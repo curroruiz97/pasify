@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Control de acceso QR · Pasify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="_shared.css" />
+<style>
+  /* page-specific extensions */
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:32px}
+  @media(max-width:880px){.grid-3,.grid-2{grid-template-columns:1fr}}
+  .cap{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .25s ease,border-color .25s ease}
+  .cap:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .cap .ico{width:40px;height:40px;border-radius:10px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
+  .cap h4{font-size:18px;font-weight:600;letter-spacing:-0.01em;color:var(--ink);line-height:1.3}
+  .cap p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:8px}
+  .step-card{position:relative;background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px}
+  .step-card .num{font-family:'Geist Mono',monospace;font-size:48px;font-weight:300;letter-spacing:-0.04em;color:var(--accent);line-height:1;opacity:.4}
+  .step-card h4{font-size:20px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);margin-top:14px}
+  .step-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
+  .compare-table{width:100%;border-collapse:separate;border-spacing:0;background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  .compare-table th,.compare-table td{padding:18px 24px;text-align:left;border-bottom:1px solid var(--line);font-size:14.5px}
+  .compare-table thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);background:rgba(244,238,226,.02)}
+  .compare-table tbody tr:last-child td{border-bottom:none}
+  .compare-table .col-after{background:rgba(232,84,42,.05);color:var(--ink)}
+  .compare-table .col-before{color:var(--ink-3);text-decoration:line-through;text-decoration-color:rgba(244,238,226,.2)}
+  .quote-block{background:linear-gradient(135deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:56px 56px;display:grid;grid-template-columns:1fr 280px;gap:48px;align-items:center;position:relative;overflow:hidden;margin:96px 0}
+  .quote-block::before{content:'"';position:absolute;font-family:'Instrument Serif',serif;font-size:280px;color:var(--accent);opacity:.15;top:-60px;left:24px;line-height:1}
+  .quote-block .text{position:relative;font-family:'Instrument Serif',serif;font-size:clamp(24px,2.4vw,32px);font-weight:400;font-style:italic;line-height:1.3;color:var(--ink);letter-spacing:-0.01em}
+  .quote-block .who{position:relative;margin-top:24px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .quote-block .who strong{color:var(--accent);font-weight:500}
+  .quote-block .pic{position:relative;width:100%;aspect-ratio:1;border-radius:18px;background:linear-gradient(135deg,#3D1F12,#1A0F08);border:1px solid rgba(232,84,42,.4);display:grid;place-items:center;font-family:'Instrument Serif',serif;font-size:96px;font-style:italic;color:var(--accent)}
+  .faq{border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line)}
+  .faq summary{padding:24px 0;font-size:18px;font-weight:500;color:var(--ink);cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;transition:color .2s ease}
+  .faq summary:hover{color:var(--accent)}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+";font-family:'Geist Mono',monospace;font-size:24px;color:var(--accent);transition:transform .25s ease;font-weight:300}
+  .faq details[open] summary::after{transform:rotate(45deg)}
+  .faq details[open] summary{color:var(--accent)}
+  .faq .answer{padding:0 0 24px;font-size:15px;color:var(--ink-2);line-height:1.65;max-width:64ch}
+  .related-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:880px){.related-grid{grid-template-columns:1fr}}
+  .related-card{display:block;background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:24px;transition:border-color .2s ease,transform .2s ease;text-decoration:none}
+  .related-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+  .related-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .related-card h5{font-size:17px;font-weight:600;color:var(--ink);margin-top:8px;letter-spacing:-0.01em}
+  .related-card p{font-size:13.5px;color:var(--ink-3);margin-top:6px;line-height:1.5}
+  .related-card .arrow{display:inline-block;margin-top:14px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  /* mock device — door scanner */
+  .scanner-mock{position:relative;width:100%;aspect-ratio:9/16;max-height:560px;background:linear-gradient(160deg,#0F0D0B,#1A1411);border:1px solid var(--line);border-radius:36px;padding:18px;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+  .scanner-mock .top{display:flex;justify-content:space-between;align-items:center;font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);padding:4px 8px}
+  .scanner-mock .viewport{margin-top:14px;height:62%;background:#000;border-radius:18px;position:relative;overflow:hidden;border:1px solid #1F1B17}
+  .scanner-mock .viewport::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(232,84,42,.06) 0,rgba(232,84,42,.06) 2px,transparent 2px,transparent 4px)}
+  .scanner-mock .qrbox{position:absolute;inset:18%;border:2px solid var(--accent);border-radius:14px}
+  .scanner-mock .qrbox::before,.scanner-mock .qrbox::after{content:"";position:absolute;width:18px;height:18px;border:3px solid var(--ink);border-radius:3px}
+  .scanner-mock .qrbox::before{top:-3px;left:-3px;border-right:none;border-bottom:none}
+  .scanner-mock .qrbox::after{bottom:-3px;right:-3px;border-left:none;border-top:none}
+  .scanner-mock .scanline{position:absolute;left:18%;right:18%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);box-shadow:0 0 16px var(--accent);animation:scanline 1.6s ease-in-out infinite;top:18%}
+  @keyframes scanline{0%,100%{top:18%}50%{top:82%}}
+  .scanner-mock .info{margin-top:18px;padding:14px 16px;background:rgba(244,238,226,.04);border:1px solid var(--line);border-radius:12px}
+  .scanner-mock .info .row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:11px;color:var(--ink-2);font-family:'Geist Mono',monospace;letter-spacing:.06em}
+  .scanner-mock .info .row .ok{color:#4ADE80}
+  .scanner-mock .info .row .name{color:var(--ink);font-family:'Geist',sans-serif;font-size:13px;letter-spacing:0}
+  .live-row{display:flex;align-items:center;gap:14px;margin-top:32px;flex-wrap:wrap}
+  .live-row .dot{width:8px;height:8px;border-radius:50%;background:#4ADE80;box-shadow:0 0 0 0 #4ADE80;animation:livepulse 2s infinite}
+  @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}70%{box-shadow:0 0 0 12px rgba(74,222,128,0)}}
+  .live-row .lbl{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)}
+  .live-row .val{font-family:'Geist Mono',monospace;font-size:13px;color:var(--ink)}
+  /* gauge */
+  .gauge{position:relative;width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:24px}
+  .gauge h6{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  .gauge .bar{height:14px;background:rgba(244,238,226,.06);border-radius:999px;overflow:hidden;position:relative}
+  .gauge .fill{height:100%;background:linear-gradient(90deg,var(--accent),#FF8A4F);border-radius:999px;width:78%;animation:fillgrow 2s ease-out forwards;transform-origin:left;transform:scaleX(0)}
+  @keyframes fillgrow{to{transform:scaleX(1)}}
+  .gauge .legend{display:flex;justify-content:space-between;margin-top:10px;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3)}
+  .gauge .legend strong{color:var(--accent);font-weight:500}
+</style>
+</head>
+<body data-current="control-acceso">
+<div class="grain"></div>
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#productos">Operación</a>
+      <span class="sep">/</span>
+      <span class="here">Control de acceso QR</span>
+    </nav>
+
+    <!-- HERO -->
+    <section class="page-hero">
+      <div class="inner">
+        <div>
+          <span class="label"><span class="pulse"></span>Operación · Acceso 02</span>
+          <h1>Pasa <em>3.000 personas</em> en <span class="underline-word">15 minutos</span>.</h1>
+          <p class="lede">Lectura QR offline, validación instantánea, anti-fraude integrado y métricas en directo. Tu puerta no se atasca aunque caiga el wifi en mitad del evento.</p>
+          <div class="ctas">
+            <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+            <a href="#capacidades" class="btn btn-outline">Ver capacidades</a>
+          </div>
+          <div class="live-row">
+            <span class="dot"></span>
+            <span class="lbl">En vivo · Sala Razzmatazz</span>
+            <span class="val">2.847 / 3.200 dentro</span>
+          </div>
+        </div>
+        <div class="scanner-mock">
+          <div class="top">
+            <span>22:47</span>
+            <span style="color:var(--accent)">● PUERTA A</span>
+          </div>
+          <div class="viewport">
+            <div class="qrbox"></div>
+            <div class="scanline"></div>
+          </div>
+          <div class="info">
+            <div class="row"><span class="name">María Sánchez</span><span class="ok">✓ VALIDADA</span></div>
+            <div class="row"><span>VIP · MESA 14</span><span>0,38s</span></div>
+            <div class="row"><span>2× CONSUM. INCL.</span><span>OK</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="stats-bar reveal" style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding:36px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:48px">
+      <div><div style="font-family:'Geist Mono',monospace;font-size:36px;font-weight:600;letter-spacing:-0.03em;color:var(--ink)">0,4<em style="font-family:'Instrument Serif',serif;font-style:italic;color:var(--accent);font-size:24px">s</em></div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px">Por validación</div></div>
+      <div><div style="font-family:'Geist Mono',monospace;font-size:36px;font-weight:600;letter-spacing:-0.03em;color:var(--ink)">−70<em style="font-family:'Instrument Serif',serif;font-style:italic;color:var(--accent);font-size:24px">%</em></div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px">Tiempo de cola</div></div>
+      <div><div style="font-family:'Geist Mono',monospace;font-size:36px;font-weight:600;letter-spacing:-0.03em;color:var(--ink)">16</div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px">Puertas en paralelo</div></div>
+      <div><div style="font-family:'Geist Mono',monospace;font-size:36px;font-weight:600;letter-spacing:-0.03em;color:var(--ink)">100<em style="font-family:'Instrument Serif',serif;font-style:italic;color:var(--accent);font-size:24px">%</em></div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px">Trazabilidad</div></div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section style="padding:120px 0 96px">
+      <div style="max-width:760px;margin-bottom:64px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Cómo funciona</div>
+        <h2 style="font-size:clamp(36px,4.4vw,56px);font-weight:600;letter-spacing:-0.04em;line-height:1.02;color:var(--ink)">Cuatro pasos. <em style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)">Cero fricción.</em></h2>
+        <p style="font-size:17px;color:var(--ink-2);line-height:1.55;margin-top:18px;max-width:62ch">El validador abre el evento desde su móvil, escanea, oye el "ping", y la persona pasa. Internamente Pasify desencripta el QR, comprueba reglas y deja huella. En menos de medio segundo.</p>
+      </div>
+      <div class="grid-3" style="grid-template-columns:repeat(4,1fr);gap:20px">
+        <div class="step-card"><div class="num">01</div><h4>El evento se abre</h4><p>El responsable abre el evento en su móvil y se sincroniza el padrón de tickets local. A partir de aquí ya no necesita red.</p></div>
+        <div class="step-card"><div class="num">02</div><h4>Lectura del QR</h4><p>Cámara nativa o lector Bluetooth. Funciona con cualquier QR Pasify, will-call y multi-paso (entrada + extra).</p></div>
+        <div class="step-card"><div class="num">03</div><h4>Validación local</h4><p>Pasify desencripta y valida en el dispositivo. Si está duplicado, expirado o no es de hoy: feedback inmediato.</p></div>
+        <div class="step-card"><div class="num">04</div><h4>Sincronización</h4><p>Cuando vuelve la red, todo se sube al servidor. Otros validadores reciben el cambio en milisegundos.</p></div>
+      </div>
+    </section>
+
+    <!-- FEATURES alternated -->
+    <section style="padding:48px 0">
+      <div class="grid-2 reveal" style="align-items:center;gap:80px;margin-bottom:120px">
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">01 · Velocidad real</div>
+          <h3 style="font-size:clamp(30px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)">El doble de rápido que tu lector actual.</h3>
+          <p style="font-size:16.5px;color:var(--ink-2);line-height:1.6;margin-top:18px">El benchmark interno con 12.000 validaciones reales arroja una media de 0,38s desde lectura a "ping". Tu cuello de botella ya no es el sistema, es la persona que tarda en buscar el móvil en el bolso.</p>
+          <ul style="list-style:none;margin-top:24px;display:flex;flex-direction:column;gap:12px">
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Lector con criptografía local (Ed25519)</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Cero round-trips a servidor en hot path</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Sincronización P2P entre puertas (LAN local)</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Modo "high pace" para festivales</li>
+          </ul>
+        </div>
+        <div class="gauge">
+          <h6>Velocidad media de validación</h6>
+          <div style="font-family:'Instrument Serif',serif;font-size:64px;color:var(--ink);letter-spacing:-0.04em;line-height:1">0,38<em style="font-style:italic;color:var(--accent);font-size:36px">s</em></div>
+          <div class="bar" style="margin-top:14px"><div class="fill"></div></div>
+          <div class="legend"><span>Pasify · 0,38s</span><span><strong>vs.</strong> Competencia · 1,2s</span></div>
+          <div style="margin-top:24px;padding-top:24px;border-top:1px dashed var(--line)">
+            <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px">Pico medido</div>
+            <div style="font-family:'Geist Mono',monospace;font-size:14px;color:var(--ink)">2.847 validaciones / 18 minutos<br><span style="color:var(--ink-3);font-size:12px">Sonora Festival · Puerta A · Sábado 22:00–22:18</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2 reveal" style="align-items:center;gap:80px;margin-bottom:120px">
+        <div style="order:2">
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">02 · Anti-fraude</div>
+          <h3 style="font-size:clamp(30px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)">Si un QR ya entró, lo sabrás antes de que cruce.</h3>
+          <p style="font-size:16.5px;color:var(--ink-2);line-height:1.6;margin-top:18px">Pasify detecta duplicados, capturas de pantalla, QRs expirados y QRs de eventos pasados al instante. Sonido distinto, vibración distinta, pantalla roja: tu equipo no necesita pensar.</p>
+          <ul style="list-style:none;margin-top:24px;display:flex;flex-direction:column;gap:12px">
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> QRs rotativos cada 30 segundos (anti-pantallazo)</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Detección de duplicado entre 16 puertas</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Lista negra de DNIs/emails recurrentes</li>
+            <li style="display:flex;gap:12px;font-size:14.5px;color:var(--ink-2)"><span style="color:var(--accent);font-family:'Geist Mono',monospace">✓</span> Foto opcional al validar (tickets nominales)</li>
+          </ul>
+        </div>
+        <div style="order:1;display:grid;gap:14px">
+          <div style="background:var(--bg-2);border:1px solid var(--line);border-left:3px solid #4ADE80;border-radius:10px;padding:18px 22px">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Geist',sans-serif;font-size:15px;color:var(--ink);font-weight:500">María Sánchez</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4ADE80;letter-spacing:.1em">VALIDADA · 22:47:14</span></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);margin-top:4px;letter-spacing:.06em">VIP · MESA 14 · PUERTA A</div>
+          </div>
+          <div style="background:var(--bg-2);border:1px solid var(--line);border-left:3px solid #4ADE80;border-radius:10px;padding:18px 22px">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Geist',sans-serif;font-size:15px;color:var(--ink);font-weight:500">Adrián López</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4ADE80;letter-spacing:.1em">VALIDADA · 22:47:09</span></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);margin-top:4px;letter-spacing:.06em">GENERAL · PUERTA B</div>
+          </div>
+          <div style="background:rgba(232,84,42,.08);border:1px solid rgba(232,84,42,.4);border-left:3px solid var(--accent);border-radius:10px;padding:18px 22px;animation:flash 2.4s infinite">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Geist',sans-serif;font-size:15px;color:var(--ink);font-weight:500">Pablo M. (mismo QR)</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.1em;font-weight:500">⚠ DUPLICADO</span></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-2);margin-top:4px;letter-spacing:.06em">YA ENTRÓ A LAS 22:31 · PUERTA A</div>
+          </div>
+          <div style="background:var(--bg-2);border:1px solid var(--line);border-left:3px solid #4ADE80;border-radius:10px;padding:18px 22px">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Geist',sans-serif;font-size:15px;color:var(--ink);font-weight:500">Lucía Vargas</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4ADE80;letter-spacing:.1em">VALIDADA · 22:46:51</span></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);margin-top:4px;letter-spacing:.06em">GENERAL · PUERTA C</div>
+          </div>
+        </div>
+      </div>
+      <style>@keyframes flash{0%,100%{background:rgba(232,84,42,.08)}50%{background:rgba(232,84,42,.18)}}</style>
+
+      <div class="grid-2 reveal" style="align-items:center;gap:80px;margin-bottom:48px">
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">03 · Aforo en vivo</div>
+          <h3 style="font-size:clamp(30px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)">Sabes cuánta gente hay en cada zona, en cada minuto.</h3>
+          <p style="font-size:16.5px;color:var(--ink-2);line-height:1.6;margin-top:18px">Cada lectura suma o resta del aforo de la zona correspondiente. Si general llega al 95%, lo sabe el manager por push antes de que la cola lo note. Si VIP está al 30%, tu RRPP recibe la alerta para activar.</p>
+        </div>
+        <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:28px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px">
+            <div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)">Aforo total</div><div style="font-family:'Instrument Serif',serif;font-size:40px;color:var(--ink);letter-spacing:-0.03em;line-height:1.1;margin-top:4px">2.847<em style="font-style:italic;color:var(--accent);font-size:24px"> / 3.200</em></div></div>
+            <div style="font-family:'Geist Mono',monospace;font-size:13px;color:#4ADE80">↑ 89%</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div><div style="display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-2);margin-bottom:6px"><span>GENERAL</span><span style="color:var(--ink)">2.110 / 2.300</span></div><div style="height:8px;background:rgba(244,238,226,.06);border-radius:999px;overflow:hidden"><div style="height:100%;width:91%;background:linear-gradient(90deg,var(--accent),#FF8A4F);border-radius:999px"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-2);margin-bottom:6px"><span>PISTA VIP</span><span style="color:var(--ink)">412 / 600</span></div><div style="height:8px;background:rgba(244,238,226,.06);border-radius:999px;overflow:hidden"><div style="height:100%;width:68%;background:linear-gradient(90deg,#FFC857,#FF8A4F);border-radius:999px"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-2);margin-bottom:6px"><span>TERRAZA</span><span style="color:var(--ink)">325 / 300 · OVERSOLD</span></div><div style="height:8px;background:rgba(244,238,226,.06);border-radius:999px;overflow:hidden"><div style="height:100%;width:100%;background:linear-gradient(90deg,#EF4444,var(--accent));border-radius:999px"></div></div></div>
+          </div>
+          <div style="margin-top:22px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3)"><span>Última actualización</span><span style="color:var(--ink)">hace 0,8s</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TESTIMONIAL -->
+    <section class="reveal">
+      <div class="quote-block">
+        <div>
+          <div class="text">El sábado abrimos a las 23:00 con 3.200 entradas vendidas. A las 23:18 los primeros estaban en barra. <em style="color:var(--accent)">Antes de Pasify, esa misma cola la teníamos hasta la 1:30.</em></div>
+          <div class="who">Carla Ruiz · Directora de operaciones · <strong>Sala Razzmatazz, Barcelona</strong></div>
+        </div>
+        <div class="pic">CR</div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section style="padding:48px 0 96px">
+      <div style="max-width:760px;margin-bottom:48px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Antes vs. Pasify</div>
+        <h2 style="font-size:clamp(32px,3.8vw,48px);font-weight:600;letter-spacing:-0.04em;line-height:1.05;color:var(--ink)">Lo que cambia en tu puerta el día 1.</h2>
+      </div>
+      <table class="compare-table">
+        <thead><tr><th style="width:36%">Métrica</th><th class="col-before" style="text-decoration:none;color:var(--ink-3)">Antes (lector legacy)</th><th class="col-after" style="color:var(--accent)">Con Pasify</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--ink)">Tiempo medio por validación</td><td class="col-before">1,1 – 1,8 segundos</td><td class="col-after"><strong style="color:var(--ink)">0,38 segundos</strong></td></tr>
+          <tr><td style="color:var(--ink)">Validación sin red</td><td class="col-before">Imposible. Cae todo.</td><td class="col-after"><strong style="color:var(--ink)">Total. Sincroniza después.</strong></td></tr>
+          <tr><td style="color:var(--ink)">Detección de duplicados</td><td class="col-before">Manual o post-evento</td><td class="col-after"><strong style="color:var(--ink)">En tiempo real entre puertas</strong></td></tr>
+          <tr><td style="color:var(--ink)">Aforo por zona</td><td class="col-before">Hoja de cálculo a mano</td><td class="col-after"><strong style="color:var(--ink)">Automático y visible al manager</strong></td></tr>
+          <tr><td style="color:var(--ink)">Setup de hardware</td><td class="col-before">Equipos propietarios + cables</td><td class="col-after"><strong style="color:var(--ink)">Cualquier móvil del equipo</strong></td></tr>
+          <tr><td style="color:var(--ink)">Informe post-evento</td><td class="col-before">Lo monta IT al día siguiente</td><td class="col-after"><strong style="color:var(--ink)">Listo a las 9 AM en tu inbox</strong></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- CAPABILITIES -->
+    <section id="capacidades" style="padding:48px 0 96px">
+      <div style="max-width:760px;margin-bottom:48px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Capacidades</div>
+        <h2 style="font-size:clamp(32px,3.8vw,48px);font-weight:600;letter-spacing:-0.04em;line-height:1.05;color:var(--ink)">Todo lo que necesita la puerta. <em style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)">Y nada más.</em></h2>
+      </div>
+      <div class="grid-3">
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s-8-4.5-8-12V5l8-3 8 3v5c0 7.5-8 12-8 12z"/></svg></div><h4>Roles y permisos granulares</h4><p>Define qué hace cada miembro del equipo: solo lectura, lectura + anulación, exportar datos, modificar aforos. Compatible con SSO.</p></div>
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M12 7v5l3 2"/></svg></div><h4>Histórico completo</h4><p>Cada validación deja huella: qué QR, qué validador, qué puerta, a qué hora, con qué retraso. Exportable a CSV o BI.</p></div>
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12h2M20 12h2M12 2v2M12 20v2"/></svg></div><h4>Hardware compatible</h4><p>iPhone, Android, PDA Zebra TC22/TC52, escáner Honeywell, lector USB. Pasify se adapta a lo que ya tienes.</p></div>
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h4>Cifrado end-to-end</h4><p>QRs firmados con Ed25519, rotación de clave por evento, comunicación TLS 1.3. Datos en RGPD-EU exclusivamente.</p></div>
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></div><h4>Modo high-pace</h4><p>Para festivales y aperturas masivas: la app se quita avisos visuales innecesarios y va al hueso. Validaciones en cadena.</p></div>
+        <div class="cap"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><h4>Webhook por validación</h4><p>Cada lectura dispara un webhook a tu sistema. Para activar pulseras, abrir torno o lo que toque en tu operación.</p></div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section style="padding:48px 0 96px;display:grid;grid-template-columns:.6fr 1fr;gap:80px;align-items:start">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Preguntas frecuentes</div>
+        <h2 style="font-size:clamp(28px,3.4vw,40px);font-weight:600;letter-spacing:-0.04em;line-height:1.05;color:var(--ink)">Lo que pregunta todo el mundo antes de migrar.</h2>
+        <p style="font-size:15px;color:var(--ink-2);line-height:1.55;margin-top:20px">¿No está tu duda aquí? <a href="../pasify.html#contacto" style="color:var(--accent);text-decoration:underline;text-underline-offset:3px">Hablamos en menos de 24h.</a></p>
+      </div>
+      <div class="faq">
+        <details open><summary>¿Qué pasa si se cae el wifi en mitad del evento?</summary><div class="answer">Nada. Pasify valida en local con la lista de tickets pre-cargada. Cuando vuelve la red, sincroniza con servidor y entre puertas. Trabajamos cada validación con un sello de tiempo independiente.</div></details>
+        <details><summary>¿Necesitamos comprar hardware nuevo?</summary><div class="answer">No. Funciona en cualquier móvil del equipo (iOS 14+ o Android 9+). Si quieres robustez extra, ofrecemos PDAs Zebra y Honeywell en alquiler por evento o compra.</div></details>
+        <details><summary>¿Cómo evitamos que alguien entre con un QR pirateado?</summary><div class="answer">Tres líneas de defensa: (1) los QRs son rotativos cada 30 segundos en la app del cliente, (2) cifrado Ed25519 con clave por evento, (3) detección de duplicado entre las 16 puertas en tiempo real.</div></details>
+        <details><summary>¿Qué velocidad real puedo esperar?</summary><div class="answer">Media de 0,38s por validación con cualquier móvil moderno. En PDAs profesionales bajamos a 0,28s. El cuello de botella deja de ser el sistema y pasa a ser el flujo físico de la cola.</div></details>
+        <details><summary>¿Cómo se forma a mi equipo de puerta?</summary><div class="answer">Te dejamos 30 minutos de vídeos en Pasify Academy + un PDF con los 8 atajos. La mayoría del equipo está operando en menos de 15 minutos. En eventos grandes mandamos un especialista in-situ.</div></details>
+        <details><summary>¿Qué datos quedan en el informe?</summary><div class="answer">Hora exacta, QR validado, puerta, validador, retraso entre lecturas, tipo de incidencia (duplicado, expirado, OK). Exportable a CSV o vía API a tu BI.</div></details>
+        <details><summary>¿Compatible con tornos físicos o pulseras NFC?</summary><div class="answer">Sí. Cada validación dispara un webhook configurable que puede abrir torno (Boon Edam, Gunnebo, etc.) o activar pulsera NFC para abono cashless. Lo dejamos cableado el día del setup.</div></details>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section style="margin:32px 0 96px;background:linear-gradient(135deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:64px 56px;display:grid;grid-template-columns:1.3fr 1fr;gap:48px;align-items:center;position:relative;overflow:hidden">
+      <div style="position:absolute;width:400px;height:400px;background:var(--accent);filter:blur(120px);opacity:.25;top:-100px;right:-100px;pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px">Setup en 1 hora</div>
+        <h2 style="font-size:clamp(32px,3.6vw,48px);font-weight:600;letter-spacing:-0.04em;line-height:1.05;color:var(--ink)">Tu puerta, en cómo era nunca antes.</h2>
+        <p style="font-size:17px;color:var(--ink-2);line-height:1.55;margin-top:18px;max-width:48ch">Solicita una demo y te enseñamos Pasify con un evento real. Te montamos un piloto de 1 noche sin compromiso.</p>
+        <div style="display:flex;gap:14px;margin-top:32px;flex-wrap:wrap">
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
+        </div>
+      </div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:start;gap:14px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.3);display:grid;place-items:center;color:var(--accent);flex-shrink:0;font-family:'Geist Mono',monospace;font-size:13px">✓</span><div style="font-size:15px;color:var(--ink);line-height:1.5">Funciona en cualquier móvil Android/iOS</div></div>
+        <div style="display:flex;align-items:start;gap:14px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.3);display:grid;place-items:center;color:var(--accent);flex-shrink:0;font-family:'Geist Mono',monospace;font-size:13px">✓</span><div style="font-size:15px;color:var(--ink);line-height:1.5">Hardware opcional: PDA Zebra, escáner Honeywell</div></div>
+        <div style="display:flex;align-items:start;gap:14px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.3);display:grid;place-items:center;color:var(--accent);flex-shrink:0;font-family:'Geist Mono',monospace;font-size:13px">✓</span><div style="font-size:15px;color:var(--ink);line-height:1.5">Setup completo en menos de 1 hora</div></div>
+        <div style="display:flex;align-items:start;gap:14px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.3);display:grid;place-items:center;color:var(--accent);flex-shrink:0;font-family:'Geist Mono',monospace;font-size:13px">✓</span><div style="font-size:15px;color:var(--ink);line-height:1.5">Equipo de soporte en directo durante eventos</div></div>
+      </div>
+    </section>
+
+    <!-- RELATED -->
+    <section style="padding:48px 0 96px">
+      <div style="margin-bottom:32px">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">Sigue explorando</div>
+        <h2 style="font-size:clamp(28px,3vw,36px);font-weight:600;letter-spacing:-0.03em;color:var(--ink)">Soluciones relacionadas</h2>
+      </div>
+      <div class="related-grid">
+        <a class="related-card" href="recepcion-eventos.html"><div class="lab">Operación</div><h5>Recepción de eventos</h5><p>VIPs, invitados y will-call gestionados desde una sola pantalla.</p><div class="arrow">Ver →</div></a>
+        <a class="related-card" href="tpv.html"><div class="lab">Operación</div><h5>Software TPV</h5><p>Cobros en 2 toques, propinas, split bill y arqueo automático.</p><div class="arrow">Ver →</div></a>
+        <a class="related-card" href="entradas.html"><div class="lab">Venta</div><h5>Venta de entradas</h5><p>Páginas de evento que cargan en menos de un segundo.</p><div class="arrow">Ver →</div></a>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer style="border-top:1px solid var(--line);padding:48px 0 32px;margin-top:48px">
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:24px">
+    <a href="../pasify.html" class="logo" style="font-size:22px"><span>Pas</span><span class="dot"></span><span>if</span><span class="y">y</span></a>
+    <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)">© 2026 Pasify · El pase a tu mejor noche.</div>
+  </div>
+</footer>
+
+<script src="_header.js"></script>
+</body>
+</html>
