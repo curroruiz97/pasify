@@ -42,6 +42,16 @@
   .crumbs .sep{margin:0 10px;color:var(--line-2)}
   .crumbs .here{color:var(--ink)}
   .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Subsections (integrated children) */
+  .sub-section{margin-top:96px;position:relative}
+  .sub-head{max-width:680px;margin-bottom:36px}
+  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
+  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
+  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
 </style>
 </head>
 <body data-depth="sub" data-current="ayuda">
@@ -63,7 +73,7 @@
     <section class="page-hero">
       <span class="label"><span class="pulse"></span>Recursos · Centro de ayuda</span>
       <h1>Centro de ayuda</h1>
-      <p class="lede">400+ artículos, búsqueda inteligente y vídeos cortos. Lo que necesites para resolver tú mismo en 2 minutos.</p>
+      <p class="lede">El centro único de soporte de Pasify. 400+ artículos con búsqueda IA, vídeos cortos, <em>changelog semanal</em>, estado del sistema en directo y soporte humano 24/7 — todo en una sola página para que resuelvas tú mismo en 2 minutos, o tengas a alguien al otro lado en 5.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
@@ -95,6 +105,105 @@
           </div>
           <h3>Comunidad</h3>
           <p>Foro con otros promotores. Tu duda probablemente ya la respondieron.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · CHANGELOG ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Changelog<span class="pill">v4.2</span></span>
+        <h2>Qué hay nuevo cada semana en Pasify.</h2>
+        <p class="sub">Sin marketing-speak. Lo que se publicó, qué problema resuelve y cómo activarlo. Cada miércoles, lo que ha entrado en producción los 7 días previos.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="12" cy="15" r="2" fill="currentColor"/></svg>
+          </div>
+          <h3>Semanal</h3>
+          <p>Cada miércoles, lo que ha entrado en producción los 7 días previos. Sin saltos, sin meses oscuros.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7M3 12h13M3 18h9"/><circle cx="20" cy="6" r="1.5" fill="currentColor"/><circle cx="20" cy="12" r="1.5" fill="currentColor"/></svg>
+          </div>
+          <h3>Por área</h3>
+          <p>Filtra por taquilla, RRPP, datos, integraciones. Mira solo lo tuyo, ignora el resto.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+          </div>
+          <h3>Roadmap público</h3>
+          <p>Lo que llega el próximo trimestre, sin sorpresas. Vota lo que necesitas y lo subimos en prioridad.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · ESTADO DEL SISTEMA ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Estado del sistema<span class="pill">99.99%</span></span>
+        <h2>Si algo va mal, lo sabes <em>antes</em> que tu cliente.</h2>
+        <p class="sub">99.99% de uptime promedio. Cada microservicio monitorizado en directo. Si tu región se ve afectada, tú decides cómo enterarte: email, SMS o webhook a tu Slack.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l4-4 4 4 5-6 5 6"/><path d="M3 21h18"/></svg>
+          </div>
+          <h3>Uptime histórico</h3>
+          <p>12 meses de datos públicos. Sin esconder los malos días — los publicamos con su post-mortem.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+          </div>
+          <h3>Subscripciones</h3>
+          <p>Email o SMS al instante si tu región se ve afectada. Webhook a tu Slack opcional para integrarlo en tu flujo.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg>
+          </div>
+          <h3>Post-mortems</h3>
+          <p>Cuando algo falla, escribimos qué pasó, por qué, y cómo lo evitamos. Públicos, sin filtros.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · SOPORTE 24/7 ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Soporte 24/7<span class="pill">Humano</span></span>
+        <h2>Soporte <em>humano</em>, en tu lengua, en tu zona horaria.</h2>
+        <p class="sub">WhatsApp, email, chat y teléfono. Equipo humano en español, inglés, portugués y catalán. Respuesta en menos de 5 minutos durante eventos en directo. Sin chatbots, sin "te contestamos en 48–72h".</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <h3>WhatsApp directo</h3>
+          <p>Línea con tu account manager, no un bot. Activa durante tus eventos — viernes y sábados de 22:00 a 06:00 con respuesta media de 4 minutos.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>
+          </div>
+          <h3>Multi-idioma</h3>
+          <p>Español, inglés, portugués y catalán. Soporte en tu lengua, en tu zona horaria. Si tu equipo escala a otros mercados, escalamos contigo.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+          </div>
+          <h3>Estado público</h3>
+          <p>status.pasify.com siempre actualizado. Sin esconder incidencias — cuando algo falla, lo publicamos al minuto con su post-mortem.</p>
         </div>
       </div>
     </section>

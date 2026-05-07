@@ -42,6 +42,16 @@
   .crumbs .sep{margin:0 10px;color:var(--line-2)}
   .crumbs .here{color:var(--ink)}
   .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Subsections (integrated children) */
+  .sub-section{margin-top:96px;position:relative}
+  .sub-head{max-width:680px;margin-bottom:36px}
+  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
+  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
+  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
 </style>
 </head>
 <body data-depth="sub" data-current="sobre">
@@ -63,7 +73,7 @@
     <section class="page-hero">
       <span class="label"><span class="pulse"></span>Nosotros · Sobre Pasify</span>
       <h1>Sobre <em>Pasify</em></h1>
-      <p class="lede">Empezamos en 2019 detrás de una barra. Hoy operamos +12.000 eventos al año en 14 países. Mismo equipo, misma obsesión: hacer que la noche fluya.</p>
+      <p class="lede">Empezamos en 2019 detrás de una barra. Hoy operamos +12.000 eventos al año en 14 países. Mismo equipo, misma obsesión: hacer que la noche fluya — con un <em>manifiesto</em> que se cumple, un equipo que entiende tu negocio y un compromiso real con la sostenibilidad del nightlife como espacio cultural.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
@@ -95,6 +105,105 @@
           </div>
           <h3>Misión</h3>
           <p>Convertir cada noche en un sistema que aprende, vende mejor y trata mejor.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · MANIFIESTO ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Manifiesto<span class="pill">Pasify</span></span>
+        <h2>Creemos que la noche merece un software a su <em>altura</em>.</h2>
+        <p class="sub">Robusto a las 03:00, simple a las 09:00. Diseñado para humanos cansados, no para CFOs aburridos. Tres principios que no son un poster en la oficina — son lo que rompe o hace cada release.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 7v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <h3>Robusto</h3>
+          <p>Cae menos que la electricidad. Si nosotros fallamos, tu noche se rompe — así que medimos uptime al milisegundo.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h4M17 12h4M12 3v4M12 17v4"/></svg>
+          </div>
+          <h3>Simple</h3>
+          <p>Tu camarera nueva del sábado lo entiende sin manual. Si necesita formación, hemos fallado en el diseño — no ella.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16h.01"/></svg>
+          </div>
+          <h3>Honesto</h3>
+          <p>Sin precios ocultos, sin permanencia, sin letra pequeña. Si no te servimos, te vas — y te llevas tu data limpia.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · EQUIPO ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">El equipo<span class="pill">60 pers</span></span>
+        <h2>Personas que <em>entienden</em> tu negocio.</h2>
+        <p class="sub">60 personas en Madrid, Barcelona, Lisboa y Berlín. Promotores, ingenieros, diseñadores y operadores. Todos compartimos un detalle: hemos cerrado un local a las 07:00.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51"/></svg>
+          </div>
+          <h3>Mitad nightlife</h3>
+          <p>30 personas vienen de salas, festivales y promotoras. Saben de qué hablan cuando dices "viernes a las 02:00".</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3>Mitad software</h3>
+          <p>Otras 30 vienen de Stripe, Glovo, Cabify, N26. Saben construir esto a escala — y mantenerlo en producción.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <h3>Cultura</h3>
+          <p>Trabajamos para que el sector mejore. Si tu noche va mejor, nosotros vamos mejor — sin métricas vanidad.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · SOSTENIBILIDAD ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Sostenibilidad<span class="pill">200%</span></span>
+        <h2>Operar la noche sin <em>gastar</em> el planeta.</h2>
+        <p class="sub">Cero papel. Compensamos el 200% de nuestras emisiones. El 1% del revenue va a iniciativas de protección del nightlife como espacio cultural — venues históricos, archivos sonoros, residencias de artistas.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+          </div>
+          <h3>Cero papel</h3>
+          <p>Entradas, listas, recibos: todo digital. Ahorras 12 árboles por cada 10.000 eventos — auditado externamente.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M20 12h2M12 2v2M12 20v2"/><circle cx="12" cy="12" r="5"/></svg>
+          </div>
+          <h3>Carbon offset 200%</h3>
+          <p>Compensamos el doble de lo que emitimos. Auditado por South Pole — proyectos de reforestación verificada en Iberia.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <h3>1% for the night</h3>
+          <p>El 1% del revenue va a salvar venues históricos amenazados de cierre. Quien usa Pasify, financia la cultura.</p>
         </div>
       </div>
     </section>

@@ -55,10 +55,10 @@
   .nav-trigger svg{transition:transform .25s ease}
   .nav-item.open .nav-trigger svg{transform:rotate(180deg);color:var(--accent)}
   .header .spacer{flex:1}
-  .header .login{font-size:14px;color:var(--ink-2);padding:8px 14px;transition:color .2s ease}
-  .header .login:hover{color:var(--ink)}
-  .header .cta{font-size:14px;background:var(--accent);color:#fff;padding:10px 18px;border-radius:10px;font-weight:500;transition:transform .15s ease, box-shadow .25s ease}
-  .header .cta:hover{transform:translateY(-1px);box-shadow:0 12px 30px -10px rgba(232,84,42,.6)}
+  .header .login{font-size:14px;color:var(--ink-2);padding:8px 16px;border-radius:999px;letter-spacing:-0.005em;background:rgba(244,238,226,.03);border:1px solid rgba(244,238,226,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:color .2s ease, background .25s ease, border-color .25s ease, transform .15s ease}
+  .header .login:hover{color:var(--ink);background:rgba(244,238,226,.08);border-color:rgba(244,238,226,.18);transform:translateY(-1px)}
+  .header .cta{font-size:14px;background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;padding:10px 18px;border-radius:999px;font-weight:500;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(80,20,5,.22);transition:transform .15s ease, box-shadow .25s ease, filter .2s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 5px 14px -4px rgba(232,84,42,.5),0 12px 28px -10px rgba(184,56,26,.5)}
+  .header .cta:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 9px 20px -4px rgba(232,84,42,.6),0 18px 40px -10px rgba(184,56,26,.55)}
 
   /* MEGAMENU */
   .mega-wrap{position:fixed;top:64px;left:0;right:0;z-index:99;pointer-events:none;opacity:0;transform:translateY(-8px);transition:opacity .25s ease, transform .25s ease}
@@ -73,6 +73,10 @@
   .mega-link .pill{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;background:var(--accent);color:#fff;padding:2px 6px;border-radius:999px;margin-left:auto}
   .mega-link .ico{width:28px;height:28px;border-radius:7px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
   .mega-link .ico svg{width:14px;height:14px}
+  .mega-link.has-sub{flex-direction:column;align-items:flex-start;gap:6px;line-height:1.2}
+  .mega-link.has-sub .ttl{font-size:14px;font-weight:500;letter-spacing:-0.005em}
+  .mega-link.has-sub .sublabel{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);line-height:1.45;font-weight:400}
+  .mega-link.has-sub:hover .sublabel,.mega-link.has-sub.current .sublabel{color:var(--ink-2)}
   .mega-feature{background:linear-gradient(160deg,#1A0F08,#3D1F12);border-radius:14px;padding:24px;border:1px solid rgba(232,84,42,.25);position:relative;overflow:hidden}
   .mega-feature::before{content:"";position:absolute;width:200px;height:200px;background:var(--accent);filter:blur(80px);opacity:.3;top:-60px;right:-60px}
   .mega-feature .lab{position:relative;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
@@ -162,12 +166,14 @@
 
   /* ============ BUTTONS ============ */
   .btn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:15px;font-weight:500;padding:13px 20px;border-radius:11px;border:1px solid transparent;cursor:pointer;transition:all .2s ease;text-decoration:none;line-height:1;white-space:nowrap}
-  .btn-primary{background:var(--accent);color:#fff;box-shadow:0 0 0 1px rgba(232,84,42,.3), 0 8px 24px -10px rgba(232,84,42,.6)}
-  .btn-primary:hover{background:var(--accent-deep);transform:translateY(-1px);box-shadow:0 12px 30px -10px rgba(232,84,42,.7)}
-  .btn-outline{background:transparent;color:var(--ink);border-color:var(--line-2)}
-  .btn-outline:hover{border-color:var(--ink-2);background:rgba(244,238,226,.03)}
-  .btn-ghost{background:transparent;color:var(--ink-2)}
-  .btn-ghost:hover{color:var(--ink)}
+  .btn-primary{background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;border-radius:999px;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(80,20,5,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 6px 16px -4px rgba(232,84,42,.5),0 14px 32px -10px rgba(184,56,26,.5)}
+  .btn-primary:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 10px 22px -4px rgba(232,84,42,.6),0 22px 44px -10px rgba(184,56,26,.55)}
+  .btn-primary:active{transform:translateY(0);filter:brightness(.98);box-shadow:inset 0 2px 4px rgba(80,20,5,.32),0 4px 10px -4px rgba(232,84,42,.45)}
+  .btn-outline{background:rgba(244,238,226,.04);color:var(--ink);border:1px solid rgba(244,238,226,.18);border-radius:999px;letter-spacing:-0.005em;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.20),0 4px 14px -4px rgba(0,0,0,.30),0 10px 28px -10px rgba(0,0,0,.25)}
+  .btn-outline:hover{transform:translateY(-2px);background:rgba(244,238,226,.09);border-color:rgba(244,238,226,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(0,0,0,.25),0 8px 22px -4px rgba(0,0,0,.40),0 18px 40px -10px rgba(0,0,0,.30)}
+  .btn-outline:active{transform:translateY(0);box-shadow:inset 0 2px 4px rgba(0,0,0,.20)}
+  .btn-ghost{background:transparent;color:var(--ink-2);border:1px solid transparent;border-radius:999px;letter-spacing:-0.005em}
+  .btn-ghost:hover{color:var(--ink);background:rgba(244,238,226,.05);transform:translateY(-1px)}
   .btn .arrow{display:inline-block;transition:transform .2s ease}
   .btn:hover .arrow{transform:translateX(3px)}
 
@@ -588,29 +594,30 @@
         <div class="mega-col">
           <h6>Aprende</h6>
           <ul>
-            <li><a class="mega-link" href="#">Pasify Academy</a></li>
-            <li><a class="mega-link" href="#">Blog &amp; tendencias</a></li>
-            <li><a class="mega-link" href="#">Guías para promotores</a></li>
-            <li><a class="mega-link" href="#">Webinars &amp; eventos</a></li>
-            <li><a class="mega-link" href="#">Newsletter mensual</a></li>
+            <li><a class="mega-link" href="recursos/academy.html">Pasify Academy</a></li>
+            <li><a class="mega-link has-sub" href="recursos/blog.html">
+              <span class="ttl">Blogs &amp; Newsletter</span>
+              <span class="sublabel">Blog · Newsletter · Webinars &amp; eventos</span>
+            </a></li>
           </ul>
         </div>
         <div class="mega-col">
-          <h6>Producto</h6>
+          <h6>Ayuda</h6>
           <ul>
-            <li><a class="mega-link" href="#">Changelog <span class="pill">v4.2</span></a></li>
-            <li><a class="mega-link" href="#">Centro de ayuda</a></li>
-            <li><a class="mega-link" href="#">Documentación API</a></li>
-            <li><a class="mega-link" href="#">Estado del sistema</a></li>
+            <li><a class="mega-link has-sub" href="recursos/ayuda.html">
+              <span class="ttl">Centro de ayuda</span>
+              <span class="sublabel">Changelog · Estado del sistema · Soporte 24/7</span>
+            </a></li>
+            <li><a class="mega-link" href="recursos/api-docs.html">API e integraciones</a></li>
           </ul>
         </div>
         <div class="mega-col">
           <h6>Comunidad</h6>
           <ul>
-            <li><a class="mega-link" href="#">Pasify Pro Network</a></li>
-            <li><a class="mega-link" href="#">Programa de partners</a></li>
-            <li><a class="mega-link" href="#">Fun Business Days</a></li>
-            <li><a class="mega-link" href="#">Embajadores RRPP</a></li>
+            <li><a class="mega-link has-sub" href="recursos/pro-network.html">
+              <span class="ttl">Partners &amp; Promotores</span>
+              <span class="sublabel">Programa de partners · Programa de embajadores RRPP</span>
+            </a></li>
           </ul>
         </div>
         <div class="mega-feature">
@@ -626,29 +633,32 @@
         <div class="mega-col">
           <h6>Pasify</h6>
           <ul>
-            <li><a class="mega-link" href="#">Sobre nosotros</a></li>
-            <li><a class="mega-link" href="#">Manifesto</a></li>
-            <li><a class="mega-link" href="#">Equipo</a></li>
-            <li><a class="mega-link" href="#">Cultura &amp; carrera</a></li>
-            <li><a class="mega-link" href="#">Prensa &amp; medios</a></li>
+            <li><a class="mega-link has-sub" href="nosotros/sobre.html">
+              <span class="ttl">Sobre nosotros</span>
+              <span class="sublabel">Manifiesto · Equipo · Sostenibilidad</span>
+            </a></li>
           </ul>
         </div>
         <div class="mega-col">
-          <h6>Compromiso</h6>
+          <h6>Confianza</h6>
           <ul>
-            <li><a class="mega-link" href="#">Privacidad de datos</a></li>
-            <li><a class="mega-link" href="#">Seguridad</a></li>
-            <li><a class="mega-link" href="#">Sostenibilidad</a></li>
-            <li><a class="mega-link" href="#">Diversidad</a></li>
+            <li><a class="mega-link has-sub" href="nosotros/seguridad.html">
+              <span class="ttl">Seguridad y privacidad</span>
+              <span class="sublabel">Privacidad de datos · Seguridad</span>
+            </a></li>
           </ul>
         </div>
         <div class="mega-col">
           <h6>Contacto</h6>
           <ul>
-            <li><a class="mega-link" href="#contacto">Solicitar demo</a></li>
-            <li><a class="mega-link" href="#">Hablar con ventas</a></li>
-            <li><a class="mega-link" href="#">Soporte 24/7</a></li>
-            <li><a class="mega-link" href="#">Oficinas</a></li>
+            <li><a class="mega-link has-sub" href="nosotros/contacto.html">
+              <span class="ttl">Solicitar demo</span>
+              <span class="sublabel">Hablar con ventas</span>
+            </a></li>
+            <li><a class="mega-link has-sub" href="nosotros/oficinas.html">
+              <span class="ttl">Contacto</span>
+              <span class="sublabel">Formulario · Oficinas</span>
+            </a></li>
           </ul>
         </div>
         <div class="mega-feature">
@@ -686,18 +696,20 @@
     <details>
       <summary>Recursos</summary>
       <div class="sub">
-        <a href="#">Pasify Academy</a>
-        <a href="#">Blog</a>
-        <a href="#">Centro de ayuda</a>
-        <a href="#">API Docs</a>
+        <a href="recursos/academy.html">Pasify Academy</a>
+        <a href="recursos/blog.html">Blogs &amp; Newsletter</a>
+        <a href="recursos/ayuda.html">Centro de ayuda</a>
+        <a href="recursos/api-docs.html">API e integraciones</a>
+        <a href="recursos/pro-network.html">Partners &amp; Promotores</a>
       </div>
     </details>
     <details>
       <summary>Nosotros</summary>
       <div class="sub">
-        <a href="#">Sobre Pasify</a>
-        <a href="#">Carreras</a>
-        <a href="#">Prensa</a>
+        <a href="nosotros/sobre.html">Sobre nosotros</a>
+        <a href="nosotros/seguridad.html">Seguridad y privacidad</a>
+        <a href="nosotros/contacto.html">Solicitar demo</a>
+        <a href="nosotros/oficinas.html">Contacto</a>
       </div>
     </details>
     <a href="#pricing" style="padding:18px 4px;font-size:18px;font-weight:500;border-bottom:1px solid var(--line);color:var(--ink)">Pricing</a>
@@ -1074,7 +1086,7 @@
       <h2 class="h2">Tecnología hecha por y para nuestra <em>industria</em>.</h2>
     </div>
     <div class="sectors">
-      <a href="#" class="sector s1 reveal">
+      <a href="sectores/discotecas.html" class="sector s1 reveal">
         <div class="bg"></div>
         <div class="grain"></div>
         <div class="overlay"></div>
@@ -1090,7 +1102,7 @@
           </div>
         </div>
       </a>
-      <a href="#" class="sector s2 reveal">
+      <a href="sectores/promotoras.html" class="sector s2 reveal">
         <div class="bg"></div>
         <div class="grain"></div>
         <div class="overlay"></div>
@@ -1100,13 +1112,13 @@
             <span class="num">02</span>
           </div>
           <div>
-            <h3>Promotores</h3>
+            <h3>Promotoras</h3>
             <p>Centraliza y controla todos tus eventos con la mayor precisión.</p>
-            <div class="arrow">Software promotores <span>→</span></div>
+            <div class="arrow">Software promotoras <span>→</span></div>
           </div>
         </div>
       </a>
-      <a href="#" class="sector s3 reveal">
+      <a href="sectores/beach-clubs.html" class="sector s3 reveal">
         <div class="bg"></div>
         <div class="grain"></div>
         <div class="overlay"></div>
@@ -1122,7 +1134,7 @@
           </div>
         </div>
       </a>
-      <a href="#" class="sector s4 reveal">
+      <a href="sectores/festivales.html" class="sector s4 reveal">
         <div class="bg"></div>
         <div class="grain"></div>
         <div class="overlay"></div>

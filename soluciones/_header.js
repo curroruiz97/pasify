@@ -21,6 +21,12 @@
   function H(anchor){ return P + 'pasify.html' + (anchor ? '#' + anchor : ''); }
 
   var html = ''
+    + '<style id="pasify-mega-extra">'
+    +   '.mega-link.has-sub{flex-direction:column;align-items:flex-start;gap:6px;line-height:1.2}'
+    +   '.mega-link.has-sub .ttl{font-size:14px;font-weight:500;letter-spacing:-0.005em}'
+    +   '.mega-link.has-sub .sublabel{font-family:\'Geist Mono\',monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);line-height:1.45;font-weight:400}'
+    +   '.mega-link.has-sub:hover .sublabel,.mega-link.has-sub.current .sublabel{color:var(--ink-2)}'
+    + '</style>'
     + '<header class="header" id="header">'
     +   '<div class="header-inner">'
     +     '<a href="' + H('') + '" class="logo" aria-label="Pasify">'
@@ -140,28 +146,29 @@
     +           '<h6>Aprende</h6>'
     +           '<ul>'
     +             '<li><a class="mega-link" data-slug="academy" href="' + L('recursos','academy.html') + '">Pasify Academy</a></li>'
-    +             '<li><a class="mega-link" data-slug="blog" href="' + L('recursos','blog.html') + '">Blog &amp; tendencias</a></li>'
-    +             '<li><a class="mega-link" data-slug="guias" href="' + L('recursos','guias.html') + '">Guías para promotores</a></li>'
-    +             '<li><a class="mega-link" data-slug="webinars" href="' + L('recursos','webinars.html') + '">Webinars &amp; eventos</a></li>'
-    +             '<li><a class="mega-link" data-slug="newsletter" href="' + L('recursos','newsletter.html') + '">Newsletter mensual</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="blog-newsletter" href="' + L('recursos','blog.html') + '">'
+    +               '<span class="ttl">Blogs &amp; Newsletter</span>'
+    +               '<span class="sublabel">Blog · Newsletter · Webinars &amp; eventos</span>'
+    +             '</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-col">'
-    +           '<h6>Producto</h6>'
+    +           '<h6>Ayuda</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" data-slug="changelog" href="' + L('recursos','changelog.html') + '">Changelog <span class="pill">v4.2</span></a></li>'
-    +             '<li><a class="mega-link" data-slug="ayuda" href="' + L('recursos','ayuda.html') + '">Centro de ayuda</a></li>'
-    +             '<li><a class="mega-link" data-slug="api-docs" href="' + L('recursos','api-docs.html') + '">Documentación API</a></li>'
-    +             '<li><a class="mega-link" data-slug="status" href="' + L('recursos','status.html') + '">Estado del sistema</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="ayuda" href="' + L('recursos','ayuda.html') + '">'
+    +               '<span class="ttl">Centro de ayuda</span>'
+    +               '<span class="sublabel">Changelog · Estado del sistema · Soporte 24/7</span>'
+    +             '</a></li>'
+    +             '<li><a class="mega-link" data-slug="api-docs" href="' + L('recursos','api-docs.html') + '">API e integraciones</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-col">'
     +           '<h6>Comunidad</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" data-slug="pro-network" href="' + L('recursos','pro-network.html') + '">Pasify Pro Network</a></li>'
-    +             '<li><a class="mega-link" data-slug="partners" href="' + L('recursos','partners.html') + '">Programa de partners</a></li>'
-    +             '<li><a class="mega-link" data-slug="fbd" href="' + L('recursos','fbd.html') + '">Fun Business Days</a></li>'
-    +             '<li><a class="mega-link" data-slug="embajadores" href="' + L('recursos','embajadores.html') + '">Embajadores RRPP</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="partners-promotores" href="' + L('recursos','pro-network.html') + '">'
+    +               '<span class="ttl">Partners &amp; Promotores</span>'
+    +               '<span class="sublabel">Programa de partners · Programa de embajadores RRPP</span>'
+    +             '</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-feature">'
@@ -179,29 +186,32 @@
     +         '<div class="mega-col">'
     +           '<h6>Pasify</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" data-slug="sobre" href="' + L('nosotros','sobre.html') + '">Sobre nosotros</a></li>'
-    +             '<li><a class="mega-link" data-slug="manifesto" href="' + L('nosotros','manifesto.html') + '">Manifesto</a></li>'
-    +             '<li><a class="mega-link" data-slug="equipo" href="' + L('nosotros','equipo.html') + '">Equipo</a></li>'
-    +             '<li><a class="mega-link" data-slug="cultura" href="' + L('nosotros','cultura.html') + '">Cultura &amp; carrera</a></li>'
-    +             '<li><a class="mega-link" data-slug="prensa" href="' + L('nosotros','prensa.html') + '">Prensa &amp; medios</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="sobre" href="' + L('nosotros','sobre.html') + '">'
+    +               '<span class="ttl">Sobre nosotros</span>'
+    +               '<span class="sublabel">Manifiesto · Equipo · Sostenibilidad</span>'
+    +             '</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-col">'
-    +           '<h6>Compromiso</h6>'
+    +           '<h6>Confianza</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" data-slug="privacidad" href="' + L('nosotros','privacidad.html') + '">Privacidad de datos</a></li>'
-    +             '<li><a class="mega-link" data-slug="seguridad" href="' + L('nosotros','seguridad.html') + '">Seguridad</a></li>'
-    +             '<li><a class="mega-link" data-slug="sostenibilidad" href="' + L('nosotros','sostenibilidad.html') + '">Sostenibilidad</a></li>'
-    +             '<li><a class="mega-link" data-slug="diversidad" href="' + L('nosotros','diversidad.html') + '">Diversidad</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="seguridad-privacidad" href="' + L('nosotros','seguridad.html') + '">'
+    +               '<span class="ttl">Seguridad y privacidad</span>'
+    +               '<span class="sublabel">Privacidad de datos · Seguridad</span>'
+    +             '</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-col">'
     +           '<h6>Contacto</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" data-slug="contacto-page" href="' + L('nosotros','contacto.html') + '">Solicitar demo</a></li>'
-    +             '<li><a class="mega-link" data-slug="ventas" href="' + L('nosotros','ventas.html') + '">Hablar con ventas</a></li>'
-    +             '<li><a class="mega-link" data-slug="soporte-page" href="' + L('nosotros','soporte.html') + '">Soporte 24/7</a></li>'
-    +             '<li><a class="mega-link" data-slug="oficinas" href="' + L('nosotros','oficinas.html') + '">Oficinas</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="contacto-page" href="' + L('nosotros','contacto.html') + '">'
+    +               '<span class="ttl">Solicitar demo</span>'
+    +               '<span class="sublabel">Hablar con ventas</span>'
+    +             '</a></li>'
+    +             '<li><a class="mega-link has-sub" data-slug="contacto-form" href="' + L('nosotros','oficinas.html') + '">'
+    +               '<span class="ttl">Contacto</span>'
+    +               '<span class="sublabel">Formulario · Oficinas</span>'
+    +             '</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-feature">'
@@ -247,21 +257,19 @@
     +     '<summary>Recursos</summary>'
     +     '<div class="sub">'
     +       '<a href="' + L('recursos','academy.html') + '">Pasify Academy</a>'
-    +       '<a href="' + L('recursos','blog.html') + '">Blog</a>'
+    +       '<a href="' + L('recursos','blog.html') + '">Blogs &amp; Newsletter</a>'
     +       '<a href="' + L('recursos','ayuda.html') + '">Centro de ayuda</a>'
-    +       '<a href="' + L('recursos','api-docs.html') + '">API Docs</a>'
-    +       '<a href="' + L('recursos','changelog.html') + '">Changelog</a>'
-    +       '<a href="' + L('recursos','partners.html') + '">Partners</a>'
+    +       '<a href="' + L('recursos','api-docs.html') + '">API e integraciones</a>'
+    +       '<a href="' + L('recursos','pro-network.html') + '">Partners &amp; Promotores</a>'
     +     '</div>'
     +   '</details>'
     +   '<details>'
     +     '<summary>Nosotros</summary>'
     +     '<div class="sub">'
-    +       '<a href="' + L('nosotros','sobre.html') + '">Sobre Pasify</a>'
-    +       '<a href="' + L('nosotros','equipo.html') + '">Equipo</a>'
-    +       '<a href="' + L('nosotros','cultura.html') + '">Cultura &amp; carrera</a>'
-    +       '<a href="' + L('nosotros','prensa.html') + '">Prensa</a>'
-    +       '<a href="' + L('nosotros','contacto.html') + '">Contacto</a>'
+    +       '<a href="' + L('nosotros','sobre.html') + '">Sobre nosotros</a>'
+    +       '<a href="' + L('nosotros','seguridad.html') + '">Seguridad y privacidad</a>'
+    +       '<a href="' + L('nosotros','contacto.html') + '">Solicitar demo</a>'
+    +       '<a href="' + L('nosotros','oficinas.html') + '">Contacto</a>'
     +     '</div>'
     +   '</details>'
     +   '<a href="' + H('precios') + '" style="padding:18px 4px;font-size:18px;font-weight:500;border-bottom:1px solid var(--line);color:var(--ink)">Pricing</a>'
@@ -280,15 +288,18 @@
     crm:'soluciones', marketing:'soluciones', informes:'soluciones', api:'soluciones',
     'sec-discotecas':'sectores','sec-salas':'sectores','sec-beach':'sectores',
     'sec-festivales':'sectores','sec-promotoras':'sectores','sec-privados':'sectores',
-    academy:'recursos', blog:'recursos', guias:'recursos', webinars:'recursos',
-    newsletter:'recursos', changelog:'recursos', ayuda:'recursos',
-    'api-docs':'recursos', status:'recursos', 'pro-network':'recursos',
-    partners:'recursos', fbd:'recursos', embajadores:'recursos',
-    sobre:'nosotros', manifesto:'nosotros', equipo:'nosotros', cultura:'nosotros',
-    prensa:'nosotros', privacidad:'nosotros', seguridad:'nosotros',
-    sostenibilidad:'nosotros', diversidad:'nosotros',
+    academy:'recursos', 'blog-newsletter':'recursos',
+    blog:'recursos', newsletter:'recursos', webinars:'recursos',
+    ayuda:'recursos', changelog:'recursos', status:'recursos',
+    'api-docs':'recursos',
+    'partners-promotores':'recursos', 'pro-network':'recursos',
+    partners:'recursos', embajadores:'recursos',
+    sobre:'nosotros', manifesto:'nosotros', equipo:'nosotros', sostenibilidad:'nosotros',
+    'seguridad-privacidad':'nosotros', seguridad:'nosotros', privacidad:'nosotros',
     'contacto-page':'nosotros', ventas:'nosotros',
-    'soporte-page':'nosotros', oficinas:'nosotros',
+    'contacto-form':'nosotros', oficinas:'nosotros',
+    cultura:'nosotros', prensa:'nosotros', diversidad:'nosotros',
+    'soporte-page':'recursos',
   };
 
   function init(){

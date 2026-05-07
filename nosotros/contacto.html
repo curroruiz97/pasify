@@ -42,6 +42,16 @@
   .crumbs .sep{margin:0 10px;color:var(--line-2)}
   .crumbs .here{color:var(--ink)}
   .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Subsections (integrated children) */
+  .sub-section{margin-top:96px;position:relative}
+  .sub-head{max-width:680px;margin-bottom:36px}
+  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
+  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
+  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
 </style>
 </head>
 <body data-depth="sub" data-current="contacto-page">
@@ -63,7 +73,7 @@
     <section class="page-hero">
       <span class="label"><span class="pulse"></span>Contacto · Demo</span>
       <h1>Solicita una demo</h1>
-      <p class="lede">30 minutos por videollamada con un humano que conoce tu sector. Te muestra Pasify con datos de salas como la tuya. Sin presión, sin discurso comercial.</p>
+      <p class="lede">30 minutos por videollamada con un humano que conoce tu sector. Te muestra Pasify con datos de salas como la tuya — sin presión, sin discurso comercial. Si operas a escala (+50 eventos/año o +5.000 personas/noche), tenemos un <em>track de ventas dedicado</em> con precio personalizado, SLA premium y migración asistida.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
@@ -95,6 +105,39 @@
           </div>
           <h3>Sin compromiso</h3>
           <p>30 minutos y decides. Si no encaja, te recomendamos a un competidor que sí.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · HABLAR CON VENTAS ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Hablar con ventas<span class="pill">Enterprise</span></span>
+        <h2>Para los que <em>mueven</em> el sector.</h2>
+        <p class="sub">Si operas +50 eventos al año o +5.000 personas por noche, hablamos contigo directamente. Precio personalizado, onboarding dedicado, contrato anual con descuento, SLA premium y migración asistida desde tu plataforma actual.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <h3>Precio enterprise</h3>
+          <p>Modelo de pricing flexible: por evento, por GMV o por aforo anual. Lo que mejor encaje con tu operación, no con nuestro Excel.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 11v.01M9 11v.01M15 11v.01"/></svg>
+          </div>
+          <h3>SLA premium</h3>
+          <p>99.99% uptime contractual. Soporte prioritario en directo durante tus eventos — un ingeniero pendiente de tu instancia desde puertas a cierre.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3>Migración asistida</h3>
+          <p>Pasamos tus datos, tus listas y tus procesos en menos de 14 días. Tu próximo viernes ya operas con Pasify, sin pérdida de histórico.</p>
         </div>
       </div>
     </section>

@@ -4,29 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pasify para discotecas · Pasify</title>
+<meta name="description" content="El software operativo para discotecas modernas. Ticketing, reservados, RRPP, control de acceso y CRM en una sola plataforma. Diseñado para clubs de 100 a 2.000 personas.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../soluciones/_shared.css">
 <style>
-  /* Page-local extras */
-  .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
-  @media (max-width:880px){.feature-grid{grid-template-columns:1fr}}
-  .card{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .25s ease, border-color .25s ease}
-  .card:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .card-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
-  .card-ico svg{width:20px;height:20px}
-  .card h3{font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--ink);margin-bottom:8px}
-  .card p{font-size:14px;line-height:1.55;color:var(--ink-2)}
-  .cta-banner{margin:80px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:24px;padding:56px;display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;position:relative;overflow:hidden}
-  .cta-banner::before{content:"";position:absolute;width:300px;height:300px;background:var(--accent);filter:blur(100px);opacity:.25;top:-100px;right:-50px}
-  .cta-banner h2{position:relative;font-size:clamp(28px,3.4vw,42px);font-weight:600;letter-spacing:-0.03em;line-height:1.05;max-width:18ch}
-  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .cta-banner .ctas{position:relative;display:flex;gap:12px;flex-wrap:wrap}
+  /* ============================================================
+     Page-local styles · sectores/discotecas
+     Inherits ../soluciones/_shared.css (dark Pasify tokens)
+     ============================================================ */
+
+  /* Reveal-on-scroll */
   .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
   .reveal.in{opacity:1;transform:none}
+
+  /* Section frame */
   main{padding-top:0}
-  .page-hero{padding:120px 0 80px;position:relative;overflow:hidden}
+  .sec{padding:96px 0;position:relative}
+  .sec.compact{padding:64px 0}
+  .sec-head{max-width:760px;margin-bottom:48px}
+  .sec-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .sec-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sec-head h2{font-size:clamp(32px,4vw,52px);font-weight:600;letter-spacing:-0.035em;line-height:1.04;color:var(--ink)}
+  .sec-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sec-head p.sub{font-size:clamp(15px,1.2vw,17px);line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:62ch}
+
+  /* Crumbs (kept from prior) */
+  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .crumbs a{color:var(--ink-3);transition:color .2s ease}
+  .crumbs a:hover{color:var(--accent)}
+  .crumbs .sep{margin:0 10px;color:var(--line-2)}
+  .crumbs .here{color:var(--ink)}
+
+  /* Hero */
+  .page-hero{padding:80px 0 60px;position:relative;overflow:hidden}
   .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
   .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.08;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
   .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
@@ -34,87 +46,938 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
   .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
   .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .page-hero h1 .highlight{position:relative;display:inline-block}
+  .page-hero h1 .highlight::after{content:"";position:absolute;left:-2px;right:-2px;bottom:8px;height:14px;background:var(--accent);opacity:.45;z-index:-1;border-radius:2px;transform:skewY(-1deg)}
   .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
   .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
-  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-  .crumbs a{color:var(--ink-3);transition:color .2s ease}
-  .crumbs a:hover{color:var(--accent)}
-  .crumbs .sep{margin:0 10px;color:var(--line-2)}
-  .crumbs .here{color:var(--ink)}
-  .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .page-hero .meta{margin-top:32px;display:flex;gap:24px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);position:relative;z-index:2}
+  .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
+  .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+
+  /* Stats strip */
+  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
+  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
+  .stats-strip > div:last-child{border-right:none}
+  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
+  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
+  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
+  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
+  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
+
+  /* Pain section (3 cards "the problem") */
+  .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
+  .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
+  .pain-card:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .pain-card .x{position:absolute;top:24px;right:24px;width:30px;height:30px;border-radius:8px;border:1px solid rgba(232,84,42,.25);background:rgba(232,84,42,.08);display:grid;place-items:center;color:var(--accent);font-size:14px}
+  .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
+  .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
+  .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
+  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
+
+  /* Modules — 6 cards with unique icons */
+  .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.mod-grid{grid-template-columns:1fr}}
+  .mod{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .3s ease, border-color .3s ease, background .3s ease;position:relative;overflow:hidden}
+  .mod::before{content:"";position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:0;filter:blur(50px);top:-40px;right:-40px;transition:opacity .3s ease;pointer-events:none}
+  .mod:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .mod:hover::before{opacity:.18}
+  .mod .head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative}
+  .mod .ico{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mod .ico svg{width:22px;height:22px}
+  .mod .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--ink-3)}
+  .mod h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;position:relative}
+  .mod p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px;position:relative}
+  .mod ul{list-style:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+  .mod ul li{font-size:13px;color:var(--ink-2);display:flex;align-items:start;gap:10px;line-height:1.5}
+  .mod ul li::before{content:"";width:14px;height:1px;background:var(--accent);margin-top:9px;flex-shrink:0}
+
+  /* Timeline section (one night with Pasify) */
+  .timeline-wrap{position:relative;padding-left:48px;margin-top:32px}
+  .timeline-wrap::before{content:"";position:absolute;left:14px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,transparent,var(--line-2) 8%,var(--line-2) 92%,transparent)}
+  .tl-row{position:relative;padding:0 0 28px 0;display:grid;grid-template-columns:120px 1fr;gap:32px;align-items:start}
+  .tl-row::before{content:"";position:absolute;left:-40px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.12)}
+  .tl-row.peak::before{background:var(--accent);box-shadow:0 0 0 6px rgba(232,84,42,.18),0 0 20px rgba(232,84,42,.5)}
+  .tl-row .time{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-0.02em;line-height:1}
+  .tl-row .day{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+  .tl-row .body h4{font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-0.015em;margin-bottom:6px}
+  .tl-row .body p{font-size:14.5px;color:var(--ink-2);line-height:1.6;max-width:54ch}
+  .tl-row .body .tag{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:999px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  @media (max-width:720px){.tl-row{grid-template-columns:90px 1fr;gap:20px}.timeline-wrap{padding-left:36px}.tl-row::before{left:-32px;width:12px;height:12px}}
+
+  /* Dashboard mock */
+  .mock{margin-top:48px;background:linear-gradient(160deg,#0F0C0A,#1A1411);border:1px solid var(--line-2);border-radius:20px;padding:6px;position:relative;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6),0 0 80px -20px rgba(232,84,42,.2)}
+  .mock-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .mock-bar .dot{width:11px;height:11px;border-radius:50%;background:var(--line-2)}
+  .mock-bar .dot.r{background:#E8542A}
+  .mock-bar .dot.y{background:#E8B04C}
+  .mock-bar .dot.g{background:#4DB87A}
+  .mock-bar .url{margin-left:14px;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 14px;display:flex;align-items:center;gap:8px}
+  .mock-bar .url::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  .mock-body{padding:32px}
+  .mock-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;margin-bottom:28px}
+  .mock-head h4{font-size:22px;font-weight:600;letter-spacing:-0.02em;color:var(--ink)}
+  .mock-head .date{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  @media (max-width:720px){.mock-kpi{grid-template-columns:repeat(2,1fr)}}
+  .mock-kpi > div{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .mock-kpi .l{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi .v{font-family:'Geist Mono',monospace;font-size:24px;font-weight:600;color:var(--ink);margin-top:8px;letter-spacing:-0.02em;line-height:1}
+  .mock-kpi .v em{font-style:normal;color:var(--accent)}
+  .mock-kpi .d{font-family:'Geist Mono',monospace;font-size:11px;color:#4DB87A;margin-top:6px}
+  .mock-kpi .d.warn{color:var(--warm)}
+  .mock-split{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  @media (max-width:880px){.mock-split{grid-template-columns:1fr}}
+  .mock-tbl{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;overflow:hidden}
+  .mock-tbl .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;display:flex;justify-content:space-between}
+  .mock-tbl .ttl .live{color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+  .mock-tbl .ttl .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
+  .mock-tbl-row{display:grid;grid-template-columns:1.6fr .9fr .8fr 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--line);font-size:13px;align-items:center}
+  .mock-tbl-row.h{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);border-top:none;padding-top:0}
+  .mock-tbl-row .name{color:var(--ink);font-weight:500}
+  .mock-tbl-row .ppl{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .min{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .st{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  .mock-tbl-row .st.ok{color:#4DB87A}
+  .mock-tbl-row .st.wait{color:var(--warm)}
+  .mock-tbl-row .st.vip{color:var(--accent)}
+  .mock-tbl-row .st.gone{color:var(--ink-3);text-decoration:line-through}
+  @media (max-width:480px){.mock-tbl-row{grid-template-columns:1.6fr 1fr;gap:8px}.mock-tbl-row .min,.mock-tbl-row.h .min{display:none}}
+  .mock-feed{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:0}
+  .mock-feed .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  .feed-row{padding:11px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+  .feed-row:first-of-type{border-top:none}
+  .feed-row .t{font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink-3);letter-spacing:.04em;line-height:1.5}
+  .feed-row .body{font-size:13px;color:var(--ink-2);line-height:1.5}
+  .feed-row .body b{color:var(--ink);font-weight:500}
+  .feed-row .body .acc{color:var(--accent);font-weight:500}
+
+  /* Reservados split */
+  .res-split{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+  @media (max-width:980px){.res-split{grid-template-columns:1fr;gap:32px}}
+  .res-split .text h2{font-size:clamp(30px,3.6vw,46px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)}
+  .res-split .text h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .res-split .text p.sub{font-size:17px;line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:54ch}
+  .res-split ul.checks{list-style:none;margin-top:28px;display:flex;flex-direction:column;gap:14px}
+  .res-split ul.checks li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:15px;color:var(--ink-2);line-height:1.55}
+  .res-split ul.checks li b{color:var(--ink);font-weight:600}
+  .res-split ul.checks .ck{width:24px;height:24px;border-radius:6px;background:rgba(232,84,42,.14);border:1px solid rgba(232,84,42,.3);color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;display:grid;place-items:center;flex-shrink:0;margin-top:1px}
+  .res-card{background:linear-gradient(160deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:20px;padding:32px;position:relative;overflow:hidden}
+  .res-card::before{content:"";position:absolute;width:280px;height:280px;background:var(--accent);filter:blur(100px);opacity:.25;top:-80px;right:-80px;pointer-events:none}
+  .res-card .lab{position:relative;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .res-card .total{position:relative;display:flex;align-items:baseline;gap:6px;margin-top:14px}
+  .res-card .total .v{font-family:'Geist Mono',monospace;font-size:48px;font-weight:600;letter-spacing:-0.04em;color:var(--ink);line-height:1}
+  .res-card .total .c{font-family:'Geist Mono',monospace;font-size:18px;color:var(--ink-2)}
+  .res-card .small{position:relative;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px}
+  .res-card hr{position:relative;border:none;border-top:1px solid var(--line);margin:24px 0}
+  .res-card .line{position:relative;display:grid;grid-template-columns:1fr auto;gap:14px;font-size:13.5px;padding:8px 0;align-items:center}
+  .res-card .line .k{color:var(--ink-2)}
+  .res-card .line .v{font-family:'Geist Mono',monospace;color:var(--ink);font-weight:500}
+  .res-card .line.tot{padding-top:14px;border-top:1px dashed var(--line-2);font-weight:600}
+  .res-card .line.tot .v{color:var(--accent);font-size:15px}
+  .res-card .badge-row{position:relative;margin-top:24px;display:flex;gap:8px;flex-wrap:wrap}
+  .res-card .b{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:rgba(244,238,226,.06);border:1px solid var(--line-2);color:var(--ink-2)}
+  .res-card .b.ok{background:rgba(77,184,122,.1);border-color:rgba(77,184,122,.3);color:#4DB87A}
+
+  /* Comparison table */
+  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
+  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
+  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
+  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
+  .cmp td{color:var(--ink-3);font-size:14px}
+  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
+  .cmp td.yes{color:#4DB87A}
+  .cmp td.no{color:var(--ink-4)}
+  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
+  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
+
+  /* Testimonials */
+  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
+  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
+  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
+  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
+  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
+  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
+  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
+  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
+  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+  /* Integrations strip */
+  .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
+  @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
+  .int{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center;transition:transform .25s ease, border-color .25s ease, background .25s ease}
+  .int:hover{transform:translateY(-2px);border-color:rgba(232,84,42,.3);background:var(--bg-3)}
+  .int .nm{font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;letter-spacing:-0.005em;color:var(--ink)}
+  .int .cat{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+  /* FAQ */
+  .faq{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line);padding:24px 0;transition:background .25s ease}
+  .faq details[open]{background:linear-gradient(180deg,rgba(232,84,42,.03),transparent)}
+  .faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:24px;font-size:18px;font-weight:500;letter-spacing:-0.015em;color:var(--ink);outline:none}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+  .faq summary .plus{flex-shrink:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s ease, color .3s ease, border-color .3s ease;font-family:'Geist Mono',monospace;font-size:18px;line-height:1}
+  .faq details[open] summary .plus{transform:rotate(45deg);color:var(--accent);border-color:var(--accent)}
+  .faq .answer{padding:18px 56px 4px 0;font-size:15.5px;line-height:1.65;color:var(--ink-2);max-width:75ch}
+  .faq .answer p + p{margin-top:12px}
+  .faq .answer code{font-family:'Geist Mono',monospace;font-size:13px;color:var(--accent);background:rgba(232,84,42,.08);padding:2px 8px;border-radius:6px;border:1px solid rgba(232,84,42,.18)}
+
+  /* CTA banner final */
+  .cta-banner{margin:48px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:56px;display:grid;grid-template-columns:1.4fr 1fr;gap:48px;align-items:center;position:relative;overflow:hidden}
+  @media (max-width:880px){.cta-banner{grid-template-columns:1fr;padding:40px 28px;gap:32px}}
+  .cta-banner::before{content:"";position:absolute;width:400px;height:400px;background:var(--accent);filter:blur(120px);opacity:.28;top:-120px;right:-100px;pointer-events:none}
+  .cta-banner::after{content:"";position:absolute;width:300px;height:300px;background:var(--warm);filter:blur(100px);opacity:.12;bottom:-100px;left:-80px;pointer-events:none}
+  .cta-banner .left{position:relative}
+  .cta-banner .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .cta-banner h2{font-size:clamp(30px,3.4vw,48px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;max-width:18ch;color:var(--ink)}
+  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .cta-banner p.sub{font-size:16px;line-height:1.55;color:var(--ink-2);margin-top:18px;max-width:48ch}
+  .cta-banner .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .cta-banner ul.bulls{position:relative;list-style:none;display:flex;flex-direction:column;gap:14px}
+  .cta-banner ul.bulls li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:14.5px;color:var(--ink);line-height:1.5}
+  .cta-banner ul.bulls .ck{width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.35);display:grid;place-items:center;color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;flex-shrink:0;margin-top:1px}
+
+  /* Footer */
+  .footer{margin-top:96px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .reveal{opacity:1;transform:none}
+  }
 </style>
 </head>
 <body data-depth="sub" data-current="sec-discotecas">
-<div class="grain"></div>
+<a href="#main" class="skip-to-content" style="position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;z-index:9999;font-size:14px" onfocus="this.style.left='12px';this.style.top='12px'" onblur="this.style.left='-9999px'">Saltar al contenido</a>
 
-<!-- HEADER (injected) -->
+<div class="grain" aria-hidden="true"></div>
+
+<!-- HEADER (auto-injected) -->
 <div id="site-header"></div>
 
-<main>
+<main id="main">
   <div class="wrap">
-    <nav class="crumbs">
+
+    <!-- ===== CRUMBS ===== -->
+    <nav class="crumbs" aria-label="Migas de pan">
       <a href="../pasify.html">Inicio</a>
       <span class="sep">/</span>
       <a href="../pasify.html#sectores">Sectores</a>
       <span class="sep">/</span>
-      <span class="here">Pasify para discotecas</span>
+      <span class="here">Discotecas</span>
     </nav>
 
+    <!-- ===== HERO ===== -->
     <section class="page-hero">
-      <span class="label"><span class="pulse"></span>Sectores · Discotecas</span>
-      <h1><em>Pasify</em> para discotecas</h1>
-      <p class="lede">Diseñado con y para clubs. Si tu noche es 100 personas o 2.000, si abres 1 día o 7, Pasify se adapta y crece contigo.</p>
+      <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Discotecas</span>
+      <h1>El sistema operativo de tu <span class="highlight">noche</span>, no un <em>plugin</em> más.</h1>
+      <p class="lede">Diseñado con clubs reales, no con un slide de pitch. Si tu noche son 100 personas o 2.000, si abres un día o siete, Pasify cubre la venta, el reservado, la puerta y el lunes — sin contrato, sin comisión a tu cliente, sin pelearte con cuatro pestañas a las 4 AM.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
+        <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
+      </div>
+      <div class="meta" aria-label="Datos de plataforma">
+        <span>Activo en 6 ciudades</span>
+        <span>Stripe · Bizum · Apple Wallet</span>
+        <span>Soporte WhatsApp · viernes 03:00</span>
       </div>
     </section>
 
-    <section>
-      <div class="feature-grid">
+    <!-- ===== STATS STRIP ===== -->
+    <section class="stats-strip" aria-label="Métricas de plataforma">
+      <div>
+        <div class="num"><em>+</em>38<em>%</em></div>
+        <div class="lab">venta anticipada<br>vs taquilla en puerta</div>
+      </div>
+      <div>
+        <div class="num">23<em>s</em></div>
+        <div class="lab">tiempo medio<br>de checkout móvil</div>
+      </div>
+      <div>
+        <div class="num">0<em>%</em></div>
+        <div class="lab">comisión añadida<br>al cliente final</div>
+      </div>
+      <div>
+        <div class="num">99.9<em>%</em></div>
+        <div class="lab">uptime escáner<br>en puerta de entrada</div>
+      </div>
+    </section>
 
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+    <!-- ===== PROBLEM / "LA NOCHE TIENE PROBLEMAS" ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
+        <h2>Una buena discoteca no debería operarse con <em>WhatsApp</em>, Excel y un cuaderno.</h2>
+        <p class="sub">Y sin embargo, el 70% de los clubs en España siguen así. Listas en grupos, reservados apuntados a boli, RRPP cuestionando comisiones a las 5 AM. Estos son los tres dolores con los que llegan los managers que prueban Pasify.</p>
+      </div>
+
+      <div class="pain-grid">
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 01</div>
+          <h3>Caos de RRPP los domingos por la mañana</h3>
+          <p>Cinco listas en cinco grupos. Un Excel exportado a las 6 AM. Tres promotores discutiendo a quién pertenece el cliente que entró por la puerta sin código. Y una comisión que se paga "a ojo".</p>
+          <div class="quote">"Pagaba comisiones que no podía justificar. Y a veces la pagaba dos veces."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 02</div>
+          <h3>Reservados sin trazabilidad ni pre-pago</h3>
+          <p>El cliente reserva por DM, no aparece, y la mesa queda vacía sábado a las 02:30. Si aparece, paga al final, discute la cuenta, y tu maître pasa media hora en el TPV en vez de en la sala.</p>
+          <div class="quote">"De cada 10 reservados, 2 no venían. Y nadie pagaba un duro de penalización."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 03</div>
+          <h3>Cero data útil después del evento</h3>
+          <p>El lunes el dueño quiere saber cuánta gente vino, qué bebieron, de qué ciudad eran y cuántos vuelven. La respuesta es un número total y dos screenshots del TPV. No hay manera de fidelizar a quien ya pagó.</p>
+          <div class="quote">"Tenía 14.000 clientes acumulados. Sabía sus nombres y nada más."</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== MODULES / "OPERATIVA" ===== -->
+    <section id="operativa" class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">02 /</span> Producto</span>
+        <h2>Toda tu noche, en una app que entienden taquilleros, RRPP y maître.</h2>
+        <p class="sub">Seis módulos que hablan entre sí. No "integraciones", no "marketplace de plugins". Cero fricción entre vender una entrada online y leerla en pulsera a las 02:00.</p>
+      </div>
+
+      <div class="mod-grid">
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-3h12l3 3v10l-3 3H6l-3-3V7z"/><path d="M3 10h18"/><path d="M9 14h2"/></svg>
+            </div>
+            <span class="num">01</span>
           </div>
-          <h3>Multi-noche</h3>
-          <p>Una semana, varios eventos, una sola plataforma. Reusa entradas, listas y RRPP entre noches.</p>
+          <h3>Ticketing con saltos de precio</h3>
+          <p>Crea early-bird, late-entry y franjas horarias sin abrir Excel. La URL se comparte por WhatsApp y vende sola. Apple Wallet y Google Wallet de serie.</p>
+          <ul>
+            <li>Saltos automáticos por tiempo o stock</li>
+            <li>Stripe, Bizum y Apple Pay nativos</li>
+            <li>Reembolsos parciales con un click</li>
+          </ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4M17 6V4"/><path d="M7 11h.01M11 11h.01M15 11h.01M7 15h.01M11 15h.01M15 15h.01"/></svg>
+            </div>
+            <span class="num">02</span>
+          </div>
+          <h3>Reservados con pre-pago real</h3>
+          <p>Mesa, botellas, consumición mínima — todo en el carrito antes de pisar el club. El maître ve quién entra y con cuánto, sin abrir el TPV.</p>
+          <ul>
+            <li>Pre-autorización de tarjeta · 0% no-show fee opcional</li>
+            <li>Plano de mesas drag-and-drop</li>
+            <li>Asignación a camarero y comisión por mesa</li>
+          </ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><circle cx="17" cy="6.5" r="2.5"/><path d="M21 14c0-2.2-1.8-4-4-4"/></svg>
+            </div>
+            <span class="num">03</span>
+          </div>
+          <h3>RRPP con link único y comisión transparente</h3>
+          <p>Cada promotor tiene su URL, su QR y su panel. Ve cuánto ha vendido, cuánto cobra y quién entró por su lista — en tiempo real, no a las 6 AM.</p>
+          <ul>
+            <li>Comisión configurable por promotor o evento</li>
+            <li>Liquidación automática semanal vía Stripe</li>
+            <li>Anti-fraude: trazabilidad código por código</li>
+          </ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><circle cx="17" cy="17" r="2.5" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <span class="num">04</span>
+          </div>
+          <h3>Control de acceso QR + pulseras NFC</h3>
+          <p>App nativa para puerta, modo offline, lectura en menos de 200ms. Aforo en vivo, alertas de capacidad y reentry con un toque.</p>
+          <ul>
+            <li>iOS / Android — funciona sin cobertura</li>
+            <li>Pulseras NFC pre-codificadas opcionales</li>
+            <li>Modo "blacklist" para clientes vetados</li>
+          </ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/><path d="M12 12l9-4.5M12 12v9M12 12L3 7.5"/></svg>
+            </div>
+            <span class="num">05</span>
+          </div>
+          <h3>CRM por cliente, no por evento</h3>
+          <p>Cada persona que entra por tu puerta queda con su historial: noches, gasto, mesa, frecuencia. Segmenta y lanza email/WhatsApp el martes.</p>
+          <ul>
+            <li>RGPD-compliant, opt-in granular</li>
+            <li>Score de cliente VIP automático</li>
+            <li>Export CSV / API · tu data es tuya</li>
+          </ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg>
+            </div>
+            <span class="num">06</span>
+          </div>
+          <h3>Analytics post-noche en 3 clicks</h3>
+          <p>El lunes a las 09:00 tu email tiene el cierre: ingreso bruto y neto, top mesas, hora pico, % de aforo, no-shows, comparativa semana anterior.</p>
+          <ul>
+            <li>Cuadre TPV + venta online unificado</li>
+            <li>Modelo Z para Hacienda · IVA por tipo</li>
+            <li>Power BI / Looker Studio export nativo</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== TIMELINE / "UNA NOCHE" ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">03 /</span> Operativa real</span>
+        <h2>Una noche con Pasify, hora a hora.</h2>
+        <p class="sub">No es una demo bonita: es lo que ve el equipo de un club de 1.200 personas un sábado cualquiera. Desde las pulseras pre-impresas hasta el informe que llega el lunes antes del café.</p>
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="tl-row">
+          <div>
+            <div class="time">22:30</div>
+            <div class="day">Sáb · pre-apertura</div>
+          </div>
+          <div class="body">
+            <h4>Apertura controlada</h4>
+            <p>El taquillero abre la app de puerta. La lista de invitados está sincronizada, los QR ya validados, las pulseras NFC pre-codificadas para los reservados VIP. Aforo objetivo configurado. Cero papel.</p>
+            <span class="tag">Setup en 90s</span>
+          </div>
         </div>
 
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+        <div class="tl-row">
+          <div>
+            <div class="time">23:00</div>
+            <div class="day">Primeras entradas</div>
           </div>
-          <h3>Reservados ágiles</h3>
-          <p>Mesa, botellas, pre-pago y consumiciones mínimas. Tu maître ve todo en su iPad.</p>
+          <div class="body">
+            <h4>Cola fluida, validación &lt;200ms</h4>
+            <p>Los primeros clientes con entrada anticipada llegan. Validación QR offline (incluso si se cae la fibra). Cada lectura suma al contador en vivo. El RRPP responsable de esa lista ve sus entradas confirmadas en su móvil.</p>
+            <span class="tag">Modo offline activo</span>
+          </div>
         </div>
 
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+        <div class="tl-row peak">
+          <div>
+            <div class="time">00:30</div>
+            <div class="day">Pico de afluencia</div>
           </div>
-          <h3>Aftermovie data</h3>
-          <p>Quién vino, a qué hora, con quién. Material para el equipo de marketing del lunes.</p>
+          <div class="body">
+            <h4>Aforo en vivo, alerta a 90%</h4>
+            <p>El club está a 1.080 personas. Pasify alerta al manager: 90% de capacidad. Decide cerrar venta de "lista normal" pero deja abierta "VIP" y reservados pre-pagados. Sin tener que pisar la puerta.</p>
+            <span class="tag">Alerta capacidad</span>
+          </div>
+        </div>
+
+        <div class="tl-row">
+          <div>
+            <div class="time">02:00</div>
+            <div class="day">Reservado VIP</div>
+          </div>
+          <div class="body">
+            <h4>Pre-pago al check-in, cero efectivo en puerta</h4>
+            <p>Mesa 14 entra: 8 personas, consumición mínima 600€ ya cobrada, 2 botellas asignadas. El maître escanea la pulsera NFC del responsable, le sienta, y ya tiene el ticket abierto en el TPV. Cero fricción.</p>
+            <span class="tag">Cobro automático</span>
+          </div>
+        </div>
+
+        <div class="tl-row">
+          <div>
+            <div class="time">03:30</div>
+            <div class="day">Operativa de sala</div>
+          </div>
+          <div class="body">
+            <h4>Camarero cobra consumición sin moverse</h4>
+            <p>La mesa pide la tercera botella. El camarero la añade al ticket en su iPad, se cobra al instante de la pre-autorización. Si el cliente quiere pagar al final, se suma. Si no, ya está cubierto.</p>
+            <span class="tag">TPV integrado</span>
+          </div>
+        </div>
+
+        <div class="tl-row">
+          <div>
+            <div class="time">05:30</div>
+            <div class="day">Cierre</div>
+          </div>
+          <div class="body">
+            <h4>Cuadre automático del Z</h4>
+            <p>Cierra el club. El cierre Z del TPV cuadra solo con la venta online: ingreso bruto, neto, comisiones de RRPP devengadas, propinas, IVA por tipo. Sin Excel, sin pelearse, sin "luego lo miramos".</p>
+            <span class="tag">Hacienda-ready</span>
+          </div>
+        </div>
+
+        <div class="tl-row">
+          <div>
+            <div class="time">09:00</div>
+            <div class="day">Lun · informe</div>
+          </div>
+          <div class="body">
+            <h4>El email que abrirá el dueño en el café</h4>
+            <p>Un PDF y un link en su correo. 1.247 entradas, 14.2K€ brutos, 38% mesas, hora pico 01:00, top promotor "Mar V.", 84 clientes nuevos en CRM. Y la sugerencia: "envía WhatsApp a estos 84 con su próximo evento".</p>
+            <span class="tag">Auto-segmentación</span>
+          </div>
         </div>
       </div>
     </section>
 
+    <!-- ===== DASHBOARD MOCK / "LO QUE VES DESDE CABINA" ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">04 /</span> Lo que ves desde cabina</span>
+        <h2>Un dashboard que cabe en el iPad del jefe de sala.</h2>
+        <p class="sub">No "panel de administración" interminable: una pantalla, datos vivos, decisiones rápidas. Esto es lo que vería tu manager ahora mismo si estuvieses operando un sábado.</p>
+      </div>
+
+      <div class="mock" aria-label="Demostración visual del dashboard de Pasify">
+        <div class="mock-bar">
+          <span class="dot r" aria-hidden="true"></span>
+          <span class="dot y" aria-hidden="true"></span>
+          <span class="dot g" aria-hidden="true"></span>
+          <span class="url">app.pasify.com/club/sala-eclipse/live · sáb 14 jun · 02:14</span>
+        </div>
+        <div class="mock-body">
+          <div class="mock-head">
+            <h4>Sala Eclipse · Madrid · Live</h4>
+            <span class="date">Sáb 14 · 02:14 AM</span>
+          </div>
+
+          <div class="mock-kpi">
+            <div>
+              <div class="l">Aforo</div>
+              <div class="v">1.084 <em>/ 1.200</em></div>
+              <div class="d warn">90% · alerta activa</div>
+            </div>
+            <div>
+              <div class="l">Caja viva</div>
+              <div class="v">14<em>.</em>248<em>€</em></div>
+              <div class="d">+18% vs semana ant.</div>
+            </div>
+            <div>
+              <div class="l">Reservados</div>
+              <div class="v">22 <em>/ 28</em></div>
+              <div class="d">6 pendientes &lt; 04:00</div>
+            </div>
+            <div>
+              <div class="l">Top promotor</div>
+              <div class="v" style="font-size:18px">Mar V.</div>
+              <div class="d">128 entradas · 384€ comisión</div>
+            </div>
+          </div>
+
+          <div class="mock-split">
+            <div class="mock-tbl">
+              <div class="ttl">
+                <span>Reservados · sala</span>
+                <span class="live">live</span>
+              </div>
+              <div class="mock-tbl-row h">
+                <span>Mesa</span><span>Pax</span><span>Mín</span><span>Estado</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">14 · Pista B</span><span class="ppl">8 pax</span><span class="min">600€</span><span class="st vip">VIP · ENTRÓ</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">07 · Bordillo</span><span class="ppl">4 pax</span><span class="min">240€</span><span class="st ok">DENTRO</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">22 · DJ booth</span><span class="ppl">12 pax</span><span class="min">1.200€</span><span class="st vip">VIP · DENTRO</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">03 · Pasillo</span><span class="ppl">6 pax</span><span class="min">360€</span><span class="st wait">PEND · 03:30</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">11 · Pista A</span><span class="ppl">2 pax</span><span class="min">120€</span><span class="st gone">NO-SHOW</span>
+              </div>
+              <div class="mock-tbl-row">
+                <span class="name">19 · Reservado</span><span class="ppl">10 pax</span><span class="min">800€</span><span class="st ok">DENTRO</span>
+              </div>
+            </div>
+
+            <div class="mock-feed">
+              <div class="ttl">Últimas entradas</div>
+              <div class="feed-row">
+                <span class="t">02:14</span>
+                <span class="body"><b>Carla M.</b> escaneó · entrada general · <span class="acc">RRPP Mar V.</span></span>
+              </div>
+              <div class="feed-row">
+                <span class="t">02:13</span>
+                <span class="body"><b>+3 entradas</b> en 90s · pista A</span>
+              </div>
+              <div class="feed-row">
+                <span class="t">02:12</span>
+                <span class="body"><b>Mesa 14</b> añade botella · <span class="acc">+90€</span></span>
+              </div>
+              <div class="feed-row">
+                <span class="t">02:11</span>
+                <span class="body"><b>Aforo 90%</b> · alerta a manager</span>
+              </div>
+              <div class="feed-row">
+                <span class="t">02:09</span>
+                <span class="body"><b>RRPP "JuanZ"</b> liquidación pendiente · 156€</span>
+              </div>
+              <div class="feed-row">
+                <span class="t">02:07</span>
+                <span class="body"><b>Mesa 03</b> recordatorio enviado · <span class="acc">WhatsApp</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== RESERVADOS DEEP DIVE ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">05 /</span> Reservados</span>
+      </div>
+
+      <div class="res-split">
+        <div class="text">
+          <h2>El <em>60%</em> de tu facturación, gestionado como en un restaurante de Michelin.</h2>
+          <p class="sub">Los reservados son donde se gana o se pierde la noche. Un no-show del 22% — la media del sector — equivale a perder un fin de semana al mes. Pasify trata cada mesa como un producto, con su precio, su pre-autorización, su consumición, su trazabilidad y su penalización si hace falta.</p>
+
+          <ul class="checks">
+            <li>
+              <span class="ck">✓</span>
+              <div><b>Consumición mínima cobrada al reservar.</b> El cliente pre-paga el suelo de la mesa. Lo que consuma de más va sumando al ticket, sin discusiones.</div>
+            </li>
+            <li>
+              <span class="ck">✓</span>
+              <div><b>Pre-autorización de tarjeta.</b> Si no aparece en 60 minutos del horario, se cobra el 50% como no-show fee — configurable, opcional.</div>
+            </li>
+            <li>
+              <span class="ck">✓</span>
+              <div><b>Plano de mesas vivo.</b> Tu maître arrastra mesas, libera, reasigna y bloquea desde el iPad sin tocar el TPV.</div>
+            </li>
+            <li>
+              <span class="ck">✓</span>
+              <div><b>Comisión por camarero.</b> Cada mesa va asignada a un camarero. Su % se calcula automáticamente al cierre del Z.</div>
+            </li>
+            <li>
+              <span class="ck">✓</span>
+              <div><b>Cliente VIP detectado.</b> Si el responsable de mesa ya estuvo 3+ veces, salta el flag. El maître lo recibe sabiéndolo.</div>
+            </li>
+          </ul>
+        </div>
+
+        <aside class="res-card" aria-label="Ejemplo de reservado pre-pagado">
+          <div class="lab">Mesa 14 · pista B · sáb 14 jun</div>
+          <div class="total">
+            <span class="v">680</span><span class="c">€ · pre-pagado</span>
+          </div>
+          <div class="small">8 pax · responsable Carla M. · llegada 01:00</div>
+
+          <hr>
+
+          <div class="line"><span class="k">Consumición mínima</span><span class="v">600,00 €</span></div>
+          <div class="line"><span class="k">Botella welcome (1)</span><span class="v">incluida</span></div>
+          <div class="line"><span class="k">Service charge · 10%</span><span class="v">60,00 €</span></div>
+          <div class="line"><span class="k">Mesa preferente · pista B</span><span class="v">20,00 €</span></div>
+          <div class="line tot"><span class="k">Total cobrado</span><span class="v">680,00 €</span></div>
+
+          <div class="badge-row">
+            <span class="b ok">PRE-AUTH OK</span>
+            <span class="b">RRPP Mar V.</span>
+            <span class="b">Camarero · Iván</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===== COMPARISON TABLE ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
+        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
+        <p class="sub">Sin nombrar a nadie. Estos son los rangos típicos de las dos plataformas más usadas en discotecas en España, según conversaciones con managers que migraron a Pasify en 2024–25. Si crees que la tuya cobra menos, escríbenos: ajustamos.</p>
+      </div>
+
+      <div class="cmp" role="region" aria-label="Comparativa de Pasify vs alternativas">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"></th>
+              <th scope="col" class="hl">Pasify</th>
+              <th scope="col">Plataforma vertical A</th>
+              <th scope="col">Plataforma marketplace B</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Comisión por entrada vendida</th>
+              <td class="hl"><span class="pct">0%</span> al cliente · 4–6% al club</td>
+              <td>5–7% al cliente <span style="color:var(--ink-4)">(repercutido)</span></td>
+              <td>3,5% + 0,99 €/entrada al cliente</td>
+            </tr>
+            <tr>
+              <th scope="row">Reservados con pre-pago</th>
+              <td class="hl yes">Sí · nativo</td>
+              <td>Sí · módulo extra</td>
+              <td class="no">No</td>
+            </tr>
+            <tr>
+              <th scope="row">RRPP con liquidación automática</th>
+              <td class="hl yes">Sí · semanal vía Stripe</td>
+              <td>Sí · manual o quincenal</td>
+              <td class="no">No</td>
+            </tr>
+            <tr>
+              <th scope="row">Aforo en vivo + alertas</th>
+              <td class="hl yes">Sí</td>
+              <td>Sí</td>
+              <td>Solo total</td>
+            </tr>
+            <tr>
+              <th scope="row">App de puerta offline</th>
+              <td class="hl yes">Sí · sin cobertura</td>
+              <td>Limitada</td>
+              <td>Requiere conexión</td>
+            </tr>
+            <tr>
+              <th scope="row">CRM por cliente · export</th>
+              <td class="hl yes">Sí · CSV + API</td>
+              <td>Sí · CSV</td>
+              <td class="no">Solo dentro de la plataforma</td>
+            </tr>
+            <tr>
+              <th scope="row">Soporte humano viernes 03:00</th>
+              <td class="hl yes">Sí · WhatsApp directo</td>
+              <td>Tickets · 1–4h</td>
+              <td>Email · 24–48h</td>
+            </tr>
+            <tr>
+              <th scope="row">Permanencia mínima</th>
+              <td class="hl"><span class="pct">0</span> meses</td>
+              <td>12 meses</td>
+              <td>0 meses</td>
+            </tr>
+            <tr>
+              <th scope="row">Migración asistida</th>
+              <td class="hl yes">Gratis · 15 min con humano</td>
+              <td>Coste a medida</td>
+              <td class="no">No ofrecida</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== TESTIMONIALS ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
+        <h2>Tres formas de medir si Pasify funciona.</h2>
+        <p class="sub">Tres clubs reales de tres ciudades distintas. Nombres anonimizados a petición — el sector es pequeño y prefieren no aparecer. Las cifras son las que comparten en sus reuniones de equipo.</p>
+      </div>
+
+      <div class="quotes">
+        <article class="q reveal">
+          <div class="mark" aria-hidden="true">"</div>
+          <blockquote>Pasamos de <em>cuatro</em> personas en taquilla los sábados a una sola escaneando QR. La cola desapareció en dos noches. Y el cliente no paga ni un céntimo extra.</blockquote>
+          <div class="who">
+            <div class="av" aria-hidden="true"></div>
+            <div>
+              <div class="nm">M.G. · Manager</div>
+              <div class="role">Club techno · Madrid · 1.200 cap</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="q reveal">
+          <div class="mark" aria-hidden="true">"</div>
+          <blockquote>El no-show de reservados pasó del <em>22%</em> al 4% el primer mes. Pre-autorizamos al reservar y la gente, simplemente, viene. Ya recuperé el coste de Pasify en un sábado.</blockquote>
+          <div class="who">
+            <div class="av b" aria-hidden="true"></div>
+            <div>
+              <div class="nm">J.R. · Owner</div>
+              <div class="role">Sala indie · Barcelona · 600 cap</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="q reveal">
+          <div class="mark" aria-hidden="true">"</div>
+          <blockquote>Mi <em>link</em>, mi lista, mi comisión. Nunca más una discusión a las 5 AM con el dueño sobre si tres entradas eran mías o no. La transparencia me hace dormir mejor.</blockquote>
+          <div class="who">
+            <div class="av c" aria-hidden="true"></div>
+            <div>
+              <div class="nm">A.L. · Promotora</div>
+              <div class="role">Colectivo RRPP · Valencia</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== INTEGRATIONS ===== -->
+    <section class="sec compact reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <h2>Encaja con el stack que ya usas.</h2>
+        <p class="sub">No te pedimos que cambies de TPV, contabilidad, CRM ni redes. Pasify habla con todos. Y si lo tuyo no está, lo conectamos vía API en 24h.</p>
+      </div>
+
+      <div class="ints">
+        <div class="int"><div class="nm">Stripe</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Bizum</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Apple Wallet</div><div class="cat">Tickets</div></div>
+        <div class="int"><div class="nm">Google Wallet</div><div class="cat">Tickets</div></div>
+        <div class="int"><div class="nm">Holded</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Sage 50</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Revel TPV</div><div class="cat">TPV</div></div>
+        <div class="int"><div class="nm">Sumup</div><div class="cat">TPV</div></div>
+        <div class="int"><div class="nm">Instagram</div><div class="cat">Marketing</div></div>
+        <div class="int"><div class="nm">WhatsApp Biz</div><div class="cat">CRM</div></div>
+        <div class="int"><div class="nm">Mailchimp</div><div class="cat">Email</div></div>
+        <div class="int"><div class="nm">Spotify</div><div class="cat">Lineup</div></div>
+        <div class="int"><div class="nm">Looker Studio</div><div class="cat">Analytics</div></div>
+        <div class="int"><div class="nm">Power BI</div><div class="cat">Analytics</div></div>
+        <div class="int"><div class="nm">Zapier</div><div class="cat">Webhooks</div></div>
+      </div>
+    </section>
+
+    <!-- ===== FAQ ===== -->
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <h2>Lo que preguntan los managers antes de firmar.</h2>
+        <p class="sub">Si la tuya no está, escríbenos. Pasify no tiene comerciales que te llamen tres veces — un humano del producto te contesta en menos de una hora.</p>
+      </div>
+
+      <div class="faq">
+        <details>
+          <summary>¿Cuánto tarda el alta y la migración desde mi plataforma actual?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>El alta operativa son <b>15 minutos</b> con un humano nuestro por videollamada. Configuramos tu sala, tus horarios, tus mesas y tu primer evento en directo, contigo.</p>
+            <p>Si vienes de Fourvenues, Eventbrite o cualquier otra plataforma, migramos tu base de clientes (CRM), tu histórico de eventos y tus integraciones de pago <b>gratis</b>, en menos de 48h. Tu próximo viernes ya operas con Pasify.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Funciona si ya tengo contrato con Fourvenues u otra plataforma?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>Sí. Pasify puede correr en paralelo durante tu permanencia. Empieza por un módulo (típicamente reservados o RRPP) y, cuando venza tu contrato actual, migras el resto.</p>
+            <p>De hecho recomendamos esa transición — verifica el ROI antes de comprometerte. La mayoría de managers cancelan la otra plataforma a los 60 días por iniciativa propia.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Quién tiene la propiedad de la data de mis clientes?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p><b>Tú. Sin condiciones.</b> Pasify es un encargado de tratamiento (RGPD art. 28), no responsable. Tu base de clientes es exportable en cualquier momento por CSV o API, en el formato que pidas, sin coste.</p>
+            <p>Si decides irte mañana, te llevas <b>el 100%</b> de tu data. No usamos tu CRM para venderte cosas a tus clientes ni para cruzar datos con otros locales.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Cuál es la comisión exacta? ¿Hay letra pequeña?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>Para discotecas: una <b>tarifa fija mensual</b> según tu aforo (desde 149€/mes para clubs de hasta 500 cap.) más una <b>comisión del 4–6%</b> sobre la venta online — la cobramos al club, no al cliente. Tu asistente paga lo que diga el ticket, ni un céntimo más.</p>
+            <p>Lo que NO hay: setup fee, coste por evento creado, coste por usuario, coste por mesa, coste por SMS, coste por integración, coste por exportar, coste por cancelar. Sin permanencia.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Tienen soporte humano un viernes a las 03:00 AM?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>Sí. Esto es nightlife — sabemos cuándo nos necesitas. <b>Soporte WhatsApp directo</b> con humanos del producto (no chatbots) viernes y sábados de 22:00 a 06:00. Tiempo medio de respuesta: 4 minutos.</p>
+            <p>El resto de la semana, lunes a jueves 09:00–20:00 con respuesta en menos de 30 minutos. Y sí, tenemos guardia de operaciones para festivales y noches especiales — coordinamos antes.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Y si mi club no es nightlife puro? Ej: cocktail bar con DJ los jueves<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>También. Pasify se adapta al perfil del local: si solo necesitas reservados con pre-pago para los DJ nights, contratas solo ese módulo. Si quieres ticketing para una sesión especial al mes, igual.</p>
+            <p>Tenemos clientes que solo usan Pasify <b>para cuatro noches al mes</b> y están encantados. La tarifa fija escala hacia abajo si tu volumen es bajo — escríbenos y ajustamos.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Cumple con Hacienda y la facturación TPV en España?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>Sí. Pasify genera <b>cierre Z certificado</b>, IVA por tipo (4% / 10% / 21%), libro registro de facturas y export directo a Holded, Sage o Excel para tu gestoría. Cumplimos con la normativa <code>Veri*Factu</code> 2026.</p>
+            <p>Y si tu gestor prefiere que le mandemos los datos cada lunes en un formato concreto, lo configuramos una vez y va solo.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>¿Puedo probarlo antes de firmar?<span class="plus" aria-hidden="true">+</span></summary>
+          <div class="answer">
+            <p>Sí. <b>Primer evento gratis, sin tarjeta.</b> Crea el evento, vende entradas, opera la noche, y al lunes decides. Si no encaja, no nos debes nada — y tu data se exporta limpia.</p>
+            <p>Si quieres probar dos o tres noches antes de comprometerte, también vale. Solo dilo en la demo.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ===== FINAL CTA ===== -->
     <section class="cta-banner reveal">
-      <h2>La operativa que tu <em>noche</em> merece.</h2>
-      <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+      <div class="left">
+        <div class="lab">Empieza esta semana</div>
+        <h2>La operativa que tu <em>noche</em> merece. Sin contrato, sin sorpresas.</h2>
+        <p class="sub">30 días para probarlo en serio. Migración gratis desde tu plataforma actual. Un humano de Pasify te configura el primer evento en 15 minutos por videollamada — y se queda contigo el viernes por si algo arde.</p>
+        <div class="ctas">
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
+        </div>
       </div>
+      <ul class="bulls">
+        <li><span class="ck">✓</span><div><b>Onboarding humano · 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Por videollamada con alguien que ha trabajado en sala. Sin formulario, sin chatbot.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Migración gratis desde Eventbrite o Fourvenues</b><br><span style="color:var(--ink-2);font-size:13px">Importamos clientes, eventos pasados y tu integración de pago en 48h.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Soporte WhatsApp · viernes 03:00</b><br><span style="color:var(--ink-2);font-size:13px">Personas del producto, no tickets. Tiempo medio de respuesta: 4 min.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Sin permanencia, sin letra pequeña</b><br><span style="color:var(--ink-2);font-size:13px">Si no funciona el primer mes, cancelas y te llevas tu data.</span></div></li>
+      </ul>
     </section>
+
   </div>
+
   <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
 </main>
 
 <script src="../soluciones/_header.js"></script>
 <script>
   // Reveal on scroll
-  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+  (function(){
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+      return;
+    }
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }});
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  })();
 </script>
 </body>
 </html>

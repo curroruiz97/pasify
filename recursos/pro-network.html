@@ -42,9 +42,19 @@
   .crumbs .sep{margin:0 10px;color:var(--line-2)}
   .crumbs .here{color:var(--ink)}
   .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Subsections (integrated children) */
+  .sub-section{margin-top:96px;position:relative}
+  .sub-head{max-width:680px;margin-bottom:36px}
+  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
+  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
+  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
 </style>
 </head>
-<body data-depth="sub" data-current="pro-network">
+<body data-depth="sub" data-current="partners-promotores">
 <div class="grain"></div>
 
 <!-- HEADER (injected) -->
@@ -57,13 +67,13 @@
       <span class="sep">/</span>
       <a href="../pasify.html">Recursos</a>
       <span class="sep">/</span>
-      <span class="here">Pasify Pro Network</span>
+      <span class="here">Partners &amp; Promotores</span>
     </nav>
 
     <section class="page-hero">
-      <span class="label"><span class="pulse"></span>Comunidad · Pro Network</span>
-      <h1><em>Pasify</em> Pro Network</h1>
-      <p class="lede">Comunidad cerrada de +800 promotores, managers y dueños de salas. Slack, eventos y reuniones privadas para compartir lo que no se publica.</p>
+      <span class="label"><span class="pulse"></span>Comunidad · Partners &amp; Promotores</span>
+      <h1>Partners <em>&amp;</em> Promotores</h1>
+      <p class="lede">La red profesional de Pasify: <em>+800 promotores</em>, managers y dueños de salas en Slack privado, partners certificados que recomiendan Pasify por comisión, y embajadores RRPP que ganan por cada entrada vendida con su link.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
@@ -95,6 +105,72 @@
           </div>
           <h3>Acceso exclusivo</h3>
           <p>Roadmap, beta tests y precios privados antes que el resto.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · PROGRAMA DE PARTNERS ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Programa de partners<span class="pill">B2B</span></span>
+        <h2>Si vendes a salas y promotores, gana <em>recurrente</em>.</h2>
+        <p class="sub">Para hardware, marketing, consultoría o agencia. Pasify te da herramientas, formación oficial y comisiones recurrentes durante 24 meses por cada cliente que recomiendes.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <h3>Comisión recurrente</h3>
+          <p>20% del MRR durante 24 meses por cada cliente que recomiendes. Pago automático vía Stripe.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><circle cx="17" cy="6.5" r="2.5"/><path d="M21 14c0-2.2-1.8-4-4-4"/></svg>
+          </div>
+          <h3>Co-marketing</h3>
+          <p>Webinars conjuntos, casos de estudio y leads compartidos. Tu marca + la nuestra, en frente del público correcto.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.5 5 5.5.8-4 3.9.9 5.5L12 14.6 7.1 17.2 8 11.7 4 7.8l5.5-.8z"/></svg>
+          </div>
+          <h3>Certificación</h3>
+          <p>Pasa el examen y obtén el sello "Pasify Certified Partner". Visibilidad pública en nuestra web y rondas de leads cualificados.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · EMBAJADORES RRPP ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Programa de embajadores RRPP<span class="pill">B2C</span></span>
+        <h2>Si eres RRPP top y traes ventas, te lo <em>pagamos</em>.</h2>
+        <p class="sub">Comisión por cada entrada vendida con tu link, ranking público de los Top 50 RRPP de España, y premios trimestrales — viajes, cabinas DJ y cabezas de cartel — para los mejores. Si vendes, te tratamos como artista.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </div>
+          <h3>Comisión por venta</h3>
+          <p>Hasta 12% por entrada vendida con tu código. Pago semanal a tu cuenta vía Stripe. Cero discusiones a las 5 AM.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V10M9 21V4M15 21v-7M21 21v-13"/><path d="M2 21h20"/></svg>
+          </div>
+          <h3>Ranking público</h3>
+          <p>Top 50 RRPP de España, actualizado en vivo. Visibilidad real, oportunidades reales — promotoras te buscan a ti.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5"/><path d="M18 9a6 6 0 0 1-12 0"/><path d="M9 22h6M12 14v8"/><path d="M3 5h3M18 5h3"/></svg>
+          </div>
+          <h3>Premios trimestrales</h3>
+          <p>Viajes, cabinas DJ, cabezas de cartel. Si vendes, te tratamos como artista. Cuatro veces al año, los Top 10 reciben experiencias reales.</p>
         </div>
       </div>
     </section>

@@ -42,9 +42,19 @@
   .crumbs .sep{margin:0 10px;color:var(--line-2)}
   .crumbs .here{color:var(--ink)}
   .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* Subsections (integrated children) */
+  .sub-section{margin-top:96px;position:relative}
+  .sub-head{max-width:680px;margin-bottom:36px}
+  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
+  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
+  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
 </style>
 </head>
-<body data-depth="sub" data-current="blog">
+<body data-depth="sub" data-current="blog-newsletter">
 <div class="grain"></div>
 
 <!-- HEADER (injected) -->
@@ -57,13 +67,13 @@
       <span class="sep">/</span>
       <a href="../pasify.html">Recursos</a>
       <span class="sep">/</span>
-      <span class="here">Blog &amp; tendencias del nightlife</span>
+      <span class="here">Blogs &amp; Newsletter</span>
     </nav>
 
     <section class="page-hero">
-      <span class="label"><span class="pulse"></span>Recursos · Blog</span>
-      <h1>Blog &amp; tendencias del nightlife</h1>
-      <p class="lede">Análisis, casos reales, entrevistas con promotores y datos del sector. Sin paja, sin SEO. Solo lo que ayuda a vender más entradas y operar mejor.</p>
+      <span class="label"><span class="pulse"></span>Recursos · Blogs &amp; Newsletter</span>
+      <h1>Blogs <em>&amp;</em> Newsletter</h1>
+      <p class="lede">Todo lo que publicamos sobre nightlife — en un solo sitio. Análisis y casos reales en el blog, una <em>newsletter mensual</em> con lo que importa, y webinars en directo cada mes. Sin paja, sin SEO. Solo lo que ayuda a vender más entradas y operar mejor.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
@@ -95,6 +105,72 @@
           </div>
           <h3>Entrevistas</h3>
           <p>Promotores y managers que están cambiando el nightlife. En sus palabras.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · NEWSLETTER ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Newsletter<span class="pill">Mensual</span></span>
+        <h2>Una vez al mes, lo que <em>importa</em>.</h2>
+        <p class="sub">Cinco minutos de lectura, cero ruido. Un caso real con sus números, tres datos del sector que tus competidores no están mirando, y una herramienta nueva para probar el finde.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
+          </div>
+          <h3>1 caso real</h3>
+          <p>Cómo lo hicieron, qué números sacaron, qué cambiarían. Sin filtros de marketing.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg>
+          </div>
+          <h3>3 datos del sector</h3>
+          <p>Las cifras que tus competidores no están mirando: ticket medio, hot spots, géneros que crecen.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7h7M14 12h7M14 17h7M3 7h7v10H3z"/></svg>
+          </div>
+          <h3>1 herramienta nueva</h3>
+          <p>Una integración, un truco operativo o una plantilla nueva cada mes. Aplicable el viernes siguiente.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SUBSECTION · WEBINARS & EVENTOS ===== -->
+    <section class="sub-section reveal">
+      <div class="sub-head">
+        <span class="eyebrow">Webinars &amp; eventos<span class="pill">En directo</span></span>
+        <h2>Una vez al mes, en directo, sin guion de marketing.</h2>
+        <p class="sub">Nos juntamos con un promotor o manager top y desmontamos un caso real. Q&amp;A abierto al final, encuentros físicos cuatro veces al año en Madrid, Barcelona, Valencia e Ibiza.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>
+          </div>
+          <h3>Cada mes en directo</h3>
+          <p>Un caso, un invitado, 60 minutos. Q&amp;A abierto al final — preguntas tuyas, respuestas reales.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M9 14l4 2-4 2z" fill="currentColor"/></svg>
+          </div>
+          <h3>Repositorio en vídeo</h3>
+          <p>Si no puedes en vivo, todo queda grabado con timestamps por tema. Búscalo, salta al minuto exacto.</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-11a7 7 0 0 1 14 0c0 6.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          </div>
+          <h3>Encuentros físicos</h3>
+          <p>4 veces al año reunimos a la comunidad en Madrid, Barcelona, Valencia e Ibiza. Cena, panel y networking real.</p>
         </div>
       </div>
     </section>
