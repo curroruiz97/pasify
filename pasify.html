@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pasify — El sistema operativo del nightlife</title>
+<title>Pasify — El sistema operativo de los eventos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -138,7 +138,7 @@
   @keyframes cardFloat{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-2deg) translateY(-12px)}}
   .ticket-card::before,.ticket-card::after{content:"";position:absolute;width:24px;height:24px;background:var(--bg);border-radius:50%;left:50%;transform:translateX(-50%)}
   .ticket-card::before{top:64%}
-  .ticket-card .img{height:200px;background:linear-gradient(135deg,#3D1F12 0%,#7A2A0F 50%,#E8542A 100%);position:relative;overflow:hidden}
+  .ticket-card .img{height:200px;background:linear-gradient(135deg,#3D1F12 0%,#7A2A0F 50%,#E8542A 100%),url("uploads/pera%20fiesta.jpg") center/cover no-repeat;background-blend-mode:multiply;position:relative;overflow:hidden}
   .ticket-card .img::after{content:"";position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><circle cx='20' cy='20' r='1' fill='white' opacity='0.2'/></svg>") repeat;opacity:.6}
   .ticket-card .img-content{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;justify-content:space-between;color:#fff}
   .ticket-card .img-content .top{display:flex;justify-content:space-between;align-items:start}
@@ -201,11 +201,17 @@
   /* LOGO STRIP */
   .logo-strip{padding:60px 0 40px;border-bottom:1px solid var(--line)}
   .logo-strip-label{text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);margin-bottom:32px}
-  .logo-strip-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:48px 64px;align-items:center;opacity:.7}
-  .logo-strip-grid .brand{font-family:'Geist',sans-serif;font-weight:700;font-size:22px;letter-spacing:-0.02em;color:var(--ink-2);transition:color .2s ease}
-  .logo-strip-grid .brand:hover{color:var(--ink)}
-  .logo-strip-grid .brand.serif{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:28px}
-  .logo-strip-grid .brand.thin{font-weight:300;letter-spacing:.18em}
+  .logo-strip-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:32px;align-items:center;justify-items:center}
+  .logo-strip-grid .brand-logo{height:40px;width:auto;max-width:100%;object-fit:contain;filter:brightness(0) invert(1);opacity:.62;transition:opacity .25s ease, transform .25s ease}
+  .logo-strip-grid .brand-logo:hover{opacity:1;transform:translateY(-2px)}
+  /* Per-logo height tweaks for visual balance across different aspect ratios */
+  .logo-strip-grid .brand-logo[data-brand="ultramarinos"]{height:46px}
+  .logo-strip-grid .brand-logo[data-brand="toninos"]{height:36px}
+  .logo-strip-grid .brand-logo[data-brand="pera"]{height:44px}
+  .logo-strip-grid .brand-logo[data-brand="lucense"]{height:46px}
+  .logo-strip-grid .brand-logo[data-brand="raza"]{height:30px}
+  .logo-strip-grid .brand-logo[data-brand="greca"]{height:42px}
+  .logo-strip-grid .brand-logo[data-brand="flamma"]{height:42px}
 
   /* MODULES */
   .modules{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -242,12 +248,12 @@
   .sector:hover{transform:translateY(-4px)}
   .sector .bg{position:absolute;inset:0;transition:transform .6s ease}
   .sector:hover .bg{transform:scale(1.05)}
-  .sector.s1 .bg{background:linear-gradient(160deg,#3D1F12,#7A2A0F 60%,#E8542A 100%)}
-  .sector.s2 .bg{background:linear-gradient(160deg,#1A0F2E,#3A1F5C 60%,#7B3CCC 100%)}
-  .sector.s3 .bg{background:linear-gradient(160deg,#0B2E2C,#1F4D58 60%,#3CB5C7 100%)}
-  .sector.s4 .bg{background:linear-gradient(160deg,#2E1A0B,#5C3A0F 60%,#E8B04C 100%)}
-  .sector .grain{position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay;opacity:.6;pointer-events:none}
-  .sector .overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(11,9,8,.85) 100%)}
+  .sector.s1 .bg{background:linear-gradient(160deg,#3D1F12,#7A2A0F 60%,#E8542A 100%),url("uploads/discoteca.webp") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s2 .bg{background:linear-gradient(160deg,#1A0F2E,#3A1F5C 60%,#7B3CCC 100%),url("uploads/promotora.jpg") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s3 .bg{background:linear-gradient(160deg,#0B2E2C,#1F4D58 60%,#3CB5C7 100%),url("uploads/beach%20club.jpg") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s4 .bg{background:linear-gradient(160deg,#2E1A0B,#5C3A0F 60%,#E8B04C 100%),url("uploads/festival.webp") center/cover no-repeat;background-blend-mode:multiply}
+  .sector .grain{position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay;opacity:.4;pointer-events:none}
+  .sector .overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 25%,rgba(11,9,8,.55) 60%,rgba(11,9,8,.92) 100%)}
   .sector .content{position:absolute;inset:0;padding:24px;display:flex;flex-direction:column;justify-content:space-between;color:#fff}
   .sector .content .top{display:flex;justify-content:space-between;align-items:start}
   .sector .content .ico{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);backdrop-filter:blur(10px);display:grid;place-items:center;color:#fff;border:1px solid rgba(255,255,255,.2)}
@@ -256,6 +262,16 @@
   .sector .content p{font-size:13px;color:rgba(255,255,255,.75);margin-top:8px;max-width:24ch;line-height:1.4}
   .sector .content .arrow{margin-top:14px;display:inline-flex;align-items:center;gap:8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#fff;transition:gap .2s ease}
   .sector:hover .content .arrow{gap:14px}
+  /* Glassmorphism CTA reveal — GPU-accelerated slide-up with staggered content */
+  .sector .info{transition:transform .55s cubic-bezier(0.16,1,0.3,1), opacity .35s ease;will-change:transform}
+  .sector:hover .info{transform:translateY(-72px);opacity:.92}
+  .sector .info .arrow{display:none}
+  .sector .reveal-cta{position:absolute;left:0;right:0;bottom:0;height:64px;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 20px;background:linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.10) 100%);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border-top:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 -10px 30px -8px rgba(0,0,0,.35);font-family:'Geist',sans-serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3);transform:translateY(100%);opacity:0;pointer-events:none;transition:transform .6s cubic-bezier(0.16,1,0.3,1), opacity .35s ease;will-change:transform, opacity;z-index:3}
+  .sector:hover .reveal-cta{transform:translateY(0);opacity:1;pointer-events:auto}
+  .sector .reveal-cta .label-text{display:inline-block;transform:translateY(10px);opacity:0;transition:transform .5s cubic-bezier(0.16,1,0.3,1) .15s, opacity .35s ease .15s}
+  .sector:hover .reveal-cta .label-text{transform:translateY(0);opacity:1}
+  .sector .reveal-cta .arr{display:inline-block;transform:translateX(-10px);opacity:0;font-weight:400;transition:transform .5s cubic-bezier(0.16,1,0.3,1) .25s, opacity .35s ease .25s}
+  .sector:hover .reveal-cta .arr{transform:translateX(0);opacity:1}
 
   /* TIMELINE / PRE-DURING-POST */
   .timeline{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
@@ -438,9 +454,11 @@
     .ticker{padding:14px 0}
     .ticker .item{font-size:12px;gap:10px}
     .ticker .track{gap:40px}
-    .logo-strip-grid{gap:24px 36px}
-    .logo-strip-grid .brand{font-size:18px}
-    .logo-strip-grid .brand.serif{font-size:22px}
+    .logo-strip-grid{grid-template-columns:repeat(4,1fr);gap:24px}
+    .logo-strip-grid .brand-logo{height:34px}
+    .logo-strip-grid .brand-logo[data-brand="ultramarinos"],
+    .logo-strip-grid .brand-logo[data-brand="lucense"]{height:40px}
+    .logo-strip-grid .brand-logo[data-brand="raza"]{height:26px}
     .testimonial{padding:24px}
     .testimonial .quote{font-size:17px}
     .module{padding:24px}
@@ -622,7 +640,7 @@
         </div>
         <div class="mega-feature">
           <span class="lab">Recurso gratuito</span>
-          <h5>El estado del nightlife 2026</h5>
+          <h5>El estado de los eventos 2026</h5>
           <p>Informe con datos de +12.000 eventos: ticket medio, hora pico, géneros que crecen y por qué.</p>
           <a href="#">Descargar PDF →</a>
         </div>
@@ -664,7 +682,7 @@
         <div class="mega-feature">
           <span class="lab">Estamos contratando</span>
           <h5>+12 posiciones abiertas</h5>
-          <p>Diseño, ingeniería, ventas y soporte. Construye el sistema operativo del nightlife con nosotros.</p>
+          <p>Diseño, ingeniería, ventas y soporte. Construye el sistema operativo de los eventos con nosotros.</p>
           <a href="#">Ver vacantes →</a>
         </div>
       </div>
@@ -729,9 +747,9 @@
     <div class="blob b3"></div>
   </div>
   <div class="wrap hero-content">
-    <div class="eyebrow"><span class="pulse"></span><span>Pasify · Software para nightlife</span></div>
+    <div class="eyebrow"><span class="pulse"></span><span>Pasify · Software para eventos</span></div>
     <h1>Domina cada <em>beat</em> de tu <span class="underline-word">noche</span>.</h1>
-    <p class="lede">El sistema operativo del nightlife moderno. Vende entradas, controla el aforo, gestiona reservas y RRPP — todo desde una sola app, sin papel, sin fila, sin fricción.</p>
+    <p class="lede">El sistema operativo de los eventos modernos. Vende entradas, controla el aforo, gestiona reservas y RRPP — todo desde una sola app, sin papel, sin fila, sin fricción.</p>
     <div class="ctas">
       <a href="#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
       <a href="#producto" class="btn btn-outline">Ver producto en acción</a>
@@ -752,29 +770,30 @@
               <div class="date"><div class="d">14</div><div class="m">Jun</div></div>
               <span class="badge last">Últimas 12</span>
             </div>
-            <div class="glyph">Mondo<br>Disko</div>
+            <div class="glyph">Pera<br>Limonera</div>
           </div>
         </div>
         <div class="body">
-          <div class="venue">Madrid · Sala · 23:30</div>
-          <div class="title">Mondo Disko Vol. 2</div>
+          <div class="venue">Valladolid · Restaurante · 21:00</div>
+          <div class="title">Pera Limonera</div>
           <div class="qrow">
             <div class="qr">
-              <svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="0" width="50" height="50" fill="#fff"/>
-                <g fill="#1A1714">
-                <rect x="2" y="2" width="14" height="14"/><rect x="34" y="2" width="14" height="14"/><rect x="2" y="34" width="14" height="14"/>
-                <rect x="6" y="6" width="6" height="6" fill="#fff"/><rect x="38" y="6" width="6" height="6" fill="#fff"/><rect x="6" y="38" width="6" height="6" fill="#fff"/>
-                <rect x="20" y="4" width="2" height="2"/><rect x="24" y="4" width="2" height="2"/><rect x="28" y="4" width="2" height="2"/>
-                <rect x="20" y="8" width="4" height="2"/><rect x="26" y="8" width="2" height="2"/><rect x="30" y="8" width="2" height="2"/>
-                <rect x="18" y="12" width="2" height="2"/><rect x="22" y="12" width="2" height="2"/><rect x="26" y="12" width="2" height="2"/>
-                <rect x="20" y="18" width="2" height="2"/><rect x="24" y="18" width="2" height="2"/><rect x="28" y="18" width="2" height="2"/><rect x="32" y="18" width="2" height="2"/><rect x="36" y="18" width="2" height="2"/><rect x="40" y="18" width="2" height="2"/><rect x="44" y="18" width="2" height="2"/>
-                <rect x="18" y="22" width="2" height="2"/><rect x="22" y="22" width="2" height="2"/><rect x="28" y="22" width="2" height="2"/><rect x="34" y="22" width="2" height="2"/><rect x="40" y="22" width="2" height="2"/>
-                <rect x="20" y="26" width="2" height="2"/><rect x="24" y="26" width="2" height="2"/><rect x="30" y="26" width="2" height="2"/><rect x="36" y="26" width="2" height="2"/><rect x="42" y="26" width="2" height="2"/>
-                <rect x="20" y="32" width="2" height="2"/><rect x="24" y="32" width="2" height="2"/><rect x="28" y="32" width="2" height="2"/><rect x="32" y="32" width="2" height="2"/>
-                <rect x="22" y="36" width="2" height="2"/><rect x="26" y="36" width="2" height="2"/><rect x="32" y="36" width="2" height="2"/><rect x="36" y="36" width="2" height="2"/><rect x="40" y="36" width="2" height="2"/>
-                <rect x="20" y="42" width="2" height="2"/><rect x="24" y="42" width="2" height="2"/><rect x="30" y="42" width="2" height="2"/><rect x="34" y="42" width="2" height="2"/><rect x="38" y="42" width="2" height="2"/><rect x="42" y="42" width="2" height="2"/>
-                </g>
+              <svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+                <rect width="50" height="50" fill="#fff"/>
+                <!-- Finder patterns: outer dark squares -->
+                <rect x="2" y="2" width="14" height="14" fill="#1A1714"/>
+                <rect x="34" y="2" width="14" height="14" fill="#1A1714"/>
+                <rect x="2" y="34" width="14" height="14" fill="#1A1714"/>
+                <!-- Finder patterns: white ring (1-module gap) -->
+                <rect x="4" y="4" width="10" height="10" fill="#fff"/>
+                <rect x="36" y="4" width="10" height="10" fill="#fff"/>
+                <rect x="4" y="36" width="10" height="10" fill="#fff"/>
+                <!-- Finder patterns: dark 3x3 module center -->
+                <rect x="6" y="6" width="6" height="6" fill="#1A1714"/>
+                <rect x="38" y="6" width="6" height="6" fill="#1A1714"/>
+                <rect x="6" y="38" width="6" height="6" fill="#1A1714"/>
+                <!-- Data modules: dense pseudo-random pattern (2x2 cells) -->
+                <path fill="#1A1714" d="M18 0h2v2h-2zM22 0h2v2h-2zM26 0h2v2h-2zM30 0h2v2h-2zM18 2h2v2h-2zM24 2h2v2h-2zM28 2h2v2h-2zM32 2h2v2h-2zM20 4h2v2h-2zM26 4h2v2h-2zM30 4h2v2h-2zM16 6h2v2h-2zM22 6h2v2h-2zM28 6h2v2h-2zM32 6h2v2h-2zM18 8h2v2h-2zM24 8h2v2h-2zM32 8h2v2h-2zM20 10h2v2h-2zM26 10h2v2h-2zM30 10h2v2h-2zM16 12h2v2h-2zM20 12h2v2h-2zM24 12h2v2h-2zM28 12h2v2h-2zM32 12h2v2h-2zM40 12h2v2h-2zM44 12h2v2h-2zM48 12h2v2h-2zM18 14h2v2h-2zM22 14h2v2h-2zM28 14h2v2h-2zM0 16h2v2h-2zM4 16h2v2h-2zM10 16h2v2h-2zM12 16h2v2h-2zM20 16h2v2h-2zM26 16h2v2h-2zM30 16h2v2h-2zM34 16h2v2h-2zM40 16h2v2h-2zM46 16h2v2h-2zM2 18h2v2h-2zM6 18h2v2h-2zM14 18h2v2h-2zM16 18h2v2h-2zM20 18h2v2h-2zM24 18h2v2h-2zM30 18h2v2h-2zM38 18h2v2h-2zM42 18h2v2h-2zM46 18h2v2h-2zM8 20h2v2h-2zM12 20h2v2h-2zM18 20h2v2h-2zM26 20h2v2h-2zM32 20h2v2h-2zM34 20h2v2h-2zM40 20h2v2h-2zM44 20h2v2h-2zM48 20h2v2h-2zM4 22h2v2h-2zM10 22h2v2h-2zM14 22h2v2h-2zM22 22h2v2h-2zM28 22h2v2h-2zM36 22h2v2h-2zM42 22h2v2h-2zM46 22h2v2h-2zM6 24h2v2h-2zM12 24h2v2h-2zM16 24h2v2h-2zM20 24h2v2h-2zM24 24h2v2h-2zM30 24h2v2h-2zM34 24h2v2h-2zM40 24h2v2h-2zM44 24h2v2h-2zM2 26h2v2h-2zM14 26h2v2h-2zM22 26h2v2h-2zM26 26h2v2h-2zM32 26h2v2h-2zM38 26h2v2h-2zM42 26h2v2h-2zM48 26h2v2h-2zM4 28h2v2h-2zM10 28h2v2h-2zM12 28h2v2h-2zM18 28h2v2h-2zM24 28h2v2h-2zM30 28h2v2h-2zM36 28h2v2h-2zM40 28h2v2h-2zM46 28h2v2h-2zM8 30h2v2h-2zM16 30h2v2h-2zM20 30h2v2h-2zM26 30h2v2h-2zM32 30h2v2h-2zM34 30h2v2h-2zM44 30h2v2h-2zM48 30h2v2h-2zM0 32h2v2h-2zM12 32h2v2h-2zM14 32h2v2h-2zM22 32h2v2h-2zM28 32h2v2h-2zM38 32h2v2h-2zM40 32h2v2h-2zM46 32h2v2h-2zM16 34h2v2h-2zM20 34h2v2h-2zM24 34h2v2h-2zM32 34h2v2h-2zM38 34h2v2h-2zM42 34h2v2h-2zM48 34h2v2h-2zM16 36h2v2h-2zM22 36h2v2h-2zM28 36h2v2h-2zM40 36h2v2h-2zM44 36h2v2h-2zM18 38h2v2h-2zM24 38h2v2h-2zM30 38h2v2h-2zM32 38h2v2h-2zM36 38h2v2h-2zM42 38h2v2h-2zM46 38h2v2h-2zM20 40h2v2h-2zM26 40h2v2h-2zM38 40h2v2h-2zM44 40h2v2h-2zM16 42h2v2h-2zM22 42h2v2h-2zM28 42h2v2h-2zM40 42h2v2h-2zM46 42h2v2h-2zM18 44h2v2h-2zM24 44h2v2h-2zM30 44h2v2h-2zM36 44h2v2h-2zM40 44h2v2h-2zM44 44h2v2h-2zM20 46h2v2h-2zM26 46h2v2h-2zM32 46h2v2h-2zM38 46h2v2h-2zM46 46h2v2h-2zM16 48h2v2h-2zM22 48h2v2h-2zM28 48h2v2h-2zM44 48h2v2h-2zM48 48h2v2h-2z"/>
               </svg>
             </div>
             <div class="price-block">
@@ -832,16 +851,13 @@
   <div class="wrap">
     <div class="logo-strip-label">Confían en Pasify</div>
     <div class="logo-strip-grid">
-      <span class="brand serif">naō</span>
-      <span class="brand">Cova Santa</span>
-      <span class="brand thin">CHINOIS</span>
-      <span class="brand">BCM</span>
-      <span class="brand" style="font-style:italic">Perro Negro</span>
-      <span class="brand thin">FITZ</span>
-      <span class="brand">EDEN</span>
-      <span class="brand">SONORA</span>
-      <span class="brand serif">Biloba</span>
-      <span class="brand">Florida 135</span>
+      <img class="brand-logo" data-brand="ultramarinos" src="uploads/Ultramarinos%20Maricarmen.png" alt="Ultramarinos Maricarmen">
+      <img class="brand-logo" data-brand="toninos" src="uploads/toninos.png" alt="Tonino's Cucina Italiana">
+      <img class="brand-logo" data-brand="pera" src="uploads/Pera%20Limonera.svg" alt="Pera Limonera">
+      <img class="brand-logo" data-brand="lucense" src="uploads/Lucense.svg" alt="Lucense">
+      <img class="brand-logo" data-brand="raza" src="uploads/Raza.svg" alt="Raza">
+      <img class="brand-logo" data-brand="greca" src="uploads/Crema.svg" alt="Greca">
+      <img class="brand-logo" data-brand="flamma" src="uploads/Flamma.png" alt="Flamma · Parrilla y Vinos">
     </div>
   </div>
 </div>
@@ -1092,15 +1108,16 @@
         <div class="overlay"></div>
         <div class="content">
           <div class="top">
-            <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div>
+            <div class="ico" title="Discotecas — bola de disco"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="10" y1="3" x2="14" y2="3"/><line x1="5" y1="14" x2="19" y2="14"/><path d="M5.6 11c2-1.2 4.5-1.8 6.4-1.8s4.4.6 6.4 1.8"/><path d="M5.6 17c2 1.2 4.5 1.8 6.4 1.8s4.4-.6 6.4-1.8"/><line x1="8.5" y1="7.6" x2="9.5" y2="20.4"/><line x1="15.5" y1="7.6" x2="14.5" y2="20.4"/></svg></div>
             <span class="num">01</span>
           </div>
-          <div>
+          <div class="info">
             <h3>Discotecas</h3>
             <p>Listas, mesas, RRPP y aforo. Lo que ya hacías, sin papel.</p>
             <div class="arrow">Ver software <span>→</span></div>
           </div>
         </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software discotecas</span><span class="arr">→</span></div>
       </a>
       <a href="sectores/promotoras.html" class="sector s2 reveal">
         <div class="bg"></div>
@@ -1108,15 +1125,16 @@
         <div class="overlay"></div>
         <div class="content">
           <div class="top">
-            <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l9-3 9 3M3 6v12l9 3 9-3V6M3 6l9 3 9-3M12 9v12"/></svg></div>
+            <div class="ico" title="Promotoras — megáfono"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 5v-15l-4 5H4a1 1 0 0 0-1 1z"/><path d="M10 5l11-3v20l-11-3"/><path d="M16 8v8"/></svg></div>
             <span class="num">02</span>
           </div>
-          <div>
+          <div class="info">
             <h3>Promotoras</h3>
             <p>Centraliza y controla todos tus eventos con la mayor precisión.</p>
             <div class="arrow">Software promotoras <span>→</span></div>
           </div>
         </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software promotoras</span><span class="arr">→</span></div>
       </a>
       <a href="sectores/beach-clubs.html" class="sector s3 reveal">
         <div class="bg"></div>
@@ -1124,15 +1142,16 @@
         <div class="overlay"></div>
         <div class="content">
           <div class="top">
-            <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22c2-4 6-6 10-6s8 2 10 6M12 2v8M5 8a7 7 0 0014 0"/></svg></div>
+            <div class="ico" title="Beach Clubs — sol y olas"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="3"/><line x1="12" y1="3" x2="12" y2="4.5"/><line x1="12" y1="13.5" x2="12" y2="15"/><line x1="6" y1="9" x2="4.5" y2="9"/><line x1="19.5" y1="9" x2="18" y2="9"/><line x1="7.76" y1="4.76" x2="6.7" y2="3.7"/><line x1="17.3" y1="14.3" x2="16.24" y2="13.24"/><line x1="7.76" y1="13.24" x2="6.7" y2="14.3"/><line x1="17.3" y1="3.7" x2="16.24" y2="4.76"/><path d="M3 18.5c1.5-1 3 0 4.5 0s3-1 4.5-1 3 1 4.5 1 3-1 4.5-1"/><path d="M3 21.5c1.5-1 3 0 4.5 0s3-1 4.5-1 3 1 4.5 1 3-1 4.5-1"/></svg></div>
             <span class="num">03</span>
           </div>
-          <div>
+          <div class="info">
             <h3>Beach Clubs</h3>
             <p>Day-life, DJ residentes, mesa con mínimo. Toda la temporada en una app.</p>
             <div class="arrow">Ver beach club <span>→</span></div>
           </div>
         </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software beach clubs</span><span class="arr">→</span></div>
       </a>
       <a href="sectores/festivales.html" class="sector s4 reveal">
         <div class="bg"></div>
@@ -1140,15 +1159,16 @@
         <div class="overlay"></div>
         <div class="content">
           <div class="top">
-            <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l9-18 9 18M7 21h10"/></svg></div>
+            <div class="ico" title="Festivales — escenario y audio"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="14"/><line x1="9" y1="20" x2="9" y2="10"/><line x1="14" y1="20" x2="14" y2="6"/><line x1="19" y1="20" x2="19" y2="12"/><line x1="2" y1="20" x2="22" y2="20"/><circle cx="14" cy="4" r="1.2" fill="currentColor" stroke="none"/></svg></div>
             <span class="num">04</span>
           </div>
-          <div>
+          <div class="info">
             <h3>Festivales</h3>
             <p>Multi-zona, multi-día, multi-pulsera. Aforo global y por escenario.</p>
             <div class="arrow">Ver festivales <span>→</span></div>
           </div>
         </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software festivales</span><span class="arr">→</span></div>
       </a>
     </div>
   </div>
@@ -1520,7 +1540,7 @@
         <a href="#top" class="logo" aria-label="Pasify">
           <span>Pas</span><span class="dot" aria-hidden="true"></span><span>if</span><span class="y">y</span>
         </a>
-        <p>El sistema operativo del nightlife moderno. Hecho en Valencia. Funciona en Madrid, Barcelona, Ibiza, Ciudad de México y donde haya una buena fiesta.</p>
+        <p>El sistema operativo de los eventos modernos. Hecho en Valencia. Funciona en Madrid, Barcelona, Ibiza, Ciudad de México y donde haya una buena fiesta.</p>
         <div class="socials">
           <a href="#" aria-label="Instagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".7" fill="currentColor"/></svg></a>
           <a href="#" aria-label="TikTok"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8.4V14a4.5 4.5 0 11-4.5-4.5h.5v2.5h-.5A2 2 0 1013.5 14V3h2.5a4 4 0 004 4v2.5a6.4 6.4 0 01-4-1.1z"/></svg></a>
