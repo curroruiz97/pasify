@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    PASIFY · Shared site header + megamenu
    Auto-injects identical header into <div id="site-header"></div>.
    - Detects depth (root vs sub-folder) via document.body[data-depth]
@@ -8,6 +8,100 @@
        P  = '' on root page,           '../' on any sub-folder.
    - Highlight active item via <body data-current="<slug>">.
    ============================================================ */
+
+/* ============================================================
+   SEARCH INDEX · global window.PasifySearch
+   Used by the header search dock. Sorted by section.
+   ============================================================ */
+(function(global){
+  if (global.PasifySearch) return;
+  var SUB_FOLDERS_S = ['/soluciones/','/operacion/','/data/','/sectores/','/recursos/','/nosotros/'];
+  var INDEX = [
+    // Soluciones
+    { title:'Venta de entradas',     section:'Soluciones', url:'soluciones/entradas.html',          keywords:['entradas','venta','tickets','ticket','vender entradas','online','aforo'] },
+    { title:'Venta en taquilla',     section:'Soluciones', url:'soluciones/taquilla.html',          keywords:['taquilla','taquillero','cobro en puerta','presencial','box office'] },
+    { title:'Reservados VIP',        section:'Soluciones', url:'soluciones/vip.html',               keywords:['vip','reservados','reservas de mesa','mesas','reserva','botella','minimo'] },
+    { title:'Listas de invitados',   section:'Soluciones', url:'soluciones/invitados.html',         keywords:['invitados','lista','listas','guest list','invitacion','cortesia'] },
+    { title:'Gestión de RRPP',       section:'Soluciones', url:'soluciones/rrpp.html',              keywords:['rrpp','relaciones publicas','rrpp top','comisiones rrpp','embajadores'] },
+    { title:'Canales de venta',      section:'Soluciones', url:'soluciones/canales.html',           keywords:['canales','canales de venta','distribucion','multicanal','revendedores'] },
+    // Operación
+    { title:'Control de acceso QR',  section:'Operación',  url:'operacion/control-acceso.html',     keywords:['control de acceso','acceso','qr','scanner','aforo','validacion','puerta','multipuerta'] },
+    { title:'Software TPV',          section:'Operación',  url:'operacion/tpv.html',                keywords:['tpv','caja','pos','cierre z','barra','cobro','propinas'] },
+    { title:'Recepción de eventos',  section:'Operación',  url:'operacion/recepcion.html',          keywords:['recepcion','check in','check-in','puerta','identificacion','acreditacion','pulsera'] },
+    { title:'Soporte personalizado', section:'Operación',  url:'operacion/soporte.html',            keywords:['soporte','soporte 24/7','whatsapp','account manager','onboarding','ayuda en evento'] },
+    { title:'Pases de temporada',    section:'Operación',  url:'operacion/pases-temporada.html',    keywords:['pases','abonos','temporada','suscripcion','renovacion','socios','fidelizacion'] },
+    // Data
+    { title:'CRM y datos en tiempo real', section:'Data',  url:'data/crm.html',                     keywords:['crm','datos','real time','segmentos','perfil 360','rgpd','base de datos'] },
+    { title:'Marketing digital',     section:'Data',       url:'data/marketing.html',               keywords:['marketing','marketing digital','campanas','meta','google','tiktok','atribucion','roi','capi'] },
+    { title:'Informes de eventos',   section:'Data',       url:'data/informes.html',                keywords:['informes','informe','reporte','reportes','kpi','cierre evento','heatmap','mapa de calor'] },
+    { title:'API e integraciones',   section:'Data',       url:'data/api.html',                     keywords:['api','integraciones','webhooks','rest','graphql','sdk','sandbox','conectores'] },
+    // Sectores
+    { title:'Discotecas',            section:'Sectores',   url:'sectores/discotecas.html',          keywords:['discoteca','discotecas','club','clubs','nightclub','sala'] },
+    { title:'Salas de conciertos',   section:'Sectores',   url:'sectores/salas.html',               keywords:['salas','salas de conciertos','conciertos','salas en vivo','venue','live','concierto'] },
+    { title:'Beach Clubs',           section:'Sectores',   url:'sectores/beach-clubs.html',         keywords:['beach','beach clubs','beach club','playa','chiringuito','verano'] },
+    { title:'Festivales',            section:'Sectores',   url:'sectores/festivales.html',          keywords:['festival','festivales','macroevento','open air'] },
+    { title:'Promotoras',            section:'Sectores',   url:'sectores/promotoras.html',          keywords:['promotora','promotoras','promotor','productora'] },
+    { title:'Eventos privados',      section:'Sectores',   url:'sectores/eventos-privados.html',    keywords:['eventos privados','privados','boda','bodas','corporativo','aniversario','cumpleanos'] },
+    // Recursos
+    { title:'Pasify Academy',        section:'Recursos',   url:'recursos/academy.html',             keywords:['academy','cursos','formacion','aprender','pasify pro','certificacion','diploma'] },
+    { title:'Blogs y Newsletter',    section:'Recursos',   url:'recursos/blog.html',                keywords:['blog','blogs','newsletter','casos de exito','webinars','noticias','articulos'] },
+    { title:'Centro de ayuda',       section:'Recursos',   url:'recursos/ayuda.html',               keywords:['ayuda','centro de ayuda','soporte','changelog','estado del sistema','faq'] },
+    { title:'Documentación API',     section:'Recursos',   url:'recursos/api-docs.html',            keywords:['documentacion','docs','sdk','rest','graphql','webhooks','api docs','postman','insomnia'] },
+    { title:'Partners y Promotores', section:'Recursos',   url:'recursos/pro-network.html',         keywords:['partners','promotores','comunidad','embajadores','comisiones','red','slack'] },
+    // Nosotros
+    { title:'Sobre nosotros',        section:'Nosotros',   url:'nosotros/sobre.html',               keywords:['sobre','sobre nosotros','equipo','manifiesto','historia','mision','quienes somos'] },
+    { title:'Seguridad y privacidad',section:'Nosotros',   url:'nosotros/seguridad.html',           keywords:['seguridad','privacidad','rgpd','iso','soc','compliance','dpa','pci'] },
+    { title:'Solicitar demo',        section:'Nosotros',   url:'nosotros/contacto.html',            keywords:['demo','solicitar demo','agendar','reunion','enterprise','llamada','videollamada'] },
+    { title:'Contacto y oficinas',   section:'Nosotros',   url:'nosotros/oficinas.html',            keywords:['oficinas','direccion','contacto','sedes','telefono','email','formulario'] },
+    // Pricing (anchor on home)
+    { title:'Pricing',               section:'Precios',    url:'pasify.html#precios',               keywords:['precio','precios','pricing','planes','tarifa','coste','cuanto cuesta'] }
+  ];
+  function normalize(s){
+    return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  function score(entry, q){
+    var titleN = normalize(entry.title);
+    var s = 0;
+    if (titleN === q) s = 200;
+    else if (titleN.indexOf(q) === 0) s = 130;
+    else if (titleN.indexOf(' ' + q) !== -1) s = 100;
+    else if (titleN.indexOf(q) !== -1) s = 80;
+    for (var i = 0; i < entry.keywords.length; i++) {
+      var k = normalize(entry.keywords[i]);
+      var ks = 0;
+      if (k === q) ks = 110;
+      else if (k.indexOf(q) === 0) ks = 70;
+      else if (k.indexOf(q) !== -1) ks = 50;
+      else if (q.length >= 4 && k.length >= 4 && q.indexOf(k) !== -1) ks = 30;
+      if (ks > s) s = ks;
+    }
+    return s;
+  }
+  function findMany(query, max){
+    var q = normalize((query || '').trim());
+    if (!q) return [];
+    var out = [];
+    for (var i = 0; i < INDEX.length; i++) {
+      var sc = score(INDEX[i], q);
+      if (sc > 0) out.push({ entry: INDEX[i], score: sc });
+    }
+    out.sort(function(a, b){ return b.score - a.score; });
+    return out.slice(0, max || 6).map(function(r){ return r.entry; });
+  }
+  function find(query){
+    var matches = findMany(query, 1);
+    return matches.length ? matches[0] : null;
+  }
+  function resolveUrl(url){
+    if (!url) return '#';
+    if (url.indexOf('http') === 0 || url.indexOf('//') === 0) return url;
+    var inSub = SUB_FOLDERS_S.some(function(f){ return location.pathname.indexOf(f) !== -1; });
+    var pre = inSub ? '../' : '';
+    return pre + url;
+  }
+  global.PasifySearch = { INDEX: INDEX, find: find, findMany: findMany, resolveUrl: resolveUrl };
+})(window);
+
 (function(){
   var SUB_FOLDERS = ['soluciones','operacion','data','sectores','recursos','nosotros'];
   var path = window.location.pathname;
@@ -26,11 +120,35 @@
     +   '.mega-link.has-sub .ttl{font-size:14px;font-weight:500;letter-spacing:-0.005em}'
     +   '.mega-link.has-sub .sublabel{font-family:\'Geist Mono\',monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);line-height:1.45;font-weight:400}'
     +   '.mega-link.has-sub:hover .sublabel,.mega-link.has-sub.current .sublabel{color:var(--ink-2)}'
+    +   '.search-dock{position:relative;width:40px;height:40px;flex-shrink:0;margin-right:6px}'
+    +   '.search-trigger{position:absolute;inset:0;width:40px;height:40px;border-radius:999px;border:1px solid var(--line-2);background:rgba(244,238,226,.04);display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:opacity .2s ease,transform .2s ease,color .2s ease,border-color .2s ease,background .2s ease;padding:0}'
+    +   '.search-trigger:hover{color:var(--ink);border-color:rgba(232,84,42,.4);background:rgba(232,84,42,.06)}'
+    +   '.search-trigger svg{width:16px;height:16px}'
+    +   '.search-form{position:absolute;top:0;right:0;height:40px;width:320px;border-radius:999px;background:rgba(20,17,14,0.92);border:1px solid var(--line-2);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;opacity:0;pointer-events:none;transform:scaleX(.125);transform-origin:right center;transition:transform .35s cubic-bezier(0.16,1,0.3,1),opacity .25s ease;overflow:hidden;z-index:5}'
+    +   '.search-form .search-ico{padding:0 6px 0 16px;display:flex;align-items:center;color:var(--ink-3)}'
+    +   '.search-form .search-ico svg{width:14px;height:14px}'
+    +   '.search-form input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:var(--ink);font-family:inherit;font-size:13px;padding:0 6px}'
+    +   '.search-form input::placeholder{color:var(--ink-3)}'
+    +   '.search-form .search-close{flex-shrink:0;margin-right:4px;width:28px;height:28px;border:0;background:transparent;border-radius:999px;display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease;padding:0}'
+    +   '.search-form .search-close:hover{background:rgba(244,238,226,.08);color:var(--accent);transform:scale(1.08)}'
+    +   '.search-form .search-close svg{width:14px;height:14px}'
+    +   '.search-dock.open .search-trigger{opacity:0;transform:scale(.6);pointer-events:none}'
+    +   '.search-dock.open .search-form{transform:scaleX(1);opacity:1;pointer-events:auto}'
+    +   '.search-results{position:absolute;top:48px;right:0;width:320px;background:rgba(20,17,14,0.96);border:1px solid var(--line-2);border-radius:14px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:6px;max-height:360px;overflow-y:auto;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .2s ease,transform .2s ease;z-index:6;box-shadow:0 12px 40px -12px rgba(0,0,0,.6)}'
+    +   '.search-dock.has-results .search-results{opacity:1;pointer-events:auto;transform:translateY(0)}'
+    +   '.search-result{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .15s ease;text-decoration:none;color:var(--ink)}'
+    +   '.search-result:hover,.search-result.active{background:rgba(232,84,42,.10)}'
+    +   '.search-result .lab{font-family:\'Geist Mono\',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);flex-shrink:0;min-width:78px}'
+    +   '.search-result .ttl{font-size:13px;color:var(--ink);flex:1;line-height:1.25}'
+    +   '.search-result.active .lab,.search-result:hover .lab{color:var(--accent)}'
+    +   '.search-empty{padding:18px 14px;font-size:12px;color:var(--ink-3);text-align:center;line-height:1.5}'
+    +   '@media (max-width:880px){.search-form,.search-results{width:min(280px,calc(100vw - 120px))}}'
+    +   '@media (max-width:520px){.search-dock{display:none}}'
     + '</style>'
     + '<header class="header" id="header">'
     +   '<div class="header-inner">'
     +     '<a href="' + H('') + '" class="logo" aria-label="Pasify">'
-    +       '<span>Pas</span><span class="dot" aria-hidden="true"></span><span>if</span><span class="y">y</span>'
+    +       '<img src="' + P + 'uploads/pasify-logo.png" alt="Pasify">'
     +     '</a>'
     +     '<nav class="nav" id="nav">'
     +       '<div class="nav-item" data-menu="soluciones">'
@@ -48,6 +166,19 @@
     +       '<a href="' + H('precios') + '" class="nav-trigger" style="text-decoration:none">Pricing</a>'
     +     '</nav>'
     +     '<span class="spacer"></span>'
+    +     '<div class="search-dock" id="search-dock">'
+    +       '<button type="button" class="search-trigger" id="search-trigger" aria-label="Abrir búsqueda">'
+    +         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'
+    +       '</button>'
+    +       '<form class="search-form" id="search-form" role="search" autocomplete="off">'
+    +         '<span class="search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>'
+    +         '<input type="search" id="search-input" placeholder="Busca soluciones, sectores, recursos…" />'
+    +         '<button type="button" class="search-close" id="search-close" aria-label="Cerrar búsqueda">'
+    +           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+    +         '</button>'
+    +       '</form>'
+    +       '<div class="search-results" id="search-results" role="listbox"></div>'
+    +     '</div>'
     +     '<a href="' + H('contacto') + '" class="login">Entrar</a>'
     +     '<a href="' + H('contacto') + '" class="cta">Solicita demo →</a>'
     +     '<button class="burger" id="burger" aria-label="Menú"><span></span></button>'
@@ -114,11 +245,11 @@
     +         '<div class="mega-col">'
     +           '<h6>Casos de uso</h6>'
     +           '<ul>'
-    +             '<li><a class="mega-link" href="' + H('casos') + '">Apertura de temporada</a></li>'
-    +             '<li><a class="mega-link" href="' + H('casos') + '">Festival multi-escenario</a></li>'
-    +             '<li><a class="mega-link" href="' + H('casos') + '">Reapertura post-reforma</a></li>'
-    +             '<li><a class="mega-link" href="' + H('casos') + '">Tour internacional</a></li>'
-    +             '<li><a class="mega-link" href="' + H('casos') + '">White label para promotor</a></li>'
+    +             '<li><a class="mega-link" href="' + L('recursos','blog.html') + '">Apertura de temporada</a></li>'
+    +             '<li><a class="mega-link" href="' + L('recursos','blog.html') + '">Festival multi-escenario</a></li>'
+    +             '<li><a class="mega-link" href="' + L('recursos','blog.html') + '">Reapertura post-reforma</a></li>'
+    +             '<li><a class="mega-link" href="' + L('recursos','blog.html') + '">Tour internacional</a></li>'
+    +             '<li><a class="mega-link" href="' + L('recursos','blog.html') + '">White label para promotor</a></li>'
     +           '</ul>'
     +         '</div>'
     +         '<div class="mega-col">'
@@ -134,7 +265,7 @@
     +           '<span class="lab">Caso destacado</span>'
     +           '<h5>Sonora Festival → +34% ventas online</h5>'
     +           '<p>Cómo un festival de 18.000 asistentes pasó de 3 plataformas a Pasify y redujo el check-in 70%.</p>'
-    +           '<a href="' + H('casos') + '">Leer caso →</a>'
+    +           '<a href="' + L('recursos','blog.html') + '">Leer caso →</a>'
     +         '</div>'
     +       '</div>'
     +     '</div>'
@@ -389,6 +520,91 @@
           document.body.style.overflow = '';
         });
       });
+    }
+
+    // ===== SEARCH DOCK =====
+    var dock = document.getElementById('search-dock');
+    if (dock && dock.dataset.bound !== '1' && window.PasifySearch) {
+      var sTrigger = dock.querySelector('#search-trigger');
+      var sForm    = dock.querySelector('#search-form');
+      var sInput   = dock.querySelector('#search-input');
+      var sClose   = dock.querySelector('#search-close');
+      var sResults = dock.querySelector('#search-results');
+      if (sTrigger && sForm && sInput && sClose && sResults) {
+        dock.dataset.bound = '1';
+
+        function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+        function renderResults(query){
+          var matches = window.PasifySearch.findMany(query, 6);
+          if (!matches.length) {
+            dock.classList.add('has-results');
+            sResults.innerHTML = '<div class="search-empty">Sin resultados para «' + escapeHtml(query) + '».<br/>Pulsa Enter para buscar en el centro de ayuda.</div>';
+            return;
+          }
+          dock.classList.add('has-results');
+          sResults.innerHTML = matches.map(function(m, i){
+            return '<a class="search-result' + (i===0?' active':'') + '" href="' + window.PasifySearch.resolveUrl(m.url) + '" role="option">' +
+                   '<span class="lab">' + escapeHtml(m.section) + '</span>' +
+                   '<span class="ttl">' + escapeHtml(m.title) + '</span>' +
+                   '</a>';
+          }).join('');
+        }
+
+        function clearResults(){ dock.classList.remove('has-results'); sResults.innerHTML = ''; }
+
+        function openSearch(){ dock.classList.add('open'); setTimeout(function(){ sInput.focus(); }, 200); }
+        function closeSearch(){ dock.classList.remove('open'); sInput.value = ''; clearResults(); }
+
+        sTrigger.addEventListener('click', openSearch);
+        sClose.addEventListener('click', closeSearch);
+
+        sInput.addEventListener('input', function(){
+          var q = sInput.value.trim();
+          if (!q) { clearResults(); return; }
+          renderResults(q);
+        });
+
+        sInput.addEventListener('keydown', function(e){
+          if (!dock.classList.contains('has-results')) return;
+          var items = sResults.querySelectorAll('.search-result');
+          if (!items.length) return;
+          var activeIdx = -1;
+          for (var i = 0; i < items.length; i++) { if (items[i].classList.contains('active')) { activeIdx = i; break; } }
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (activeIdx >= 0) items[activeIdx].classList.remove('active');
+            var next = (activeIdx + 1) % items.length;
+            items[next].classList.add('active');
+            items[next].scrollIntoView({ block: 'nearest' });
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (activeIdx >= 0) items[activeIdx].classList.remove('active');
+            var prev = (activeIdx - 1 + items.length) % items.length;
+            items[prev].classList.add('active');
+            items[prev].scrollIntoView({ block: 'nearest' });
+          }
+        });
+
+        document.addEventListener('keydown', function(e){
+          if (e.key === 'Escape' && dock.classList.contains('open')) closeSearch();
+        });
+
+        document.addEventListener('click', function(e){
+          if (dock.classList.contains('open') && !dock.contains(e.target)) closeSearch();
+        });
+
+        sForm.addEventListener('submit', function(e){
+          e.preventDefault();
+          var active = sResults.querySelector('.search-result.active');
+          if (active) { location.href = active.getAttribute('href'); return; }
+          var q = sInput.value.trim();
+          if (!q) return;
+          var match = window.PasifySearch.find(q);
+          if (match) location.href = window.PasifySearch.resolveUrl(match.url);
+          else location.href = window.PasifySearch.resolveUrl('recursos/ayuda.html') + '?q=' + encodeURIComponent(q);
+        });
+      }
     }
   }
 

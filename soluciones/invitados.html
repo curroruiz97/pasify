@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -36,7 +36,7 @@
 
     <section class="stats-bar reveal">
       <div class="stat"><div class="num"><em>1</em> tap</div><div class="lab">Para confirmar</div></div>
-      <div class="stat"><div class="num">+48%</div><div class="lab">Conversión RSVP</div></div>
+      <div class="stat"><div class="num">+48&nbsp;%</div><div class="lab">Conversión RSVP</div></div>
       <div class="stat"><div class="num"><em>0</em> papel</div><div class="lab">En la puerta</div></div>
       <div class="stat"><div class="num">∞</div><div class="lab">Listas por evento</div></div>
     </section>
@@ -141,18 +141,6 @@
   </section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="col-1"><a href="../pasify.html" class="logo">pas<span class="dot"></span>ify<span class="y">y</span></a><p>El sistema operativo para eventos. Vende, gestiona y descubre todo en un sitio.</p></div>
-      <div><h6>Producto</h6><ul><li><a href="entradas.html">Venta de entradas</a></li><li><a href="taquilla.html">Taquilla</a></li><li><a href="vip.html">Reservados VIP</a></li><li><a href="invitados.html">Listas de invitados</a></li><li><a href="rrpp.html">Gestión RRPP</a></li><li><a href="canales.html">Canales de venta</a></li></ul></div>
-      <div><h6>Empresa</h6><ul><li><a href="#">Sobre Pasify</a></li><li><a href="#">Casos de éxito</a></li><li><a href="#">Prensa</a></li><li><a href="#">Empleo</a></li></ul></div>
-      <div><h6>Recursos</h6><ul><li><a href="#">Centro de ayuda</a></li><li><a href="#">API · Docs</a></li><li><a href="#">Estado del servicio</a></li><li><a href="#">Contacto</a></li></ul></div>
-    </div>
-    <div class="footer-bottom"><span>© 2025 Pasify · Hecho en España</span><div class="legal"><a href="#">Privacidad</a><a href="#">Términos</a><a href="#">Cookies</a></div></div>
-  </div>
-</footer>
-
 <script>
 const h=document.getElementById('header');window.addEventListener('scroll',()=>{h.classList.toggle('scrolled',window.scrollY>20)});
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -60px 0px'});
@@ -203,11 +191,20 @@ document.getElementById('mockup-3').innerHTML = svgWrap(`
   <text x="240" y="58" fill="#8A8275" font-family="Geist Mono" font-size="8" letter-spacing="1.2" text-anchor="middle">SOLSTICE · SAB 14 JUN</text>
   <text x="240" y="86" fill="#F4EEE2" font-family="Instrument Serif" font-style="italic" font-size="22" text-anchor="middle">Estás dentro</text>
   <text x="240" y="108" fill="#C9BFA8" font-family="Geist" font-size="10" text-anchor="middle">Lista de Marina V.</text>
-  <!-- QR -->
+  <!-- QR (decorative, not a functional code) -->
   <rect x="180" y="124" width="120" height="120" rx="8" fill="#fff"/>
-  <g transform="translate(186 130)" fill="#000">
-    ${Array.from({length:108},(_,i)=>{const x=i%9,y=Math.floor(i/9);return Math.random()>.5?`<rect x="${x*12}" y="${y*12}" width="12" height="12"/>`:''}).join('')}
-  </g>
+  <svg x="186" y="130" width="108" height="108" viewBox="0 0 50 50" shape-rendering="crispEdges">
+    <rect x="2" y="2" width="14" height="14" fill="#000"/>
+    <rect x="34" y="2" width="14" height="14" fill="#000"/>
+    <rect x="2" y="34" width="14" height="14" fill="#000"/>
+    <rect x="4" y="4" width="10" height="10" fill="#fff"/>
+    <rect x="36" y="4" width="10" height="10" fill="#fff"/>
+    <rect x="4" y="36" width="10" height="10" fill="#fff"/>
+    <rect x="6" y="6" width="6" height="6" fill="#000"/>
+    <rect x="38" y="6" width="6" height="6" fill="#000"/>
+    <rect x="6" y="38" width="6" height="6" fill="#000"/>
+    <path fill="#000" d="M16 0h2v2h-2zM22 0h2v2h-2zM24 0h2v2h-2zM28 0h2v2h-2zM30 0h2v2h-2zM18 2h2v2h-2zM20 2h2v2h-2zM26 2h2v2h-2zM32 2h2v2h-2zM16 4h2v2h-2zM24 4h2v2h-2zM28 4h2v2h-2zM30 4h2v2h-2zM20 6h2v2h-2zM22 6h2v2h-2zM26 6h2v2h-2zM32 6h2v2h-2zM16 8h2v2h-2zM18 8h2v2h-2zM24 8h2v2h-2zM28 8h2v2h-2zM30 8h2v2h-2zM20 10h2v2h-2zM22 10h2v2h-2zM26 10h2v2h-2zM32 10h2v2h-2zM16 12h2v2h-2zM20 12h2v2h-2zM24 12h2v2h-2zM28 12h2v2h-2zM32 12h2v2h-2zM18 14h2v2h-2zM22 14h2v2h-2zM26 14h2v2h-2zM28 14h2v2h-2zM32 14h2v2h-2zM0 16h2v2h-2zM2 16h2v2h-2zM10 16h2v2h-2zM12 16h2v2h-2zM16 16h2v2h-2zM18 16h2v2h-2zM22 16h2v2h-2zM28 16h2v2h-2zM34 16h2v2h-2zM38 16h2v2h-2zM40 16h2v2h-2zM44 16h2v2h-2zM4 18h2v2h-2zM6 18h2v2h-2zM18 18h2v2h-2zM20 18h2v2h-2zM24 18h2v2h-2zM30 18h2v2h-2zM36 18h2v2h-2zM42 18h2v2h-2zM46 18h2v2h-2zM48 18h2v2h-2zM0 20h2v2h-2zM8 20h2v2h-2zM12 20h2v2h-2zM16 20h2v2h-2zM22 20h2v2h-2zM26 20h2v2h-2zM28 20h2v2h-2zM32 20h2v2h-2zM38 20h2v2h-2zM44 20h2v2h-2zM2 22h2v2h-2zM10 22h2v2h-2zM14 22h2v2h-2zM18 22h2v2h-2zM20 22h2v2h-2zM24 22h2v2h-2zM30 22h2v2h-2zM34 22h2v2h-2zM40 22h2v2h-2zM44 22h2v2h-2zM48 22h2v2h-2zM0 24h2v2h-2zM6 24h2v2h-2zM12 24h2v2h-2zM16 24h2v2h-2zM22 24h2v2h-2zM26 24h2v2h-2zM32 24h2v2h-2zM36 24h2v2h-2zM42 24h2v2h-2zM46 24h2v2h-2zM4 26h2v2h-2zM8 26h2v2h-2zM10 26h2v2h-2zM14 26h2v2h-2zM18 26h2v2h-2zM24 26h2v2h-2zM28 26h2v2h-2zM30 26h2v2h-2zM38 26h2v2h-2zM44 26h2v2h-2zM48 26h2v2h-2zM0 28h2v2h-2zM2 28h2v2h-2zM12 28h2v2h-2zM20 28h2v2h-2zM26 28h2v2h-2zM32 28h2v2h-2zM34 28h2v2h-2zM36 28h2v2h-2zM42 28h2v2h-2zM46 28h2v2h-2zM6 30h2v2h-2zM8 30h2v2h-2zM16 30h2v2h-2zM18 30h2v2h-2zM24 30h2v2h-2zM30 30h2v2h-2zM38 30h2v2h-2zM40 30h2v2h-2zM44 30h2v2h-2zM0 32h2v2h-2zM4 32h2v2h-2zM10 32h2v2h-2zM12 32h2v2h-2zM22 32h2v2h-2zM28 32h2v2h-2zM32 32h2v2h-2zM34 32h2v2h-2zM36 32h2v2h-2zM38 32h2v2h-2zM40 32h2v2h-2zM42 32h2v2h-2zM48 32h2v2h-2zM18 34h2v2h-2zM22 34h2v2h-2zM24 34h2v2h-2zM30 34h2v2h-2zM32 34h2v2h-2zM40 34h2v2h-2zM42 34h2v2h-2zM46 34h2v2h-2zM16 36h2v2h-2zM20 36h2v2h-2zM26 36h2v2h-2zM28 36h2v2h-2zM32 36h2v2h-2zM36 36h2v2h-2zM40 36h2v2h-2zM44 36h2v2h-2zM48 36h2v2h-2zM18 38h2v2h-2zM22 38h2v2h-2zM24 38h2v2h-2zM32 38h2v2h-2zM40 38h2v2h-2zM42 38h2v2h-2zM46 38h2v2h-2zM20 40h2v2h-2zM26 40h2v2h-2zM30 40h2v2h-2zM32 40h2v2h-2zM34 40h2v2h-2zM36 40h2v2h-2zM38 40h2v2h-2zM40 40h2v2h-2zM44 40h2v2h-2zM48 40h2v2h-2zM16 42h2v2h-2zM18 42h2v2h-2zM24 42h2v2h-2zM28 42h2v2h-2zM32 42h2v2h-2zM38 42h2v2h-2zM40 42h2v2h-2zM42 42h2v2h-2zM46 42h2v2h-2zM22 44h2v2h-2zM26 44h2v2h-2zM28 44h2v2h-2zM34 44h2v2h-2zM44 44h2v2h-2zM48 44h2v2h-2zM16 46h2v2h-2zM20 46h2v2h-2zM24 46h2v2h-2zM30 46h2v2h-2zM32 46h2v2h-2zM36 46h2v2h-2zM38 46h2v2h-2zM42 46h2v2h-2zM48 46h2v2h-2zM18 48h2v2h-2zM22 48h2v2h-2zM28 48h2v2h-2zM34 48h2v2h-2zM36 48h2v2h-2zM44 48h2v2h-2zM46 48h2v2h-2z"/>
+  </svg>
   <rect x="168" y="256" width="144" height="22" rx="11" fill="#1A1612" stroke="#332C25"/>
   <text x="240" y="271" fill="#E8542A" font-family="Geist Mono" font-size="9" letter-spacing="1" text-anchor="middle">FREE HASTA 02:00 + COPA</text>
 `);
@@ -252,5 +249,9 @@ document.getElementById('mockup-5').innerHTML = svgWrap(`
 `);
 </script>
 <script src="_header.js"></script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
 </body>
 </html>

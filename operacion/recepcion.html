@@ -1,48 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Recepción de eventos y check-in · Pasify</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../soluciones/_shared.css">
-<style>
-  /* Page-local extras */
-  .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
-  @media (max-width:880px){.feature-grid{grid-template-columns:1fr}}
-  .card{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .25s ease, border-color .25s ease}
-  .card:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .card-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
-  .card-ico svg{width:20px;height:20px}
-  .card h3{font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--ink);margin-bottom:8px}
-  .card p{font-size:14px;line-height:1.55;color:var(--ink-2)}
-  .cta-banner{margin:80px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:24px;padding:56px;display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;position:relative;overflow:hidden}
-  .cta-banner::before{content:"";position:absolute;width:300px;height:300px;background:var(--accent);filter:blur(100px);opacity:.25;top:-100px;right:-50px}
-  .cta-banner h2{position:relative;font-size:clamp(28px,3.4vw,42px);font-weight:600;letter-spacing:-0.03em;line-height:1.05;max-width:18ch}
-  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .cta-banner .ctas{position:relative;display:flex;gap:12px;flex-wrap:wrap}
-  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
-  .reveal.in{opacity:1;transform:none}
-  main{padding-top:0}
-  .page-hero{padding:120px 0 80px;position:relative;overflow:hidden}
-  .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
-  .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.08;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
-  .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
-  .page-hero .label .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
-  .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
-  .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
-  .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
-  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-  .crumbs a{color:var(--ink-3);transition:color .2s ease}
-  .crumbs a:hover{color:var(--accent)}
-  .crumbs .sep{margin:0 10px;color:var(--line-2)}
-  .crumbs .here{color:var(--ink)}
-  .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../soluciones/_shared.css" />
 </head>
 <body data-depth="sub" data-current="recepcion">
 <div class="grain"></div>
@@ -61,60 +26,371 @@
     </nav>
 
     <section class="page-hero">
-      <span class="label"><span class="pulse"></span>Operación · Recepción</span>
-      <h1>Recepción de eventos y check-in</h1>
-      <p class="lede">Una sola pantalla en puerta para entradas, lista de invitados, RRPP, VIP y prensa. Tu equipo no salta entre apps; reconoce y deja pasar.</p>
-      <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
-      </div>
-    </section>
-
-    <section>
-      <div class="feature-grid">
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+      <div class="inner">
+        <div>
+          <span class="label"><span class="pulse"></span>Operación · Recepción</span>
+          <h1>Una <em>sola</em> pantalla en puerta. Todos los accesos.</h1>
+          <p class="lede">Entradas, lista de invitados, RRPP, VIP, prensa, artistas y cortesías en la misma vista. Tu equipo no salta entre apps; reconoce a la persona, resuelve si algo falla y deja pasar.</p>
+          <div class="ctas">
+            <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+            <a href="#stack" class="btn btn-outline">Ver hardware</a>
           </div>
-          <h3>Búsqueda inteligente</h3>
-          <p>Por nombre, DNI, email, teléfono, código o número de mesa. Tipea 3 letras y aparece.</p>
         </div>
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-          </div>
-          <h3>Foto del invitado</h3>
-          <p>Confirma que la persona en puerta es la del ticket. Especialmente útil en VIP y prensa.</p>
-        </div>
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-          </div>
-          <h3>Acreditaciones</h3>
-          <p>Imprime pulseras y tarjetas con un clic. Distintos colores por zona.</p>
+        <div class="mockup reveal">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · pasify · puerta principal</div>
+          <div class="body" id="hero-mockup-1"></div>
         </div>
       </div>
     </section>
 
-    <section class="cta-banner reveal">
-      <h2>Una sola pantalla, <em>todos</em> los accesos.</h2>
-      <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+    <section class="stats-bar reveal">
+      <div class="stat"><div class="num">1 <em>pantalla</em></div><div class="lab">Todos los accesos</div></div>
+      <div class="stat"><div class="num">3 <em>toques</em></div><div class="lab">Cualquier consulta</div></div>
+      <div class="stat"><div class="num">&lt;10&nbsp;s</div><div class="lab">Recuperar un ticket perdido</div></div>
+      <div class="stat"><div class="num">24/7</div><div class="lab">Soporte en directo</div></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2 class="h2">El <em>primer punto</em> de tu noche, sin fricción.</h2>
+        </div>
+        <p class="lede-2">La recepción no es solo abrir puertas: es la primera impresión, el filtro humano y el rescate cuando algo falla. Cuatro piezas para que tu equipo lo haga rápido y sin fricción.</p>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">01 · Búsqueda unificada</div>
+          <h3>Teclea <em>3 letras</em> y aparece. Aunque esté mal escrito.</h3>
+          <p>Una sola caja para buscar por nombre, DNI, correo, teléfono, código de reserva o número de mesa. Pasify junta entradas online, lista de invitados, RRPP, VIP, prensa y cortesías en el mismo resultado y los marca por color. Tolerante a tildes, mayúsculas y dedos cansados a las 03:00.</p>
+          <ul class="checks">
+            <li>Búsqueda fonética: «Maria Lopez» encuentra «María López»</li>
+            <li>Resultados agrupados por categoría con código de color</li>
+            <li>Modo offline con sync al volver la conexión</li>
+            <li>Vista por mesa, por reservado o por invitador (RRPP)</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · búsqueda · 22:47</div>
+          <div class="body" id="mockup-2"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">02 · Identidad y acreditación</div>
+          <h3>Foto del titular en pantalla. <em>Pulsera</em> impresa al instante.</h3>
+          <p>Para VIP, prensa y artistas, la entrada lleva foto: tu portero ve si la persona delante coincide. Si la zona necesita pulsera con color o credencial nominal, sale por la impresora térmica con un toque — con su nombre, su zona y un QR opcional para subpuertas internas (backstage, cabina, comedor de artistas).</p>
+          <ul class="checks">
+            <li>Foto vinculada al ticket para VIP, prensa y artistas</li>
+            <li>Match con DNI cuando lo exige el aforo legal</li>
+            <li>Impresión de pulsera o credencial en menos de 2&nbsp;s</li>
+            <li>Color o nombre por zona: pista, VIP, backstage, prensa</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · ficha · sara martín</div>
+          <div class="body" id="mockup-3"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">03 · Resolución de incidencias</div>
+          <h3>«He <em>perdido</em> la entrada» se resuelve en 10 segundos.</h3>
+          <p>Las cuatro situaciones que se repiten cada noche, con un flujo claro y un solo botón: ticket perdido, pago que no llegó, código de cortesía caducado y transferencia entre amigos. El recepcionista no inventa; sigue el guion que aparece en pantalla y la incidencia se resuelve sin llamar al manager.</p>
+          <ul class="checks">
+            <li>Reenvío de la entrada por correo o SMS en un toque</li>
+            <li>Comprobación de pago en pasarelas conectadas</li>
+            <li>Validación de códigos de campaña sin pedir el original</li>
+            <li>Transferencia entre cuentas con verificación de identidad</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · incidencia · ticket perdido</div>
+          <div class="body" id="mockup-4"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">04 · Walk-up y notas</div>
+          <h3>Venta en puerta y <em>contexto</em> compartido con el equipo.</h3>
+          <p>Vende la entrada en puerta con el TPV integrado — cobro contactless o Bizum, entrada emitida al instante. Y para todo lo que no cabe en un campo, notas internas visibles solo a tu equipo: «pareja del DJ», «llega tarde por avión», «cumpleaños 30». El siguiente turno entiende el contexto sin reuniones.</p>
+          <ul class="checks">
+            <li>Venta presencial con cobro por tarjeta, Bizum o efectivo</li>
+            <li>Notas internas por persona, mesa o reservado</li>
+            <li>Aviso al encargado con un toque ante cualquier incidencia</li>
+            <li>Resumen del turno: vendidas, pasadas, pendientes, rechazadas</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · turno · cierre 04:18</div>
+          <div class="body" id="mockup-5"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="stack">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">El stack</div>
+          <h2 class="h2">El <em>kit</em> de recepción que te llega en 48 horas.</h2>
+        </div>
+      </div>
+      <div class="cards-3 reveal">
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h4>Tablet o iPad</h4>
+          <p>Pantalla generosa para que tu recepcionista vea la búsqueda y la ficha sin desplazarse. Soporte de mesa con teclado externo opcional para teclear rápido en horas punta.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V3h10v3M9 14h6M9 17h6"/></svg></div>
+          <h4>Impresora de pulseras</h4>
+          <p>Brother QL-820NWB y Zebra ZD421. Pulseras Tyvek y credenciales nominales con tu logo. Conectadas a la app por Bluetooth o Wi-Fi sin instalar drivers.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 7-2 8 0"/></svg></div>
+          <h4>Lector de DNI</h4>
+          <p>Para eventos con verificación de edad o aforo nominal por ley. Lee DNI/NIE, pasaporte y carnet de conducir. Cotejo automático con el titular de la entrada.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Antes / Después</div>
+          <h2 class="h2">Recepción de <em>2014</em> vs Pasify.</h2>
+        </div>
+      </div>
+      <div class="compare reveal">
+        <div class="col bad">
+          <h5>Recepción tradicional</h5>
+          <ul>
+            <li>Lista impresa con tachones a boli para los invitados</li>
+            <li>Cuatro apps abiertas: web de la entrada, Excel, WhatsApp, correo</li>
+            <li>«Avisad al jefe» cada vez que alguien pierde la entrada</li>
+            <li>Pulseras preimpresas que sobran o faltan a medianoche</li>
+            <li>Notas en pósits que se pierden entre turnos</li>
+            <li>Cierre del turno: tres folios y una hora de recuento</li>
+          </ul>
+        </div>
+        <div class="col good">
+          <h5>Pasify Recepción</h5>
+          <ul>
+            <li>Lista digital con búsqueda fonética y filtros por categoría</li>
+            <li>Una sola pantalla con todos los tipos de acceso</li>
+            <li>Recuperación de la entrada en 10 segundos sin escalar</li>
+            <li>Pulseras impresas bajo demanda, una por persona</li>
+            <li>Notas internas por persona que persisten entre turnos</li>
+            <li>Cierre automático con resumen exportable al encargado</li>
+          </ul>
+        </div>
       </div>
     </section>
   </div>
-  <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
+
+  <section class="cta-banner reveal">
+    <div class="grain-overlay"></div>
+    <div class="inner">
+      <div>
+        <h2>Tu equipo de puerta lo <em>sabe todo</em>, sin saltar entre apps.</h2>
+        <p>Te dejamos un kit de recepción y un técnico de Pasify acompañando a tu equipo la primera noche. Sin coste, sin compromiso.</p>
+      </div>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn">Solicita demo <span class="arrow">→</span></a>
+        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="related">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Sigue explorando</div>
+          <h2 class="h2">Más en <em>operación</em>.</h2>
+        </div>
+      </div>
+      <div class="related-grid reveal">
+        <a href="control-acceso.html" class="related-card">
+          <span class="lab">02 · Acceso</span>
+          <h5>Control de acceso QR</h5>
+          <p>Validación en menos de 200&nbsp;ms con cualquier móvil. El paso natural justo después de la recepción.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="../soluciones/invitados.html" class="related-card">
+          <span class="lab">Listas</span>
+          <h5>Listas de invitados</h5>
+          <p>Lista digital con cuotas por invitador, fecha límite e informes. Tu recepción la consulta sin pedirla por WhatsApp.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="../soluciones/vip.html" class="related-card">
+          <span class="lab">VIP</span>
+          <h5>Reservados VIP</h5>
+          <p>Mesas, mínimos y cuentas abiertas conectadas con la recepción. Cada VIP llega con la mesa lista.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script src="../soluciones/_header.js"></script>
 <script>
-  // Reveal on scroll
-  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const h=document.getElementById('header');
+window.addEventListener('scroll',()=>{h && h.classList.toggle('scrolled',window.scrollY>20)});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -60px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+function svgWrap(html){return `<svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;border-radius:10px">${html}</svg>`}
+
+// HERO: search bar with multi-category results
+document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">PUERTA PRINCIPAL · LUCÍA</text>
+  <rect x="32" y="48" width="416" height="44" rx="22" fill="#1A1612" stroke="#332C25"/>
+  <circle cx="56" cy="70" r="7" fill="none" stroke="#8A8275" stroke-width="1.5"/>
+  <line x1="61" y1="75" x2="68" y2="82" stroke="#8A8275" stroke-width="1.5"/>
+  <text x="80" y="74" fill="#F4EEE2" font-family="Geist" font-size="14">sara mar</text>
+  <rect x="143" y="56" width="2" height="28" fill="#E8542A"/>
+  <text x="436" y="74" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end">5 resultados</text>
+  ${[
+    ['Sara Martín','PSY-A8K2-9341','TICKET','Pista B · General','#7DD17F','#1F2A1A'],
+    ['Sara Martínez','via @djnacho','RRPP','Lista RRPP · 2 pax','#E8B07A','#2A1F1A'],
+    ['Sara Mar (Vega)','VIP-MESA-14','VIP','Mesa 14 · 8 pax','#E8542A','#2A1A1F'],
+    ['Sara Margarit','prensa@efe.es','PRENSA','Foto + 1','#7AD0D8','#1A2A2A'],
+    ['Sara Martí','invitada de Iván P.','INVITADO','Invitado · 1 pax','#9D8AE8','#1F1A2A']
+  ].map((r,i)=>`<g>
+    <rect x="32" y="${108+i*38}" width="416" height="32" rx="6" fill="${i===0?'#1F1B17':'#16130F'}" stroke="#26211C"/>
+    <rect x="44" y="${118+i*38}" width="58" height="14" rx="3" fill="${r[5]}"/>
+    <text x="73" y="${128+i*38}" fill="${r[4]}" font-family="Geist Mono" font-size="8" text-anchor="middle" letter-spacing="1.2">${r[2]}</text>
+    <text x="116" y="${128+i*38}" fill="#F4EEE2" font-family="Geist" font-size="11" font-weight="${i===0?600:500}">${r[0]}</text>
+    <text x="240" y="${128+i*38}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[1]}</text>
+    <text x="436" y="${128+i*38}" fill="#C9BFA8" font-family="Geist" font-size="10" text-anchor="end">${r[3]}</text>
+  </g>`).join('')}
+  <text x="32" y="304" fill="#8A8275" font-family="Geist Mono" font-size="9">↑↓ navegar · enter abrir ficha · esc cerrar</text>
+`);
+
+// 02: Búsqueda con filtros y resultados
+document.getElementById('mockup-2').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Búsqueda · maría lópez</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">FONÉTICA ON · 5 RESULTADOS</text>
+  ${['Todos·5','Tickets·3','Invitados·1','RRPP·1','VIP·1'].map((c,i)=>`<g>
+    <rect x="${32+i*80}" y="68" width="74" height="22" rx="11" fill="${i===0?'#E8542A':'#1A1612'}" stroke="${i===0?'transparent':'#332C25'}"/>
+    <text x="${69+i*80}" y="83" fill="${i===0?'#fff':'#C9BFA8'}" font-family="Geist Mono" font-size="9" text-anchor="middle">${c}</text>
+  </g>`).join('')}
+  ${[
+    ['María López García','PSY-A8K2-2287','TICKET','✓ check-in 22:14','#7DD17F','#1F2A1A'],
+    ['Maria Lopez','PSY-A8K2-7019','TICKET','Pendiente','#7DD17F','#1F2A1A'],
+    ['Maria Lopes','PSY-A8K2-3344','TICKET','Pendiente','#7DD17F','#1F2A1A'],
+    ['Marian López','via @lola','RRPP','RRPP · 3 pax','#E8B07A','#2A1F1A'],
+    ['M. López','VIP-MESA-08','VIP','Mesa 8 · 4 pax','#E8542A','#2A1A1F']
+  ].map((r,i)=>`<g>
+    <rect x="32" y="${102+i*38}" width="416" height="32" rx="6" fill="#16130F" stroke="#26211C"/>
+    <rect x="44" y="${112+i*38}" width="58" height="14" rx="3" fill="${r[5]}"/>
+    <text x="73" y="${122+i*38}" fill="${r[4]}" font-family="Geist Mono" font-size="8" text-anchor="middle" letter-spacing="1.2">${r[2]}</text>
+    <text x="116" y="${122+i*38}" fill="#F4EEE2" font-family="Geist" font-size="11">${r[0]}</text>
+    <text x="240" y="${122+i*38}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[1]}</text>
+    <text x="436" y="${122+i*38}" fill="#C9BFA8" font-family="Geist" font-size="10" text-anchor="end">${r[3]}</text>
+  </g>`).join('')}
+  <text x="32" y="304" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">FILTRA: SIN ENTRAR · CON FOTO · CON NOTA · MESA</text>
+`);
+
+// 03: Ficha de invitado con foto, info y acreditación
+document.getElementById('mockup-3').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Sara Martín</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">FICHA · TICKET PSY-A8K2-9341</text>
+  <rect x="32" y="74" width="120" height="140" rx="8" fill="#1A1612" stroke="#332C25"/>
+  <circle cx="92" cy="124" r="22" fill="#3D2419"/>
+  <path d="M70 168 Q92 148 114 168 L114 196 L70 196 Z" fill="#3D2419"/>
+  <text x="92" y="208" fill="#8A8275" font-family="Geist Mono" font-size="8" text-anchor="middle">FOTO TITULAR</text>
+  <rect x="164" y="74" width="284" height="140" rx="8" fill="#1A1612" stroke="#332C25"/>
+  ${[
+    ['Categoría','VIP · Pista B','#E8542A'],
+    ['Email','sara.m@studio.es','#F4EEE2'],
+    ['Teléfono','+34 612 ··· 481','#F4EEE2'],
+    ['Mesa','14 · 8 pax · mín. 240€','#E8B07A'],
+    ['Comprado','12/06 22:14 · Stripe','#C9BFA8'],
+    ['Notas','Pareja del DJ · pasar directo','#7AD0D8']
+  ].map((r,i)=>`<g>
+    <text x="180" y="${100+i*20}" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">${r[0].toUpperCase()}</text>
+    <text x="436" y="${100+i*20}" fill="${r[2]}" font-family="Geist" font-size="10.5" text-anchor="end">${r[1]}</text>
+  </g>`).join('')}
+  <rect x="32" y="232" width="416" height="68" rx="10" fill="#1A0F08" stroke="rgba(232,84,42,0.4)"/>
+  <rect x="44" y="244" width="100" height="44" rx="6" fill="#E8542A"/>
+  <text x="94" y="262" fill="#fff" font-family="Geist Mono" font-size="9" text-anchor="middle" letter-spacing="1.2">PISTA B</text>
+  <text x="94" y="278" fill="#fff" font-family="Geist" font-size="13" font-weight="600" text-anchor="middle">Sara M.</text>
+  <text x="160" y="252" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">PULSERA · LISTA</text>
+  <text x="160" y="272" fill="#F4EEE2" font-family="Geist" font-size="11">Brother QL-820 · 1.8 s</text>
+  <rect x="312" y="252" width="124" height="36" rx="8" fill="#E8542A"/>
+  <text x="374" y="275" fill="#fff" font-family="Geist" font-size="11" font-weight="600" text-anchor="middle">Imprimir + dejar pasar</text>
+`);
+
+// 04: Resolución de incidencias — 4 escenarios con quick action
+document.getElementById('mockup-4').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Centro de incidencias</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">FLUJOS GUIADOS · 4 ESCENARIOS HABITUALES</text>
+  ${[
+    ['He perdido la entrada','Reenvío email + SMS','#E8542A','22:31 · 1 caso hoy'],
+    ['Mi pago no llegó','Re-check Stripe + reenvío','#E8B07A','22:18 · 0 hoy'],
+    ['Código de invitado caducado','Validar campaña + override','#9D8AE8','—'],
+    ['Transferencia entre amigos','Verificar identidad + transfer','#7AD0D8','22:05 · 2 hoy']
+  ].map((r,i)=>{const y=78+i*52;return `<g>
+    <rect x="32" y="${y}" width="416" height="44" rx="8" fill="${i===0?'#1F1612':'#16130F'}" stroke="${i===0?r[2]:'#26211C'}" stroke-width="${i===0?1.4:1}"/>
+    <circle cx="56" cy="${y+22}" r="9" fill="${r[2]}" opacity="0.18"/>
+    <text x="56" y="${y+27}" fill="${r[2]}" font-family="Geist" font-size="13" text-anchor="middle">${i+1}</text>
+    <text x="80" y="${y+19}" fill="#F4EEE2" font-family="Geist" font-size="11.5" font-weight="600">${r[0]}</text>
+    <text x="80" y="${y+34}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[1]}</text>
+    <text x="436" y="${y+22}" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end">${r[3]}</text>
+  </g>`}).join('')}
+  <rect x="32" y="290" width="416" height="22" rx="11" fill="#E8542A"/>
+  <text x="240" y="305" fill="#fff" font-family="Geist" font-size="10.5" font-weight="600" text-anchor="middle">Resolver perdido → reenvío en 8 s</text>
+`);
+
+// 05: Cierre de turno
+document.getElementById('mockup-5').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Cierre de turno · Lucía</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">14 JUN · 22:00–04:18 · PUERTA PRINCIPAL</text>
+  ${[
+    [32,76,'Pasadas','1.687','#4DB87A'],
+    [172,76,'Pendientes','38','#E8B07A'],
+    [312,76,'Rechazadas','3','#E8542A']
+  ].map(k=>`<g>
+    <rect x="${k[0]}" y="${k[1]}" width="124" height="68" rx="8" fill="#1A1612" stroke="#332C25"/>
+    <text x="${k[0]+12}" y="${k[1]+22}" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">${k[2].toUpperCase()}</text>
+    <text x="${k[0]+12}" y="${k[1]+58}" fill="${k[4]}" font-family="Geist" font-size="26" font-weight="600">${k[3]}</text>
+  </g>`).join('')}
+  <text x="32" y="172" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">DESGLOSE POR CATEGORÍA</text>
+  ${[
+    ['Tickets',1124,'#7DD17F'],
+    ['Invitados',342,'#9D8AE8'],
+    ['RRPP',158,'#E8B07A'],
+    ['VIP',54,'#E8542A'],
+    ['Prensa',9,'#7AD0D8']
+  ].map((r,i)=>{const y=188+i*20; const max=1124; const w=320*(r[1]/max); return `<g>
+    <text x="32" y="${y+10}" fill="#F4EEE2" font-family="Geist" font-size="10.5">${r[0]}</text>
+    <rect x="98" y="${y+1}" width="${w}" height="10" rx="3" fill="${r[2]}" opacity="0.85"/>
+    <text x="${98+w+8}" y="${y+10}" fill="#C9BFA8" font-family="Geist Mono" font-size="9.5">${r[1]}</text>
+  </g>`}).join('')}
+  <rect x="32" y="290" width="416" height="22" rx="11" fill="#1A1612" stroke="#332C25"/>
+  <text x="240" y="305" fill="#C9BFA8" font-family="Geist Mono" font-size="9" text-anchor="middle" letter-spacing="1.2">EXPORTAR PDF · ENVIAR AL ENCARGADO</text>
+`);
 </script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
 </body>
 </html>

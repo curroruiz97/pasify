@@ -1,57 +1,31 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seguridad · Pasify</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../soluciones/_shared.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Seguridad y privacidad · Pasify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../soluciones/_shared.css" />
 <style>
-  /* Page-local extras */
-  .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
-  @media (max-width:880px){.feature-grid{grid-template-columns:1fr}}
-  .card{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .25s ease, border-color .25s ease}
-  .card:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .card-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
-  .card-ico svg{width:20px;height:20px}
-  .card h3{font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--ink);margin-bottom:8px}
-  .card p{font-size:14px;line-height:1.55;color:var(--ink-2)}
-  .cta-banner{margin:80px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:24px;padding:56px;display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;position:relative;overflow:hidden}
-  .cta-banner::before{content:"";position:absolute;width:300px;height:300px;background:var(--accent);filter:blur(100px);opacity:.25;top:-100px;right:-50px}
-  .cta-banner h2{position:relative;font-size:clamp(28px,3.4vw,42px);font-weight:600;letter-spacing:-0.03em;line-height:1.05;max-width:18ch}
-  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .cta-banner .ctas{position:relative;display:flex;gap:12px;flex-wrap:wrap}
-  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
-  .reveal.in{opacity:1;transform:none}
-  main{padding-top:0}
-  .page-hero{padding:120px 0 80px;position:relative;overflow:hidden}
-  .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
-  .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.08;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
-  .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
-  .page-hero .label .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
-  .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
-  .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
-  .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
-  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-  .crumbs a{color:var(--ink-3);transition:color .2s ease}
-  .crumbs a:hover{color:var(--accent)}
-  .crumbs .sep{margin:0 10px;color:var(--line-2)}
-  .crumbs .here{color:var(--ink)}
-  .footer{margin-top:120px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-
-  /* Subsections (integrated children) */
-  .sub-section{margin-top:96px;position:relative}
-  .sub-head{max-width:680px;margin-bottom:36px}
-  .sub-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
-  .sub-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
-  .sub-head .eyebrow .pill{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.14em;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px;margin-left:6px;text-transform:uppercase}
-  .sub-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.06;color:var(--ink)}
-  .sub-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .sub-head p.sub{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:14px;max-width:60ch}
+  /* Legal blocks (privacidad / términos / cookies) */
+  .legal-block{max-width:880px;margin:0 auto}
+  .legal-block h3{font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--ink);margin:36px 0 12px}
+  .legal-block h3:first-child{margin-top:0}
+  .legal-block p,.legal-block li{font-size:14.5px;line-height:1.7;color:var(--ink-2);margin-bottom:14px}
+  .legal-block ul{padding-left:22px;margin-bottom:18px}
+  .legal-block ul li{margin-bottom:6px}
+  .legal-block strong{color:var(--ink);font-weight:500}
+  .legal-block code{font-family:'Geist Mono',monospace;font-size:12px;color:var(--accent);background:rgba(232,84,42,.08);padding:2px 6px;border-radius:4px}
+  .legal-block table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--bg-2);border-radius:10px;overflow:hidden}
+  .legal-block table th,.legal-block table td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.5;vertical-align:top}
+  .legal-block table tbody tr:last-child th,.legal-block table tbody tr:last-child td{border-bottom:none}
+  .legal-block table th{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3);border-bottom:1px solid var(--line-2)}
+  .legal-block .updated{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .legal-block .anchor-link{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .2s ease}
+  .legal-block .anchor-link:hover{border-bottom-color:var(--accent)}
+  section.sec[id="privacidad"],section.sec[id="terminos"],section.sec[id="cookies"]{scroll-margin-top:96px}
 </style>
 </head>
 <body data-depth="sub" data-current="seguridad-privacidad">
@@ -65,99 +39,660 @@
     <nav class="crumbs">
       <a href="../pasify.html">Inicio</a>
       <span class="sep">/</span>
-      <a href="../pasify.html">Nosotros</a>
+      <a href="../pasify.html#producto">Nosotros</a>
       <span class="sep">/</span>
       <span class="here">Seguridad y privacidad</span>
     </nav>
 
     <section class="page-hero">
-      <span class="label"><span class="pulse"></span>Confianza · Seguridad y privacidad</span>
-      <h1>Seguridad <em>y</em> privacidad</h1>
-      <p class="lede">ISO 27001, SOC 2 Type II, PCI DSS Level 1. RGPD <em>by design</em>. Pentest trimestral, bug bounty público, equipo de seguridad in-house, datos en Frankfurt y Madrid, cifrado en tránsito y en reposo. Dormimos para que tú duermas.</p>
-      <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#producto" class="btn btn-outline">Ver producto</a>
-      </div>
-    </section>
-
-    <section>
-      <div class="feature-grid">
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+      <div class="inner">
+        <div>
+          <span class="label"><span class="pulse"></span>Confianza · Seguridad y privacidad</span>
+          <h1>Dormimos para que <em>tú</em> duermas.</h1>
+          <p class="lede">ISO 27001, SOC 2 Type II y PCI DSS Level 1. RGPD nativo, no añadido. Pentest trimestral, programa público de bug bounty, equipo de seguridad interno y datos en Frankfurt y Madrid sin salir nunca de la UE. Cinco mil personas en sala merecen una infraestructura que aguante.</p>
+          <div class="ctas">
+            <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+            <a href="#certificaciones" class="btn btn-outline">Ver certificaciones</a>
           </div>
-          <h3>ISO 27001 + SOC 2</h3>
-          <p>Auditorías anuales por terceros independientes. Reports disponibles bajo NDA.</p>
         </div>
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-          </div>
-          <h3>PCI DSS</h3>
-          <p>Pagos certificados al máximo nivel. Tu cliente paga, tú no tocas la tarjeta.</p>
-        </div>
-
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-          </div>
-          <h3>Bug bounty</h3>
-          <p>Programa público en HackerOne. Si encuentras algo, te pagamos.</p>
+        <div class="mockup reveal">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · trust.pasify.com · live</div>
+          <div class="body" id="hero-mockup-1"></div>
         </div>
       </div>
     </section>
 
-    <!-- ===== SUBSECTION · PRIVACIDAD DE DATOS ===== -->
-    <section class="sub-section reveal">
-      <div class="sub-head">
-        <span class="eyebrow">Privacidad de datos<span class="pill">RGPD</span></span>
-        <h2>Privacidad <em>seria</em>, no marketing.</h2>
-        <p class="sub">RGPD <em>by design</em>, no como check-list. Datos almacenados en Frankfurt y Madrid. Cifrado en tránsito y en reposo. Tú eres el responsable, nosotros el encargado, y se nota en cómo tratamos cada byte de información tuya y de tus clientes.</p>
+    <section class="stats-bar reveal">
+      <div class="stat"><div class="num">99,99&nbsp;%</div><div class="lab">Uptime contractual</div></div>
+      <div class="stat"><div class="num">3 <em>certificaciones</em></div><div class="lab">ISO 27001 · SOC 2 · PCI DSS</div></div>
+      <div class="stat"><div class="num">EU <em>only</em></div><div class="lab">Frankfurt y Madrid</div></div>
+      <div class="stat"><div class="num">24 <em>h</em></div><div class="lab">Borrado RGPD garantizado</div></div>
+    </section>
+
+    <section class="sec" id="certificaciones">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2 class="h2">La parte aburrida que <em>importa</em>.</h2>
+        </div>
+        <p class="lede-2">Cuatro piezas para que la seguridad deje de ser un PDF olvidado: certificaciones auditadas, privacidad RGPD nativa, hosting europeo cifrado y un equipo interno que rompe Pasify a diario para que no lo rompan otros.</p>
       </div>
 
-      <div class="feature-grid">
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
-          </div>
-          <h3>RGPD nativo</h3>
-          <p>Consentimiento granular, derecho al olvido en 1 clic, exportación inmediata. No "ajustes", no formularios — funciona por defecto.</p>
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">01 · Certificaciones</div>
+          <h3>Auditadas por <em>terceros</em>, no por nuestro PowerPoint.</h3>
+          <p>ISO 27001 desde 2022, SOC 2 Type II desde 2023 y PCI DSS Level 1 desde el primer pago procesado. Auditorías anuales por BDO y Deloitte; los informes se firman bajo NDA pero existen, los puedes pedir y los entregamos antes de que cierres con tu equipo de compliance. No es un sello de marketing — es papel firmado.</p>
+          <ul class="checks">
+            <li>ISO 27001:2022 · auditoría anual BDO · vigencia 2026</li>
+            <li>SOC 2 Type II · revisión continua · informe trimestral</li>
+            <li>PCI DSS Level 1 · el máximo, requerido por Stripe</li>
+            <li>Informes disponibles bajo NDA en menos de 48 h</li>
+          </ul>
         </div>
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>
-          </div>
-          <h3>Hosting EU</h3>
-          <p>AWS Frankfurt y OVH Madrid. Tus datos no salen de la UE jamás — ni para backups, ni para analytics, ni para soporte.</p>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · compliance · 3 sellos vigentes</div>
+          <div class="body" id="mockup-2"></div>
         </div>
-        <div class="card reveal">
-          <div class="card-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-          </div>
-          <h3>DPA estándar</h3>
-          <p>Acuerdo de tratamiento firmable online en menos de 60 segundos. Revisado por +1.500 clientes — sin sorpresas, sin negociación.</p>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">02 · Privacidad RGPD</div>
+          <h3>RGPD <em>nativo</em>, no como casilla.</h3>
+          <p>Pasify se diseñó cuando el RGPD ya estaba vigente, así que la privacidad es estructura, no parche. Consentimiento granular por finalidad — venta, marketing, perfilado — y el cliente final tiene un panel propio para gestionar lo suyo. Borrado a petición ejecutado en menos de 24 horas, propagado a destinos publicitarios incluidos. DPA firmable online en menos de 60 segundos, ya revisado por más de 1.500 clientes.</p>
+          <ul class="checks">
+            <li>Consentimiento granular por finalidad y trazable</li>
+            <li>Borrado a petición en &lt;24 h con propagación a destinos</li>
+            <li>Centro de privacidad para que el cliente final decida solo</li>
+            <li>DPA estándar firmable online sin negociación</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · rgpd · centro de privacidad</div>
+          <div class="body" id="mockup-3"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">03 · Hosting y cifrado</div>
+          <h3>Datos en la <em>UE</em>, cifrados de extremo a extremo.</h3>
+          <p>Servidores en AWS Frankfurt y OVH Madrid, con replicación entre los dos. Los datos no salen de la UE jamás — ni para copia de seguridad, ni para analítica interna, ni para soporte. TLS 1.3 en tránsito, AES-256 en reposo, claves rotadas trimestralmente y aisladas por cliente para que un fallo en una sala no exponga datos de otra.</p>
+          <ul class="checks">
+            <li>AWS Frankfurt + OVH Madrid · sin salida de la UE</li>
+            <li>TLS 1.3 obligatorio en tránsito, AES-256 en reposo</li>
+            <li>Claves rotadas cada trimestre y aisladas por cliente</li>
+            <li>Copia de seguridad cifrada con retención de 90 días</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · infra · frankfurt + madrid</div>
+          <div class="body" id="mockup-4"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">04 · Bug bounty y red team</div>
+          <h3>Pagamos por <em>romperlo</em> antes que otros.</h3>
+          <p>Programa público en HackerOne con recompensas hasta 12.000&nbsp;€ por vulnerabilidad crítica. Equipo de seguridad interno con cuatro personas a tiempo completo y un pentest trimestral por consultora externa rotativa para evitar el sesgo de la misma firma. Página pública con vulnerabilidades resueltas, su severidad y el tiempo de fix.</p>
+          <ul class="checks">
+            <li>Bug bounty público en HackerOne · hasta 12.000&nbsp;€</li>
+            <li>Equipo interno de seguridad de 4 personas a tiempo completo</li>
+            <li>Pentest trimestral por consultora externa rotativa</li>
+            <li>Página pública con vulnerabilidades resueltas y MTTR</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · bug bounty · q2 2026</div>
+          <div class="body" id="mockup-5"></div>
         </div>
       </div>
     </section>
 
-    <section class="cta-banner reveal">
-      <h2>Seguridad de <em>banco</em>, simplicidad de app.</h2>
-      <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
-        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">El stack</div>
+          <h2 class="h2">Lo que tu equipo de <em>compliance</em> va a pedir.</h2>
+        </div>
+      </div>
+      <div class="cards-3 reveal">
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h4>Centro de confianza</h4>
+          <p>trust.pasify.com con certificaciones, informes públicos, incidencias resueltas y plantillas de DPA. Lo que tu CISO va a pedir, ya está colgado.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h4>Página de estado</h4>
+          <p>status.pasify.com con uptime histórico de 365 días, incidencias por componente y aviso por correo cuando lo que te afecta cambia de color.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 12h10M12 7v10"/></svg></div>
+          <h4>DPA y contratos</h4>
+          <p>Acuerdo de tratamiento de datos firmable online en 60 segundos, ya revisado por +1.500 clientes — sin sorpresas, sin negociación con tu legal.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Antes / Después</div>
+          <h2 class="h2">Seguridad de <em>2014</em> vs Pasify.</h2>
+        </div>
+      </div>
+      <div class="compare reveal">
+        <div class="col bad">
+          <h5>SaaS sin auditar</h5>
+          <ul>
+            <li>«Seguro como un banco» en la web, sin papel que lo respalde</li>
+            <li>Datos en datacenters fuera de la UE para abaratar coste</li>
+            <li>RGPD añadido en 2018 a un producto pensado en 2012</li>
+            <li>Borrado a petición que tarda meses y nunca propaga</li>
+            <li>Sin programa de bug bounty: los fallos se descubren explotándose</li>
+            <li>DPA negociado por la legal del cliente cada vez</li>
+          </ul>
+        </div>
+        <div class="col good">
+          <h5>Pasify Seguridad</h5>
+          <ul>
+            <li>ISO 27001 + SOC 2 Type II + PCI DSS Level 1 vigentes</li>
+            <li>AWS Frankfurt y OVH Madrid · sin salida de la UE</li>
+            <li>RGPD diseñado en la estructura, no parcheado encima</li>
+            <li>Borrado en menos de 24 h con propagación a destinos</li>
+            <li>Bug bounty público con hasta 12.000&nbsp;€ por vulnerabilidad</li>
+            <li>DPA estándar firmable en 60 segundos, sin negociación</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== POLÍTICA DE PRIVACIDAD ========== -->
+    <section class="sec" id="privacidad">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Política de privacidad</div>
+          <h2 class="h2">Cómo tratamos tus <em>datos</em>.</h2>
+        </div>
+        <p class="lede-2">Conforme al Reglamento (UE) 2016/679 (RGPD) y a la Ley Orgánica 3/2018 de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD).</p>
+      </div>
+
+      <div class="legal-block reveal">
+        <p class="updated">Última actualización: 8 de mayo de 2026</p>
+
+        <h3>1. Responsable del tratamiento</h3>
+        <p>El responsable del tratamiento de los datos personales recogidos a través del sitio web pasify.com y del software Pasify es:</p>
+        <ul>
+          <li><strong>Razón social:</strong> Pasify, S.L.</li>
+          <li><strong>CIF:</strong> B-XXXXXXXX</li>
+          <li><strong>Domicilio social:</strong> Calle Acera de Recoletos, 47004 Valladolid (España)</li>
+          <li><strong>Correo de contacto:</strong> <a class="anchor-link" href="mailto:privacidad@pasify.com">privacidad@pasify.com</a></li>
+          <li><strong>Delegado de Protección de Datos (DPD):</strong> <a class="anchor-link" href="mailto:dpo@pasify.com">dpo@pasify.com</a></li>
+        </ul>
+
+        <h3>2. Datos que tratamos</h3>
+        <p>Recogemos únicamente los datos necesarios para prestar el servicio. Por categoría:</p>
+        <ul>
+          <li><strong>Identificativos:</strong> nombre, apellidos, fecha de nacimiento, DNI/NIE/pasaporte (solo cuando lo exija la normativa de aforo o verificación de edad).</li>
+          <li><strong>De contacto:</strong> dirección de correo electrónico, teléfono y, en su caso, dirección postal.</li>
+          <li><strong>De pago:</strong> medio de pago, últimos cuatro dígitos de la tarjeta y datos para reembolso (IBAN). El número completo de tarjeta nunca se almacena en nuestros sistemas: se procesa directamente por el proveedor certificado PCI DSS Level 1 (Stripe).</li>
+          <li><strong>De uso del servicio:</strong> compras, consumiciones, mesas reservadas, asistencia a eventos, dispositivo y navegador, dirección IP y registros de auditoría.</li>
+          <li><strong>De comunicaciones:</strong> contenido de los correos, mensajes de WhatsApp y registros de soporte que nos remitas.</li>
+          <li><strong>De cookies:</strong> ver la política de cookies más abajo.</li>
+        </ul>
+
+        <h3>3. Finalidades del tratamiento</h3>
+        <ul>
+          <li>Prestación del servicio contratado: gestión de eventos, ventas, accesos, reservados, abonos y pagos.</li>
+          <li>Atención al cliente, soporte técnico y resolución de incidencias.</li>
+          <li>Cumplimiento de obligaciones legales: facturación, contabilidad, fiscalidad, antifraude y prevención del blanqueo de capitales.</li>
+          <li>Comunicaciones comerciales y marketing personalizado, exclusivamente cuando exista consentimiento previo, expreso y revocable.</li>
+          <li>Mejora del producto mediante análisis estadístico agregado y anonimizado.</li>
+          <li>Seguridad de la información y prevención de fraudes y abusos.</li>
+        </ul>
+
+        <h3>4. Base jurídica</h3>
+        <ul>
+          <li><strong>Ejecución de un contrato</strong> (art. 6.1.b RGPD): para la prestación del servicio que contratas.</li>
+          <li><strong>Cumplimiento de una obligación legal</strong> (art. 6.1.c): facturación, fiscalidad y antifraude.</li>
+          <li><strong>Consentimiento</strong> (art. 6.1.a): para marketing, perfilado y cesión a destinos publicitarios. Puedes retirarlo en cualquier momento.</li>
+          <li><strong>Interés legítimo</strong> (art. 6.1.f): para garantizar la seguridad del servicio y prevenir fraudes, tras superar el correspondiente juicio de ponderación.</li>
+        </ul>
+
+        <h3>5. Plazos de conservación</h3>
+        <ul>
+          <li>Datos transaccionales y de facturación: <strong>seis años</strong> desde la última operación, conforme al artículo 30 del Código de Comercio.</li>
+          <li>Datos de cliente activo: durante toda la vigencia de la relación contractual.</li>
+          <li>Datos para finalidades de marketing con consentimiento: hasta que retires dicho consentimiento.</li>
+          <li>Datos para defensa legal: hasta la prescripción de las eventuales acciones legales (entre uno y cinco años según la naturaleza).</li>
+        </ul>
+
+        <h3>6. Destinatarios y cesiones</h3>
+        <p>Pasify comparte datos exclusivamente con encargados del tratamiento que han firmado el correspondiente acuerdo de tratamiento de datos (DPA) conforme al RGPD:</p>
+        <ul>
+          <li><strong>Amazon Web Services (AWS), Frankfurt y OVH Madrid:</strong> alojamiento e infraestructura.</li>
+          <li><strong>Stripe Payments Europe Ltd. (Irlanda):</strong> procesamiento de pagos con tarjeta y SEPA.</li>
+          <li><strong>WhatsApp Business / Meta Platforms Ireland Ltd.:</strong> comunicaciones por WhatsApp.</li>
+          <li><strong>Brevo (Sendinblue SAS, Francia):</strong> envío de correo electrónico transaccional y newsletter.</li>
+          <li><strong>HackerOne Inc.:</strong> programa público de divulgación de vulnerabilidades.</li>
+          <li>Administraciones públicas, Fuerzas y Cuerpos de Seguridad y Tribunales cuando exista requerimiento legal previo.</li>
+        </ul>
+
+        <h3>7. Transferencias internacionales</h3>
+        <p>Por defecto, los datos personales no salen del Espacio Económico Europeo. Cuando un encargado del tratamiento opera fuera de la UE (por ejemplo, Stripe o Meta para sus servicios estadounidenses), aplicamos las <strong>cláusulas contractuales tipo (CCT)</strong> aprobadas por la Decisión de Ejecución (UE) 2021/914 de la Comisión Europea, así como las garantías adicionales del marco <em>EU-US Data Privacy Framework</em> cuando el destinatario está adherido.</p>
+
+        <h3>8. Derechos del usuario</h3>
+        <p>De acuerdo con el RGPD y la LOPDGDD, tienes derecho a:</p>
+        <ul>
+          <li><strong>Acceder</strong> a los datos personales que tratamos sobre ti.</li>
+          <li><strong>Rectificarlos</strong> cuando sean inexactos o incompletos.</li>
+          <li><strong>Suprimirlos</strong> cuando ya no sean necesarios o cuando retires el consentimiento.</li>
+          <li><strong>Limitar</strong> su tratamiento en los supuestos previstos por el artículo 18 RGPD.</li>
+          <li><strong>Portabilidad:</strong> recibirlos en un formato estructurado y de uso común (JSON o CSV).</li>
+          <li><strong>Oponerte</strong> a tratamientos basados en el interés legítimo.</li>
+          <li><strong>Retirar el consentimiento</strong> en cualquier momento, sin que ello afecte a la licitud del tratamiento previo.</li>
+          <li><strong>No ser objeto de decisiones automatizadas</strong> con efectos jurídicos significativos.</li>
+        </ul>
+
+        <h3>9. Cómo ejercer tus derechos</h3>
+        <p>Escríbenos a <a class="anchor-link" href="mailto:privacidad@pasify.com">privacidad@pasify.com</a> indicando el derecho que deseas ejercer y adjuntando copia de tu DNI, NIE o pasaporte para verificar tu identidad. Atendemos las solicitudes en un plazo máximo de un mes (artículo 12.3 RGPD); en la práctica, respondemos en 24-72 horas.</p>
+        <p>También puedes gestionar tus consentimientos y descargar tus datos directamente desde el centro de privacidad de tu cuenta.</p>
+
+        <h3>10. Reclamaciones ante la autoridad de control</h3>
+        <p>Si consideras que el tratamiento de tus datos personales no se ajusta a la normativa o que tus derechos no han sido atendidos correctamente, puedes presentar una reclamación ante la <strong>Agencia Española de Protección de Datos</strong> (<a class="anchor-link" href="https://www.aepd.es" target="_blank" rel="noopener">www.aepd.es</a>), C/ Jorge Juan, 6, 28001 Madrid.</p>
+
+        <h3>11. Modificaciones de esta política</h3>
+        <p>Podemos modificar esta política para adaptarla a cambios normativos o de funcionamiento del servicio. Los cambios sustanciales se comunicarán por correo electrónico con una antelación mínima de 30 días naturales y mediante un aviso destacado en pasify.com.</p>
+      </div>
+    </section>
+
+    <!-- ========== TÉRMINOS Y CONDICIONES ========== -->
+    <section class="sec" id="terminos">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Términos y condiciones</div>
+          <h2 class="h2">Las <em>reglas</em> del servicio.</h2>
+        </div>
+        <p class="lede-2">Estos términos regulan la relación entre Pasify, S.L. y los clientes que contratan o utilizan el software de gestión de eventos «Pasify».</p>
+      </div>
+
+      <div class="legal-block reveal">
+        <p class="updated">Última actualización: 8 de mayo de 2026</p>
+
+        <h3>1. Objeto</h3>
+        <p>Las presentes condiciones generales (en adelante, «Términos») regulan el acceso y uso del software de gestión de eventos «Pasify» (en adelante, el «Servicio»), titularidad de Pasify, S.L., dirigido a salas, promotores, festivales y operadores del sector eventos.</p>
+
+        <h3>2. Aceptación</h3>
+        <p>El registro o el uso del Servicio implica la aceptación íntegra y sin reservas de estos Términos, así como de la política de privacidad y la política de cookies. Si no estás de acuerdo, debes abstenerte de utilizar el Servicio.</p>
+
+        <h3>3. Registro y cuenta</h3>
+        <p>Para utilizar Pasify es necesario completar un proceso de registro y mantener los datos exactos y actualizados. El cliente es el único responsable de la confidencialidad de sus credenciales y de todas las acciones realizadas con su cuenta. Debe notificar a Pasify cualquier acceso no autorizado de forma inmediata a <a class="anchor-link" href="mailto:soporte@pasify.com">soporte@pasify.com</a>.</p>
+
+        <h3>4. Uso lícito del Servicio</h3>
+        <p>El cliente se compromete a utilizar el Servicio conforme a la ley, a estos Términos, a la moral, al orden público y a las buenas prácticas del sector. Queda expresamente prohibido:</p>
+        <ul>
+          <li>Utilizarlo con fines ilícitos o que vulneren derechos de terceros.</li>
+          <li>Intentar acceder, sin autorización, a datos, sistemas o redes ajenos.</li>
+          <li>Subir o difundir contenido ilícito, ofensivo, violento o que infrinja derechos de propiedad intelectual o industrial.</li>
+          <li>Realizar ingeniería inversa, descompilar, modificar o crear obras derivadas del Servicio.</li>
+          <li>Utilizar el Servicio para enviar comunicaciones comerciales no autorizadas (spam).</li>
+        </ul>
+
+        <h3>5. Propiedad intelectual e industrial</h3>
+        <p>Pasify, su marca, su software, sus interfaces, su código fuente, su documentación y los contenidos publicados en pasify.com son propiedad exclusiva de Pasify, S.L. y se encuentran protegidos por la legislación española y europea sobre propiedad intelectual e industrial. La aceptación de estos Términos no concede al cliente ninguna licencia más allá del uso permitido del Servicio.</p>
+        <p>El cliente conserva la titularidad de todos los datos, contenidos y bases de datos que sube al Servicio, otorgando a Pasify una licencia mundial, no exclusiva y libre de regalías, limitada estrictamente a lo necesario para prestar el Servicio.</p>
+
+        <h3>6. Tarifas, pagos y reembolsos</h3>
+        <p>Las tarifas vigentes están publicadas en <a class="anchor-link" href="../pasify.html#precios">pasify.com/precios</a>. Los pagos se domicilian en el medio elegido por el cliente (tarjeta a través de Stripe o transferencia SEPA). El IVA aplicable se incluye en factura.</p>
+        <p>Los abonos mensuales no son reembolsables una vez iniciado el periodo de facturación. Los abonos anuales se reembolsan proporcionalmente si la cancelación se solicita en los catorce días naturales siguientes al pago. La falta de pago podrá conllevar la suspensión del Servicio tras un aviso previo con un plazo mínimo de siete días naturales.</p>
+
+        <h3>7. Disponibilidad y SLA</h3>
+        <p>Pasify se compromete a prestar el Servicio con un nivel de disponibilidad mínimo del 99,95 % medido mensualmente, conforme al acuerdo de nivel de servicio (SLA) detallado en <a class="anchor-link" href="https://status.pasify.com" target="_blank" rel="noopener">status.pasify.com</a>. En caso de incumplimiento del SLA, el cliente tendrá derecho a los créditos automáticos previstos en factura.</p>
+
+        <h3>8. Limitación de responsabilidad</h3>
+        <p>Pasify no será responsable de:</p>
+        <ul>
+          <li>Pérdidas indirectas, lucro cesante, daño reputacional o pérdida de oportunidad.</li>
+          <li>Daños derivados del uso indebido del Servicio o del incumplimiento de estos Términos por parte del cliente.</li>
+          <li>Caídas de proveedores externos ajenos a Pasify (suministro eléctrico, conexión a internet, plataformas de pago, servicios de mensajería).</li>
+          <li>Contenidos subidos o gestionados por el cliente.</li>
+        </ul>
+        <p>La responsabilidad máxima de Pasify frente a un mismo incidente o serie de incidentes relacionados se limita al importe efectivamente abonado por el cliente en los doce meses anteriores al hecho que origine la responsabilidad. Esta limitación no aplicará en los casos de dolo, culpa grave o vulneración de derechos fundamentales del consumidor.</p>
+
+        <h3>9. Suspensión y terminación</h3>
+        <p>Pasify podrá suspender o terminar el acceso al Servicio en caso de: incumplimiento grave de estos Términos, falta reiterada de pago, actividad fraudulenta o requerimiento legal. El cliente podrá terminar su cuenta en cualquier momento desde el panel de control. Tras la terminación, Pasify entregará al cliente todos sus datos en formato JSON y CSV en un plazo máximo de siete días naturales.</p>
+
+        <h3>10. Modificaciones</h3>
+        <p>Pasify se reserva el derecho a modificar los Términos para adaptarlos a cambios normativos o evolutivos del Servicio. Los cambios sustanciales se notificarán por correo electrónico con una antelación mínima de treinta días naturales. Si el cliente no acepta los nuevos Términos podrá terminar la relación antes de la fecha de entrada en vigor sin penalización.</p>
+
+        <h3>11. Ley aplicable y jurisdicción</h3>
+        <p>Estos Términos se rigen por la legislación española. Para cualquier controversia derivada de su interpretación o ejecución, las partes, con renuncia expresa a cualquier otro fuero que pudiera corresponderles, se someten a los Juzgados y Tribunales de Valladolid (España), salvo cuando el cliente tenga la condición legal de consumidor, en cuyo caso resultará de aplicación el fuero del consumidor previsto en la legislación de protección de los consumidores y usuarios.</p>
+      </div>
+    </section>
+
+    <!-- ========== POLÍTICA DE COOKIES ========== -->
+    <section class="sec" id="cookies">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Política de cookies</div>
+          <h2 class="h2">Las <em>cookies</em> que usamos.</h2>
+        </div>
+        <p class="lede-2">Conforme a la Ley 34/2002 de Servicios de la Sociedad de la Información (LSSI) y a la Guía de cookies de la AEPD.</p>
+      </div>
+
+      <div class="legal-block reveal">
+        <p class="updated">Última actualización: 8 de mayo de 2026</p>
+
+        <h3>1. ¿Qué son las cookies?</h3>
+        <p>Las cookies son pequeños ficheros de texto que un sitio web instala en el dispositivo del usuario al visitarlo. Sirven para que el sitio recuerde información sobre el usuario (idioma, preferencias, sesión iniciada) entre páginas y visitas.</p>
+
+        <h3>2. Cookies que utilizamos</h3>
+        <p>En pasify.com utilizamos las siguientes categorías de cookies:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Finalidad</th>
+              <th>Base jurídica</th>
+              <th>Vigencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Técnicas</strong></td>
+              <td>Necesarias para el funcionamiento del sitio (sesión, idioma, balance de carga, seguridad).</td>
+              <td>Necesidad técnica · exentas de consentimiento</td>
+              <td>Sesión / hasta 1 año</td>
+            </tr>
+            <tr>
+              <td><strong>Preferencias</strong></td>
+              <td>Recuerdan tu configuración (modo oscuro, idioma, ubicación).</td>
+              <td>Consentimiento</td>
+              <td>1 año</td>
+            </tr>
+            <tr>
+              <td><strong>Analíticas</strong></td>
+              <td>Estadísticas de uso anonimizadas y agregadas con nuestra propia herramienta interna (sin Google Analytics).</td>
+              <td>Consentimiento</td>
+              <td>13 meses</td>
+            </tr>
+            <tr>
+              <td><strong>Marketing</strong></td>
+              <td>Atribución de campañas publicitarias propias. Solo se activan tras consentimiento explícito.</td>
+              <td>Consentimiento explícito</td>
+              <td>90 días</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3. Cookies de terceros</h3>
+        <p>Pasify minimiza las cookies de terceros. Los proveedores externos que pueden instalar cookies en visitas a pasify.com son:</p>
+        <ul>
+          <li><strong>Stripe:</strong> únicamente al procesar un pago. Cumple PCI DSS Level 1 y RGPD.</li>
+          <li><strong>WhatsApp Business:</strong> únicamente cuando el usuario inicia una conversación con nuestro equipo.</li>
+        </ul>
+        <p>Pasify <strong>no utiliza</strong> Google Analytics, Meta Pixel, TikTok Pixel ni herramientas de seguimiento de terceros similares en su web corporativa. Toda la analítica es propia y server-side, alineada con la <em>Guía sobre el uso de las cookies</em> de la AEPD (julio 2023).</p>
+
+        <h3>4. Cómo gestionar las cookies</h3>
+        <p>Puedes gestionar tus preferencias de cookies en cualquier momento:</p>
+        <ul>
+          <li><strong>En el banner inicial</strong> que aparece la primera vez que visitas el sitio: aceptar todas, rechazar todas o personalizar por categoría.</li>
+          <li><strong>Desde el centro de privacidad</strong> de tu cuenta, una vez registrado.</li>
+          <li><strong>Desde la configuración de tu navegador,</strong> donde puedes bloquear o eliminar cookies. Te dejamos las guías oficiales:
+            <ul>
+              <li><a class="anchor-link" href="https://support.google.com/chrome/answer/95647" target="_blank" rel="noopener">Google Chrome</a></li>
+              <li><a class="anchor-link" href="https://support.mozilla.org/es/kb/proteccion-antirrastreo-mejorada-firefox-escritorio" target="_blank" rel="noopener">Mozilla Firefox</a></li>
+              <li><a class="anchor-link" href="https://support.apple.com/es-es/guide/safari/sfri11471/mac" target="_blank" rel="noopener">Safari</a></li>
+              <li><a class="anchor-link" href="https://support.microsoft.com/es-es/microsoft-edge" target="_blank" rel="noopener">Microsoft Edge</a></li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>5. Consecuencias de rechazar las cookies</h3>
+        <p>El rechazo de las cookies técnicas o de preferencias puede afectar al funcionamiento normal del sitio (por ejemplo, podría no recordar tu sesión iniciada). El rechazo de las cookies analíticas o de marketing no afecta a la funcionalidad del Servicio.</p>
+
+        <h3>6. Modificaciones</h3>
+        <p>Podemos modificar esta política de cookies para adaptarla a cambios normativos o a nuevas funcionalidades del sitio. Te avisaremos mediante el banner de cookies cuando haya cambios sustanciales que requieran un nuevo consentimiento.</p>
+
+        <h3>7. Contacto</h3>
+        <p>Para cualquier duda relativa a esta política puedes escribirnos a <a class="anchor-link" href="mailto:privacidad@pasify.com">privacidad@pasify.com</a>.</p>
       </div>
     </section>
   </div>
-  <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
+
+  <section class="cta-banner reveal">
+    <div class="grain-overlay"></div>
+    <div class="inner">
+      <div>
+        <h2>Tu equipo de <em>compliance</em> firma sin parpadear.</h2>
+        <p>Te enviamos los informes ISO 27001, SOC 2 Type II y la DPA estándar antes de la primera demo, para que tu equipo legal y de seguridad los revise mientras tu equipo operativo prueba el producto.</p>
+      </div>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn">Solicita informes <span class="arrow">→</span></a>
+        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="related">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Sigue explorando</div>
+          <h2 class="h2">Más en <em>nosotros</em>.</h2>
+        </div>
+      </div>
+      <div class="related-grid reveal">
+        <a href="sobre.html" class="related-card">
+          <span class="lab">Nosotros</span>
+          <h5>Sobre Pasify</h5>
+          <p>El equipo, la historia y los principios detrás de cada decisión técnica de seguridad y privacidad.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="../data/crm.html" class="related-card">
+          <span class="lab">CRM</span>
+          <h5>CRM y datos en tiempo real</h5>
+          <p>Cómo se aplica la privacidad en el día a día: dato propio, consentido, exportable y borrable en 24 h.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="contacto.html" class="related-card">
+          <span class="lab">Contacto</span>
+          <h5>Solicita una demo</h5>
+          <p>Hablamos contigo y con tu equipo de compliance en la misma llamada si hace falta. Una demo, dos audiencias.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script src="../soluciones/_header.js"></script>
 <script>
-  // Reveal on scroll
-  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const h=document.getElementById('header');
+window.addEventListener('scroll',()=>{h && h.classList.toggle('scrolled',window.scrollY>20)});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -60px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+function svgWrap(html){return `<svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;border-radius:10px">${html}</svg>`}
+
+// HERO: trust center dashboard with seals and live metrics
+document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Centro de confianza</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">TRUST.PASIFY.COM · ACTUALIZADO HACE 12 SEGUNDOS</text>
+  <!-- 3 seals -->
+  ${[
+    [32,74,'ISO 27001','Auditor BDO','Vigente · 2026','#4DB87A'],
+    [172,74,'SOC 2 Type II','Auditor Deloitte','Continuous','#4DB87A'],
+    [312,74,'PCI DSS L1','Auditor Stripe','Vigente · 2026','#4DB87A']
+  ].map(s=>`<g>
+    <rect x="${s[0]}" y="${s[1]}" width="124" height="76" rx="10" fill="#1A1F18" stroke="rgba(125,209,127,0.3)"/>
+    <circle cx="${s[0]+62}" cy="${s[1]+22}" r="9" fill="${s[5]}"/>
+    <path d="M${s[0]+57} ${s[1]+22} l4 4 l8 -8" stroke="#0A0907" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="${s[0]+62}" y="${s[1]+50}" fill="#F4EEE2" font-family="Geist" font-size="11" font-weight="600" text-anchor="middle">${s[2]}</text>
+    <text x="${s[0]+62}" y="${s[1]+62}" fill="#8A8275" font-family="Geist Mono" font-size="8" text-anchor="middle">${s[3]}</text>
+    <text x="${s[0]+62}" y="${s[1]+72}" fill="${s[5]}" font-family="Geist Mono" font-size="8" text-anchor="middle" letter-spacing="1.2">${s[4].toUpperCase()}</text>
+  </g>`).join('')}
+  <!-- live KPIs -->
+  ${[
+    [32,166,'Uptime 30 d','99,98%','#4DB87A'],
+    [172,166,'MTTR último mes','4 min','#4DB87A'],
+    [312,166,'Vulnerabilidades abiertas','0 críticas','#4DB87A']
+  ].map(k=>`<g>
+    <rect x="${k[0]}" y="${k[1]}" width="124" height="50" rx="8" fill="#1A1612" stroke="#332C25"/>
+    <text x="${k[0]+12}" y="${k[1]+18}" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">${k[2].toUpperCase()}</text>
+    <text x="${k[0]+12}" y="${k[1]+40}" fill="${k[4]}" font-family="Geist" font-size="16" font-weight="600">${k[3]}</text>
+  </g>`).join('')}
+  <!-- bottom bar -->
+  <rect x="32" y="232" width="416" height="68" rx="10" fill="#1A0F08" stroke="rgba(232,84,42,0.3)"/>
+  <text x="48" y="252" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">DOCUMENTACIÓN DISPONIBLE BAJO NDA EN 48 H</text>
+  ${['ISO 27001','SOC 2 Type II','Pentest Q2','DPA estándar'].map((d,i)=>`<g>
+    <rect x="${48+i*92}" y="266" width="84" height="22" rx="11" fill="#1A1612" stroke="#332C25"/>
+    <text x="${90+i*92}" y="280" fill="#C9BFA8" font-family="Geist Mono" font-size="9" text-anchor="middle">${d}</text>
+  </g>`).join('')}
+`);
+
+// 02: Compliance certificates detail
+document.getElementById('mockup-2').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Certificaciones · vigencias</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">3 SELLOS ACTIVOS · AUDITORES INDEPENDIENTES · INFORMES NDA</text>
+  ${[
+    ['ISO 27001:2022','BDO','Anual · próx. nov 2026','Sistema de gestión SI','#4DB87A'],
+    ['SOC 2 Type II','Deloitte','Continuo · informe Q','Controles operativos','#4DB87A'],
+    ['PCI DSS Level 1','Stripe SAQ','Anual · próx. mar 2027','Procesado de tarjetas','#4DB87A']
+  ].map((r,i)=>{const y=78+i*46;return `<g>
+    <rect x="32" y="${y}" width="416" height="38" rx="8" fill="#16130F" stroke="rgba(125,209,127,0.2)"/>
+    <circle cx="56" cy="${y+19}" r="11" fill="${r[4]}" opacity="0.18"/>
+    <path d="M50 ${y+19} l4 4 l8 -8" stroke="${r[4]}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="80" y="${y+15}" fill="#F4EEE2" font-family="Geist" font-size="11.5" font-weight="600">${r[0]}</text>
+    <text x="80" y="${y+30}" fill="#8A8275" font-family="Geist" font-size="9.5">${r[3]}</text>
+    <text x="240" y="${y+15}" fill="#C9BFA8" font-family="Geist Mono" font-size="9.5">Auditor: ${r[1]}</text>
+    <text x="240" y="${y+30}" fill="#E8B07A" font-family="Geist Mono" font-size="9">${r[2]}</text>
+    <rect x="380" y="${y+10}" width="56" height="20" rx="10" fill="#1A1612" stroke="#332C25"/>
+    <text x="408" y="${y+24}" fill="#C9BFA8" font-family="Geist Mono" font-size="9" text-anchor="middle">PEDIR</text>
+  </g>`}).join('')}
+  <!-- legend -->
+  <text x="32" y="232" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">DOCUMENTACIÓN ADICIONAL DISPONIBLE</text>
+  ${['Pentest Q1 2026','Pentest Q2 2026','Disaster Recovery','Business Continuity','Política de privacidad','DPA estándar'].map((d,i)=>{const x=32+(i%3)*140; const y=246+Math.floor(i/3)*28; return `<g>
+    <rect x="${x}" y="${y}" width="132" height="22" rx="4" fill="#1A1612" stroke="#26211C"/>
+    <text x="${x+12}" y="${y+15}" fill="#C9BFA8" font-family="Geist" font-size="9.5">${d}</text>
+    <text x="${x+124}" y="${y+15}" fill="#7DD17F" font-family="Geist Mono" font-size="8" text-anchor="end">PDF</text>
+  </g>`}).join('')}
+`);
+
+// 03: RGPD privacy center
+document.getElementById('mockup-3').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Centro de privacidad del cliente</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">SARA MARTÍN · GESTIONA QUÉ HACEMOS CON TU DATO</text>
+  ${[
+    ['Ventas y entradas','Necesario para comprar','#4DB87A',true,true],
+    ['Marketing por WhatsApp','Eventos que te interesan','#E8542A',true,false],
+    ['Marketing por correo','Newsletter mensual','#E8B07A',true,false],
+    ['Perfilado de preferencias','Recomendaciones a medida','#9D8AE8',true,false],
+    ['Compartir con destinos','Meta Ads, Google Ads','#7AD0D8',false,false]
+  ].map((r,i)=>{const y=78+i*32;const on=r[3];return `<g>
+    <rect x="32" y="${y}" width="416" height="26" rx="6" fill="#16130F" stroke="#26211C"/>
+    <text x="44" y="${y+12}" fill="#F4EEE2" font-family="Geist" font-size="10.5" font-weight="500">${r[0]}${r[4]?' · obligatorio':''}</text>
+    <text x="44" y="${y+22}" fill="#8A8275" font-family="Geist" font-size="9">${r[1]}</text>
+    <rect x="404" y="${y+5}" width="32" height="16" rx="8" fill="${on?r[2]:'#332C25'}" opacity="${r[4]?'0.5':'1'}"/>
+    <circle cx="${on?424:412}" cy="${y+13}" r="6" fill="#fff"/>
+  </g>`}).join('')}
+  <rect x="32" y="246" width="416" height="56" rx="10" fill="#1A0F08" stroke="rgba(232,84,42,0.3)"/>
+  <text x="48" y="266" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">DERECHOS RGPD · 1 CLIC</text>
+  ${[
+    [48,278,'Descargar mis datos','#1A1612','#C9BFA8','#332C25'],
+    [188,278,'Exportar a JSON','#1A1612','#C9BFA8','#332C25'],
+    [336,278,'Solicitar borrado','#E8542A','#fff','transparent']
+  ].map(b=>`<g>
+    <rect x="${b[0]}" y="${b[1]}" width="100" height="22" rx="11" fill="${b[3]}" stroke="${b[5]}"/>
+    <text x="${b[0]+50}" y="${b[1]+15}" fill="${b[4]}" font-family="Geist" font-size="9.5" text-anchor="middle">${b[2]}</text>
+  </g>`).join('')}
+`);
+
+// 04: Hosting infrastructure map
+document.getElementById('mockup-4').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Infraestructura · Frankfurt + Madrid</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">REPLICACIÓN ACTIVA · TLS 1.3 · AES-256 · ROTACIÓN TRIMESTRAL</text>
+  <!-- 2 nodes -->
+  ${[
+    [80,100,'AWS · Frankfurt','eu-central-1','PRIMARIO','#E8542A'],
+    [320,100,'OVH · Madrid','GRA · ES1','RÉPLICA','#7AD0D8']
+  ].map(n=>`<g>
+    <rect x="${n[0]-50}" y="${n[1]}" width="120" height="100" rx="12" fill="#1A1612" stroke="${n[5]}" stroke-width="1.4"/>
+    <circle cx="${n[0]}" cy="${n[1]+22}" r="11" fill="${n[5]}" opacity="0.18"/>
+    <text x="${n[0]}" y="${n[1]+27}" fill="${n[5]}" font-family="Geist" font-size="13" font-weight="700" text-anchor="middle">${n[2].split(' · ')[0].charAt(0)}</text>
+    <text x="${n[0]}" y="${n[1]+50}" fill="#F4EEE2" font-family="Geist Mono" font-size="9.5" text-anchor="middle" font-weight="600">${n[2]}</text>
+    <text x="${n[0]}" y="${n[1]+64}" fill="#8A8275" font-family="Geist Mono" font-size="8.5" text-anchor="middle">${n[3]}</text>
+    <text x="${n[0]}" y="${n[1]+86}" fill="${n[5]}" font-family="Geist Mono" font-size="8.5" text-anchor="middle" letter-spacing="1.5">${n[4]}</text>
+  </g>`).join('')}
+  <!-- replication line -->
+  <line x1="130" y1="150" x2="270" y2="150" stroke="#4DB87A" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="200" y="142" fill="#4DB87A" font-family="Geist Mono" font-size="9" text-anchor="middle" letter-spacing="1.2">REPL. EN VIVO</text>
+  <text x="200" y="166" fill="#8A8275" font-family="Geist Mono" font-size="8" text-anchor="middle">latencia 18 ms</text>
+  <!-- compliance bar -->
+  <text x="32" y="226" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">CIFRADO · CONTROLES ACTIVOS</text>
+  ${[
+    ['TLS 1.3','En tránsito','#4DB87A'],
+    ['AES-256','En reposo','#4DB87A'],
+    ['Claves rotadas','Trimestral','#4DB87A'],
+    ['Aislamiento','Por cliente','#4DB87A'],
+    ['Backups','Cifrados · 90 d','#4DB87A']
+  ].map((r,i)=>{const y=242+Math.floor(i/3)*30; const x=32+(i%3)*140; return `<g>
+    <rect x="${x}" y="${y}" width="132" height="22" rx="4" fill="#1A1F18" stroke="rgba(125,209,127,0.2)"/>
+    <circle cx="${x+12}" cy="${y+11}" r="3" fill="${r[2]}"/>
+    <text x="${x+22}" y="${y+15}" fill="#F4EEE2" font-family="Geist" font-size="10" font-weight="500">${r[0]}</text>
+    <text x="${x+124}" y="${y+15}" fill="#8A8275" font-family="Geist Mono" font-size="8.5" text-anchor="end">${r[1]}</text>
+  </g>`}).join('')}
+`);
+
+// 05: Bug bounty stats
+document.getElementById('mockup-5').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Bug bounty · Q2 2026</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">PROGRAMA PÚBLICO HACKERONE · HASTA 12.000 € POR CRÍTICA</text>
+  <!-- KPIs -->
+  ${[
+    [32,76,'Reportes recibidos','142','este Q','#F4EEE2'],
+    [172,76,'Vulnerabilidades válidas','38','27%','#E8B07A'],
+    [312,76,'Pagado en bounties','24.840 €','+18% Q','#E8542A']
+  ].map(k=>`<g>
+    <rect x="${k[0]}" y="${k[1]}" width="124" height="60" rx="10" fill="#1A1612" stroke="#332C25"/>
+    <text x="${k[0]+12}" y="${k[1]+18}" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">${k[2].toUpperCase()}</text>
+    <text x="${k[0]+12}" y="${k[1]+44}" fill="${k[5]}" font-family="Geist" font-size="18" font-weight="600">${k[3]}</text>
+    <text x="${k[0]+114}" y="${k[1]+44}" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end">${k[4]}</text>
+  </g>`).join('')}
+  <!-- recent fixes -->
+  <text x="32" y="166" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">VULNERABILIDADES RESUELTAS RECIENTES · MTTR PROMEDIO 4 H</text>
+  ${[
+    ['CRIT','XSS en panel admin','4.500 €','Fixed 3 h 14 min','#E8542A'],
+    ['ALTA','IDOR en /v1/tickets','2.100 €','Fixed 8 h 02 min','#E8B07A'],
+    ['MEDIA','SSRF en webhooks','840 €','Fixed 14 h 38 min','#9D8AE8'],
+    ['BAJA','Cabeceras CSP débiles','280 €','Fixed 22 h','#7AD0D8']
+  ].map((r,i)=>{const y=180+i*26;return `<g>
+    <rect x="32" y="${y}" width="416" height="22" rx="4" fill="${i%2?'#0F0D0B':'#1A1612'}"/>
+    <text x="44" y="${y+15}" fill="${r[4]}" font-family="Geist Mono" font-size="9" font-weight="600" letter-spacing="1.2">${r[0]}</text>
+    <text x="84" y="${y+15}" fill="#F4EEE2" font-family="Geist" font-size="10">${r[1]}</text>
+    <text x="320" y="${y+15}" fill="#E8542A" font-family="Geist Mono" font-size="9.5" text-anchor="end" font-weight="600">${r[2]}</text>
+    <text x="436" y="${y+15}" fill="#4DB87A" font-family="Geist Mono" font-size="9" text-anchor="end">${r[3]}</text>
+  </g>`}).join('')}
+  <rect x="32" y="294" width="416" height="14" rx="7" fill="#0F0D0B" stroke="#26211C"/>
+  <text x="44" y="304" fill="#8A8275" font-family="Geist Mono" font-size="9">VER PROGRAMA EN HACKERONE.COM/PASIFY · POLÍTICA DE DIVULGACIÓN</text>
+`);
 </script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
 </body>
 </html>

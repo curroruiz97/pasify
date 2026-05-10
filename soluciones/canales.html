@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
@@ -35,7 +35,7 @@
     </section>
 
     <section class="stats-bar reveal">
-      <div class="stat"><div class="num">+38%</div><div class="lab">Alcance vs canal único</div></div>
+      <div class="stat"><div class="num">+38&nbsp;%</div><div class="lab">Alcance vs canal único</div></div>
       <div class="stat"><div class="num">1</div><div class="lab">Stock real, sincronizado</div></div>
       <div class="stat"><div class="num"><em>0</em> dobles</div><div class="lab">Overbooking eliminado</div></div>
       <div class="stat"><div class="num">12+</div><div class="lab">Canales conectados</div></div>
@@ -140,18 +140,6 @@
     </div>
   </section>
 </main>
-
-<footer>
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="col-1"><a href="../pasify.html" class="logo">pas<span class="dot"></span>ify<span class="y">y</span></a><p>El sistema operativo para eventos. Vende, gestiona y descubre todo en un sitio.</p></div>
-      <div><h6>Producto</h6><ul><li><a href="entradas.html">Venta de entradas</a></li><li><a href="taquilla.html">Taquilla</a></li><li><a href="vip.html">Reservados VIP</a></li><li><a href="invitados.html">Listas de invitados</a></li><li><a href="rrpp.html">Gestión RRPP</a></li><li><a href="canales.html">Canales de venta</a></li></ul></div>
-      <div><h6>Empresa</h6><ul><li><a href="#">Sobre Pasify</a></li><li><a href="#">Casos de éxito</a></li><li><a href="#">Prensa</a></li><li><a href="#">Empleo</a></li></ul></div>
-      <div><h6>Recursos</h6><ul><li><a href="#">Centro de ayuda</a></li><li><a href="#">API · Docs</a></li><li><a href="#">Estado del servicio</a></li><li><a href="#">Contacto</a></li></ul></div>
-    </div>
-    <div class="footer-bottom"><span>© 2025 Pasify · Hecho en España</span><div class="legal"><a href="#">Privacidad</a><a href="#">Términos</a><a href="#">Cookies</a></div></div>
-  </div>
-</footer>
 
 <script>
 const h=document.getElementById('header');window.addEventListener('scroll',()=>{h.classList.toggle('scrolled',window.scrollY>20)});
@@ -281,5 +269,9 @@ document.getElementById('mockup-5').innerHTML = svgWrap(`
 `);
 </script>
 <script src="_header.js"></script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
 </body>
 </html>
