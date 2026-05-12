@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "es.studentslife.app",
+      "sha256_cert_fingerprints": [
+        "B2:A7:AC:EF:0E:5B:22:21:B7:32:E4:0E:AE:50:9D:27:92:93:CA:97:61:5F:79:BC:07:15:03:A9:68:05:CF:D6"
+      ]
+    }
+  }
+]

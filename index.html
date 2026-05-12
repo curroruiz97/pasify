@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- Favicon Pasify -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="mask-icon" href="/favicon.svg" color="#E8542A">
+  <meta name="msapplication-TileColor" content="#0F0F0F">
+  <meta name="theme-color" content="#0F0F0F">
+
+  <!-- SEO -->
+  <title>Pasify | Tickets y eventos en España</title>
+  <meta name="description" content="Pasify: plataforma de tickets y eventos para locales, discotecas y promotores en España. Crea eventos, vende entradas y gestiona accesos con QR.">
+  <meta name="keywords" content="pasify, tickets, entradas, eventos, discotecas, locales, promotores, españa">
+  <meta name="author" content="Pasify" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="https://pasify.es/" />
+
+  <!-- PWA Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pasify">
+  <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pasify.es/" />
+  <meta property="og:title" content="Pasify | Tickets y eventos en España" />
+  <meta property="og:description" content="Plataforma de tickets y eventos para locales, discotecas y promotores en España." />
+  <meta property="og:site_name" content="Pasify" />
+  <meta property="og:locale" content="es_ES" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pasify | Tickets y eventos en España" />
+  <meta name="twitter:description" content="Plataforma de tickets y eventos para locales, discotecas y promotores en España." />
+
+  <!-- Google Fonts: Inter + Instrument Serif -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+</head>
+
+<body>
+<!--
+  Splash inline visibile prima del mount React.
+  Pinned dark from the first paint, no white flash possible.
+-->
+<style>
+  html, body { margin: 0; padding: 0; border: 0; background: #0a0a0a; }
+  body { overflow-x: hidden; }
+  #app-splash {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw; height: 100vh;
+    z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 40%, #1a0e05 0%, #0a0a0a 70%);
+    transition: opacity 280ms ease-out;
+    margin: 0; padding: 0; border: 0; outline: 0;
+    overflow: hidden;
+  }
+  #app-splash, #app-splash * { outline: 0 !important; border: 0 !important; }
+  #app-splash.fade-out { opacity: 0; pointer-events: none; }
+  #app-splash .wordmark {
+    display: block;
+    width: 280px; max-width: 60vw;
+    animation: pasify-splash-pulse 2s ease-in-out infinite;
+    user-select: none;
+  }
+  #app-splash .wordmark img {
+    width: 100%; height: auto; display: block;
+    border: 0; outline: 0;
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #app-splash .dots { margin-top: 28px; display: flex; gap: 6px; }
+  #app-splash .dots span {
+    width: 8px; height: 8px; border-radius: 50%; background: rgba(232, 84, 42, 0.85);
+    animation: pasify-splash-bounce 1.4s ease-in-out infinite both;
+    display: inline-block;
+  }
+  #app-splash .dots span:nth-child(2) { animation-delay: 0.16s; }
+  #app-splash .dots span:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes pasify-splash-pulse  { 0%,100% { transform: scale(1) } 50% { transform: scale(1.05) } }
+  @keyframes pasify-splash-bounce { 0%,80%,100% { transform: translateY(0); opacity: 0.5 } 40% { transform: translateY(-8px); opacity: 1 } }
+  #root { min-height: 100vh; background: #0a0a0a; }
+</style>
+<div id="app-splash">
+  <div class="wordmark" aria-label="Pasify">
+    <img src="/pasify-logo.png" alt="Pasify" width="280" height="120" decoding="async" fetchpriority="high" draggable="false" />
+  </div>
+  <div class="dots"><span></span><span></span><span></span></div>
+</div>
+<div id="root"></div>
+<script>
+  // HashRouter rescue: redirect path → hash quando WebView strippa il fragment.
+  (function () {
+    if (window.location.hash) return;
+    var path = window.location.pathname || "";
+    var search = window.location.search || "";
+    if (
+      path.startsWith("/calendar") ||
+      path.startsWith("/p/") ||
+      path.startsWith("/client-dashboard")
+    ) {
+      window.location.replace("/#" + path + search);
+    }
+  })();
+</script>
+<script type="module" src="/src/main.tsx"></script>
+<script>
+  // Rimuovi splash quando React monta.
+  (function () {
+    var hideSplash = function () {
+      var s = document.getElementById('app-splash');
+      if (!s) return;
+      s.classList.add('fade-out');
+      setTimeout(function () { s.parentNode && s.parentNode.removeChild(s); }, 320);
+    };
+    var root = document.getElementById('root');
+    if (!root) return;
+    var observer = new MutationObserver(function () {
+      if (root.childElementCount > 0) {
+        hideSplash();
+        observer.disconnect();
+      }
+    });
+    observer.observe(root, { childList: true });
+    setTimeout(hideSplash, 8000);
+  })();
+</script>
+</body>
+</html>

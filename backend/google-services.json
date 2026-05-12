@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "892613837659",
+    "project_id": "notifichestudentslife",
+    "storage_bucket": "notifichestudentslife.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:892613837659:android:8662b671dfc9306be8d07e",
+        "android_client_info": {
+          "package_name": "es.studentslife.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkcsvboZRL96uFUDvCWAzeuuMzb0IdlCU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

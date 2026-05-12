@@ -1,0 +1,637 @@
+?column?
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c5faeebe-1707-4df1-ac33-9d7b25a820c2', 'j.pingo.development@gmail.com', '$2a$10$mGK21BYfTPxcucqHI14W9exqfoZpNcX4m.xglzsvUphNCBaw/rUbe', '2025-10-02 23:59:21.241246+00',
+   '2025-10-02 23:59:21.214415+00', '2026-01-23 09:10:06.041379+00', '{""sub"": ""c5faeebe-1707-4df1-ac33-9d7b25a820c2"", ""email"": ""j.pingo.development@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('69e1b254-28ba-446f-b86a-9057f3de5923', 'fivenapoli@gmail.com', '$2a$10$Nl0joK83YZe.yXSeL2ExquORvlDKsZu9iVMwMoNm5Eg4iWYxMiFeW', '2025-10-07 08:38:37.146556+00',
+   '2025-10-07 08:38:37.060021+00', '2026-01-07 02:09:48.514134+00', '{""sub"": ""69e1b254-28ba-446f-b86a-9057f3de5923"", ""email"": ""fivenapoli@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('57fa7421-d879-42bc-82e7-44d83978d2ab', 'eventos@salaveinte.com', '$2a$10$4GbmzLjpuWJ5GEfbXzWrPOZIEerIgmG6QQL32HEk9LhdoefWTICOC', '2025-12-01 16:48:00.042735+00',
+   '2025-12-01 16:47:59.926546+00', '2026-01-12 22:20:53.398168+00', '{""sub"": ""57fa7421-d879-42bc-82e7-44d83978d2ab"", ""email"": ""eventos@salaveinte.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('93c72b6a-bbca-4f8b-9a36-fbc9f9ef1c61', 'judithceagonzalez@gmail.com', '$2a$10$RBqdXvwSIjbG5HUC0bq25euTUeIfSJxcJJ7rS5D.AhRCcWN/qhXee', '2025-11-27 20:19:39.543683+00',
+   '2025-11-27 20:19:39.455999+00', '2025-12-11 17:14:51.375947+00', '{""sub"": ""93c72b6a-bbca-4f8b-9a36-fbc9f9ef1c61"", ""email"": ""judithceagonzalez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('ab382cab-877b-4ae3-9bc6-4dd80a9f26d8', 'aslan.dogukan.alagoz@gmail.com', '$2a$10$EAMdb32EWKD7/2sD5hS8C.oJxx8bQ3gTziTHL5PZzumi2Q9Hm0ZdK', '2025-10-16 11:54:26.074652+00',
+   '2025-10-16 11:54:26.043953+00', '2025-11-29 16:21:47.923454+00', '{""sub"": ""ab382cab-877b-4ae3-9bc6-4dd80a9f26d8"", ""email"": ""aslan.dogukan.alagoz@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('72f62bbd-3bd1-4e82-b969-022ad8458219', 'katerincabrerareyna@gmail.com', '$2a$10$8xn/r3reQ4UgoFg92cl/kOfRCFq9qTgI67.YCdMSsBnAYxesZ2iQm', '2025-10-15 08:53:07.522018+00',
+   '2025-10-15 08:53:07.473897+00', '2025-12-29 17:28:23.416269+00', '{""sub"": ""72f62bbd-3bd1-4e82-b969-022ad8458219"", ""email"": ""katerincabrerareyna@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('07ab0aec-dc40-4339-9368-8aec3c303742', 'info@socylmediapc.es', '$2a$10$Nh0GPK1vFMof9VYEnqarkuxcl3OqjRYdBxr3jSlSFHZI6zXarBlPK', '2025-10-09 11:11:48.787222+00',
+   '2025-10-09 11:11:48.731553+00', '2025-10-14 17:47:36.093259+00', '{""sub"": ""07ab0aec-dc40-4339-9368-8aec3c303742"", ""email"": ""info@socylmediapc.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('0f0da95c-d4d5-4b4d-9595-49e6fb42a083', 'viajeserasmusvalladolid@gmail.com', '$2a$10$zJqtybT0h19z/kySzszxE.Gt61mkhnbAcYQ8SVvXXDvnapPjVV8JO', '2025-10-03 15:48:50.46568+00',
+   '2025-10-03 15:48:50.436342+00', '2025-12-06 22:38:46.86409+00', '{""sub"": ""0f0da95c-d4d5-4b4d-9595-49e6fb42a083"", ""email"": ""viajeserasmusvalladolid@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('a1193cbd-bf03-4549-a7e2-eef09f8c1466', 'barberluxecorner@gmail.com', '$2a$10$Qj/goV.bez21cvqtpc7RK.gTTwb1oMHpbno/LYVhdlq.7wePCZJcC', '2025-10-03 18:28:27.649588+00',
+   '2025-10-03 18:28:27.626523+00', '2026-01-19 11:46:34.653933+00', '{""sub"": ""a1193cbd-bf03-4549-a7e2-eef09f8c1466"", ""email"": ""barberluxecorner@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9b236396-2c26-4442-99ed-2de482e5737c', 'admin@gmail.com', '$2a$10$PAMh7IKW2MVka343htWt4.KV5Vl5YSbg4fcCoap6PUZ0nI/8zcPVC', '2025-10-03 15:36:15.745971+00',
+   '2025-10-03 15:36:15.718853+00', '2026-01-26 10:00:05.447857+00', '{""sub"": ""9b236396-2c26-4442-99ed-2de482e5737c"", ""email"": ""admin@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('358c1f66-f67a-4f99-82dc-4dc3176f2100', 'tatooink@gmail.com', '$2a$10$2w8GhL7Da5bOCi9KWKJpduE9wqkGcc5hGOUe0DP6yRgvQPEwruqEW', '2025-10-17 18:02:09.4492+00',
+   '2025-10-17 18:02:09.410607+00', '2025-11-22 13:09:19.518039+00', '{""sub"": ""358c1f66-f67a-4f99-82dc-4dc3176f2100"", ""email"": ""tatooink@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('bf89b661-f1b3-4df4-8e5c-631208d09db1', 'laperitivoitalianosl@gmail.com', '$2a$10$0s/McCjMISxjYQcBrV8wpeUIXc9EKXLZk7.aMIcH7/TajlZ0kv.oa', '2025-10-17 18:59:24.190161+00',
+   '2025-10-17 18:59:24.103946+00', '2026-01-08 07:28:54.293951+00', '{""sub"": ""bf89b661-f1b3-4df4-8e5c-631208d09db1"", ""email"": ""laperitivoitalianosl@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('4c40b9db-198a-424a-9991-2261a1b34a6b', 'elsecreto@gmail.com', '$2a$10$D2rCwujdswfY.jL6vEBOFeLFXQdv9/9UA/1ccSEP7QzF4pdlPa0w6', '2025-10-08 17:21:23.502738+00',
+   '2025-10-08 17:21:23.327492+00', '2025-11-22 13:28:46.133187+00', '{""sub"": ""4c40b9db-198a-424a-9991-2261a1b34a6b"", ""email"": ""elsecreto@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('744095b4-ef00-4003-a41a-0793a10b7fbb', 'hamburguesasvalladolid2023@gmail.com', '$2a$10$R0qwL5OHh.pXstx9wMJZPuMeKwCp7qG3l9u4BZyE5msPXWNng0Spy', '2025-11-11 11:41:31.961148+00',
+   '2025-11-11 11:41:31.887289+00', '2025-12-12 19:41:02.399674+00', '{""sub"": ""744095b4-ef00-4003-a41a-0793a10b7fbb"", ""email"": ""hamburguesasvalladolid2023@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('df4bd73e-3668-4887-ba2d-f7f932b8208a', 'marketonline.tg@gmail.com', '$2a$10$4XXd3.20UhIFfrHeMBZq4egcsAq61iX6.IcLru8NU3Xbn4xBdKyNG', '2025-10-22 16:48:15.853308+00',
+   '2025-10-22 16:48:15.80168+00', '2025-10-22 18:02:06.898462+00', '{""sub"": ""df4bd73e-3668-4887-ba2d-f7f932b8208a"", ""email"": ""marketonline.tg@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('1042ca26-fbcd-442f-a0c2-e55b85eeeeb7', 'angelafadda06@gmail.com', '$2a$10$711iBNpp/nnzRfFoZ4ZI3O563UYaf6hx25nczoZx.18858FpPxUsa', '2025-11-02 15:34:27.622447+00',
+   '2025-11-02 15:34:27.484759+00', '2025-11-02 15:34:46.283731+00', '{""sub"": ""1042ca26-fbcd-442f-a0c2-e55b85eeeeb7"", ""email"": ""angelafadda06@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('0c96220c-e55e-4525-8690-b2f2df6dfd43', 'belinnailsshop@gmail.com', '$2a$10$FPKKzD.jOcm8LC5Jaq2fSueQJPJmpjZ4u41zW9uj6MFJxgasHJcH.', '2025-10-30 16:49:12.497578+00',
+   '2025-10-30 16:49:12.448146+00', '2026-01-20 17:32:26.633228+00', '{""sub"": ""0c96220c-e55e-4525-8690-b2f2df6dfd43"", ""email"": ""belinnailsshop@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3dc2c7a9-acc8-4ac3-9a9f-5596e4fbdb2e', 'bacterio_coils@hotmail.com', '$2a$10$LtcRRQhZbk1vJr9sbtWvV.EhCzMvb5SDvUbJbYbviKBnQC26dgGFS', '2025-11-03 17:05:50.948619+00',
+   '2025-11-03 17:05:50.909795+00', '2025-11-06 11:02:23.88373+00', '{""sub"": ""3dc2c7a9-acc8-4ac3-9a9f-5596e4fbdb2e"", ""email"": ""bacterio_coils@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('30b15591-1976-4075-af67-af045a69ab44', 'puertocanalla@gmail.com', '$2a$10$Xq.1/RJtkwo6FrN5CkrzrOmZ3s4zerdjmnEa5AfO1940c52ZZgdaC', '2025-10-30 14:17:35.021921+00',
+   '2025-10-30 14:17:34.945117+00', '2025-11-22 13:15:53.759353+00', '{""sub"": ""30b15591-1976-4075-af67-af045a69ab44"", ""email"": ""puertocanalla@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('56b99be0-19c3-44b7-9d35-40f72fdab733', 'davide.corciulo25@estudiantes.uva.es', '$2a$10$VT5U0.Ls60m.e.VplwAVHeyPYlH3xC3BUvrZjj4EPsNCGMxsl8tZS', '2025-11-06 18:36:10.938331+00',
+   '2025-11-06 18:36:10.882525+00', '2026-01-07 17:11:06.454609+00', '{""sub"": ""56b99be0-19c3-44b7-9d35-40f72fdab733"", ""email"": ""davide.corciulo25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fb6eb10c-6d70-46bb-8936-ab431ddc92e8', 'carolinagarofalo98@outlook.it', '$2a$10$gKeboXlM5rhLKWQzJQ0jk.19S/Dc71rs8ED1uf2ahD6lBxT.13P6S', '2025-12-05 18:06:05.311811+00',
+   '2025-12-05 18:06:05.222839+00', '2025-12-06 13:54:24.015699+00', '{""sub"": ""fb6eb10c-6d70-46bb-8936-ab431ddc92e8"", ""email"": ""carolinagarofalo98@outlook.it"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f37c8583-dde1-4e6b-b336-ad442101fe30', 'mantellini74@gmail.com', '$2a$10$rUACwe16SYHcoqS/UijwOOFIYBoszYmkLu0AUO0FnZl2Jg3KtRHOK', '2025-12-04 12:27:38.178161+00',
+   '2025-12-04 12:27:38.108176+00', '2025-12-06 14:10:14.746739+00', '{""sub"": ""f37c8583-dde1-4e6b-b336-ad442101fe30"", ""email"": ""mantellini74@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('68833e5c-a6db-4ab8-acfc-5cc7a642546f', 'leonormozovives98@gmail.com', '$2a$10$FSU1eBrqQTCRgWKoDR/8Ze7752.pKPKUvFjqKmg4RHh/Ss2oJuJVu', '2025-12-04 21:02:07.278314+00',
+   '2025-12-04 21:02:07.233194+00', '2026-01-08 12:08:47.222325+00', '{""sub"": ""68833e5c-a6db-4ab8-acfc-5cc7a642546f"", ""email"": ""leonormozovives98@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3fabfe61-aa1d-4332-b077-86bc51f396e6', 'juanitacalamidad@gmail.com', '$2a$10$HzpRhjAAiJinsUQrgHEUteoQIlrSxyfOu0IwV4USodipxikUlaBx2', '2025-10-30 14:35:47.012127+00',
+   '2025-10-30 14:35:46.971504+00', '2025-12-06 23:47:29.262791+00', '{""sub"": ""3fabfe61-aa1d-4332-b077-86bc51f396e6"", ""email"": ""juanitacalamidad@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('6efec2d5-f004-441d-af15-c981201fc898', 'ricard.jonama.rodriguez@gmail.com', '$2a$10$GnFcveG2.EVpQ0JxHcg04OrEZzhI7eZ5Rbd57hu33Z92222LAZyGy', '2025-11-08 16:51:38.272543+00',
+   '2025-11-08 16:51:38.235577+00', '2025-11-20 18:34:21.331539+00', '{""sub"": ""6efec2d5-f004-441d-af15-c981201fc898"", ""email"": ""ricard.jonama.rodriguez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('17585460-f2b3-488c-bb47-8ded18e28837', 'david.basket92@gmail.com', '$2a$10$ueBKipFKrCH1b3hYfElHFe7cXy3BN6xLAZUzB73Y40EHNUNUglA22', '2025-11-16 09:11:52.692335+00',
+   '2025-11-16 09:11:52.548204+00', '2025-12-30 22:34:15.041403+00', '{""sub"": ""17585460-f2b3-488c-bb47-8ded18e28837"", ""email"": ""david.basket92@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('972265da-71db-473b-a56b-31a97d79a39a', 'bugatti.claudia04@gmail.com', '$2a$10$dn7WpK4ooZ3KznjHhO.FE.5uc1ywvRhuj9ocCnUW8ZuF1mD5TqPfi', '2025-11-09 12:16:06.322121+00',
+   '2025-11-09 12:16:06.2237+00', '2025-11-09 12:16:06.381666+00', '{""sub"": ""972265da-71db-473b-a56b-31a97d79a39a"", ""email"": ""bugatti.claudia04@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('2c5ca0eb-6cd1-4195-8c62-7ecd8969b7f7', 'frangarro07@gmail.com', '$2a$10$74/THG8xsY8zZlOONLkb0O2a.omFVqEtLtAfyH6blSO9RiNcwzOeW', '2025-11-09 14:02:25.117078+00',
+   '2025-11-09 14:02:24.998784+00', '2026-01-21 20:20:17.488675+00', '{""sub"": ""2c5ca0eb-6cd1-4195-8c62-7ecd8969b7f7"", ""email"": ""frangarro07@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fadc3bf3-4eac-42a8-bb19-7d519f3f5a57', 'camirupa@icloud.com', '$2a$10$eZ2itiTErE6ANpPkCgGCWOk2L9UPrCxquRaa5VujT6z1C1QwI/mrS', '2025-11-19 11:16:13.955476+00',
+   '2025-11-19 11:16:13.869936+00', '2025-11-20 11:58:18.000628+00', '{""sub"": ""fadc3bf3-4eac-42a8-bb19-7d519f3f5a57"", ""email"": ""camirupa@icloud.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('aa9f533b-90a7-4cce-8cff-3bbf161d2f83', 'giorgiaazzaroo@gmail.com', '$2a$10$ZtN/wRJDOP7l6Q8VZwgHkuXzt.vFdx7lYktzdnZgdHJIgrTeZnc8u', '2025-11-19 10:10:55.055899+00',
+   '2025-11-19 10:10:54.958084+00', '2025-11-19 10:33:09.617441+00', '{""sub"": ""aa9f533b-90a7-4cce-8cff-3bbf161d2f83"", ""email"": ""giorgiaazzaroo@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('ba6a5904-e683-4cf7-8204-c1bc588cb9a3', 'rocacastello2024@gmail.com', '$2a$10$vkcf.ZteEn2wYMVOZOxyL.Nit7Rk.C6ydfA/eK10Hp2ENNQnq1zBS', '2025-11-18 11:39:52.722696+00',
+   '2025-11-18 11:39:52.68011+00', '2025-11-22 13:11:31.582993+00', '{""sub"": ""ba6a5904-e683-4cf7-8204-c1bc588cb9a3"", ""email"": ""rocacastello2024@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('6dccd29d-f306-45fd-a8cd-fb12c229ced1', 'kamilamcabrerareyna@gmail.com', '$2a$10$Z6LoLwOnp2DYEUIVfFDnquwisvulA7MajCmtLix0RkwIQl7KWssCG', '2025-11-16 17:53:20.25634+00',
+   '2025-11-16 17:53:20.206303+00', '2025-11-16 17:54:04.029572+00', '{""sub"": ""6dccd29d-f306-45fd-a8cd-fb12c229ced1"", ""email"": ""kamilamcabrerareyna@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d76db9c8-1e01-4410-a8fb-17627c6a8b96', 'joseasneto2000@gmail.com', '$2a$10$GKus3FxsYW6YWBOK5qyUVuQkIqMIZHUDfUz4Zopv5EIfCrDuhTGJq', '2025-11-29 01:59:50.089793+00',
+   '2025-11-29 01:59:50.049524+00', '2025-12-10 02:12:01.824436+00', '{""sub"": ""d76db9c8-1e01-4410-a8fb-17627c6a8b96"", ""email"": ""joseasneto2000@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c030973a-9e21-4a1a-b41c-2ecd1628e900', 'iiliass0969@gmail.com', '$2a$10$n/i7KUY4Wi7782C.f6ZjAeE5UoOT7a/kxw3xyjbQuq5BYCqP3mIzy', '2025-11-19 10:11:20.714583+00',
+   '2025-11-19 10:11:20.70085+00', '2025-11-19 10:11:34.915279+00', '{""sub"": ""c030973a-9e21-4a1a-b41c-2ecd1628e900"", ""email"": ""iiliass0969@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9706f220-c18c-40a5-b0c2-2770db7081cc', 'dsanchezalvarez98@gmail.com', '$2a$10$mK.aJWyjzR3E2ZkYibZ.E.oFWxCjKNLUvGw444RtQDc8F5MzjSlrS', '2025-11-16 17:26:19.33008+00',
+   '2025-11-16 17:26:19.286288+00', '2025-11-16 17:26:59.302012+00', '{""sub"": ""9706f220-c18c-40a5-b0c2-2770db7081cc"", ""email"": ""dsanchezalvarez98@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('da4ca4fc-410b-4520-83db-3176aad5d422', 'sofiricci2004@gmail.com', '$2a$10$69tK6p8HVYz8foak9Npeneee3XFw/K55kAS7lBYRIOCFLJkECejMG', '2025-11-19 10:46:28.889373+00',
+   '2025-11-19 10:46:28.811174+00', '2025-11-19 10:55:04.119709+00', '{""sub"": ""da4ca4fc-410b-4520-83db-3176aad5d422"", ""email"": ""sofiricci2004@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('065f6bd7-ff4c-442f-a98a-f0975ddc9069', 'paula.mendez.lopez@gmail.com', '$2a$10$suM.snpMzQtUfkJSPJyZ8ehZz7jFmr6dNCpnzkOq09fVuUOLZtxCu', '2025-12-06 21:23:32.484459+00',
+   '2025-12-06 21:23:32.473045+00', '2025-12-06 23:18:24.988913+00', '{""sub"": ""065f6bd7-ff4c-442f-a98a-f0975ddc9069"", ""email"": ""paula.mendez.lopez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c90aeb11-bb82-4744-a75b-9a8cac7117b4', 'vittoria.pascale25@estudiante.uva.es', '$2a$10$ySVlpxOkegkSMjS3n0dIWeSXdww4kGRDtnW4jOi0YKAu17FRMiPJy', '2025-11-19 10:16:54.613167+00',
+   '2025-11-19 10:16:54.598007+00', '2026-01-12 16:06:56.522935+00', '{""sub"": ""c90aeb11-bb82-4744-a75b-9a8cac7117b4"", ""email"": ""vittoria.pascale25@estudiante.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('12278147-7cba-4b75-9ce8-a791ea90e83c', 'hectorcidfifa3@gmail.com', '$2a$10$OHiW2YnBYDoghni8nu8q5uv.AtXc/.SY82YxmksBSSNw7ishAGv8S', '2025-12-07 16:47:46.018678+00',
+   '2025-12-07 16:47:45.990491+00', '2025-12-07 16:47:46.038116+00', '{""sub"": ""12278147-7cba-4b75-9ce8-a791ea90e83c"", ""email"": ""hectorcidfifa3@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('ee414619-aa37-474e-bbae-a1ef12ae6054', 'amaliutza25@gmail.com', '$2a$10$AadLWB9ktPkwO./WYn5OS.EpkmN7aIyo9.0MZlyZea9N7vwO.0Tj.', '2025-12-03 21:37:24.388581+00',
+   '2025-12-03 21:37:24.306163+00', '2025-12-04 05:39:04.409103+00', '{""sub"": ""ee414619-aa37-474e-bbae-a1ef12ae6054"", ""email"": ""amaliutza25@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('1c8637ae-c2bf-45b3-a26f-faa4d696643f', 'davide.grigioni2002@gmail.com', '$2a$10$U80gRlXPzQFP3fDP/xE/YuYN6MJcpjTc1rwRDQaCcwKhWoFD/t7Tq', '2025-11-19 10:11:36.107339+00',
+   '2025-11-19 10:11:36.100274+00', '2026-01-16 10:26:13.947534+00', '{""sub"": ""1c8637ae-c2bf-45b3-a26f-faa4d696643f"", ""email"": ""davide.grigioni2002@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('4b8b9afe-7909-45f1-9586-5f949bf5ef12', 'carolinaalc.arquitetura@gmail.com', '$2a$10$8t4fS1Ng7.kJOLGmlsrqXuhq.kXHjCH8JruRsLaemsXQW4bn7svbu', '2025-11-19 12:37:06.302777+00',
+   '2025-11-19 12:37:06.232189+00', '2026-01-13 14:20:30.595276+00', '{""sub"": ""4b8b9afe-7909-45f1-9586-5f949bf5ef12"", ""email"": ""carolinaalc.arquitetura@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('e429f7e5-cf12-4094-b693-63ac8906b9d0', 'alejandro0610sl@gmail.com', '$2a$10$QGN4/k4.xlvPxlpKKsWrDumIPdWXrAQmJLR.Hgrcb1sLBehEa39di', '2025-11-16 17:12:11.86835+00',
+   '2025-11-16 17:12:11.810939+00', '2025-11-25 15:21:11.842119+00', '{""sub"": ""e429f7e5-cf12-4094-b693-63ac8906b9d0"", ""email"": ""alejandro0610sl@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('b848546f-4f3b-4e7a-ae58-8d791119c293', 'alfercon.01@gmail.com', '$2a$10$OR8ryd0pJDTKHPfuUjWHkOrAHOz/XecHrXBvWdLRjpaKvMmfmuGKq', '2025-11-19 20:19:00.137948+00',
+   '2025-11-19 20:19:00.072624+00', '2025-11-20 11:41:08.665568+00', '{""sub"": ""b848546f-4f3b-4e7a-ae58-8d791119c293"", ""email"": ""alfercon.01@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('52f61ac9-87b0-492e-9cc7-20fa779f5a6a', 'chiara.fasoli25@estudiantes.uva.es', '$2a$10$FCRdHMgIgIcCXMpYQQF6ZORrmhEBkUpzIwzRGCWlxEBQ/VJ8QpKCC', '2025-11-19 18:11:33.173161+00',
+   '2025-11-19 18:11:33.141006+00', '2025-12-09 15:07:47.432141+00', '{""sub"": ""52f61ac9-87b0-492e-9cc7-20fa779f5a6a"", ""email"": ""chiara.fasoli25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('509376e3-32ee-4499-af58-4b275aad14e3', 'goble.tasha28@gmail.com', '$2a$10$HVeNaZijk5wUCjCfbSYS1eyx8kx6xxASZnLsRDu3TxKq4.ondTm2G', '2025-11-19 12:40:19.31387+00',
+   '2025-11-19 12:40:19.25218+00', '2025-11-19 17:18:57.2134+00', '{""sub"": ""509376e3-32ee-4499-af58-4b275aad14e3"", ""email"": ""goble.tasha28@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('ec12bf1c-7f11-45ed-9172-9ab4fede119d', 'dobrusiapardus@gmail.com', '$2a$10$RO8JDHeoFUt1u8r1YXVmuuT5zi9B4eGEzIFrAmK2IJqkJ5hlP.SjG', '2025-11-19 13:34:21.634755+00',
+   '2025-11-19 13:34:21.610074+00', '2025-11-19 17:31:19.917928+00', '{""sub"": ""ec12bf1c-7f11-45ed-9172-9ab4fede119d"", ""email"": ""dobrusiapardus@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('63871511-383d-4075-a5ad-0e8a50b28991', 'caterina.maimone25@estudiantes.uva.it', '$2a$10$OaVLyTdgdMG3PSJ6Gz6QC.VDl9kfsrvBu8ow5OcvzngRAGhMpn0Nq', '2025-11-19 15:24:19.232686+00',
+   '2025-11-19 15:24:19.180615+00', '2025-11-19 15:24:19.27248+00', '{""sub"": ""63871511-383d-4075-a5ad-0e8a50b28991"", ""email"": ""caterina.maimone25@estudiantes.uva.it"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('2bfc4d06-5411-482b-abb5-bb9463fc34c1', 'anajimena.licea25@estudiantes.uva.es', '$2a$10$0LF0s9DO3Tbx2oOWNdUR6./zMnPMmVrgdHHo6Dpzc3lPkfCQf.Ti2', '2025-11-19 16:16:03.74925+00',
+   '2025-11-19 16:16:03.620997+00', '2025-11-27 14:53:34.933438+00', '{""sub"": ""2bfc4d06-5411-482b-abb5-bb9463fc34c1"", ""email"": ""anajimena.licea25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('35d25385-cd71-4e88-a67f-2cdb13809173', 'sof04bb@gmail.com', '$2a$10$GDXAFAq9PU.tlsJZBt2.IuBQ9vGBveEMwo4ABl/yS9iPftLkBe8LW', '2025-11-19 21:35:45.06893+00',
+   '2025-11-19 21:35:44.980795+00', '2025-11-24 23:23:15.677285+00', '{""sub"": ""35d25385-cd71-4e88-a67f-2cdb13809173"", ""email"": ""sof04bb@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('60bad3c2-867d-4b77-8c4d-0d9cafd9553f', 'tharaaa@estudiantes.uva.es', '$2a$10$dRuFf7FjHiXH4PHJmU2RqOJpaOwdqkYf/7GS2WjWV98OF6XqvUPPW', '2025-12-04 12:52:38.194201+00',
+   '2025-12-04 12:52:38.123739+00', '2025-12-04 12:52:38.243108+00', '{""sub"": ""60bad3c2-867d-4b77-8c4d-0d9cafd9553f"", ""email"": ""tharaaa@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('be7b03d3-90f7-410d-a4b0-400c76dd5314', 'fernando.viajeserasmus@gmail.com', '$2a$10$jd6RNczGEuXSfPgX9U99KuqeiuANM9goV9mrounsPO/gHC06cB8E.', '2025-11-19 19:56:41.03948+00',
+   '2025-11-19 19:56:41.002266+00', '2025-11-19 20:00:04.03212+00', '{""sub"": ""be7b03d3-90f7-410d-a4b0-400c76dd5314"", ""email"": ""fernando.viajeserasmus@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('80e9369f-2fa6-472c-a517-248e86d99000', 'andresvg198@gmail.com', '$2a$10$f4YDW4puUGgSLSTHtw0U/uvM5MgP4bSZ2xjqczQOhUwbsuCBOjGqS', '2025-11-20 17:14:02.083932+00',
+   '2025-11-20 17:14:01.966658+00', '2025-12-14 20:12:10.197134+00', '{""sub"": ""80e9369f-2fa6-472c-a517-248e86d99000"", ""email"": ""andresvg198@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('51eec434-56dc-4569-8de2-67c30f57dc82', 'fedegaglia04@gmail.com', '$2a$10$lofTC3YuihxcHXQNbXnIpuYXHUWQCbLsUrCOegCtejy5azs26h1DW', '2025-11-19 13:31:16.958012+00',
+   '2025-11-19 13:31:16.858308+00', '2025-12-29 10:52:23.063341+00', '{""sub"": ""51eec434-56dc-4569-8de2-67c30f57dc82"", ""email"": ""fedegaglia04@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('5eea37fd-0d7b-4b98-a82c-e11f41c6301d', 'alvcabcl@gmail.com', '$2a$10$Mv8e3o5wkSuNN46D7aYjI.P9.mpysdtkMEDu1XEdMkT0S7veL0oR6', '2025-12-04 08:25:15.755415+00',
+   '2025-12-04 08:25:15.64569+00', '2025-12-17 02:07:28.026196+00', '{""sub"": ""5eea37fd-0d7b-4b98-a82c-e11f41c6301d"", ""email"": ""alvcabcl@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('70e85e71-a2be-4a65-9b20-6d5bdabd3904', 'sofilopezg@icloud.com', '$2a$10$Mjk6mtF0weaiktHoc.FC8ONwKL0p8VfuAQnnCiytOrfYdlnX1ZHRm', '2025-11-20 18:22:20.598477+00',
+   '2025-11-20 18:22:20.465824+00', '2025-11-21 21:37:14.255647+00', '{""sub"": ""70e85e71-a2be-4a65-9b20-6d5bdabd3904"", ""email"": ""sofilopezg@icloud.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f8dcf979-755d-479f-ba1e-0c3732570dcc', 'solorzanobrandon178@gmail.com', '$2a$10$V75AMu4HfnKDdIyKJ6haZuk9jFu20CFYV0kTVx952WxM37BCIaT5u', '2025-12-04 21:24:36.385814+00',
+   '2025-12-04 21:24:36.338457+00', '2025-12-04 21:25:03.529473+00', '{""sub"": ""f8dcf979-755d-479f-ba1e-0c3732570dcc"", ""email"": ""solorzanobrandon178@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d6eaa7e9-073a-4ba2-8a30-7afe4f514116', 'santiago.cruz.lechuga8@gmail.com', '$2a$10$BelbdRKDi9JpYqtJHrZ2ouGH7.TJeOv5jvJMbdIrhnB0STvvQboge', '2025-11-19 12:53:22.650363+00',
+   '2025-11-19 12:53:22.609426+00', '2025-12-08 09:48:47.337533+00', '{""sub"": ""d6eaa7e9-073a-4ba2-8a30-7afe4f514116"", ""email"": ""santiago.cruz.lechuga8@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('732d68c8-6a5e-457c-a4ba-7068af28a6ea', 'claudia.arranz@estudiantes.uva.es', '$2a$10$ieTUTGN9cAjZ7zbUtGLC1eFu/LpqUdqglbRhvil7EyYhjp7D6Pjgq', '2025-12-09 18:19:37.519745+00',
+   '2025-12-09 18:19:37.433487+00', '2025-12-10 09:09:10.776762+00', '{""sub"": ""732d68c8-6a5e-457c-a4ba-7068af28a6ea"", ""email"": ""claudia.arranz@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('95c4f2ce-9e39-49ce-b8af-91566459d22e', 'miguelsuarezhierro@gmail.com', '$2a$10$rKpZYlZAMUgJ9FJ3Ti7zs.rnSFdhNxO4kOg/X71DxL/Z/mQNIy8QS', '2025-12-03 22:37:20.774769+00',
+   '2025-12-03 22:37:20.689453+00', '2025-12-27 17:31:13.261157+00', '{""sub"": ""95c4f2ce-9e39-49ce-b8af-91566459d22e"", ""email"": ""miguelsuarezhierro@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('95e19826-d253-4287-a50e-36e3789c6eb6', 'fernando@sportiagimnasios.com', '$2a$10$FabAP8oGx5IFbBWi65gtGO3xiF3BJAFCpbbHBCW54cgtMUD/6cJTe', '2025-11-27 09:36:29.162914+00',
+   '2025-11-27 09:36:29.124403+00', '2026-01-26 10:49:32.288086+00', '{""sub"": ""95e19826-d253-4287-a50e-36e3789c6eb6"", ""email"": ""fernando@sportiagimnasios.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('16719be1-539d-47ff-85e9-c5c19f513617', 'luuciapg22@gmail.com', '$2a$10$Nrq/JXWI2uVSZMNtLmSpgOCkpNiPODk4IqwuO/bRZV.kkrewlyLP6', '2025-12-04 09:50:24.464168+00',
+   '2025-12-04 09:50:24.398219+00', '2025-12-04 18:30:52.697502+00', '{""sub"": ""16719be1-539d-47ff-85e9-c5c19f513617"", ""email"": ""luuciapg22@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f755996b-cd8c-491e-a4e5-d3d2aaf735ba', 'virginiacatania@icloud.com', '$2a$10$QMSw9K8XXAGvfvKtIBJKjuAmV2p5P4hd95rH2f6VoePB5I/l/ST.O', '2025-11-23 16:42:06.444186+00',
+   '2025-11-23 16:42:06.324509+00', '2025-11-23 16:42:32.929541+00', '{""sub"": ""f755996b-cd8c-491e-a4e5-d3d2aaf735ba"", ""email"": ""virginiacatania@icloud.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('06643324-3b61-4bc8-954b-1c78a4a670f2', '5hermanosburger@gmail.com', '$2a$10$i4k9af8uMTQidsljMvhj8urs/2aPpclYooVLXGfMvwZbn51xgV/nK', '2025-11-20 22:43:28.08623+00',
+   '2025-11-20 22:43:28.012931+00', '2026-01-15 15:10:04.885664+00', '{""sub"": ""06643324-3b61-4bc8-954b-1c78a4a670f2"", ""email"": ""5hermanosburger@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9ed6f75d-ae3d-4432-a7b5-179fba1f6605', 'giorgiario2003@gmail.com', '$2a$10$ClQIbm./ZI.lLC1CZ3GbxOm5PUtEXPH/WuwkoE1Y/KCj4u6X049pC', '2025-11-23 12:20:56.557399+00',
+   '2025-11-23 12:20:56.438452+00', '2025-12-03 02:08:07.079122+00', '{""sub"": ""9ed6f75d-ae3d-4432-a7b5-179fba1f6605"", ""email"": ""giorgiario2003@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('706b498e-281a-48ab-b0a3-62358e965b0d', 'lucianaposada3456@gmail.com', '$2a$10$OQYR4pQqdWAs1c2dFQXnbOy0ZueHDe3AM4fAYntY9OIUFj6RxXLoW', '2025-11-21 08:14:15.427072+00',
+   '2025-11-21 08:14:15.279437+00', '2025-12-09 11:21:36.613186+00', '{""sub"": ""706b498e-281a-48ab-b0a3-62358e965b0d"", ""email"": ""lucianaposada3456@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('5a51fda0-0453-4069-9dec-e2c5fe32ff1f', 'gabellierigiovanna@gmail.com', '$2a$10$wPF/.2dzcgigOdarW.MkO.DnVtHhmakAenOT04Cjt4qCnqumlBjIq', '2025-11-21 00:09:54.598692+00',
+   '2025-11-21 00:09:54.473181+00', '2025-12-18 14:19:34.186061+00', '{""sub"": ""5a51fda0-0453-4069-9dec-e2c5fe32ff1f"", ""email"": ""gabellierigiovanna@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3f8590a5-8c66-41b5-b885-8582aa780a60', 'marcopaiatto@gmail.com', '$2a$10$2ksAgNOpm3K.rfOzRobxJ.fCyJeli3HBLZySWaDMWR1k795OLwYQe', '2025-11-24 13:29:55.205885+00',
+   '2025-11-24 13:29:55.071473+00', '2025-11-26 08:33:28.420753+00', '{""sub"": ""3f8590a5-8c66-41b5-b885-8582aa780a60"", ""email"": ""marcopaiatto@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('38d09cef-9c50-425c-aa5c-8116e6b3ac00', 'holac1441@gmail.com', '$2a$10$XL7AIACSHDtxzxZBhLFCRu6zgPUOOjQRNdeg8msis/wIg.wSa.wUG', '2025-12-03 23:20:16.921776+00',
+   '2025-12-03 23:20:16.695996+00', '2025-12-03 23:20:36.852225+00', '{""sub"": ""38d09cef-9c50-425c-aa5c-8116e6b3ac00"", ""email"": ""holac1441@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d71f327b-2952-4efb-acae-666816a208d8', 'ra.valdebenitodv@gmail.com', '$2a$10$AWQ2pfkzc3/c8V1ifYiIJOYMP8B8KVSVqD1qtk3W3jvJet4C94MFq', '2025-12-03 20:20:00.711453+00',
+   '2025-12-03 20:20:00.65401+00', '2025-12-03 20:20:00.74866+00', '{""sub"": ""d71f327b-2952-4efb-acae-666816a208d8"", ""email"": ""ra.valdebenitodv@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('ff50ccaa-20df-48c4-938d-0305844ea838', 'yassirdaoudi2015@gmail.com', '$2a$10$30Wve6WAkB6O6W9ouWF7tufdxfO.XVsU9NWIdjKqCCZsWdz20KrH2', '2025-12-04 05:22:41.819322+00',
+   '2025-12-04 05:22:41.766859+00', '2025-12-04 05:22:41.848563+00', '{""sub"": ""ff50ccaa-20df-48c4-938d-0305844ea838"", ""email"": ""yassirdaoudi2015@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('914f1d2a-0f8d-490c-bf0d-002b7af778df', 'gioreina05@gmail.com', '$2a$10$kjwtQT//38Ionuy6A88mXONZ2j1muQRC6G35mEhRv/Fx3zk5q9WXS', '2025-12-03 23:59:29.916302+00',
+   '2025-12-03 23:59:29.831092+00', '2025-12-04 07:24:01.072033+00', '{""sub"": ""914f1d2a-0f8d-490c-bf0d-002b7af778df"", ""email"": ""gioreina05@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('591e7742-880d-45c0-8f6b-7feca1730824', 'info@moss-club.com', '$2a$10$mMs4H591nf9D/gv96mM2Le/KKqrYyEjWzSyM03H4PjsY3xOb8K2Um', '2025-12-05 19:17:04.061882+00',
+   '2025-12-05 19:17:04.020952+00', '2026-01-22 17:24:26.573742+00', '{""sub"": ""591e7742-880d-45c0-8f6b-7feca1730824"", ""email"": ""info@moss-club.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3384f35c-5487-4b0a-a779-ccbbf2efeeb1', 'carolinaop23@gmail.com', '$2a$10$VIV74fc6dRMh3zwe5CPZA.AkSc9I/UFPZdtfOhYALzB0QbfCHIyAe', '2025-12-03 22:37:21.880623+00',
+   '2025-12-03 22:37:21.860724+00', '2025-12-29 20:34:35.824448+00', '{""sub"": ""3384f35c-5487-4b0a-a779-ccbbf2efeeb1"", ""email"": ""carolinaop23@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('e681e57e-0354-472a-9784-34ee2c1edf4d', 'gdiazromeo3@gmail.com', '$2a$10$uQO7Vg.yQQVcSxUmsFEIfuvghGdoMCcSMy79w0mdo53Skca5vdzgq', '2025-12-07 23:06:36.806253+00',
+   '2025-12-07 23:06:36.666671+00', '2025-12-07 23:39:04.005798+00', '{""sub"": ""e681e57e-0354-472a-9784-34ee2c1edf4d"", ""email"": ""gdiazromeo3@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('873a12e5-23d8-4323-ad4c-55ee82261604', 'alejandroarandamontoya265@gmail.com', '$2a$10$.Dl8wzWYx4qWIYj5Q18A0eDUB4oxWOH3ccYqcnLxnPYq22SxSjDtm', '2025-12-04 08:54:43.146293+00',
+   '2025-12-04 08:54:43.053173+00', '2025-12-05 02:09:21.696516+00', '{""sub"": ""873a12e5-23d8-4323-ad4c-55ee82261604"", ""email"": ""alejandroarandamontoya265@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3fd02df5-a292-4a55-8c83-8ea80675e0ae', 'ivan.ordas05@gmail.com', '$2a$10$3/QyAEN0oKB.AWx3a5oqzeQD5RqKt2e0B0jr1EB7C.zsc1DK7KAya', '2025-12-09 01:53:34.429771+00',
+   '2025-12-09 01:53:34.266496+00', '2026-01-07 00:40:46.066361+00', '{""sub"": ""3fd02df5-a292-4a55-8c83-8ea80675e0ae"", ""email"": ""ivan.ordas05@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('73fb53b1-5714-4c54-adaf-0249c2a3f460', 'alejo.310810@gmail.con', '$2a$10$9HOvcgfiBmd2GxxGk/7M0.V2FOBllE/.N7muRqWEn1gv8S81DH22e', '2025-12-09 18:20:00.053319+00',
+   '2025-12-09 18:20:00.028727+00', '2025-12-09 18:23:22.323789+00', '{""sub"": ""73fb53b1-5714-4c54-adaf-0249c2a3f460"", ""email"": ""alejo.310810@gmail.con"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c58910e0-c226-484e-9625-ea128d2dd8a8', 'lucborrod@gmail.com', '$2a$10$FqINBVryozUNwp73bF/KpOEQQczTbQ7DHi.9/25lvEuu2cFiejUTa', '2025-12-04 13:29:14.81382+00',
+   '2025-12-04 13:29:14.745938+00', '2026-01-01 19:54:08.011874+00', '{""sub"": ""c58910e0-c226-484e-9625-ea128d2dd8a8"", ""email"": ""lucborrod@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('eb3cb383-5313-41e1-b07f-440b56601ee7', 'latentacionvalladolid@gmail.com', '$2a$10$bl15cqrkXt/16md0DUTD5eDtO4DWkjvoOTEJeF1V19xlO.I7NON2a', '2025-11-18 11:58:54.281219+00',
+   '2025-11-18 11:58:54.241306+00', '2025-12-16 09:45:24.815328+00', '{""sub"": ""eb3cb383-5313-41e1-b07f-440b56601ee7"", ""email"": ""latentacionvalladolid@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('bf961ca6-e88b-4265-8659-67cf3b0e9df5', 'juanluis.gonzalez.gonzalez@estudiantes.uva.ez', '$2a$10$EwlZclF4EvNehqx6Kzy68OOWg.n6yk750FzsclFVy/gRpBW03YWay', '2026-01-06 16:52:51.43939+00',
+   '2026-01-06 16:52:51.419521+00', '2026-01-06 16:52:51.452627+00', '{""sub"": ""bf961ca6-e88b-4265-8659-67cf3b0e9df5"", ""email"": ""juanluis.gonzalez.gonzalez@estudiantes.uva.ez"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('abd99aa4-cdcc-4786-82b4-71ee32ccac65', 'sgarcia34792@alumnos.uemc.es', '$2a$10$yHht5b7fU2yZ09yTeJRjCu3ys.Z024HOiDpAjAdwTTuN3ptMtKGHS', '2026-01-12 09:05:14.551212+00',
+   '2026-01-12 09:05:14.373297+00', '2026-01-14 14:08:50.08707+00', '{""sub"": ""abd99aa4-cdcc-4786-82b4-71ee32ccac65"", ""email"": ""sgarcia34792@alumnos.uemc.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('db4547b9-7f2f-42c2-9f8d-5310af63e9d0', 'andreaillera03@gmail.com', '$2a$10$mIcdrN4z2aIbyjnLI0u4TeIitRe8lXS5PC8ZOdykgCqOIzajlQ7dK', '2025-12-05 20:01:10.130457+00',
+   '2025-12-05 20:01:10.086683+00', '2026-01-25 17:06:21.697389+00', '{""sub"": ""db4547b9-7f2f-42c2-9f8d-5310af63e9d0"", ""email"": ""andreaillera03@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c0dcf065-0051-4026-a88e-a4f149aaeb2a', 'guinebo2010@gmail.com', '$2a$10$AzbfMAYHfOft3DeUXbPwEuai5eMw1M3YlWyHe8szN7fnryjNwKly.', '2025-12-09 10:33:27.422301+00',
+   '2025-12-09 10:33:27.353065+00', '2025-12-09 10:34:25.206009+00', '{""sub"": ""c0dcf065-0051-4026-a88e-a4f149aaeb2a"", ""email"": ""guinebo2010@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d8fc2f80-e4de-4595-8994-7d1017325a00', 'palomagb246@gmail.com', '$2a$10$z.9w7iIesvrTOkc.Bi0RFOZblHm0Vt6Kp75wUON1XkLIvyKBbkLBK', '2025-12-04 09:15:32.771892+00',
+   '2025-12-04 09:15:32.705863+00', '2025-12-05 12:48:26.141101+00', '{""sub"": ""d8fc2f80-e4de-4595-8994-7d1017325a00"", ""email"": ""palomagb246@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('13a6c41b-59e8-43c3-a03b-c237dd860d65', 'mariacarolinafigueiredoferraz@gmail.com', '$2a$10$bvmBN3lxxBKN4UfXBgQ0teAuJ2aGPgzPDhRxzhbI0sDmlfivEEg9C', '2025-12-16 10:39:00.789176+00',
+   '2025-12-16 10:39:00.693426+00', '2025-12-21 20:47:06.770522+00', '{""sub"": ""13a6c41b-59e8-43c3-a03b-c237dd860d65"", ""email"": ""mariacarolinafigueiredoferraz@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('e86db922-12ad-4eca-8372-256891c65cb1', 'saritadelbarriogarcia@gmail.com', '$2a$10$gFS0LEYMtB2KJGy6U4Yo2O3KbnBOhziYnI7VGnlNu9Jzc2adJlrJe', '2026-01-06 19:00:33.972318+00',
+   '2026-01-06 19:00:33.82004+00', '2026-01-06 19:01:37.146991+00', '{""sub"": ""e86db922-12ad-4eca-8372-256891c65cb1"", ""email"": ""saritadelbarriogarcia@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('93e1c135-bcce-49ee-9c37-3253b6d16cb6', 'josecupello1@gmail.com', '$2a$10$z1AvcyZX3Oxwn6tY4BzZmuK6/20oOSeCzXrmqatfC9QFjbIDkxTtK', '2025-12-05 23:50:46.592374+00',
+   '2025-12-05 23:50:46.427752+00', '2025-12-06 22:04:03.767484+00', '{""sub"": ""93e1c135-bcce-49ee-9c37-3253b6d16cb6"", ""email"": ""josecupello1@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('948777e3-9496-4af0-9a3a-45ce07c91cd5', 'cris.vayoglez@gmail.com', '$2a$10$4iutMEhpTTZTEpBvx41XAu/FTg2om66Q3eIlDvBJpPGZZPHYrTn0C', '2025-12-05 13:12:11.556413+00',
+   '2025-12-05 13:12:11.50967+00', '2025-12-05 13:12:11.584093+00', '{""sub"": ""948777e3-9496-4af0-9a3a-45ce07c91cd5"", ""email"": ""cris.vayoglez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d716d78d-4bd5-419f-b961-2ea9ecab9054', 'angelamartinm2002@gmail.com', '$2a$10$0rvldB6w.AmuxtA4NiNDW.V5lx.bNe2MZkNLOfl14vsjQJ1JPd0ii', '2025-12-08 00:52:23.900424+00',
+   '2025-12-08 00:52:23.761793+00', '2025-12-17 03:10:53.593322+00', '{""sub"": ""d716d78d-4bd5-419f-b961-2ea9ecab9054"", ""email"": ""angelamartinm2002@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('130f1a30-f687-41e9-b49d-a32d51e92c25', 'prietoguerrerovictor64@gmail.com', '$2a$10$gtZqmrW8rEU4ZwLU3d9DNOjVPI2ZrI3qLJJoQwjkG8FNZDA4xzmse', '2026-01-12 16:27:23.880381+00',
+   '2026-01-12 16:27:23.765419+00', '2026-01-12 16:32:59.334711+00', '{""sub"": ""130f1a30-f687-41e9-b49d-a32d51e92c25"", ""email"": ""prietoguerrerovictor64@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('218322f0-a4ea-4645-8917-3f2b9d63a7f7', 'juan.contreras25@estudiantes.uva.es', '$2a$10$ckvcpjzrMd83cDyfN1ETPu/F/rOwD0vHDRh12iZ.Autv7u7hK/Fou', '2025-12-09 19:01:24.722485+00',
+   '2025-12-09 19:01:24.58502+00', '2025-12-09 22:39:44.708711+00', '{""sub"": ""218322f0-a4ea-4645-8917-3f2b9d63a7f7"", ""email"": ""juan.contreras25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('bf3d7f54-4e58-40e2-b4b2-56287fceb118', 'adrigon2001@gmail.com', '$2a$10$A/Mr2GDs1l/jiD.ykyeFM.PygsIXn7ROwpxvwNg6AC3XGUoTgDgUS', '2025-12-04 13:44:24.594525+00',
+   '2025-12-04 13:44:24.568438+00', '2026-01-13 00:24:51.967789+00', '{""sub"": ""bf3d7f54-4e58-40e2-b4b2-56287fceb118"", ""email"": ""adrigon2001@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('aec70234-9c8c-427f-a5fb-e0788d471440', 'angela.martinez.sarmentero25@estudiantes.uva.es', '$2a$10$pkpTB0ZwRggPlDlXuUFcRO0w35FG9sk8HFlAFmKBZyQgs5q9HZQxi', '2025-12-04 09:58:51.354153+00',
+   '2025-12-04 09:58:51.316797+00', '2025-12-04 09:58:51.371986+00', '{""sub"": ""aec70234-9c8c-427f-a5fb-e0788d471440"", ""email"": ""angela.martinez.sarmentero25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('33f73403-4252-47e7-923b-abd16552f955', 'mebellimikel@gmail.com', '$2a$10$rZ30BK7wDteuBJeageDoF.Oz7iu2A7IyGmHxWplzJdaOTsHb845ge', '2025-11-19 14:59:15.047224+00',
+   '2025-11-19 14:59:14.995856+00', '2025-12-09 21:20:59.207483+00', '{""sub"": ""33f73403-4252-47e7-923b-abd16552f955"", ""email"": ""mebellimikel@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('17d506ea-0c0b-41f6-bcec-bb67e86c53d4', 'hibachebani1@gmail.com', '$2a$10$i8pcCtHWMT7RlQ7IKysbN.zrULvEGvKMY1z/fTgNBS1xTB11ytsgS', '2025-12-04 13:51:30.275406+00',
+   '2025-12-04 13:51:30.224511+00', '2025-12-10 23:49:52.232377+00', '{""sub"": ""17d506ea-0c0b-41f6-bcec-bb67e86c53d4"", ""email"": ""hibachebani1@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('74bdc0ff-9ee6-4f33-8d25-568927285a7b', 'tteodorom@gmail.com', '$2a$10$zVJ80gicDxcU1./9F68Jr.j53810lzRwSlQG77k2KbsM.2FXtZ2wa', '2025-12-06 14:40:03.220197+00',
+   '2025-12-06 14:40:03.174068+00', '2025-12-15 00:59:52.51288+00', '{""sub"": ""74bdc0ff-9ee6-4f33-8d25-568927285a7b"", ""email"": ""tteodorom@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9d1b3b38-c1cd-475a-86c5-cf931a51031b', 'perezmiranda0120@gmail.com', '$2a$10$CIwBZHKmahQUVDnvyAd71OMJcGhh5KRTj1A0fSD9mt8qMlZ5utfPG', '2025-12-08 05:44:39.016512+00',
+   '2025-12-08 05:44:38.841513+00', '2025-12-08 05:44:39.115944+00', '{""sub"": ""9d1b3b38-c1cd-475a-86c5-cf931a51031b"", ""email"": ""perezmiranda0120@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('760be82f-c653-42b8-aeed-e83c6606c977', 'condeamarosl@gmail.com', '$2a$10$cWblCRTNOYOKzrQG5GU66eop48ysTsUg69p08xIWcQy2O45rbj2vS', '2025-11-10 08:39:33.487489+00',
+   '2025-11-10 08:39:33.36114+00', '2025-12-22 18:44:44.612471+00', '{""sub"": ""760be82f-c653-42b8-aeed-e83c6606c977"", ""email"": ""condeamarosl@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('2ea70881-8c1f-4007-986b-31a0ed7569b2', '100446062@alumnos.uc3m.es', '$2a$10$82ss2Ybz9lm.J.Kw9xCcN.T6xyzlpMXGiPZcSSGEgRQDsrUtYdFHO', '2026-01-13 10:04:38.173382+00',
+   '2026-01-13 10:04:38.032114+00', '2026-01-13 10:04:38.265845+00', '{""sub"": ""2ea70881-8c1f-4007-986b-31a0ed7569b2"", ""email"": ""100446062@alumnos.uc3m.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('578f7e21-eb48-4616-a8a5-718313db7a75', 'jairoferper@gmail.com', '$2a$10$BfxlToQVuhlMcfItBwRdneeDavZL0b1GGq1woH.sWtOQSZpLVLvGS', '2025-12-09 12:45:34.759983+00',
+   '2025-12-09 12:45:34.619083+00', '2025-12-09 13:26:25.565482+00', '{""sub"": ""578f7e21-eb48-4616-a8a5-718313db7a75"", ""email"": ""jairoferper@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d7d8c99b-0a21-4955-bc48-5a59fb0f100f', 'estermartinezsanzo@hotmail.com', '$2a$10$aMxPiActOi5h3BhJDht5X.q/WkprtJffA1oL7HoqKgpqpf98fnhze', '2026-01-06 22:18:34.461124+00',
+   '2026-01-06 22:18:34.296655+00', '2026-01-13 20:47:20.500044+00', '{""sub"": ""d7d8c99b-0a21-4955-bc48-5a59fb0f100f"", ""email"": ""estermartinezsanzo@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('011df4c0-a75c-4520-bced-5bee81389284', 'info@tierrabatidosvalladolid.com', '$2a$10$WO5RAILDekbtXBB4ajFKBORdZpz77FzwN2aKZ0DAH18l7KWDyyi9G', '2025-12-03 12:39:49.129211+00',
+   '2025-12-03 12:39:49.012231+00', '2025-12-09 16:42:59.160415+00', '{""sub"": ""011df4c0-a75c-4520-bced-5bee81389284"", ""email"": ""info@tierrabatidosvalladolid.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c252555c-ca0c-4928-a4e0-c1e602f78e99', 'sineadmchugh222@gmail.com', '$2a$10$hTyU3FkNa46GcQ.oo4UlSe9FMYskNcN1/OVcqe2o8AdI/Em5vykY6', '2025-12-05 13:35:30.403887+00',
+   '2025-12-05 13:35:30.352159+00', '2025-12-15 11:46:07.337066+00', '{""sub"": ""c252555c-ca0c-4928-a4e0-c1e602f78e99"", ""email"": ""sineadmchugh222@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9184360a-7276-4bf9-a9f8-02d3e9952ec0', 'priscilladoria2004@gmail.con', '$2a$10$KbDyBbeCJBurk8iaUB9OneSkAm4dteCos6oyCQnPAWU2Z5rw6l8Gu', '2025-12-04 14:29:08.824248+00',
+   '2025-12-04 14:29:08.770299+00', '2025-12-04 14:29:08.868938+00', '{""sub"": ""9184360a-7276-4bf9-a9f8-02d3e9952ec0"", ""email"": ""priscilladoria2004@gmail.con"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fb8f8023-8119-4b8f-a41f-e32093445505', 'erickalejosherguedas@gmail.com', '$2a$10$fSSZZ.9SPYawTOAhV6MfW.gefhzZ3kG.3Wii3FORzfQ12kIpm5HMa', '2025-12-06 15:35:05.948815+00',
+   '2025-12-06 15:35:05.815429+00', '2025-12-16 10:31:22.191616+00', '{""sub"": ""fb8f8023-8119-4b8f-a41f-e32093445505"", ""email"": ""erickalejosherguedas@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('db810c04-ff65-4756-9e67-c84b6ab573d0', 'julie.sironi@gmail.com', '$2a$10$Q5mPrXMv.fcCBfklsWxzveQeh9WKT9uP1m8PNAGDvTU3p62.qJWzm', '2025-12-04 10:19:43.277325+00',
+   '2025-12-04 10:19:43.268375+00', '2025-12-17 10:11:58.140575+00', '{""sub"": ""db810c04-ff65-4756-9e67-c84b6ab573d0"", ""email"": ""julie.sironi@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f9bc8e1a-b153-492c-99e2-b0dcb198c194', 'marianamaldaners@yahoo.com', '$2a$10$P1BT1PhRps2l/23kyfOiZefKfReQMI9L.JtOpXWpKdaXMiJHiJU9m', '2025-12-04 10:19:09.22814+00',
+   '2025-12-04 10:19:09.186151+00', '2025-12-22 15:12:37.65006+00', '{""sub"": ""f9bc8e1a-b153-492c-99e2-b0dcb198c194"", ""email"": ""marianamaldaners@yahoo.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3ef2de76-e0d0-4866-90b7-cea091d6d446', 'inesvarela@usal.es', '$2a$10$zcFSSciWGKzx4tWmt/4hiuJ0r5/jWqVtD89VNn6chFc5ovXvXKu6K', '2025-12-22 17:00:12.77848+00',
+   '2025-12-22 17:00:12.634914+00', '2025-12-26 16:47:14.463734+00', '{""sub"": ""3ef2de76-e0d0-4866-90b7-cea091d6d446"", ""email"": ""inesvarela@usal.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('15dd2bcd-c938-4d9d-bc86-58926edf4407', 'francescapiermaria13@gmail.com', '$2a$10$VEfWLwIr2bmr.uSF8Hxb0OuNsQzBSJfGb5J4B4s97ghYOSQF/VLTK', '2025-12-04 10:18:38.494286+00',
+   '2025-12-04 10:18:38.42525+00', '2026-01-05 10:57:35.096952+00', '{""sub"": ""15dd2bcd-c938-4d9d-bc86-58926edf4407"", ""email"": ""francescapiermaria13@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('16eb505f-fc02-4528-a500-0cc6d5cb8736', 'marioazcona@hotmail.com', '$2a$10$iUBZRQjQibESFfLDBCAKcuEzGM19bmLQtYL9ErQZuzlaWuE6wDRG2', '2026-01-06 23:04:12.512528+00',
+   '2026-01-06 23:04:12.403787+00', '2026-01-07 11:48:26.825312+00', '{""sub"": ""16eb505f-fc02-4528-a500-0cc6d5cb8736"", ""email"": ""marioazcona@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('1945d19b-2855-481a-be56-5812204b2e13', 'paula.alogal@sanviatorvalladolid.com', '$2a$10$jJDp2beAUJEAZxiZmc5/geno1/faTO9RIwY.fYiUyu.XQP5isPbJm', '2025-12-09 14:50:12.898514+00',
+   '2025-12-09 14:50:12.752981+00', '2025-12-19 21:58:24.258749+00', '{""sub"": ""1945d19b-2855-481a-be56-5812204b2e13"", ""email"": ""paula.alogal@sanviatorvalladolid.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('878f6e3b-83a9-4811-9f42-cf54fb8f4aad', 'thecasperxxx@gmail.com', '$2a$10$gIeaqYgo94Re.HjpJMmAhersFiWaxKMqLohbz8uLwVHPwKCKEw/cS', '2025-12-10 11:15:07.723627+00',
+   '2025-12-10 11:15:07.599112+00', '2025-12-10 13:13:20.445774+00', '{""sub"": ""878f6e3b-83a9-4811-9f42-cf54fb8f4aad"", ""email"": ""thecasperxxx@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('b60a9d94-1a7f-459a-8baa-0b6d18d73882', 'alvaretegp00@gmail.com', '$2a$10$2j./AoWKA/2xWACdtQcxWOqOx8/4nHct12KWFGF32fh.CZZ/l.Dtm', '2026-01-13 12:26:43.509484+00',
+   '2026-01-13 12:26:43.392073+00', '2026-01-22 17:02:01.290505+00', '{""sub"": ""b60a9d94-1a7f-459a-8baa-0b6d18d73882"", ""email"": ""alvaretegp00@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('b2f1f877-bddd-4f13-83bb-04dad80e1b5b', 'mariavalentinaperdomodavila@gmail.com', '$2a$10$Ob25eEp7vaH9voUN9DGoNu5nodQUZdsaXVCE2Dl6oAzn2CrCv8CIe', '2025-12-04 10:23:17.066597+00',
+   '2025-12-04 10:23:17.011945+00', '2025-12-06 14:30:41.800265+00', '{""sub"": ""b2f1f877-bddd-4f13-83bb-04dad80e1b5b"", ""email"": ""mariavalentinaperdomodavila@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f2e3b6fe-e5bd-4f01-982b-950c1ee1dccf', 'nazaret_flor@hotmail.com', '$2a$10$2pVEP4Kil/8VxiBaPdDd1O6OQAuJqesgxHVQ6YUNpp8PycEjuImje', '2025-12-04 15:14:49.599776+00',
+   '2025-12-04 15:14:49.492288+00', '2026-01-25 23:14:55.293822+00', '{""sub"": ""f2e3b6fe-e5bd-4f01-982b-950c1ee1dccf"", ""email"": ""nazaret_flor@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fe0ed8f9-24f8-4be6-9c75-3aedf6f36f79', 'elisahubneriberti@gmail.com', '$2a$10$zWTCy1k6Blop0mf8y/2w0uldsmFjurYdcEJqEGheld0kwIw9bndwq', '2025-12-04 10:23:34.256491+00',
+   '2025-12-04 10:23:34.245224+00', '2025-12-04 11:06:13.272363+00', '{""sub"": ""fe0ed8f9-24f8-4be6-9c75-3aedf6f36f79"", ""email"": ""elisahubneriberti@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('59b55bf1-e3c9-49a4-ac51-8be5d5c18fcf', 'nata3diver@gmail.com', '$2a$10$ep2j27DB.gyrsq7E.Van7udAP3LE9o.jeCsqqTMIhHE5Kg6Io0KSy', '2025-12-05 13:50:49.185056+00',
+   '2025-12-05 13:50:49.098169+00', '2025-12-05 14:27:50.869888+00', '{""sub"": ""59b55bf1-e3c9-49a4-ac51-8be5d5c18fcf"", ""email"": ""nata3diver@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('93e1f5fd-80bc-4306-b156-fd793b706a36', 'likatamamai22@gmail.com', '$2a$10$HP8NFpSaiRwZv6SyXLB4gORaJGRbbzcu4C7QTQRKcOGWARBZ7TDtm', '2026-01-21 21:46:10.954184+00',
+   '2026-01-21 21:46:10.820664+00', '2026-01-21 21:46:11.036403+00', '{""sub"": ""93e1f5fd-80bc-4306-b156-fd793b706a36"", ""email"": ""likatamamai22@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('7bce1d50-3cb5-47fa-ac3a-a0090b429952', 'alesco2004@gmail.com', '$2a$10$WhRjZNkGg7zIBIMGFL6rRONbsroXiiWH1LMkAvBtyV3GCkH7zJO26', '2025-12-06 15:48:21.833805+00',
+   '2025-12-06 15:48:21.77498+00', '2025-12-06 16:22:44.706293+00', '{""sub"": ""7bce1d50-3cb5-47fa-ac3a-a0090b429952"", ""email"": ""alesco2004@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('e98532f6-87d7-4b6a-978a-513a4db7df41', 'santiagoj.marpen@educa.jcyl.es', '$2a$10$0ie1fyFQAntoJdDdy3028OvpYKFUYcWJXa99I.YYv.KQimaLpf6.y', '2025-12-06 22:52:21.130704+00',
+   '2025-12-06 22:52:21.012664+00', '2025-12-06 22:52:41.913954+00', '{""sub"": ""e98532f6-87d7-4b6a-978a-513a4db7df41"", ""email"": ""santiagoj.marpen@educa.jcyl.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('9c3c29a6-3cac-42f3-a265-807215f4981d', 'luciamaria90123@hotmail.com', '$2a$10$OL7S6PcHh4uxi8Ml.Z9OE.K14ig/Pv3bP4RBvYAi1kNSWOq2ZQdIa', '2025-12-08 10:45:31.344055+00',
+   '2025-12-08 10:45:31.203518+00', '2025-12-08 11:10:50.522762+00', '{""sub"": ""9c3c29a6-3cac-42f3-a265-807215f4981d"", ""email"": ""luciamaria90123@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('04ec61d7-d0bb-45a7-8b3a-c900fd57fb06', 'alessiocerbone26@gmail.com', '$2a$10$zHz6jHyzpaWPIb8SwNkxqu43K9qjaFxLRy0HXtqdMQQNPihLBA7eq', '2025-12-27 09:16:52.924219+00',
+   '2025-12-27 09:16:52.752874+00', '2025-12-27 09:17:14.590215+00', '{""sub"": ""04ec61d7-d0bb-45a7-8b3a-c900fd57fb06"", ""email"": ""alessiocerbone26@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('19fc7014-80e1-43f4-808b-c38681814a28', 'miriamsd98@gmail.com', '$2a$10$vkOZBeoeHlLAaPktpATys.lay7qzGSwzjwkE3MXh6W0nOnD3lOmDO', '2025-12-10 12:16:46.291945+00',
+   '2025-12-10 12:16:46.205994+00', '2026-01-23 14:00:00.836076+00', '{""sub"": ""19fc7014-80e1-43f4-808b-c38681814a28"", ""email"": ""miriamsd98@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('bbfc473d-e534-41ee-ad45-aea196a51a72', 'sultanesmanurt@gmail.com', '$2a$10$W8197lpygRclBrSzuSDZ.OllOaHT0fdImpOA3lOMLMMAzh75yTYt2', '2025-12-06 16:21:32.662321+00',
+   '2025-12-06 16:21:32.625206+00', '2025-12-06 16:21:32.676226+00', '{""sub"": ""bbfc473d-e534-41ee-ad45-aea196a51a72"", ""email"": ""sultanesmanurt@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f639f434-f7c3-4f6a-addc-11665923ead9', 'sergioblanco507@gmail.com', '$2a$10$oxpqdmRblqzK3cPgWew7m.DTgR/bKsrl3aE5mByXAcPwaT0I.xYD2', '2025-12-04 10:24:56.043147+00',
+   '2025-12-04 10:24:56.032505+00', '2025-12-04 16:14:52.926422+00', '{""sub"": ""f639f434-f7c3-4f6a-addc-11665923ead9"", ""email"": ""sergioblanco507@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('0f175157-e9f1-4d43-a55b-58d136efa5ad', 'mollymalone@gmail.com', '$2a$10$ottIuARRik7T020vojfj9.ZtV73Ib0hCAuNjtAHZs7QUCKFoUC/..', '2025-12-05 15:26:16.848339+00',
+   '2025-12-05 15:26:16.742448+00', '2025-12-06 19:29:20.585682+00', '{""sub"": ""0f175157-e9f1-4d43-a55b-58d136efa5ad"", ""email"": ""mollymalone@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('22ef3bf4-bd7d-4fd7-bcda-034eff397c8b', '04gaarcia@gmail.com', '$2a$10$MvQgfgLAz.kPzqng2GL/h.j001uUQkBQ0HEkZ2V4XTc5kIAmGvyJm', '2025-12-07 13:26:02.531777+00',
+   '2025-12-07 13:26:02.438999+00', '2026-01-16 10:04:43.494851+00', '{""sub"": ""22ef3bf4-bd7d-4fd7-bcda-034eff397c8b"", ""email"": ""04gaarcia@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('2f6aee2e-f3f0-4e2c-b0de-6669ae4e461d', 'cath9620@gmail.com', '$2a$10$YL.eowZ//x0p9zf7FORFveD4RxqhwmPr0p.2aDd9g3qvSgAtfrbyG', '2025-12-10 18:32:49.244974+00',
+   '2025-12-10 18:32:49.128007+00', '2026-01-16 15:25:37.684729+00', '{""sub"": ""2f6aee2e-f3f0-4e2c-b0de-6669ae4e461d"", ""email"": ""cath9620@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('a4b266d8-0c38-495a-b540-9e2df390ef66', 'dnixelamartin@gmail.com', '$2a$10$C9Blv3mY2qkz2dzKnQKajOORuRMLTtpdMg3/LyWF4E0lDZTL4ertS', '2025-12-30 13:46:31.654215+00',
+   '2025-12-30 13:46:31.508244+00', '2025-12-30 13:46:31.741077+00', '{""sub"": ""a4b266d8-0c38-495a-b540-9e2df390ef66"", ""email"": ""dnixelamartin@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('c3743624-b46b-4a4a-a2a1-3e0abf6d91da', 'yoliloren.55@gmail.com', '$2a$10$vH4b1ZNIvFI6Ro6SPC3ILeX0ZN.Nzv.XgJSaBeKMFndiHcjQDMFK6', '2025-12-08 11:58:26.685089+00',
+   '2025-12-08 11:58:26.572898+00', '2025-12-08 17:20:34.308642+00', '{""sub"": ""c3743624-b46b-4a4a-a2a1-3e0abf6d91da"", ""email"": ""yoliloren.55@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('cfdbfb0a-b450-4ff9-b91c-5b901b96cc78', 'chavi_15@hotmail.com', '$2a$10$tld3iAkR0pnBPUklUWnD2ugnA1Y8044L/tb7CGhwoUD2J0ei.sPBC', '2025-12-04 15:32:28.91349+00',
+   '2025-12-04 15:32:28.839994+00', '2025-12-16 16:07:40.258898+00', '{""sub"": ""cfdbfb0a-b450-4ff9-b91c-5b901b96cc78"", ""email"": ""chavi_15@hotmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('4bcb02a8-afd2-43f2-9334-bb95a19eda59', 'rosadprieto@gmail.com', '$2a$10$Uqfqo0Sd5Fi8fRMGGJyUteNTjq6sk0mb2oWsmu7GMRxjnBy.nY6Oi', '2026-01-23 22:16:49.10633+00',
+   '2026-01-23 22:16:49.022998+00', '2026-01-23 22:17:25.729296+00', '{""sub"": ""4bcb02a8-afd2-43f2-9334-bb95a19eda59"", ""email"": ""rosadprieto@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('b1d6e52f-7d06-43c6-8c1d-b5f47baea2f4', 'gabrielamaria.pinero25@estudiantes.uva.es', '$2a$10$Rakt60RP1B/hDCL9BMjnfugsLJc9FnI9xrFhZuSiTuWpDHMkSLRr6', '2025-12-04 10:55:25.356336+00',
+   '2025-12-04 10:55:25.267516+00', '2025-12-07 20:15:20.896865+00', '{""sub"": ""b1d6e52f-7d06-43c6-8c1d-b5f47baea2f4"", ""email"": ""gabrielamaria.pinero25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fa7fd3c0-7c77-4fbc-978d-c7524249f26a', 'andrea.verdejo.rodriguez@gmail.com', '$2a$10$ZlXt3qem0zzwZsYVmE7nVuxx0dH6sn6e5uF7bVFqB/AMrTNBuXRD.', '2025-12-04 17:19:14.764144+00',
+   '2025-12-04 17:19:14.664087+00', '2025-12-05 08:06:03.391205+00', '{""sub"": ""fa7fd3c0-7c77-4fbc-978d-c7524249f26a"", ""email"": ""andrea.verdejo.rodriguez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('a7f12a27-c4af-4c7d-9956-96b162b31237', 'elenausualv@gmail.com', '$2a$10$BWuUvWlMgIh4wHxe3x9DheDGleADlMw9mVbk8tcJVJPOo9xBLK74.', '2025-12-06 16:55:25.980905+00',
+   '2025-12-06 16:55:25.901043+00', '2025-12-07 10:04:11.950919+00', '{""sub"": ""a7f12a27-c4af-4c7d-9956-96b162b31237"", ""email"": ""elenausualv@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('7883c8fc-7b8d-43b7-a9c7-8903f3555946', 'grodssky@gmail.com', '$2a$10$TJP8VaHroxvqpZ80RdpSr.SgYT0TrK3YarzEvelxYrQqEa81S5Jui', '2026-01-07 12:20:10.819987+00',
+   '2026-01-07 12:20:10.715711+00', '2026-01-19 11:19:26.663092+00', '{""sub"": ""7883c8fc-7b8d-43b7-a9c7-8903f3555946"", ""email"": ""grodssky@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('44c96ccc-c3fa-4bd9-af93-8b56450a37f2', 'mariebalotro@gmail.com', '$2a$10$3SnEj1PDpsXW7t3R/D9XveUgjtPwIvSmkDyIdazh4V69ljYbvILEG', '2025-12-08 16:23:30.768883+00',
+   '2025-12-08 16:23:30.668273+00', '2025-12-08 16:23:30.843008+00', '{""sub"": ""44c96ccc-c3fa-4bd9-af93-8b56450a37f2"", ""email"": ""mariebalotro@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('e8c6264c-69f5-4ef7-9532-39ac06124e74', 'ireneimpresora@gmail.com', '$2a$10$d31jFjUEpJSr/QKvbtO9r.FCvP4fsinz9kDaHZ/EPE3OkjpO1CAcm', '2025-12-07 14:21:17.730511+00',
+   '2025-12-07 14:21:17.643518+00', '2025-12-07 14:21:32.888371+00', '{""sub"": ""e8c6264c-69f5-4ef7-9532-39ac06124e74"", ""email"": ""ireneimpresora@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('18730fa0-3d25-439d-88e2-8a2fb08fa018', 'silvy.pappalardo@gmail.com', '$2a$10$S5ZEw7al5WlzJYy8BSeQROMhRprlNsLnSKARb9enOjFAbwRq/d326', '2026-01-06 14:15:07.700097+00',
+   '2026-01-06 14:15:07.546799+00', '2026-01-23 14:51:20.60479+00', '{""sub"": ""18730fa0-3d25-439d-88e2-8a2fb08fa018"", ""email"": ""silvy.pappalardo@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('1beaf63d-c358-4629-a44f-bf4d2cbbbcc5', '224j7409@live.uem.es', '$2a$10$EKxSXKClig9H6AO5N6Ou4OwCiRN7jRhUsFYrZFBJzcy4V.3k0/BRu', '2025-12-12 11:54:44.166938+00',
+   '2025-12-12 11:54:44.078604+00', '2025-12-13 08:39:33.618497+00', '{""sub"": ""1beaf63d-c358-4629-a44f-bf4d2cbbbcc5"", ""email"": ""224j7409@live.uem.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('3d5a2010-3980-400d-9cb2-424daf1c18cb', 'cristina.revuelta.caballero@estudiantes.uva.es', '$2a$10$Yud7kfj1ciCNoNSXjnbGQO181nUHHctoBs0HZQ/WMB.h/1s5eRXo6', '2025-12-05 17:45:28.981587+00',
+   '2025-12-05 17:45:28.838847+00', '2025-12-05 17:46:18.090356+00', '{""sub"": ""3d5a2010-3980-400d-9cb2-424daf1c18cb"", ""email"": ""cristina.revuelta.caballero@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('609b9f51-fdcc-4961-a202-2d61ad261eb1', 'nihal.oddi25@estudiantes.uva.es', '$2a$10$0qkKe8sJfmj.RD5TOy5QeurKGJX0Vl9//7SqFPJSsrzXFWB.ACNzG', '2025-12-07 14:56:29.39375+00',
+   '2025-12-07 14:56:29.253502+00', '2025-12-07 17:30:04.081151+00', '{""sub"": ""609b9f51-fdcc-4961-a202-2d61ad261eb1"", ""email"": ""nihal.oddi25@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('2a3005a3-6ba1-4a11-84ab-9160dde8cd7a', 'ineesaloonso7@gmail.com', '$2a$10$3iy5sWn9fEkTaW5UJpjKHe4V62BY/i4yYBi.g6Fc8UjWHaJCUXpZS', '2025-12-04 19:08:05.429243+00',
+   '2025-12-04 19:08:05.373751+00', '2025-12-04 19:08:29.916022+00', '{""sub"": ""2a3005a3-6ba1-4a11-84ab-9160dde8cd7a"", ""email"": ""ineesaloonso7@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('eb3b395d-9b04-49ea-8678-24fd6416d0ca', 'mariapriem29@gmail.com', '$2a$10$P5h/.yaMVEMeg9xPLuaOb.FKNl7nCyOVuHekIaKoR1BZd5iLe4eC.', '2025-12-04 11:00:24.179727+00',
+   '2025-12-04 11:00:24.170255+00', '2025-12-04 11:03:50.661982+00', '{""sub"": ""eb3b395d-9b04-49ea-8678-24fd6416d0ca"", ""email"": ""mariapriem29@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('d5168f88-b32c-4955-8483-95b42802ca7c', 'sarasimon26@gmail.com', '$2a$10$kXWJzMUBaieLlCrc7uA2QO2G.zVeWJLIy4NL8giSjS213jI7gHmV6', '2025-12-06 17:18:30.708758+00',
+   '2025-12-06 17:18:30.620541+00', '2026-01-12 18:17:55.508059+00', '{""sub"": ""d5168f88-b32c-4955-8483-95b42802ca7c"", ""email"": ""sarasimon26@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('158f6912-d796-4663-a0f2-8b9e31541455', 'malejatp19@gmail.com', '$2a$10$SCE/yVpdO6.vtNApSSIcsOQYUkXbIzdMtKSETJYqVhSqp9U5y1mly', '2025-12-08 20:34:34.721426+00',
+   '2025-12-08 20:34:34.558193+00', '2025-12-08 20:34:34.804184+00', '{""sub"": ""158f6912-d796-4663-a0f2-8b9e31541455"", ""email"": ""malejatp19@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('f88b834b-9822-4775-bc51-babfdc7d5871', 'tatianabecerrilperrote2006@gmail.com', '$2a$10$3Tbsd5kvBJZ3RfZsxJW9IOIXnsY46GlzAeZ1bNP/Dg1oQE7QzIr5G', '2025-12-13 21:25:05.290975+00',
+   '2025-12-13 21:25:05.141381+00', '2025-12-13 21:25:05.380388+00', '{""sub"": ""f88b834b-9822-4775-bc51-babfdc7d5871"", ""email"": ""tatianabecerrilperrote2006@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('8ebe12fd-7444-4b76-bc31-95fe2f4fd430', 'jesussantamariagarcia7@gmail.com', '$2a$10$2tmAVw8Qs.mAGMXIVv4LJ.UOFEaMHTKIhAjUMP1EIR3Cn/YhvS5je', '2026-01-08 13:05:29.947032+00',
+   '2026-01-08 13:05:29.801171+00', '2026-01-10 19:26:19.22211+00', '{""sub"": ""8ebe12fd-7444-4b76-bc31-95fe2f4fd430"", ""email"": ""jesussantamariagarcia7@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('1657ad7a-e2c6-4164-b87c-e5922943f2ea', 'mariajesus.esteban@uva.es', '$2a$10$VAyESPgWdltLcUGLjEubdOTxh2Kk482WDCco2ZIC3xgI48OWcji7K', '2026-01-06 16:01:13.76007+00',
+   '2026-01-06 16:01:13.636357+00', '2026-01-20 20:00:26.461701+00', '{""sub"": ""1657ad7a-e2c6-4164-b87c-e5922943f2ea"", ""email"": ""mariajesus.esteban@uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('fa008877-6ca1-4aab-ab72-35ea58479fe0', 'lorylamy2005@gmail.com', '$2a$10$nOHtBVKxMvJ1vjou1voCO.MIVZT.FWwYoaxMPXUX/E9S7DPEGswPe', '2025-12-04 11:08:04.407501+00',
+   '2025-12-04 11:08:04.364125+00', '2025-12-04 11:08:27.989977+00', '{""sub"": ""fa008877-6ca1-4aab-ab72-35ea58479fe0"", ""email"": ""lorylamy2005@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('442afa24-33bb-47da-92e7-286686976bad', 'saritalopezg@gmail.com', '$2a$10$v0jHct3kn4.fpmxTJw5uueLxdB1QCJVff2OHdT6NAPoeIb8kSNP/C', '2025-12-04 19:16:10.001232+00',
+   '2025-12-04 19:16:09.889464+00', '2025-12-15 17:27:00.225345+00', '{""sub"": ""442afa24-33bb-47da-92e7-286686976bad"", ""email"": ""saritalopezg@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('be16ed4c-ba52-45e5-b3db-c32d2e0e7d38', 'zakariaberrami02@gmail.com', '$2a$10$/5O5UDSrJOky4sVkFfy4ueT9BgFPfvv5zwnDL9kAC.sQSEpqnxT32', '2025-12-04 11:12:37.408691+00',
+   '2025-12-04 11:12:37.395899+00', '2025-12-04 11:16:29.712408+00', '{""sub"": ""be16ed4c-ba52-45e5-b3db-c32d2e0e7d38"", ""email"": ""zakariaberrami02@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('4eb2b7b2-9b3b-4244-a18d-96b01fdca77b', 'alsantiustegil2@gmail.com', '$2a$10$aAwDgENvK6nnIEcxQUMKGu8YE/xFDkqBm4E6XayXHnA9iSG/VfrvS', '2025-12-08 23:22:42.883816+00',
+   '2025-12-08 23:22:42.743426+00', '2025-12-17 10:12:21.578809+00', '{""sub"": ""4eb2b7b2-9b3b-4244-a18d-96b01fdca77b"", ""email"": ""alsantiustegil2@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('bc5b68a2-617f-40c8-90ef-9e68bf6df5e5', 'tcasadogon@gmail.com', '$2a$10$TI8K/45Ooxk7ww0L3lGQbeaAhw9HnrWjayTimrDNcMb.vt5DPDAVq', '2025-12-04 11:20:06.999262+00',
+   '2025-12-04 11:20:06.917204+00', '2025-12-04 11:20:32.772886+00', '{""sub"": ""bc5b68a2-617f-40c8-90ef-9e68bf6df5e5"", ""email"": ""tcasadogon@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('4e2627a2-853f-45eb-86b8-ac2bd22623c6', 'perezrodrigueziness@gmail.com', '$2a$10$GyfFYJeDJx9Ac4TvqFkCO.A.h8XeNCNR7XdPn6WjMvyXbfO716HfS', '2025-12-07 15:38:24.484259+00',
+   '2025-12-07 15:38:24.389768+00', '2025-12-07 15:38:47.860352+00', '{""sub"": ""4e2627a2-853f-45eb-86b8-ac2bd22623c6"", ""email"": ""perezrodrigueziness@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('663bb7dd-0849-4b30-896d-fca2b5e22338', 'juanlgg2002@gmail.com', '$2a$10$wTN67I5io7KvnfPpWkGv8uMtAqUd2U1FpNWBYVk3y/IvP3IlT5j9u', '2026-01-06 16:50:01.913835+00',
+   '2026-01-06 16:50:01.814722+00', '2026-01-11 13:21:15.422769+00', '{""sub"": ""663bb7dd-0849-4b30-896d-fca2b5e22338"", ""email"": ""juanlgg2002@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('6137431b-6b1d-421c-8a19-252fd539bb10', 'natalia.perez.rodriguez22@estudiantes.uva.es', '$2a$10$M6VaT69QMPjlhuJs7Dp3N.qlnw0JTwJZ.AG7gPqxBQd1pQ7qeNeY2', '2025-12-04 12:00:16.648836+00',
+   '2025-12-04 12:00:16.602861+00', '2025-12-15 11:16:49.481336+00', '{""sub"": ""6137431b-6b1d-421c-8a19-252fd539bb10"", ""email"": ""natalia.perez.rodriguez22@estudiantes.uva.es"", ""email_verified"": true, ""phone_verified"": false}');"
+"INSERT INTO auth.users (id, email,
+  encrypted_password, email_confirmed_at, created_at,  
+  updated_at, raw_user_meta_data) VALUES ('6754d299-05e7-444a-9385-58b1f1962631', 'mario.callejaperez@gmail.com', '$2a$10$rWohZ29Gx05omO5MsLqTmeDgtBpyy9cfQxQCCtsmQgMtnysjg0dZ.', '2026-01-10 17:54:24.735168+00',
+   '2026-01-10 17:54:24.58295+00', '2026-01-11 13:22:48.30245+00', '{""sub"": ""6754d299-05e7-444a-9385-58b1f1962631"", ""email"": ""mario.callejaperez@gmail.com"", ""email_verified"": true, ""phone_verified"": false}');"

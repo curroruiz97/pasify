@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasify — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-base:#F4EEE2;
+    --bg-base-2:#F7F3EC;
+    --bg-elevated:#FFFFFF;
+    --bg-overlay:#EBE4D2;
+    --bg-tinted:#FBE4D3;
+    --bg-warm:#FFE9C8;
+    --bg-deep:#1A1714;
+    --border-subtle:#E2D9C5;
+    --border-strong:#C9BFA8;
+    --text-primary:#1A1714;
+    --text-secondary:#5C544A;
+    --text-tertiary:#8A8275;
+    --accent:#E8542A;          /* terracota Pasify, más vibrante que Claude */
+    --accent-deep:#B8381A;
+    --accent-soft:#FBE4D3;
+    --accent-ink:#1A1714;
+    --success:#2D7A4F;
+    --warm:#E8B04C;
+    --shadow-warm: 0 24px 60px -24px rgba(184,56,26,.18), 0 8px 20px -10px rgba(26,23,20,.08);
+    --shadow-card: 0 1px 0 rgba(255,255,255,.6) inset, 0 12px 32px -16px rgba(26,23,20,.12);
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg-base);color:var(--text-primary);font-family:'Geist',ui-sans-serif,system-ui,sans-serif;font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;padding:48px 32px 96px}
+  .wrap{max-width:1280px;margin:0 auto}
+  .mono{font-family:'Geist Mono',ui-monospace,monospace}
+  .serif{font-family:'Instrument Serif',serif;font-style:italic}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep);font-weight:500}
+  .h1{font-size:clamp(40px,6vw,72px);font-weight:600;letter-spacing:-0.035em;line-height:1.02}
+  .h2{font-size:clamp(28px,3.4vw,42px);font-weight:600;letter-spacing:-0.028em;line-height:1.06}
+  .h3{font-size:22px;font-weight:600;letter-spacing:-0.02em}
+  .lede{font-size:19px;line-height:1.55;color:var(--text-secondary);max-width:62ch}
+  hr.editorial{border:none;text-align:center;margin:64px 0;color:var(--text-tertiary);font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.6em}
+  hr.editorial::after{content:"*  *  *"}
+
+  /* HEADER ===================================================== */
+  .topnav{position:sticky;top:24px;z-index:50;backdrop-filter:blur(20px);background:rgba(244,238,226,.78);border:1px solid var(--border-subtle);border-radius:14px;padding:10px 16px 10px 18px;display:flex;align-items:center;gap:24px;margin-bottom:48px}
+  .logo{display:flex;align-items:baseline;gap:2px;font-size:22px;font-weight:600;letter-spacing:-0.04em;color:var(--text-primary)}
+  .logo .dot{width:7px;height:7px;background:var(--accent);border-radius:50%;display:inline-block;margin:0 1px 4px 0;align-self:center;transform:translateY(-7px)}
+  .logo .y-swash{color:var(--accent);font-family:'Instrument Serif',serif;font-style:italic;font-weight:400}
+  .topnav nav{display:flex;gap:22px;font-size:14px;color:var(--text-secondary)}
+  .topnav nav a{color:inherit;text-decoration:none}
+  .topnav .spacer{flex:1}
+  .topnav .login{font-size:14px;color:var(--text-primary);text-decoration:none;padding:8px 16px;border-radius:999px;letter-spacing:-0.005em;background:rgba(255,255,255,.45);border:1px solid rgba(26,23,20,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:background .25s ease, border-color .25s ease, transform .15s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(26,23,20,.04),0 1px 4px -1px rgba(26,23,20,.06)}
+  .topnav .login:hover{background:rgba(255,255,255,.7);border-color:rgba(26,23,20,.18);transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 4px 12px -2px rgba(26,23,20,.10)}
+  .topnav .cta{font-size:14px;background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;padding:9px 18px;border-radius:999px;text-decoration:none;font-weight:500;letter-spacing:-0.005em;display:inline-flex;align-items:center;gap:6px;text-shadow:0 1px 1px rgba(80,20,5,.22);transition:transform .15s ease, box-shadow .25s ease, filter .2s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 5px 14px -4px rgba(232,84,42,.5),0 12px 28px -10px rgba(184,56,26,.5)}
+  .topnav .cta:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 9px 20px -4px rgba(232,84,42,.6),0 18px 40px -10px rgba(184,56,26,.55)}
+
+  /* HERO BLOCK ================================================= */
+  .hero{position:relative;border-radius:24px;padding:72px 56px 64px;overflow:hidden;border:1px solid var(--border-subtle);background:
+    radial-gradient(60% 80% at 18% 20%, #FBE4D3 0%, transparent 60%),
+    radial-gradient(45% 70% at 85% 30%, #FFE9C8 0%, transparent 60%),
+    radial-gradient(50% 50% at 70% 90%, #F4DDC8 0%, transparent 60%),
+    linear-gradient(180deg,#F7F3EC 0%, #F4EEE2 100%);
+    margin-bottom:80px}
+  .hero .grain{position:absolute;inset:0;opacity:.5;mix-blend-mode:multiply;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.6 0 0 0 0 0.4 0 0 0 0 0.3 0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+  .hero h1{position:relative;font-size:clamp(44px,7vw,84px);font-weight:600;letter-spacing:-0.04em;line-height:0.98;max-width:14ch}
+  .hero h1 .highlight{position:relative;display:inline-block}
+  .hero h1 .highlight::after{content:"";position:absolute;left:-2px;right:-2px;bottom:6px;height:14px;background:var(--accent);opacity:.85;z-index:-1;border-radius:2px;transform:skewY(-1deg)}
+  .hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent-deep)}
+  .hero .lede{margin-top:28px;font-size:20px}
+  .hero .ctas{display:flex;gap:12px;margin-top:36px;flex-wrap:wrap}
+  .hero .meta{position:absolute;top:32px;right:40px;display:flex;align-items:center;gap:14px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--text-tertiary);text-transform:uppercase}
+  .hero .meta .pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 14px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
+
+  /* SECTION ==================================================== */
+  section{margin-bottom:80px}
+  .sec-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:32px;gap:32px;flex-wrap:wrap}
+  .sec-head .num{font-family:'Geist Mono',monospace;font-size:12px;color:var(--text-tertiary);letter-spacing:.2em}
+
+  /* COLOR ====================================================== */
+  .swatches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+  .sw{border-radius:14px;overflow:hidden;border:1px solid var(--border-subtle);background:var(--bg-elevated);box-shadow:var(--shadow-card)}
+  .sw .chip{height:120px;position:relative}
+  .sw .body{padding:14px 14px 16px}
+  .sw .name{font-size:14px;font-weight:600;letter-spacing:-0.01em}
+  .sw .hex{font-family:'Geist Mono',monospace;font-size:11px;color:var(--text-tertiary);margin-top:2px}
+  .sw .role{font-size:12px;color:var(--text-secondary);margin-top:8px;line-height:1.4}
+  .sw.feature{grid-column:span 2}
+  .sw.feature .chip{height:180px}
+
+  /* TYPE ======================================================= */
+  .type-grid{display:grid;grid-template-columns:280px 1fr;gap:32px;align-items:start}
+  .type-row{padding:20px 0;border-top:1px solid var(--border-subtle);display:grid;grid-template-columns:140px 1fr;gap:24px;align-items:center}
+  .type-row:first-child{border-top:none}
+  .type-row .label{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--text-tertiary);text-transform:uppercase}
+  .type-row .sample{color:var(--text-primary)}
+
+  /* BUTTONS ==================================================== */
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:15px;font-weight:500;padding:13px 20px;border-radius:11px;border:1px solid transparent;cursor:pointer;transition:transform .15s ease, box-shadow .2s ease, background .2s ease;text-decoration:none;line-height:1}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;border-radius:999px;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(80,20,5,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 6px 16px -4px rgba(232,84,42,.5),0 14px 32px -10px rgba(184,56,26,.5)}
+  .btn-primary:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 10px 22px -4px rgba(232,84,42,.6),0 22px 44px -10px rgba(184,56,26,.55)}
+  .btn-primary:active{transform:translateY(0);filter:brightness(.98);box-shadow:inset 0 2px 4px rgba(80,20,5,.32),0 4px 10px -4px rgba(232,84,42,.45)}
+  .btn-ink{background:linear-gradient(180deg,#2A2520 0%,var(--accent-ink) 60%,#000 100%);color:#fff;border-radius:999px;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(0,0,0,.3);box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(0,0,0,.4),0 4px 12px -4px rgba(0,0,0,.30),0 10px 24px -8px rgba(0,0,0,.25)}
+  .btn-ink:hover{transform:translateY(-2px);filter:brightness(1.15);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.4),0 8px 20px -4px rgba(0,0,0,.4),0 18px 36px -8px rgba(0,0,0,.3)}
+  .btn-outline{background:rgba(255,255,255,.55);color:var(--text-primary);border:1px solid rgba(26,23,20,.12);border-radius:999px;letter-spacing:-0.005em;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(26,23,20,.06),0 2px 8px -2px rgba(26,23,20,.08),0 6px 18px -6px rgba(26,23,20,.10)}
+  .btn-outline:hover{transform:translateY(-2px);background:rgba(255,255,255,.75);border-color:rgba(26,23,20,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -1px 0 rgba(26,23,20,.08),0 6px 16px -4px rgba(26,23,20,.12),0 14px 32px -8px rgba(26,23,20,.14)}
+  .btn-outline:active{transform:translateY(0);box-shadow:inset 0 2px 4px rgba(26,23,20,.10)}
+  .btn-ghost{background:transparent;color:var(--text-primary);border:1px solid transparent;border-radius:999px;letter-spacing:-0.005em}
+  .btn-ghost:hover{background:rgba(26,23,20,.04);transform:translateY(-1px)}
+  .btn .arrow{display:inline-block;transition:transform .2s ease}
+  .btn:hover .arrow{transform:translateX(3px)}
+  .btn-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+  /* BADGES ===================================================== */
+  .badges{display:flex;gap:8px;flex-wrap:wrap}
+  .badge{font-family:'Geist Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.04em;padding:5px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;text-transform:uppercase;border:1px solid transparent}
+  .badge.hot{background:var(--accent-soft);color:var(--accent-deep)}
+  .badge.last{background:var(--accent);color:#fff}
+  .badge.free{background:#E1EFE6;color:var(--success)}
+  .badge.closed{background:var(--bg-overlay);color:var(--text-secondary);border-color:var(--border-subtle)}
+  .badge.vip{background:var(--accent-ink);color:#F4EEE2}
+  .badge.warm{background:#FBEDC9;color:#7A5310}
+
+  /* CARDS ====================================================== */
+  .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+  .ev-card{background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:18px;overflow:hidden;transition:transform .25s ease, box-shadow .25s ease;cursor:pointer}
+  .ev-card:hover{transform:translateY(-3px);box-shadow:0 22px 50px -18px rgba(232,84,42,.22)}
+  .ev-card .img{aspect-ratio:4/5;background:#1A1714 center/cover;position:relative}
+  .ev-card .img.a{background-image:linear-gradient(135deg,#3D1F12,#7A2A0F 50%,#E8542A 100%)}
+  .ev-card .img.b{background-image:linear-gradient(160deg,#16183C,#3A2D6B 60%,#9B5BC9 100%)}
+  .ev-card .img.c{background-image:linear-gradient(140deg,#0B2618,#1F4D2C 50%,#56B36C 100%)}
+  .ev-card .img .top{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:start;gap:8px}
+  .ev-card .img .date{background:rgba(255,255,255,.95);color:var(--text-primary);padding:6px 10px;border-radius:8px;text-align:center;font-family:'Geist Mono',monospace;line-height:1}
+  .ev-card .img .date .d{font-size:18px;font-weight:600;letter-spacing:-0.02em}
+  .ev-card .img .date .m{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-secondary);margin-top:2px}
+  .ev-card .img .glyph{position:absolute;bottom:18px;left:18px;color:#fff;font-family:'Instrument Serif',serif;font-style:italic;font-size:36px;letter-spacing:-0.02em;line-height:1;max-width:80%}
+  .ev-card .body{padding:14px 16px 18px}
+  .ev-card .body .venue{font-family:'Geist Mono',monospace;font-size:11px;color:var(--text-tertiary);letter-spacing:.1em;text-transform:uppercase}
+  .ev-card .body .title{font-size:17px;font-weight:600;letter-spacing:-0.015em;margin-top:6px}
+  .ev-card .body .row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-subtle)}
+  .ev-card .body .price{font-family:'Geist Mono',monospace;font-size:14px;font-weight:600}
+  .ev-card .body .price small{color:var(--text-tertiary);font-weight:400;font-size:11px;margin-right:4px}
+
+  /* INPUTS ===================================================== */
+  .form-row{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .input-wrap{display:flex;flex-direction:column;gap:6px}
+  .input-wrap label{font-size:13px;color:var(--text-secondary);font-weight:500}
+  .input{width:100%;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14px;color:var(--text-primary);transition:border-color .15s ease, box-shadow .15s ease}
+  .input:hover{border-color:var(--border-strong)}
+  .input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.15)}
+  .input::placeholder{color:var(--text-tertiary)}
+
+  /* WORDMARK STUDY ============================================= */
+  .wordmark-study{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  .wordmark{background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:18px;padding:48px 36px;display:flex;align-items:center;justify-content:center;min-height:200px}
+  .wordmark .big{font-size:96px;font-weight:600;letter-spacing:-0.05em;color:var(--text-primary);line-height:.9;display:flex;align-items:baseline}
+  .wordmark .big .dot{width:14px;height:14px;background:var(--accent);border-radius:50%;display:inline-block;align-self:flex-start;margin-top:18px}
+  .wordmark .big .y-swash{color:var(--accent);font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;margin-left:-4px}
+  .wordmark.dark{background:var(--bg-deep)}
+  .wordmark.dark .big{color:#F4EEE2}
+  .wordmark.compact .big{font-size:54px}
+  .wordmark.lockup{flex-direction:column;align-items:flex-start;gap:6px}
+  .wordmark.lockup .tag{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-tertiary)}
+  .wordmark .symbol-mark{display:flex;align-items:center;gap:10px}
+  .wordmark .bracket{color:var(--accent);font-family:'Geist Mono',monospace;font-size:48px;font-weight:500;line-height:.9}
+
+  /* FOOTER NOTE ================================================ */
+  .footer-note{margin-top:96px;padding-top:32px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-tertiary)}
+
+  /* TWO-COL ==================================================== */
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+  /* PANEL ====================================================== */
+  .panel{background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:18px;padding:28px;box-shadow:var(--shadow-card)}
+  .panel.tinted{background:var(--bg-tinted);border-color:#F0CFB0}
+  .panel.deep{background:var(--bg-deep);color:#F4EEE2;border-color:#2A2520}
+  .panel.deep .sec-head .num{color:#8A8275}
+
+  @media (max-width:920px){
+    .swatches{grid-template-columns:repeat(2,1fr)}
+    .sw.feature{grid-column:span 2}
+    .cards{grid-template-columns:1fr}
+    .two,.wordmark-study,.form-row{grid-template-columns:1fr}
+    .topnav nav{display:none}
+    .hero{padding:48px 28px}
+    .hero .meta{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOP NAV -->
+  <header class="topnav" data-screen-label="Header">
+    <a href="#" class="logo" aria-label="Pasify">
+      <span>Pas</span><span class="dot" aria-hidden="true"></span><span>if</span><span class="y-swash">y</span>
+    </a>
+    <nav>
+      <a href="#">Producto</a>
+      <a href="#">Sectores</a>
+      <a href="#">Precios</a>
+      <a href="#">Casos</a>
+      <a href="#">Recursos</a>
+    </nav>
+    <span class="spacer"></span>
+    <a href="#" class="login">Entrar</a>
+    <a href="#" class="cta">Solicita demo →</a>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero" data-screen-label="Brand Hero">
+    <div class="grain"></div>
+    <div class="meta"><span class="pulse"></span><span>Phase 01 · Brand foundation · v0.1</span></div>
+    <span class="eyebrow">Pasify · Sistema de diseño</span>
+    <h1 style="margin-top:16px">El <em>pase</em> a tu mejor <span class="highlight">noche</span>.</h1>
+    <p class="lede">Pasify es el sistema operativo de los eventos modernos. Convertimos cualquier local o evento en una experiencia de venta y entrada sin fricción — para el que organiza, y para el que entra.</p>
+    <div class="ctas">
+      <a href="#" class="btn btn-primary">Empieza gratis <span class="arrow">→</span></a>
+      <a href="#" class="btn btn-outline">Ver el producto</a>
+    </div>
+  </div>
+
+  <!-- 01 IDENTITY DECISIONS -->
+  <section data-screen-label="01 Identity decisions">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">01 / </span>Decisiones de identidad</div>
+        <h2 class="h2" style="margin-top:8px">Tagline, voz y mantra de marca.</h2>
+      </div>
+      <p class="lede" style="font-size:15px">La triada que define cualquier copy de Pasify: <b>cálida, confiada, con criterio</b>. Habla de tú, sin gritar.</p>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <div class="eyebrow">Tagline elegido</div>
+        <p class="serif" style="font-size:42px;line-height:1.05;margin-top:14px;letter-spacing:-0.02em;color:var(--text-primary)">"El <span style="color:var(--accent)">pase</span> a tu mejor noche."</p>
+        <p style="margin-top:18px;color:var(--text-secondary);font-size:15px;line-height:1.55">Activa el doble sentido del nombre — pase como acceso, y como gesto de pasar adentro. Funciona como CTA emocional para B2C y como promesa de plataforma para B2B. Las alternativas ("Vende, gestiona, vibra" / "Pasa adentro. Sin fila, sin papel, sin fricción") quedan como <i>secondary copy</i> para hero rotativos y campañas.</p>
+        <hr style="border:none;border-top:1px solid var(--border-subtle);margin:22px 0">
+        <div class="eyebrow">Sub-taglines de campaña</div>
+        <ul style="margin-top:12px;list-style:none;color:var(--text-secondary);font-size:14px;line-height:1.9">
+          <li>· <b>Para locales:</b> Vende más. Cobra menos comisión. Dueño de tu data.</li>
+          <li>· <b>Para asistentes:</b> Sin fila, sin papel, sin fricción.</li>
+          <li>· <b>Para promotores:</b> Tu link. Tu lista. Tu comisión.</li>
+        </ul>
+      </div>
+
+      <div class="panel tinted">
+        <div class="eyebrow">Personalidad</div>
+        <h3 class="h3" style="margin-top:10px;font-size:24px;letter-spacing:-0.02em">El primo nocturno de Claude.</h3>
+        <p style="margin-top:14px;color:var(--text-secondary);font-size:15px;line-height:1.55">Premium pero no frío. Cálido pero no naïve. Editorial pero no acartonado. Como si tu local favorito tuviera un equipo de software detrás — y ese equipo tuviera buen gusto.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px">
+          <div>
+            <div class="eyebrow" style="color:var(--success)">Sí decimos</div>
+            <ul style="margin-top:8px;list-style:none;font-size:13.5px;line-height:1.7;color:var(--text-primary)">
+              <li>"Pasa adentro."</li>
+              <li>"Domina la noche."</li>
+              <li>"Cero fila. Cero fricción."</li>
+              <li>"Sin papel, sin drama."</li>
+            </ul>
+          </div>
+          <div>
+            <div class="eyebrow" style="color:var(--accent-deep)">No decimos</div>
+            <ul style="margin-top:8px;list-style:none;font-size:13.5px;line-height:1.7;color:var(--text-secondary);text-decoration:line-through;text-decoration-color:var(--accent)">
+              <li>"Solución innovadora"</li>
+              <li>"Empoderamos negocios"</li>
+              <li>"Sinergia 360°"</li>
+              <li>"Revolucionamos el sector"</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 02 WORDMARK -->
+  <section data-screen-label="02 Wordmark">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">02 / </span>Wordmark</div>
+        <h2 class="h2" style="margin-top:8px">Pasify, en tres gestos.</h2>
+      </div>
+      <p class="lede" style="font-size:15px">El <b>punto sobre la <span class="serif" style="color:var(--accent)">i</span></b> y el <b>swash de la <span class="serif" style="color:var(--accent)">y</span></b> son los dos detalles que la convierten en marca, no solo en palabra. Sutiles en mobile, expresivos en hero.</p>
+    </div>
+
+    <div class="wordmark-study">
+      <div class="wordmark lockup">
+        <div class="big">
+          <span>Pas</span><span class="dot"></span><span>if</span><span class="y-swash">y</span>
+        </div>
+        <span class="tag" style="margin-top:18px">Primary lockup · light</span>
+      </div>
+      <div class="wordmark dark lockup">
+        <div class="big">
+          <span>Pas</span><span class="dot"></span><span>if</span><span class="y-swash">y</span>
+        </div>
+        <span class="tag" style="margin-top:18px;color:#8A8275">On dark · footer & POS</span>
+      </div>
+    </div>
+
+    <div class="wordmark-study" style="margin-top:18px">
+      <div class="wordmark compact">
+        <div class="symbol-mark">
+          <span class="bracket">[›</span>
+          <span class="big" style="font-size:40px">Pasify</span>
+          <span class="bracket">]</span>
+        </div>
+      </div>
+      <div class="wordmark compact" style="background:var(--accent)">
+        <div class="big" style="color:#fff;font-size:48px"><span>Pas</span><span class="dot" style="background:var(--bg-base)"></span><span>if</span><span class="y-swash" style="color:var(--bg-base)">y</span></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 03 COLOR -->
+  <section data-screen-label="03 Color">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">03 / </span>Paleta</div>
+        <h2 class="h2" style="margin-top:8px">Beige cálido · Terracota Pasify · Tinta.</h2>
+      </div>
+      <p class="lede" style="font-size:15px">Tres familias. Cero blancos puros. Cero negros puros. Todo está ligeramente quemado por el sol de las cinco de la tarde.</p>
+    </div>
+
+    <div class="swatches">
+      <div class="sw feature">
+        <div class="chip" style="background:#E8542A;display:flex;align-items:end;padding:18px;color:#fff">
+          <div>
+            <div class="mono" style="font-size:11px;letter-spacing:.18em;opacity:.8">ACCENT · PRIMARY</div>
+            <div style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin-top:4px">Terracota Pasify</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="name">--accent</div>
+          <div class="hex">#E8542A · oklch(0.66 0.17 38)</div>
+          <div class="role">CTAs primarios, logo, subrayados decorativos, badges urgentes. Más vibrante y quemado que el #CC785C de Anthropic — Pasify tiene fuego propio.</div>
+        </div>
+      </div>
+      <div class="sw feature">
+        <div class="chip" style="background:#F4EEE2;border-bottom:1px solid var(--border-subtle);display:flex;align-items:end;padding:18px;color:var(--text-primary)">
+          <div>
+            <div class="mono" style="font-size:11px;letter-spacing:.18em;color:var(--text-tertiary)">BG · BASE</div>
+            <div style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin-top:4px">Beige arena</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="name">--bg-base</div>
+          <div class="hex">#F4EEE2 · oklch(0.94 0.02 80)</div>
+          <div class="role">Fondo principal de toda la web. Nunca aparece blanco puro. Las cards elevadas usan #FFFFFF para crear jerarquía sobre este beige.</div>
+        </div>
+      </div>
+
+      <div class="sw">
+        <div class="chip" style="background:#1A1714"></div>
+        <div class="body">
+          <div class="name">Tinta cálida</div>
+          <div class="hex">#1A1714</div>
+          <div class="role">Headlines, footer, contrapunto. Casi negro con tinte cálido — nunca #000.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#FBE4D3"></div>
+        <div class="body">
+          <div class="name">Coral tinted</div>
+          <div class="hex">#FBE4D3</div>
+          <div class="role">Bloques destacados, fondos de badges, hover sutil sin saturar.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#B8381A"></div>
+        <div class="body">
+          <div class="name">Accent deep</div>
+          <div class="hex">#B8381A</div>
+          <div class="role">Hover y pressed sobre primario; texto accent sobre claro.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#FFE9C8"></div>
+        <div class="body">
+          <div class="name">Cream warm</div>
+          <div class="hex">#FFE9C8</div>
+          <div class="role">Tercer tono del gradient hero; bloques editoriales secundarios.</div>
+        </div>
+      </div>
+
+      <div class="sw">
+        <div class="chip" style="background:#2D7A4F"></div>
+        <div class="body">
+          <div class="name">Verde botánico</div>
+          <div class="hex">#2D7A4F</div>
+          <div class="role">Confirmaciones, "Free entry", success states.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#E8B04C"></div>
+        <div class="body">
+          <div class="name">Mostaza apagado</div>
+          <div class="hex">#E8B04C</div>
+          <div class="role">Badges "Hot", destacados editoriales, ratings.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#5C544A"></div>
+        <div class="body">
+          <div class="name">Texto secundario</div>
+          <div class="hex">#5C544A</div>
+          <div class="role">Body secundario, captions, meta.</div>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:#E2D9C5"></div>
+        <div class="body">
+          <div class="name">Border subtle</div>
+          <div class="hex">#E2D9C5</div>
+          <div class="role">Divisores, borders de cards e inputs en reposo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 04 TYPE -->
+  <section data-screen-label="04 Type">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">04 / </span>Tipografía</div>
+        <h2 class="h2" style="margin-top:8px">Geist + Instrument Serif + Geist Mono.</h2>
+      </div>
+      <p class="lede" style="font-size:15px"><b>Geist</b> aporta el rigor geométrico cálido — display y body. <b>Instrument Serif italic</b> aparece como cursiva editorial en hero y pull-quotes (1–2 veces por página, no más). <b>Geist Mono</b> para horas, precios, códigos de evento y eyebrows.</p>
+    </div>
+
+    <div class="panel">
+      <div class="type-row">
+        <div class="label">H1 / Display<br>Geist 600 · -3.5%</div>
+        <div class="sample" style="font-size:64px;font-weight:600;letter-spacing:-0.035em;line-height:1">Domina la noche, sin levantar la voz.</div>
+      </div>
+      <div class="type-row">
+        <div class="label">H1 editorial<br>Instrument Serif italic</div>
+        <div class="sample serif" style="font-size:64px;letter-spacing:-0.02em;line-height:1;color:var(--accent-deep)">El pase a tu mejor noche.</div>
+      </div>
+      <div class="type-row">
+        <div class="label">H2<br>Geist 600 · -2.8%</div>
+        <div class="sample" style="font-size:38px;font-weight:600;letter-spacing:-0.028em;line-height:1.05">Vende, gestiona, vibra.</div>
+      </div>
+      <div class="type-row">
+        <div class="label">H3<br>Geist 600</div>
+        <div class="sample" style="font-size:22px;font-weight:600;letter-spacing:-0.02em">Reservas de mesa que se llenan solas.</div>
+      </div>
+      <div class="type-row">
+        <div class="label">Body<br>Geist 400 · 1.55</div>
+        <div class="sample" style="font-size:17px;line-height:1.55;color:var(--text-secondary);max-width:62ch">Centraliza la venta de entradas online y offline. Automatiza saltos de precio, controla aforo en tiempo real y entiende a tus clientes mejor que ellos mismos. Todo desde una sola app.</div>
+      </div>
+      <div class="type-row">
+        <div class="label">Eyebrow<br>Geist Mono 500</div>
+        <div class="sample mono" style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-deep)">SOFTWARE PARA EVENTOS · DESDE 2024</div>
+      </div>
+      <div class="type-row">
+        <div class="label">Mono ticker<br>Geist Mono 600</div>
+        <div class="sample mono" style="font-size:24px;font-weight:600;letter-spacing:-0.01em">23:45 · 14.2K€ · 1.836 entradas · +34%</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 05 BUTTONS -->
+  <section data-screen-label="05 Buttons">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">05 / </span>Botones</div>
+        <h2 class="h2" style="margin-top:8px">Cuatro variantes. Una jerarquía clara.</h2>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="btn-row" style="margin-bottom:24px">
+        <button class="btn btn-primary">Solicita demo <span class="arrow">→</span></button>
+        <button class="btn btn-ink">Crear evento</button>
+        <button class="btn btn-outline">Ver precios</button>
+        <button class="btn btn-ghost">Saber más</button>
+      </div>
+      <div class="btn-row" style="margin-bottom:24px">
+        <button class="btn btn-primary" style="font-size:13px;padding:9px 14px">Comprar entrada · 18€</button>
+        <button class="btn btn-outline" style="font-size:13px;padding:9px 14px">Añadir al carrito</button>
+        <button class="btn btn-ink" style="font-size:18px;padding:18px 28px">Reservar mesa →</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border-top:1px solid var(--border-subtle);padding-top:24px">
+        <div><div class="eyebrow" style="margin-bottom:10px">Default</div><button class="btn btn-primary">Continuar</button></div>
+        <div><div class="eyebrow" style="margin-bottom:10px">Hover</div><button class="btn btn-primary" style="background:var(--accent-deep);transform:translateY(-1px);box-shadow:0 12px 30px -10px rgba(232,84,42,.65)">Continuar</button></div>
+        <div><div class="eyebrow" style="margin-bottom:10px">Pressed</div><button class="btn btn-primary" style="background:var(--accent-deep);transform:translateY(1px);box-shadow:none">Continuar</button></div>
+        <div><div class="eyebrow" style="margin-bottom:10px">Disabled</div><button class="btn btn-primary" style="opacity:.4;cursor:not-allowed" disabled>Continuar</button></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 06 BADGES -->
+  <section data-screen-label="06 Badges">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">06 / </span>Badges</div>
+        <h2 class="h2" style="margin-top:8px">Pequeños, pill, mono. Nunca emojis salvo decoración.</h2>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="badges">
+        <span class="badge hot">★ Hot</span>
+        <span class="badge last">Últimas 12 entradas</span>
+        <span class="badge free">Free entry</span>
+        <span class="badge closed">Lista cerrada</span>
+        <span class="badge vip">VIP</span>
+        <span class="badge warm">Lineup confirmado</span>
+        <span class="badge" style="background:var(--bg-overlay);color:var(--text-primary);border-color:var(--border-strong)">21+ años</span>
+        <span class="badge" style="background:#FFFFFF;color:var(--text-primary);border-color:var(--border-strong)">Madrid · Sala</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 07 EVENT CARDS -->
+  <section data-screen-label="07 Event cards">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">07 / </span>Cards de evento</div>
+        <h2 class="h2" style="margin-top:8px">Imagen full bleed, info debajo, hover cálido.</h2>
+      </div>
+      <p class="lede" style="font-size:15px">Aspect 4:5. La imagen del evento es la protagonista — los overlays solo aparecen para legibilidad. Hover sube 3px con sombra terracota.</p>
+    </div>
+
+    <div class="cards">
+      <div class="ev-card">
+        <div class="img a">
+          <div class="top">
+            <div class="date"><div class="d">14</div><div class="m">Jun</div></div>
+            <span class="badge last" style="font-size:10px;padding:4px 8px">Últimas 12</span>
+          </div>
+          <div class="glyph">Mondo<br>Disko</div>
+        </div>
+        <div class="body">
+          <div class="venue">Madrid · Sala · 23:30</div>
+          <div class="title">Mondo Disko Vol. 2 — Techno Diaspora</div>
+          <div class="row">
+            <div class="price"><small>desde</small> 18€</div>
+            <span class="badge hot" style="font-size:10px;padding:4px 8px">Hot</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ev-card">
+        <div class="img b">
+          <div class="top">
+            <div class="date"><div class="d">21</div><div class="m">Jun</div></div>
+            <span class="badge vip" style="font-size:10px;padding:4px 8px">VIP</span>
+          </div>
+          <div class="glyph">Sutton<br><i>Club</i></div>
+        </div>
+        <div class="body">
+          <div class="venue">Barcelona · Club · 00:00</div>
+          <div class="title">Sutton Club — Reggaeton All Stars</div>
+          <div class="row">
+            <div class="price"><small>desde</small> 25€</div>
+            <span class="badge warm" style="font-size:10px;padding:4px 8px">Lineup ✓</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ev-card">
+        <div class="img c">
+          <div class="top">
+            <div class="date"><div class="d">28</div><div class="m">Jun</div></div>
+            <span class="badge free" style="font-size:10px;padding:4px 8px">Free entry</span>
+          </div>
+          <div class="glyph">Florida<br>135</div>
+        </div>
+        <div class="body">
+          <div class="venue">Valencia · Festival · 22:00</div>
+          <div class="title">Florida 135 — Indie Garden Session</div>
+          <div class="row">
+            <div class="price"><small>desde</small> 0€</div>
+            <span class="badge closed" style="font-size:10px;padding:4px 8px">Lista cerrada</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 08 INPUTS -->
+  <section data-screen-label="08 Inputs">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">08 / </span>Inputs</div>
+        <h2 class="h2" style="margin-top:8px">Blanco elevado sobre arena. Focus terracota.</h2>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="input-wrap">
+          <label>Nombre del evento</label>
+          <input class="input" type="text" value="Mondo Disko Vol. 2">
+        </div>
+        <div class="input-wrap">
+          <label>Ciudad</label>
+          <input class="input" type="text" placeholder="Madrid, Barcelona, Ibiza...">
+        </div>
+        <div class="input-wrap">
+          <label>Fecha</label>
+          <input class="input" type="text" value="14 / 06 / 2026">
+        </div>
+        <div class="input-wrap">
+          <label>Aforo</label>
+          <input class="input" type="text" placeholder="Ej. 850 personas">
+        </div>
+        <div class="input-wrap" style="grid-column:span 2">
+          <label>Email para la confirmación</label>
+          <input class="input" type="email" placeholder="tu@correo.com" style="border-color:var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.15)">
+          <span style="font-size:12px;color:var(--text-tertiary);margin-top:2px">Estado: focus · ring-4 sobre fondo arena</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="editorial">
+
+  <!-- 09 SCREEN MAP -->
+  <section data-screen-label="09 Pages roadmap">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow"><span class="num">09 / </span>Plan de páginas</div>
+        <h2 class="h2" style="margin-top:8px">13 páginas, 3 bloques, 1 sistema.</h2>
+      </div>
+      <p class="lede" style="font-size:15px">Lo que viene tras tu OK. Cada bloque es una fase, con pausa intermedia para iterar.</p>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <div class="eyebrow">Bloque 1 — Marketing B2B</div>
+        <ol style="margin-top:14px;list-style:none;font-size:14px;line-height:1.7;color:var(--text-primary)">
+          <li><b>01 Home</b> — hero + propuesta + social proof + módulos + testimonios + CTA final</li>
+          <li><b>02 Producto</b> — ticketing, RRPP, mesas, escáner QR, CRM, analytics expandidos</li>
+          <li><b>03 Pricing</b> — Starter / Pro / Enterprise + comparativa + ROI calculator + FAQ</li>
+          <li><b>04 Casos de éxito</b> — grid + 1 case study extendido con métricas</li>
+          <li><b>05 Promotores / RRPP</b> — landing dedicada con sistema de comisiones</li>
+        </ol>
+      </div>
+      <div class="panel tinted">
+        <div class="eyebrow">Bloque 2 — Marketplace B2C</div>
+        <ol style="margin-top:14px;list-style:none;font-size:14px;line-height:1.7;color:var(--text-primary)">
+          <li><b>06 Descubre eventos</b> — grid filtrable por ciudad, fecha, género, precio</li>
+          <li><b>07 Ficha de evento</b> — hero media + lineup + mapa + ticket selector + urgencia</li>
+          <li><b>08 Ficha de local</b> — galería + próximos eventos + reseñas</li>
+          <li><b>09 Checkout</b> — 3 pasos (selección → datos → pago) + resumen sticky</li>
+        </ol>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Bloque 3 — Soporte</div>
+        <ol style="margin-top:14px;list-style:none;font-size:14px;line-height:1.7;color:var(--text-primary)">
+          <li><b>10 Sobre nosotros</b> — manifiesto + equipo + métricas globales</li>
+          <li><b>11 Recursos / Blog</b> — listado + plantilla de artículo</li>
+          <li><b>12 Contacto / Demo</b> — formulario calificador + Calendly embebido</li>
+          <li><b>13 Footer global</b> + plantilla legal (privacidad, términos, cookies)</li>
+        </ol>
+      </div>
+      <div class="panel deep" data-screen-label="Phase plan">
+        <div class="eyebrow" style="color:#E8542A">Cómo entrego</div>
+        <ol style="margin-top:14px;list-style:none;font-size:14px;line-height:1.8;color:#E2D9C5">
+          <li><b style="color:#fff">Fase 2</b> — Home → Producto → Pricing  <span class="mono" style="color:#8A8275">// pausa</span></li>
+          <li><b style="color:#fff">Fase 3</b> — Marketplace → Ficha evento → Checkout  <span class="mono" style="color:#8A8275">// pausa</span></li>
+          <li><b style="color:#fff">Fase 4</b> — Casos → Promotores → Sobre / Demo / Footer</li>
+        </ol>
+        <p style="margin-top:18px;color:#8A8275;font-size:13px;line-height:1.6">Cada página será un artifact React+TS+Tailwind autocontenido, mobile-first 375px, con microinteracciones y datos realistas (Madrid, Barcelona, Ibiza, Sala Apolo Lab, Mondo Disko, Florida 135...). Tras cada fase paro y espero feedback.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-note">
+    <span>Pasify · Design System v0.1</span>
+    <span>Phase 01 / 04 · esperando luz verde para Fase 2</span>
+  </div>
+</div>
+</body>
+</html>

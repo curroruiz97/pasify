@@ -1,0 +1,615 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasify para festivales · Pasify</title>
+<meta name="description" content="El sistema operativo de tu festival, del primer pase abonado al último brazalete escaneado. Cashless con top-up en vivo, multi-stage, accreditation, sponsors y CRM por fan.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../soluciones/_shared.css">
+<style>
+  /* Page-local · sectores/festivales · coherent with sister pages */
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
+  .reveal.in{opacity:1;transform:none}
+  main{padding-top:0}
+  .sec{padding:96px 0;position:relative}
+  .sec.compact{padding:64px 0}
+  .sec-head{max-width:760px;margin-bottom:48px}
+  .sec-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .sec-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sec-head h2{font-size:clamp(32px,4vw,52px);font-weight:600;letter-spacing:-0.035em;line-height:1.04;color:var(--ink)}
+  .sec-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sec-head p.sub{font-size:clamp(15px,1.2vw,17px);line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:62ch}
+  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .crumbs a{color:var(--ink-3);transition:color .2s ease}
+  .crumbs a:hover{color:var(--accent)}
+  .crumbs .sep{margin:0 10px;color:var(--line-2)}
+  .crumbs .here{color:var(--ink)}
+  .page-hero{padding:80px 0 60px;position:relative;overflow:hidden}
+  .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
+  .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.08;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
+  .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
+  .page-hero .label .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
+  .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
+  .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .page-hero h1 .highlight{position:relative;display:inline-block}
+  .page-hero h1 .highlight::after{content:"";position:absolute;left:-2px;right:-2px;bottom:8px;height:14px;background:var(--accent);opacity:.45;z-index:-1;border-radius:2px;transform:skewY(-1deg)}
+  .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
+  .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
+  .page-hero .meta{margin-top:32px;display:flex;gap:24px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);position:relative;z-index:2}
+  .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
+  .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+
+  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
+  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
+  .stats-strip > div:last-child{border-right:none}
+  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
+  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
+  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
+  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
+  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
+
+  .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
+  .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
+  .pain-card:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .pain-card .x{position:absolute;top:24px;right:24px;width:30px;height:30px;border-radius:8px;border:1px solid rgba(232,84,42,.25);background:rgba(232,84,42,.08);display:grid;place-items:center;color:var(--accent);font-size:14px}
+  .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
+  .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
+  .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
+  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
+
+  .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.mod-grid{grid-template-columns:1fr}}
+  .mod{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .3s ease, border-color .3s ease, background .3s ease;position:relative;overflow:hidden}
+  .mod::before{content:"";position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:0;filter:blur(50px);top:-40px;right:-40px;transition:opacity .3s ease;pointer-events:none}
+  .mod:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .mod:hover::before{opacity:.18}
+  .mod .head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative}
+  .mod .ico{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mod .ico svg{width:22px;height:22px}
+  .mod .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--ink-3)}
+  .mod h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;position:relative}
+  .mod p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px;position:relative}
+  .mod ul{list-style:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+  .mod ul li{font-size:13px;color:var(--ink-2);display:flex;align-items:start;gap:10px;line-height:1.5}
+  .mod ul li::before{content:"";width:14px;height:1px;background:var(--accent);margin-top:9px;flex-shrink:0}
+
+  .timeline-wrap{position:relative;padding-left:48px;margin-top:32px}
+  .timeline-wrap::before{content:"";position:absolute;left:14px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,transparent,var(--line-2) 8%,var(--line-2) 92%,transparent)}
+  .tl-row{position:relative;padding:0 0 28px 0;display:grid;grid-template-columns:120px 1fr;gap:32px;align-items:start}
+  .tl-row::before{content:"";position:absolute;left:-40px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.12)}
+  .tl-row.peak::before{background:var(--accent);box-shadow:0 0 0 6px rgba(232,84,42,.18),0 0 20px rgba(232,84,42,.5)}
+  .tl-row .time{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-0.02em;line-height:1}
+  .tl-row .day{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+  .tl-row .body h4{font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-0.015em;margin-bottom:6px}
+  .tl-row .body p{font-size:14.5px;color:var(--ink-2);line-height:1.6;max-width:54ch}
+  .tl-row .body .tag{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:999px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  @media (max-width:720px){.tl-row{grid-template-columns:90px 1fr;gap:20px}.timeline-wrap{padding-left:36px}.tl-row::before{left:-32px;width:12px;height:12px}}
+
+  .mock{margin-top:48px;background:linear-gradient(160deg,#0F0C0A,#1A1411);border:1px solid var(--line-2);border-radius:20px;padding:6px;position:relative;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6),0 0 80px -20px rgba(232,84,42,.2)}
+  .mock-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .mock-bar .dot{width:11px;height:11px;border-radius:50%;background:var(--line-2)}
+  .mock-bar .dot.r{background:#E8542A}
+  .mock-bar .dot.y{background:#E8B04C}
+  .mock-bar .dot.g{background:#4DB87A}
+  .mock-bar .url{margin-left:14px;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 14px;display:flex;align-items:center;gap:8px}
+  .mock-bar .url::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  .mock-body{padding:32px}
+  .mock-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;margin-bottom:28px}
+  .mock-head h4{font-size:22px;font-weight:600;letter-spacing:-0.02em;color:var(--ink)}
+  .mock-head .date{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  @media (max-width:720px){.mock-kpi{grid-template-columns:repeat(2,1fr)}}
+  .mock-kpi > div{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .mock-kpi .l{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi .v{font-family:'Geist Mono',monospace;font-size:24px;font-weight:600;color:var(--ink);margin-top:8px;letter-spacing:-0.02em;line-height:1}
+  .mock-kpi .v em{font-style:normal;color:var(--accent)}
+  .mock-kpi .d{font-family:'Geist Mono',monospace;font-size:11px;color:#4DB87A;margin-top:6px}
+  .mock-kpi .d.warn{color:var(--warm)}
+  .mock-split{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  @media (max-width:880px){.mock-split{grid-template-columns:1fr}}
+  .mock-tbl{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;overflow:hidden}
+  .mock-tbl .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;display:flex;justify-content:space-between}
+  .mock-tbl .ttl .live{color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+  .mock-tbl .ttl .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
+  .mock-tbl-row{display:grid;grid-template-columns:1.6fr .9fr .8fr 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--line);font-size:13px;align-items:center}
+  .mock-tbl-row.h{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);border-top:none;padding-top:0}
+  .mock-tbl-row .name{color:var(--ink);font-weight:500}
+  .mock-tbl-row .ppl{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .min{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .st{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  .mock-tbl-row .st.ok{color:#4DB87A}
+  .mock-tbl-row .st.wait{color:var(--warm)}
+  .mock-tbl-row .st.vip{color:var(--accent)}
+  .mock-tbl-row .st.gone{color:var(--ink-3);text-decoration:line-through}
+  @media (max-width:480px){.mock-tbl-row{grid-template-columns:1.6fr 1fr;gap:8px}.mock-tbl-row .min,.mock-tbl-row.h .min{display:none}}
+  .mock-feed{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:0}
+  .mock-feed .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  .feed-row{padding:11px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+  .feed-row:first-of-type{border-top:none}
+  .feed-row .t{font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink-3);letter-spacing:.04em;line-height:1.5}
+  .feed-row .body{font-size:13px;color:var(--ink-2);line-height:1.5}
+  .feed-row .body b{color:var(--ink);font-weight:500}
+  .feed-row .body .acc{color:var(--accent);font-weight:500}
+
+  .res-split{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+  @media (max-width:980px){.res-split{grid-template-columns:1fr;gap:32px}}
+  .res-split .text h2{font-size:clamp(30px,3.6vw,46px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)}
+  .res-split .text h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .res-split .text p.sub{font-size:17px;line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:54ch}
+  .res-split ul.checks{list-style:none;margin-top:28px;display:flex;flex-direction:column;gap:14px}
+  .res-split ul.checks li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:15px;color:var(--ink-2);line-height:1.55}
+  .res-split ul.checks li b{color:var(--ink);font-weight:600}
+  .res-split ul.checks .ck{width:24px;height:24px;border-radius:6px;background:rgba(232,84,42,.14);border:1px solid rgba(232,84,42,.3);color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;display:grid;place-items:center;flex-shrink:0;margin-top:1px}
+  .res-card{background:linear-gradient(160deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:20px;padding:32px;position:relative;overflow:hidden}
+  .res-card::before{content:"";position:absolute;width:280px;height:280px;background:var(--accent);filter:blur(100px);opacity:.25;top:-80px;right:-80px;pointer-events:none}
+  .res-card .lab{position:relative;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .res-card .total{position:relative;display:flex;align-items:baseline;gap:6px;margin-top:14px}
+  .res-card .total .v{font-family:'Geist Mono',monospace;font-size:48px;font-weight:600;letter-spacing:-0.04em;color:var(--ink);line-height:1}
+  .res-card .total .c{font-family:'Geist Mono',monospace;font-size:18px;color:var(--ink-2)}
+  .res-card .small{position:relative;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px}
+  .res-card hr{position:relative;border:none;border-top:1px solid var(--line);margin:24px 0}
+  .res-card .line{position:relative;display:grid;grid-template-columns:1fr auto;gap:14px;font-size:13.5px;padding:8px 0;align-items:center}
+  .res-card .line .k{color:var(--ink-2)}
+  .res-card .line .v{font-family:'Geist Mono',monospace;color:var(--ink);font-weight:500}
+  .res-card .line.tot{padding-top:14px;border-top:1px dashed var(--line-2);font-weight:600}
+  .res-card .line.tot .v{color:var(--accent);font-size:15px}
+  .res-card .badge-row{position:relative;margin-top:24px;display:flex;gap:8px;flex-wrap:wrap}
+  .res-card .b{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:rgba(244,238,226,.06);border:1px solid var(--line-2);color:var(--ink-2)}
+  .res-card .b.ok{background:rgba(77,184,122,.1);border-color:rgba(77,184,122,.3);color:#4DB87A}
+
+  /* Wristband visual (festival) */
+  .wband{position:relative;margin:18px 0 8px;background:linear-gradient(95deg,#E8542A 0%,#B8381A 50%,#E8542A 100%);border-radius:14px;padding:18px 20px;color:#fff;box-shadow:0 12px 30px -10px rgba(232,84,42,.55),inset 0 1px 0 rgba(255,255,255,.18)}
+  .wband::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:repeating-linear-gradient(0deg,rgba(255,255,255,.4),rgba(255,255,255,.4) 4px,transparent 4px,transparent 8px)}
+  .wband::after{content:"";position:absolute;right:8px;top:0;bottom:0;width:2px;background:repeating-linear-gradient(0deg,rgba(255,255,255,.4),rgba(255,255,255,.4) 4px,transparent 4px,transparent 8px)}
+  .wband .id{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.85}
+  .wband .nm{font-family:'Instrument Serif',serif;font-style:italic;font-size:24px;line-height:1;margin-top:6px}
+  .wband .row{display:flex;justify-content:space-between;align-items:end;margin-top:14px;gap:12px;flex-wrap:wrap}
+  .wband .balance{font-family:'Geist Mono',monospace;font-size:32px;font-weight:600;letter-spacing:-0.03em;line-height:1}
+  .wband .pass{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;background:rgba(255,255,255,.18);padding:5px 9px;border-radius:6px}
+
+  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
+  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
+  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
+  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
+  .cmp td{color:var(--ink-3);font-size:14px}
+  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
+  .cmp td.yes{color:#4DB87A}
+  .cmp td.no{color:var(--ink-4)}
+  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
+  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
+
+  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
+  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
+  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
+  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
+  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
+  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
+  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
+  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
+  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+  .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
+  @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
+  .int{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center;transition:transform .25s ease, border-color .25s ease, background .25s ease}
+  .int:hover{transform:translateY(-2px);border-color:rgba(232,84,42,.3);background:var(--bg-3)}
+  .int .nm{font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;letter-spacing:-0.005em;color:var(--ink)}
+  .int .cat{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+  .faq{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line);padding:24px 0;transition:background .25s ease}
+  .faq details[open]{background:linear-gradient(180deg,rgba(232,84,42,.03),transparent)}
+  .faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:24px;font-size:18px;font-weight:500;letter-spacing:-0.015em;color:var(--ink);outline:none}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+  .faq summary .plus{flex-shrink:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s ease, color .3s ease, border-color .3s ease;font-family:'Geist Mono',monospace;font-size:18px;line-height:1}
+  .faq details[open] summary .plus{transform:rotate(45deg);color:var(--accent);border-color:var(--accent)}
+  .faq .answer{padding:18px 56px 4px 0;font-size:15.5px;line-height:1.65;color:var(--ink-2);max-width:75ch}
+  .faq .answer p + p{margin-top:12px}
+  .faq .answer code{font-family:'Geist Mono',monospace;font-size:13px;color:var(--accent);background:rgba(232,84,42,.08);padding:2px 8px;border-radius:6px;border:1px solid rgba(232,84,42,.18)}
+
+  .cta-banner{margin:48px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:56px;display:grid;grid-template-columns:1.4fr 1fr;gap:48px;align-items:center;position:relative;overflow:hidden}
+  @media (max-width:880px){.cta-banner{grid-template-columns:1fr;padding:40px 28px;gap:32px}}
+  .cta-banner::before{content:"";position:absolute;width:400px;height:400px;background:var(--accent);filter:blur(120px);opacity:.28;top:-120px;right:-100px;pointer-events:none}
+  .cta-banner::after{content:"";position:absolute;width:300px;height:300px;background:var(--warm);filter:blur(100px);opacity:.12;bottom:-100px;left:-80px;pointer-events:none}
+  .cta-banner .left{position:relative}
+  .cta-banner .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .cta-banner h2{font-size:clamp(30px,3.4vw,48px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;max-width:18ch;color:var(--ink)}
+  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .cta-banner p.sub{font-size:16px;line-height:1.55;color:var(--ink-2);margin-top:18px;max-width:48ch}
+  .cta-banner .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .cta-banner ul.bulls{position:relative;list-style:none;display:flex;flex-direction:column;gap:14px}
+  .cta-banner ul.bulls li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:14.5px;color:var(--ink);line-height:1.5}
+  .cta-banner ul.bulls .ck{width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.35);display:grid;place-items:center;color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;flex-shrink:0;margin-top:1px}
+
+  .footer{margin-top:96px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body data-depth="sub" data-current="sec-festivales">
+<a href="#main" class="skip-to-content" style="position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;z-index:9999;font-size:14px" onfocus="this.style.left='12px';this.style.top='12px'" onblur="this.style.left='-9999px'">Saltar al contenido</a>
+
+<div class="grain" aria-hidden="true"></div>
+<div id="site-header"></div>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="crumbs" aria-label="Migas de pan">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#sectores">Sectores</a>
+      <span class="sep">/</span>
+      <span class="here">Festivales</span>
+    </nav>
+
+    <section class="page-hero">
+      <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Festivales</span>
+      <h1>El sistema operativo de tu <em>festival</em>, del primer pase abonado al último <span class="highlight">brazalete</span> escaneado.</h1>
+      <p class="lede">Producción, accesos, cashless, sponsors, talento y CRM. Pasify cubre los seis hilos críticos sin que el cashless se caiga a las 17:00 ni el reporte al sponsor llegue una semana tarde — para festivales de 5.000 a 200.000 asistentes, multi-día, multi-stage.</p>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+        <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
+      </div>
+      <div class="meta" aria-label="Datos de plataforma">
+        <span>Multi-día · multi-stage · cashless</span>
+        <span>Acreditaciones · prensa · sponsors</span>
+        <span>Soporte humano D-7 a D+1</span>
+      </div>
+    </section>
+
+    <section class="stats-strip" aria-label="Métricas de plataforma">
+      <div><div class="num">200<em>K</em></div><div class="lab">asistentes gestionados<br>en una edición</div></div>
+      <div><div class="num">24<em>s</em></div><div class="lab">tiempo medio<br>de checkout móvil</div></div>
+      <div><div class="num">99.97<em>%</em></div><div class="lab">uptime de gates<br>en tres días de pico</div></div>
+      <div><div class="num">0<em>%</em></div><div class="lab">comisión añadida<br>al fan al comprar abono</div></div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
+        <h2>Un festival se gana o se pierde en <em>tres</em> momentos invisibles para el público.</h2>
+        <p class="sub">El público recuerda el cabeza de cartel. La organización vive recordando otras tres cosas: el cashless que se cayó a las 17:00, el reporte al sponsor que no llega, y el accesso de prensa colapsado el día 1. Estos son los tres dolores con los que llegan los directores que prueban Pasify.</p>
+      </div>
+
+      <div class="pain-grid">
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 01</div>
+          <h3>El cashless se cae justo en la hora pico</h3>
+          <p>17:00 del sábado. Cola de 800 personas para top-up. El sistema del provider falla 22 minutos. Los bares se quedan sin cobro, los asistentes furiosos, las redes en llamas. Recupera el sistema — pero la sensación de "festival mal montado" ya queda.</p>
+          <div class="quote">"Veintidós minutos de caída costaron 180.000€ en consumición no realizada."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 02</div>
+          <h3>El sponsor pide reportes una semana después</h3>
+          <p>El brand pagó 80.000€ por activación en el escenario B. Quiere saber cuántos pasaron, cuánto duraron, qué consumieron, edad media, ciudades. Tu equipo dedica 5 días a hacer el PowerPoint. El sponsor lo recibe el viernes — cuando ya está hablando con el competidor.</p>
+          <div class="quote">"Perdimos un sponsor que repetía 3 años por entregar el reporte tarde."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 03</div>
+          <h3>Acreditaciones de prensa colapsadas el día 1</h3>
+          <p>180 medios acreditados en Excel. Día 1, todos llegan entre 16:00 y 19:00. Cola de prensa, fotógrafos enfadados, alguien manda una credencial duplicada por error. Tu equipo de comunicación pasa 4 horas ahí en vez de en la rueda de prensa.</p>
+          <div class="quote">"La acreditación se gestionaba con WhatsApp y Excel. Insostenible."</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="operativa" class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">02 /</span> Producto</span>
+        <h2>Seis módulos para los seis hilos críticos de un festival.</h2>
+        <p class="sub">Pasify habla con todos los actores: producción, accesos, sponsors, prensa, fan y artista. Una sola plataforma para no tener que hacer mil llamadas a las 03:00 cuando todo está en directo.</p>
+      </div>
+
+      <div class="mod-grid">
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M16 3v6M8 3v6"/></svg></div><span class="num">01</span></div>
+          <h3>Ticketing multi-día y abonos</h3>
+          <p>Abono 3 días, día suelto, VIP, camping, glamping, parking. Saltos de precio por tiempo o stock. Apple Wallet de serie. URL única para la web del festival.</p>
+          <ul><li>Abonos / packs / bundles</li><li>Saltos de precio automáticos</li><li>Anti-reventa nominativa</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><span class="num">02</span></div>
+          <h3>Cashless con top-up en vivo</h3>
+          <p>Pulsera NFC pre-cargada. Top-up online antes del festival, en máquinas dentro o desde la app del fan. Provider redundante: si uno se cae, el otro entra automáticamente.</p>
+          <ul><li>Pulsera NFC con saldo</li><li>Top-up online + on-site</li><li>Refund post-festival auto</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="6" cy="6" r="2" fill="currentColor"/><circle cx="13" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="18" r="2" fill="currentColor"/></svg></div><span class="num">03</span></div>
+          <h3>Multi-stage con aforo por escenario</h3>
+          <p>3, 5, 10 escenarios. Cada uno con su aforo, su programación y su data. El productor ve en vivo qué stage está al 90% y reacciona — re-rutea seguridad o redirige asistentes a otro stage.</p>
+          <ul><li>Aforo por zona en vivo</li><li>Programación dinámica</li><li>Heatmap de movimientos</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><circle cx="17" cy="17" r="2.5" fill="currentColor" stroke="none"/></svg></div><span class="num">04</span></div>
+          <h3>Acreditaciones · prensa, artista, sponsor</h3>
+          <p>Cada perfil con su zona, su validez, su impresión y su QR. Los medios reciben su credencial digital antes del día 1. Backstage y artista con accesos diferenciados por banda.</p>
+          <ul><li>Credenciales por perfil y zona</li><li>Impresión on-site opcional</li><li>Histórico por edición</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 6.5-7 11-7 11z"/></svg></div><span class="num">05</span></div>
+          <h3>Sponsor analytics en vivo</h3>
+          <p>El sponsor recibe un dashboard propio: pisadas en su activación, demografía agregada, consumición media, comparativa con otras zonas. Reporte final entregado en el día +1.</p>
+          <ul><li>Dashboard sponsor en vivo</li><li>Reporte final D+1</li><li>Datos agregados RGPD-clean</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg></div><span class="num">06</span></div>
+          <h3>CRM por fan + retargeting</h3>
+          <p>Los 80.000 fans del año quedan en tu CRM con su histórico: días que vinieron, escenarios, consumición, ciudad, edad. La próxima edición se vende a los mismos antes de salir al público.</p>
+          <ul><li>Pre-venta a fans recurrentes</li><li>Lookalike audiences</li><li>Export · API · RGPD-clean</li></ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">03 /</span> Operativa real</span>
+        <h2>Una edición con Pasify, día por día.</h2>
+        <p class="sub">No es una demo: es lo que vive el equipo de un festival de 50.000 asistentes desde la carga hasta el desmontaje. Siete días que deciden si la edición fue rentable.</p>
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="tl-row"><div><div class="time">D−7</div><div class="day">Lun · carga</div></div><div class="body"><h4>Producción entra al recinto</h4><p>El equipo de producción accede con sus credenciales digitales. Los proveedores reciben sus QR de entrada al loading bay. Pasify registra cada acceso con timestamp — útil para auditorías de seguro.</p><span class="tag">Acceso producción</span></div></div>
+        <div class="tl-row"><div><div class="time">D−2</div><div class="day">Acreditaciones</div></div><div class="body"><h4>Prensa, sponsors y artistas reciben su credencial</h4><p>180 medios, 22 sponsors, 64 artistas. Cada uno con zona, validez y QR personalizado. Las pulseras de artista van pre-codificadas por banda — un técnico de Pasify supervisa la impresión.</p><span class="tag">Pre-event</span></div></div>
+        <div class="tl-row"><div><div class="time">D0 · 14:00</div><div class="day">Vie · puertas</div></div><div class="body"><h4>Apertura · cola gestionada</h4><p>Tres puertas, 12 escáneres por puerta. Validación QR offline, &lt;200ms por escaneo. Los abonos de 3 días reciben pulsera NFC pre-cargada con saldo opcional. Refresh de aforo cada 60s.</p><span class="tag">Modo offline</span></div></div>
+        <div class="tl-row"><div><div class="time">D0 · 18:00</div><div class="day">Main stage</div></div><div class="body"><h4>Primer headliner, escenario A al 70%</h4><p>El productor ve en vivo: stage A 35K, stage B 8K, stage C 4K, food court 6K. La consumición media en pulsera lleva 12.50€/asistente. Los sponsors reciben primer ping de pisadas.</p><span class="tag">Heatmap activo</span></div></div>
+        <div class="tl-row peak"><div><div class="time">D0 · 22:00</div><div class="day">Pico</div></div><div class="body"><h4>Stages al 92%, top-up de cashless al máximo</h4><p>50K en main + 32K en B + 18K en C. Los 4 puntos de top-up trabajan a tope. Pasify cambia a provider redundante por precaución. Cero caídas. La consumición media sube a 28€/persona/día.</p><span class="tag">Pico operativo</span></div></div>
+        <div class="tl-row"><div><div class="time">D0 · 02:00</div><div class="day">Cierre stage</div></div><div class="body"><h4>Última actuación, flujo controlado de salida</h4><p>El cabeza de cartel termina. Pasify dispara mensajes al fan: "ride share disponible aquí", "hidrátate", "encuentro con tus amigos en zona X". Salida ordenada, sin colas en gates.</p><span class="tag">Egress flow</span></div></div>
+        <div class="tl-row"><div><div class="time">D+1 · 09:00</div><div class="day">Sáb · resumen</div></div><div class="body"><h4>Reporte sponsor + cuadre día 1</h4><p>22 sponsors reciben su dashboard del día 1 con pisadas, consumición, demografía. La organización ve el cierre Z parcial: 1.2M€ taquilla + 850K€ cashless. Decisiones para el día 2: refuerzos en stage B.</p><span class="tag">Daily reporting</span></div></div>
+        <div class="tl-row"><div><div class="time">D+3</div><div class="day">Lun · settlement</div></div><div class="body"><h4>Settlement con artistas + refund cashless</h4><p>64 artistas firmados, pagos vía Stripe Connect. Refund automático a 8.400 fans con saldo no consumido. Reportes finales a sponsors. Email a los 50K fans del CRM con highlights y "early access" para la próxima edición.</p><span class="tag">D+3 wrap-up</span></div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">04 /</span> Lo que ves desde el centro de producción</span>
+        <h2>Un dashboard que cabe en el monitor del director técnico.</h2>
+        <p class="sub">Una pantalla. Datos vivos. Decisiones rápidas. Esto es lo que vería tu equipo durante el sábado a las 22:00 si el festival estuviese en marcha.</p>
+      </div>
+
+      <div class="mock" aria-label="Demostración visual del dashboard">
+        <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">app.pasify.com/festival/zenith-fest/live · sáb 14 jun · 22:18</span></div>
+        <div class="mock-body">
+          <div class="mock-head"><h4>Zenith Fest · Madrid · Live · Día 2/3</h4><span class="date">Sáb 14 jun · 22:18 · pico</span></div>
+
+          <div class="mock-kpi">
+            <div><div class="l">Aforo total</div><div class="v">96<em>.</em>240 <em>/ 100K</em></div><div class="d warn">96% · cierre walk-up</div></div>
+            <div><div class="l">Cashless en vivo</div><div class="v">2<em>.</em>14<em>M €</em></div><div class="d">+18% vs mismo día edición ant.</div></div>
+            <div><div class="l">Consumición media</div><div class="v">28<em>,</em>40<em>€</em></div><div class="d">+12% vs día 1</div></div>
+            <div><div class="l">Refund estimado</div><div class="v">3<em>,</em>2<em>%</em></div><div class="d">saldo no consumido</div></div>
+          </div>
+
+          <div class="mock-split">
+            <div class="mock-tbl">
+              <div class="ttl"><span>Aforo por escenario</span><span class="live">live</span></div>
+              <div class="mock-tbl-row h"><span>Stage</span><span>Personas</span><span>Cap</span><span>Estado</span></div>
+              <div class="mock-tbl-row"><span class="name">Main · Pista</span><span class="ppl">48.220</span><span class="min">50K</span><span class="st warn">96% · pico</span></div>
+              <div class="mock-tbl-row"><span class="name">Stage B · Electrónica</span><span class="ppl">28.140</span><span class="min">30K</span><span class="st warn">94% · pico</span></div>
+              <div class="mock-tbl-row"><span class="name">Stage C · Indie</span><span class="ppl">14.080</span><span class="min">15K</span><span class="st ok">94% · ok</span></div>
+              <div class="mock-tbl-row"><span class="name">Food court</span><span class="ppl">3.940</span><span class="min">8K</span><span class="st ok">49% · holgado</span></div>
+              <div class="mock-tbl-row"><span class="name">Camping</span><span class="ppl">1.860</span><span class="min">4K</span><span class="st ok">47% · ok</span></div>
+              <div class="mock-tbl-row"><span class="name">VIP zone</span><span class="ppl">2.000</span><span class="min">2K</span><span class="st vip">VIP · 100%</span></div>
+            </div>
+
+            <div class="mock-feed">
+              <div class="ttl">Últimos eventos</div>
+              <div class="feed-row"><span class="t">22:18</span><span class="body"><b>Cashless top-up</b> +320 transacciones / 60s</span></div>
+              <div class="feed-row"><span class="t">22:17</span><span class="body"><b>Stage B 94%</b> · refuerzo seguridad</span></div>
+              <div class="feed-row"><span class="t">22:16</span><span class="body"><b>Sponsor Estrella</b> · <span class="acc">8.420 pisadas / hora</span></span></div>
+              <div class="feed-row"><span class="t">22:15</span><span class="body"><b>Provider failover</b> · Cashless OK</span></div>
+              <div class="feed-row"><span class="t">22:13</span><span class="body"><b>Ambulancia gate 4</b> · 2 min ETA</span></div>
+              <div class="feed-row"><span class="t">22:11</span><span class="body"><b>Main stage</b> · headliner sale en 10'</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">05 /</span> Cashless</span>
+      </div>
+
+      <div class="res-split">
+        <div class="text">
+          <h2>El cashless es donde se gana o se pierde un festival. <em>Que no se caiga</em> es una decisión de arquitectura.</h2>
+          <p class="sub">22 minutos de caída en hora pico de un festival de 50.000 personas son 180.000€ de consumición no realizada y un trending topic en redes que duele tres semanas. Pasify implementa cashless con dos providers redundantes en hot-standby — si uno falla, el otro toma el relevo en 8 segundos sin que el bartender se entere.</p>
+
+          <ul class="checks">
+            <li><span class="ck">✓</span><div><b>Pulsera NFC pre-cargada.</b> El fan compra abono + saldo. Llega ya con su pulsera codificada y con dinero. Cero cola en top-up el primer día.</div></li>
+            <li><span class="ck">✓</span><div><b>Top-up redundante online + on-site.</b> Web, app, máquinas físicas, asistente humano. Si uno cae, los otros tres siguen.</div></li>
+            <li><span class="ck">✓</span><div><b>Refund post-festival auto.</b> El saldo no consumido se devuelve a la tarjeta del fan en 5–7 días. Sin formularios, sin emails, sin reclamaciones.</div></li>
+            <li><span class="ck">✓</span><div><b>Datos agregados al sponsor.</b> Quién consumió en su barra, demografía, productos top, comparativa con otras zonas. Sin datos personales — solo agregados.</div></li>
+            <li><span class="ck">✓</span><div><b>Failover provider en 8 segundos.</b> Dos providers de cashless en hot-standby. Si uno se cae, el otro entra sin intervención humana. Redundancia testada cada 30 días.</div></li>
+          </ul>
+        </div>
+
+        <aside class="res-card" aria-label="Pulsera cashless festival">
+          <div class="lab">Pulsera NFC · Día 2 · 22:18</div>
+
+          <div class="wband">
+            <div class="id">ZF26 · NFC · ID 8c1f-22a4</div>
+            <div class="nm">Carla M.</div>
+            <div class="row">
+              <div>
+                <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.85">Saldo en vivo</div>
+                <div class="balance">42,80 €</div>
+              </div>
+              <span class="pass">Abono 3 días · VIP</span>
+            </div>
+          </div>
+
+          <div class="total"><span class="v">128<em>,</em>40</span><span class="c">€ · gastado en 2 días</span></div>
+          <div class="small">15 transacciones · 4 zonas · 1 top-up</div>
+
+          <hr>
+
+          <div class="line"><span class="k">Top-up online · D−2</span><span class="v">100,00 €</span></div>
+          <div class="line"><span class="k">Día 1 · stage A · barra</span><span class="v">−42,50 €</span></div>
+          <div class="line"><span class="k">Día 2 · food court</span><span class="v">−18,90 €</span></div>
+          <div class="line"><span class="k">Día 2 · stage B · sponsor</span><span class="v">−24,00 €</span></div>
+          <div class="line"><span class="k">Día 2 · merch oficial</span><span class="v">−43,00 €</span></div>
+          <div class="line"><span class="k">Top-up on-site · 22:00</span><span class="v">+71,00 €</span></div>
+          <div class="line tot"><span class="k">Saldo refund estimado</span><span class="v">42,80 €</span></div>
+
+          <div class="badge-row">
+            <span class="b ok">PROVIDER A · OK</span>
+            <span class="b">Refund 5–7 días</span>
+            <span class="b">RGPD · agregado</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
+        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
+        <p class="sub">Sin nombrar a nadie. Estos son los rangos típicos de las dos plataformas más usadas para ticketing y cashless de festivales en España, según conversaciones con directores que migraron a Pasify en 2024–25.</p>
+      </div>
+
+      <div class="cmp" role="region" aria-label="Comparativa">
+        <table>
+          <thead><tr><th></th><th class="hl">Pasify</th><th>Marketplace global</th><th>Vertical festivales</th></tr></thead>
+          <tbody>
+            <tr><th>Comisión por entrada</th><td class="hl"><span class="pct">0%</span> al fan · 3,5–5% al festival</td><td>10–15% al fan</td><td>6–9% al fan</td></tr>
+            <tr><th>Cashless redundante (failover &lt;10s)</th><td class="hl yes">Sí · doble provider</td><td class="no">No · provider único</td><td>Parcial</td></tr>
+            <tr><th>Multi-stage con aforo en vivo</th><td class="hl yes">Sí · heatmap</td><td>Solo total</td><td>Sí</td></tr>
+            <tr><th>Sponsor dashboard en vivo</th><td class="hl yes">Sí · D+0 reportes</td><td class="no">No</td><td>Reportes D+7</td></tr>
+            <tr><th>Acreditación prensa/artista digital</th><td class="hl yes">Sí · pre-event</td><td class="no">No</td><td>Manual</td></tr>
+            <tr><th>Refund cashless automático</th><td class="hl yes">Sí · 5–7 días</td><td class="no">No</td><td>Manual + fee</td></tr>
+            <tr><th>CRM exportable post-edición</th><td class="hl yes">Sí · CSV + API</td><td class="no">No</td><td>Parcial</td></tr>
+            <tr><th>Soporte humano D-7 a D+1</th><td class="hl yes">Sí · ingeniero on-site</td><td>Tickets · 24h</td><td>On-site de pago</td></tr>
+            <tr><th>Permanencia mínima</th><td class="hl"><span class="pct">0</span> meses</td><td>Por edición</td><td>Por edición</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
+        <h2>Tres formas de medir si Pasify funciona en festivales.</h2>
+        <p class="sub">Tres festivales reales de tres tamaños distintos. Nombres anonimizados a petición — el sector festivalero es competitivo y prefieren no revelar stack.</p>
+      </div>
+
+      <div class="quotes">
+        <article class="q reveal"><div class="mark">"</div><blockquote>El cashless aguantó <em>tres días</em> a 50K asistentes sin una sola caída. Es la primera vez en seis años que no me han llamado a las 17:00 del sábado.</blockquote><div class="who"><div class="av"></div><div><div class="nm">D.A. · Director técnico</div><div class="role">Festival indie · Madrid · 35K asist</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>Los <em>sponsors</em> recibieron sus reportes el lunes a las 09:00. Antes tardábamos una semana. Tres marcas firmaron edición 2026 en el aeropuerto.</blockquote><div class="who"><div class="av b"></div><div><div class="nm">M.C. · Operations Lead</div><div class="role">Festival electrónico · Barcelona · 50K</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>Ahora hablamos a <em>80.000 fans</em> directamente con WhatsApp y email. Antes el ticketing se quedaba toda la data — y nuestro retargeting era un anuncio de Instagram.</blockquote><div class="who"><div class="av c"></div><div><div class="nm">P.L. · Producer</div><div class="role">Festival mainstream · 80K asist</div></div></div></article>
+      </div>
+    </section>
+
+    <section class="sec compact reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <h2>Encaja con tu stack de festival.</h2>
+        <p class="sub">Pasify habla con los providers de cashless, las plataformas de discovery y las herramientas de sponsor reporting que ya usas.</p>
+      </div>
+
+      <div class="ints">
+        <div class="int"><div class="nm">Stripe Connect</div><div class="cat">Settlement</div></div>
+        <div class="int"><div class="nm">Bizum</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Apple Wallet</div><div class="cat">Tickets</div></div>
+        <div class="int"><div class="nm">Google Wallet</div><div class="cat">Tickets</div></div>
+        <div class="int"><div class="nm">PlayPass</div><div class="cat">Cashless</div></div>
+        <div class="int"><div class="nm">Glownet</div><div class="cat">Cashless backup</div></div>
+        <div class="int"><div class="nm">Songkick</div><div class="cat">Discovery</div></div>
+        <div class="int"><div class="nm">Bandsintown</div><div class="cat">Discovery</div></div>
+        <div class="int"><div class="nm">Spotify Artists</div><div class="cat">Lineup</div></div>
+        <div class="int"><div class="nm">Holded</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Sage 50</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">WhatsApp Biz</div><div class="cat">CRM</div></div>
+        <div class="int"><div class="nm">Mailchimp</div><div class="cat">Email</div></div>
+        <div class="int"><div class="nm">Looker Studio</div><div class="cat">Sponsor analytics</div></div>
+        <div class="int"><div class="nm">Power BI</div><div class="cat">Analytics</div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <h2>Lo que preguntan los directores antes de firmar.</h2>
+      </div>
+
+      <div class="faq">
+        <details><summary>¿Soporta festivales de 200.000 asistentes?<span class="plus">+</span></summary><div class="answer"><p>Sí. La arquitectura de Pasify escala horizontalmente: gates, cashless, dashboards. <b>Hemos operado a 180K en una jornada</b> sin degradación. La base técnica está auditada por un partner de infraestructura externo cada 6 meses.</p><p>Para festivales de &gt;100K coordinamos un ingeniero de Pasify on-site durante D-2 a D+1, sin coste extra. Es donde la mayoría de plataformas fallan — la nuestra está pensada para esa escala desde el día uno.</p></div></details>
+        <details><summary>¿Qué pasa si el cashless se cae?<span class="plus">+</span></summary><div class="answer"><p>Tenemos <b>doble provider en hot-standby</b>. Si el primario detecta lag o errores, el secundario toma el relevo en menos de 10 segundos. El bartender no se entera, el fan tampoco. La conmutación se ejercita cada 30 días en producción real.</p><p>Si ambos cayeran (no ha pasado en 4 años), pasamos a <b>modo offline degradado</b>: las pulseras se siguen leyendo localmente, las transacciones se sincronizan al volver. Cero pérdida de venta.</p></div></details>
+        <details><summary>¿Cómo funciona el refund de saldo no consumido?<span class="plus">+</span></summary><div class="answer"><p>El saldo no consumido se devuelve <b>automáticamente</b> en 5–7 días a la tarjeta del fan. Cero formularios, cero emails, cero reclamaciones. La media histórica: 3,2% de saldo no consumido — refund completo, sin fees.</p><p>Algunos festivales prefieren ofrecer un "convertir saldo en early-access próxima edición" — Pasify lo soporta, el fan elige.</p></div></details>
+        <details><summary>¿Puedo dar un dashboard a cada sponsor?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada sponsor recibe su propio panel con login. Ve: pisadas en su activación, demografía agregada (RGPD-clean), consumición en su barra, comparativa con otras zonas, evolución hora a hora. <b>Reportes diarios D+0</b> y reporte final D+1.</p><p>Lo hemos usado para activaciones premium grandes — los sponsors firman edición siguiente más rápido cuando ven sus números antes de irse del recinto.</p></div></details>
+        <details><summary>¿Soporta acreditación de prensa, artista, sponsor y producción?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada perfil tiene su categoría con zona, validez y tipo de credencial (digital, impresa, pulsera NFC). La prensa recibe su credencial digital pre-event y solo se acerca al stand a por la física si quiere. Las bandas reciben pulseras pre-codificadas por banda y rol (artist, manager, técnico).</p></div></details>
+        <details><summary>¿Cumple con SGAE, Hacienda y normativa de festivales?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cierre Z certificado, IVA del espectáculo (10%), libro registro, declaración SGAE en CSV/XML. Cumple <code>Veri*Factu</code> 2026. Y para festivales con tasas locales (turística, etc.) configuramos el modelo fiscal específico una vez.</p></div></details>
+        <details><summary>¿Y si solo quiero usar Pasify para el cashless, no para ticketing?<span class="plus">+</span></summary><div class="answer"><p>Vale. Los módulos son independientes. Puedes usar tu Ticketmaster/Wegow para ticketing y solo el cashless de Pasify. <b>Sincronizamos vía API</b> los códigos del marketplace para que la pulsera NFC se cargue al validar la entrada en gate.</p></div></details>
+        <details><summary>¿Tienen ingeniero on-site durante el festival?<span class="plus">+</span></summary><div class="answer"><p>Sí, para festivales de &gt;30K asistentes. Un ingeniero de Pasify se desplaza al recinto desde D-2 hasta D+1, sin coste. Para festivales menores se coordina soporte WhatsApp con respuesta media de 4 minutos durante el evento.</p></div></details>
+      </div>
+    </section>
+
+    <section class="cta-banner reveal">
+      <div class="left">
+        <div class="lab">Empieza con tu próxima edición</div>
+        <h2>El sistema que tu <em>festival</em> merece. Sin caídas, sin reportes tardíos, sin Excel a las 03:00.</h2>
+        <p class="sub">Pre-venta gratuita para tu próxima edición. Migración asistida desde tu plataforma actual. Un equipo Pasify on-site desde D-2 a D+1 si tu festival es de &gt;30K.</p>
+        <div class="ctas">
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
+        </div>
+      </div>
+      <ul class="bulls">
+        <li><span class="ck">✓</span><div><b>Cashless redundante · failover &lt;10s</b><br><span style="color:var(--ink-2);font-size:13px">Doble provider en hot-standby, testado cada 30 días.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Sponsor reports D+0 · final D+1</b><br><span style="color:var(--ink-2);font-size:13px">Tus marcas firman antes de irse del aeropuerto.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Ingeniero on-site sin coste · &gt;30K</b><br><span style="color:var(--ink-2);font-size:13px">Equipo Pasify pendiente de tu instancia D-2 a D+1.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Tu CRM, tu propiedad · siempre</b><br><span style="color:var(--ink-2);font-size:13px">Export CSV+API. Lookalike audiences. Pre-venta directa.</span></div></li>
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
+</main>
+
+<script src="../soluciones/_header.js"></script>
+<script>
+  (function(){
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+      return;
+    }
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }});
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  })();
+</script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+project_id = "vlupmjsbobdnsmittdfs"
+
+[functions.send-approval-email]
+verify_jwt = false
+
+[functions.notify-admin-message]
+verify_jwt = false
+
+[functions.test-email]
+verify_jwt = false
+
+[functions.notify-new-registration]
+verify_jwt = false
+
+[functions.send-chat-notification]
+verify_jwt = false
+
+[functions.delete-own-account]
+verify_jwt = false
+
+[functions.moderate-content]
+verify_jwt = false
+
+[functions.send-marketing-email]
+verify_jwt = false
+
+[functions.send-partner-reminder]
+verify_jwt = false
+
+
+[functions.send-event-confirmation]
+verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.stripe-webhook-test]
+verify_jwt = false
+
+# Disabilito verify_jwt a livello gateway perché il progetto usa JWT ES256
+# che il gateway non supporta. La validazione avviene lato codice con
+# supabaseAdmin.auth.getUser(token).
+[functions.stripe-create-checkout-test]
+verify_jwt = false
+
+[functions.stripe-create-portal-test]
+verify_jwt = false
+
+[functions.stripe-create-checkout]
+verify_jwt = false
+
+[functions.stripe-create-portal]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.stripe-sync-session-test]
+verify_jwt = false
+
+[functions.debug-stripe-config]
+verify_jwt = false

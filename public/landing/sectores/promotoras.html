@@ -1,0 +1,614 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasify para promotoras · Pasify</title>
+<meta name="description" content="Tu marca, tu fiesta, tu comisión — en cualquier sala del país. White-label ticketing, multi-ciudad, RRPP nativo y liquidación automática con la sala. Sin perder al fan.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../soluciones/_shared.css">
+<style>
+  /* Page-local · sectores/promotoras · coherent with sister pages */
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
+  .reveal.in{opacity:1;transform:none}
+  main{padding-top:0}
+  .sec{padding:96px 0;position:relative}
+  .sec.compact{padding:64px 0}
+  .sec-head{max-width:760px;margin-bottom:48px}
+  .sec-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .sec-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sec-head h2{font-size:clamp(32px,4vw,52px);font-weight:600;letter-spacing:-0.035em;line-height:1.04;color:var(--ink)}
+  .sec-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sec-head p.sub{font-size:clamp(15px,1.2vw,17px);line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:62ch}
+  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .crumbs a{color:var(--ink-3);transition:color .2s ease}
+  .crumbs a:hover{color:var(--accent)}
+  .crumbs .sep{margin:0 10px;color:var(--line-2)}
+  .crumbs .here{color:var(--ink)}
+  .page-hero{padding:80px 0 60px;position:relative;overflow:hidden}
+  .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
+  .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.08;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
+  .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
+  .page-hero .label .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
+  .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
+  .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .page-hero h1 .highlight{position:relative;display:inline-block}
+  .page-hero h1 .highlight::after{content:"";position:absolute;left:-2px;right:-2px;bottom:8px;height:14px;background:var(--accent);opacity:.45;z-index:-1;border-radius:2px;transform:skewY(-1deg)}
+  .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
+  .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
+  .page-hero .meta{margin-top:32px;display:flex;gap:24px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);position:relative;z-index:2}
+  .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
+  .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+
+  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
+  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
+  .stats-strip > div:last-child{border-right:none}
+  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
+  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
+  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
+  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
+  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
+
+  .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
+  .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
+  .pain-card:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .pain-card .x{position:absolute;top:24px;right:24px;width:30px;height:30px;border-radius:8px;border:1px solid rgba(232,84,42,.25);background:rgba(232,84,42,.08);display:grid;place-items:center;color:var(--accent);font-size:14px}
+  .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
+  .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
+  .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
+  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
+
+  .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.mod-grid{grid-template-columns:1fr}}
+  .mod{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .3s ease, border-color .3s ease, background .3s ease;position:relative;overflow:hidden}
+  .mod::before{content:"";position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:0;filter:blur(50px);top:-40px;right:-40px;transition:opacity .3s ease;pointer-events:none}
+  .mod:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .mod:hover::before{opacity:.18}
+  .mod .head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative}
+  .mod .ico{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mod .ico svg{width:22px;height:22px}
+  .mod .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--ink-3)}
+  .mod h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;position:relative}
+  .mod p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px;position:relative}
+  .mod ul{list-style:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+  .mod ul li{font-size:13px;color:var(--ink-2);display:flex;align-items:start;gap:10px;line-height:1.5}
+  .mod ul li::before{content:"";width:14px;height:1px;background:var(--accent);margin-top:9px;flex-shrink:0}
+
+  .timeline-wrap{position:relative;padding-left:48px;margin-top:32px}
+  .timeline-wrap::before{content:"";position:absolute;left:14px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,transparent,var(--line-2) 8%,var(--line-2) 92%,transparent)}
+  .tl-row{position:relative;padding:0 0 28px 0;display:grid;grid-template-columns:120px 1fr;gap:32px;align-items:start}
+  .tl-row::before{content:"";position:absolute;left:-40px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.12)}
+  .tl-row.peak::before{background:var(--accent);box-shadow:0 0 0 6px rgba(232,84,42,.18),0 0 20px rgba(232,84,42,.5)}
+  .tl-row .time{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-0.02em;line-height:1}
+  .tl-row .day{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+  .tl-row .body h4{font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-0.015em;margin-bottom:6px}
+  .tl-row .body p{font-size:14.5px;color:var(--ink-2);line-height:1.6;max-width:54ch}
+  .tl-row .body .tag{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:999px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  @media (max-width:720px){.tl-row{grid-template-columns:90px 1fr;gap:20px}.timeline-wrap{padding-left:36px}.tl-row::before{left:-32px;width:12px;height:12px}}
+
+  .mock{margin-top:48px;background:linear-gradient(160deg,#0F0C0A,#1A1411);border:1px solid var(--line-2);border-radius:20px;padding:6px;position:relative;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6),0 0 80px -20px rgba(232,84,42,.2)}
+  .mock-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .mock-bar .dot{width:11px;height:11px;border-radius:50%;background:var(--line-2)}
+  .mock-bar .dot.r{background:#E8542A}
+  .mock-bar .dot.y{background:#E8B04C}
+  .mock-bar .dot.g{background:#4DB87A}
+  .mock-bar .url{margin-left:14px;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 14px;display:flex;align-items:center;gap:8px}
+  .mock-bar .url::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  .mock-body{padding:32px}
+  .mock-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;margin-bottom:28px}
+  .mock-head h4{font-size:22px;font-weight:600;letter-spacing:-0.02em;color:var(--ink)}
+  .mock-head .date{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  @media (max-width:720px){.mock-kpi{grid-template-columns:repeat(2,1fr)}}
+  .mock-kpi > div{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .mock-kpi .l{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi .v{font-family:'Geist Mono',monospace;font-size:24px;font-weight:600;color:var(--ink);margin-top:8px;letter-spacing:-0.02em;line-height:1}
+  .mock-kpi .v em{font-style:normal;color:var(--accent)}
+  .mock-kpi .d{font-family:'Geist Mono',monospace;font-size:11px;color:#4DB87A;margin-top:6px}
+  .mock-kpi .d.warn{color:var(--warm)}
+  .mock-split{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  @media (max-width:880px){.mock-split{grid-template-columns:1fr}}
+  .mock-tbl{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;overflow:hidden}
+  .mock-tbl .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;display:flex;justify-content:space-between}
+  .mock-tbl .ttl .live{color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+  .mock-tbl .ttl .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
+  .mock-tbl-row{display:grid;grid-template-columns:1.6fr .9fr .8fr 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--line);font-size:13px;align-items:center}
+  .mock-tbl-row.h{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);border-top:none;padding-top:0}
+  .mock-tbl-row .name{color:var(--ink);font-weight:500}
+  .mock-tbl-row .ppl{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .min{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .st{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  .mock-tbl-row .st.ok{color:#4DB87A}
+  .mock-tbl-row .st.wait{color:var(--warm)}
+  .mock-tbl-row .st.vip{color:var(--accent)}
+  .mock-tbl-row .st.gone{color:var(--ink-3);text-decoration:line-through}
+  @media (max-width:480px){.mock-tbl-row{grid-template-columns:1.6fr 1fr;gap:8px}.mock-tbl-row .min,.mock-tbl-row.h .min{display:none}}
+  .mock-feed{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:0}
+  .mock-feed .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  .feed-row{padding:11px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+  .feed-row:first-of-type{border-top:none}
+  .feed-row .t{font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink-3);letter-spacing:.04em;line-height:1.5}
+  .feed-row .body{font-size:13px;color:var(--ink-2);line-height:1.5}
+  .feed-row .body b{color:var(--ink);font-weight:500}
+  .feed-row .body .acc{color:var(--accent);font-weight:500}
+
+  .res-split{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+  @media (max-width:980px){.res-split{grid-template-columns:1fr;gap:32px}}
+  .res-split .text h2{font-size:clamp(30px,3.6vw,46px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)}
+  .res-split .text h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .res-split .text p.sub{font-size:17px;line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:54ch}
+  .res-split ul.checks{list-style:none;margin-top:28px;display:flex;flex-direction:column;gap:14px}
+  .res-split ul.checks li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:15px;color:var(--ink-2);line-height:1.55}
+  .res-split ul.checks li b{color:var(--ink);font-weight:600}
+  .res-split ul.checks .ck{width:24px;height:24px;border-radius:6px;background:rgba(232,84,42,.14);border:1px solid rgba(232,84,42,.3);color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;display:grid;place-items:center;flex-shrink:0;margin-top:1px}
+
+  /* White-label preview card (replaces res-card for promotoras) */
+  .wl-card{background:linear-gradient(160deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:20px;padding:0;position:relative;overflow:hidden}
+  .wl-card::before{content:"";position:absolute;width:280px;height:280px;background:var(--accent);filter:blur(100px);opacity:.25;top:-80px;right:-80px;pointer-events:none}
+  .wl-browser{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid rgba(244,238,226,.08);position:relative;z-index:2}
+  .wl-browser .d{width:9px;height:9px;border-radius:50%;background:var(--line-2)}
+  .wl-browser .d.r{background:#E8542A}
+  .wl-browser .d.y{background:#E8B04C}
+  .wl-browser .d.g{background:#4DB87A}
+  .wl-browser .url{margin-left:10px;font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em;flex:1;background:rgba(0,0,0,.3);border:1px solid var(--line-2);border-radius:6px;padding:5px 10px}
+  .wl-body{padding:28px;position:relative;z-index:2}
+  .wl-brand{display:flex;align-items:center;gap:10px;font-family:'Instrument Serif',serif;font-style:italic;font-size:24px;color:#fff;letter-spacing:-0.02em}
+  .wl-brand .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#E8542A,#FF7A4D);display:grid;place-items:center;color:#fff;font-family:'Geist Mono',monospace;font-style:normal;font-size:13px;font-weight:700}
+  .wl-brand .nb{color:#fff;font-family:'Geist',sans-serif;font-style:normal;font-weight:600}
+  .wl-event{margin-top:24px;padding:20px;border-radius:14px;background:linear-gradient(135deg,rgba(232,84,42,.15),rgba(232,176,76,.08));border:1px solid rgba(232,84,42,.3)}
+  .wl-event .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+  .wl-event .ti{font-family:'Instrument Serif',serif;font-style:italic;font-size:26px;color:#fff;line-height:1.05;letter-spacing:-0.015em}
+  .wl-event .meta{margin-top:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-2)}
+  .wl-tickets{margin-top:18px;display:flex;flex-direction:column;gap:8px}
+  .wl-tk{display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 14px;background:rgba(0,0,0,.4);border:1px solid var(--line-2);border-radius:10px;align-items:center}
+  .wl-tk.last{border-color:rgba(232,84,42,.4);background:rgba(232,84,42,.08)}
+  .wl-tk .nm{font-size:13px;color:#fff;font-weight:500;letter-spacing:-0.005em}
+  .wl-tk .sm{font-family:'Geist Mono',monospace;font-size:10.5px;color:var(--ink-3);margin-top:3px}
+  .wl-tk .pr{font-family:'Geist Mono',monospace;font-size:14px;font-weight:600;color:var(--ink)}
+  .wl-tk.last .pr{color:var(--accent)}
+  .wl-cta{margin-top:16px;padding:14px;border-radius:11px;background:#E8542A;color:#fff;font-weight:600;text-align:center;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.005em}
+  .wl-foot{margin-top:14px;font-family:'Geist Mono',monospace;font-size:9.5px;color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase;text-align:center}
+  .wl-foot em{font-style:normal;color:var(--ink-2)}
+
+  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
+  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
+  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
+  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
+  .cmp td{color:var(--ink-3);font-size:14px}
+  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
+  .cmp td.yes{color:#4DB87A}
+  .cmp td.no{color:var(--ink-4)}
+  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
+  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
+
+  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
+  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
+  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
+  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
+  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
+  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
+  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
+  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
+  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+  .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
+  @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
+  .int{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center;transition:transform .25s ease, border-color .25s ease, background .25s ease}
+  .int:hover{transform:translateY(-2px);border-color:rgba(232,84,42,.3);background:var(--bg-3)}
+  .int .nm{font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;letter-spacing:-0.005em;color:var(--ink)}
+  .int .cat{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+  .faq{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line);padding:24px 0;transition:background .25s ease}
+  .faq details[open]{background:linear-gradient(180deg,rgba(232,84,42,.03),transparent)}
+  .faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:24px;font-size:18px;font-weight:500;letter-spacing:-0.015em;color:var(--ink);outline:none}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+  .faq summary .plus{flex-shrink:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s ease, color .3s ease, border-color .3s ease;font-family:'Geist Mono',monospace;font-size:18px;line-height:1}
+  .faq details[open] summary .plus{transform:rotate(45deg);color:var(--accent);border-color:var(--accent)}
+  .faq .answer{padding:18px 56px 4px 0;font-size:15.5px;line-height:1.65;color:var(--ink-2);max-width:75ch}
+  .faq .answer p + p{margin-top:12px}
+  .faq .answer code{font-family:'Geist Mono',monospace;font-size:13px;color:var(--accent);background:rgba(232,84,42,.08);padding:2px 8px;border-radius:6px;border:1px solid rgba(232,84,42,.18)}
+
+  .cta-banner{margin:48px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:56px;display:grid;grid-template-columns:1.4fr 1fr;gap:48px;align-items:center;position:relative;overflow:hidden}
+  @media (max-width:880px){.cta-banner{grid-template-columns:1fr;padding:40px 28px;gap:32px}}
+  .cta-banner::before{content:"";position:absolute;width:400px;height:400px;background:var(--accent);filter:blur(120px);opacity:.28;top:-120px;right:-100px;pointer-events:none}
+  .cta-banner::after{content:"";position:absolute;width:300px;height:300px;background:var(--warm);filter:blur(100px);opacity:.12;bottom:-100px;left:-80px;pointer-events:none}
+  .cta-banner .left{position:relative}
+  .cta-banner .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .cta-banner h2{font-size:clamp(30px,3.4vw,48px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;max-width:18ch;color:var(--ink)}
+  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .cta-banner p.sub{font-size:16px;line-height:1.55;color:var(--ink-2);margin-top:18px;max-width:48ch}
+  .cta-banner .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .cta-banner ul.bulls{position:relative;list-style:none;display:flex;flex-direction:column;gap:14px}
+  .cta-banner ul.bulls li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:14.5px;color:var(--ink);line-height:1.5}
+  .cta-banner ul.bulls .ck{width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.35);display:grid;place-items:center;color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;flex-shrink:0;margin-top:1px}
+
+  .footer{margin-top:96px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body data-depth="sub" data-current="sec-promotoras">
+<a href="#main" class="skip-to-content" style="position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;z-index:9999;font-size:14px" onfocus="this.style.left='12px';this.style.top='12px'" onblur="this.style.left='-9999px'">Saltar al contenido</a>
+
+<div class="grain" aria-hidden="true"></div>
+<div id="site-header"></div>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="crumbs" aria-label="Migas de pan">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#sectores">Sectores</a>
+      <span class="sep">/</span>
+      <span class="here">Promotoras</span>
+    </nav>
+
+    <section class="page-hero">
+      <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Promotoras</span>
+      <h1>Tu marca, tu fiesta, tu <em>comisión</em> — en cualquier <span class="highlight">sala</span> del país.</h1>
+      <p class="lede">White-label ticketing en tu dominio, multi-ciudad bajo un mismo dashboard, RRPP nativo con liquidación transparente y settlement automático con la sala. Que tu fan vea tu marca al comprar — no la de la plataforma. Y que tu equipo no pierda dos horas el lunes cuadrando con el dueño del local.</p>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+        <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
+      </div>
+      <div class="meta" aria-label="Datos de plataforma">
+        <span>White-label · custom domain</span>
+        <span>Pop-up multi-ciudad</span>
+        <span>Liquidación con sala en 24h</span>
+      </div>
+    </section>
+
+    <section class="stats-strip" aria-label="Métricas de plataforma">
+      <div><div class="num"><em>+</em>56<em>%</em></div><div class="lab">conversión<br>desde Instagram</div></div>
+      <div><div class="num">20<em>s</em></div><div class="lab">tiempo medio<br>de checkout móvil</div></div>
+      <div><div class="num">0<em>%</em></div><div class="lab">comisión añadida<br>al asistente</div></div>
+      <div><div class="num">24<em>h</em></div><div class="lab">liquidación<br>con la sala</div></div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
+        <h2>Una promotora seria no debería operar como un grupo de WhatsApp con <em>ambición</em>.</h2>
+        <p class="sub">Tu fan compra una entrada y ve la marca de Eventbrite o Fourvenues. Tu liquidación con la sala se hace por captura de pantalla. Tu RRPP se paga por mensaje. Llega un punto en que tu marca crece — y la operativa no ha cambiado desde 2018. Estos son los tres dolores con los que llegan las promotoras que prueban Pasify.</p>
+      </div>
+
+      <div class="pain-grid">
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 01</div>
+          <h3>Tu fan compra una entrada y ve <em>otra</em> marca</h3>
+          <p>Inviertes 4 meses construyendo tu identidad en Instagram. El día que el fan paga, ve la URL del marketplace, su logo en el email, su look en el ticket. Cero memoria de tu marca. La próxima fiesta tendrás que volver a explicar quién eres.</p>
+          <div class="quote">"Construyo una marca y la plataforma se queda con la última pantalla."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 02</div>
+          <h3>Liquidar con la sala es más arte que ciencia</h3>
+          <p>El lunes vas a la sala con tu portátil. El dueño abre su Excel, tú abres el tuyo. Discutís 40 minutos sobre 14 entradas que pagaron en taquilla pero "no aparecen en el sistema". Te vas con un acuerdo aproximado y un pago a 7 días.</p>
+          <div class="quote">"Cada lunes era un mini-juicio. Y siempre perdía algo."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 03</div>
+          <h3>RRPP por WhatsApp y Excel del 2018</h3>
+          <p>15 promotores. Cada uno con su lista en su grupo de WhatsApp. Comisiones calculadas a ojo el martes. Discusiones a las 5 AM sobre si "ese cliente" entró por una lista u otra. El promotor pierde la fe, se va a otra promotora.</p>
+          <div class="quote">"Perdí a mis tres mejores RRPP por no poderles pagar bien."</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="operativa" class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">02 /</span> Producto</span>
+        <h2>Seis módulos para que tu marca sea el protagonista. Pasify, invisible.</h2>
+        <p class="sub">Tu fan ve tu URL, tu logo, tu mail, tu app. Pasify hace el trabajo sucio detrás: pagos, RRPP, liquidación, CRM, multi-ciudad, settlement. Eres tú quien construye la relación con el fan.</p>
+      </div>
+
+      <div class="mod-grid">
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 9h18M3 15h18M9 3a14 14 0 0 0 0 18M15 3a14 14 0 0 1 0 18"/></svg></div><span class="num">01</span></div>
+          <h3>White-label · tu marca, tu dominio</h3>
+          <p>Tickets, emails, app de puerta — todo con tu logo, tus colores, tu fuente y tu URL. Pasify desaparece. El fan compra en <code>tickets.tumarca.com</code>, no en pasify.com.</p>
+          <ul><li>Custom domain · DNS gestionado</li><li>Tu logo en email transaccional</li><li>App de puerta brandeable</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l9 6 9-6"/><rect x="3" y="6" width="18" height="12" rx="2"/></svg></div><span class="num">02</span></div>
+          <h3>Pop-up multi-ciudad bajo un dashboard</h3>
+          <p>Operas la misma fiesta en Madrid, Barcelona, Valencia y Bilbao. Un dashboard, cuatro instancias, cuatro salas. Cada ciudad con su deal de sala — la suma se ve en una sola pantalla.</p>
+          <ul><li>Multi-instancia con vista global</li><li>Deals distintos por sala</li><li>CRM unificado por marca</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><circle cx="17" cy="6.5" r="2.5"/><path d="M21 14c0-2.2-1.8-4-4-4"/></svg></div><span class="num">03</span></div>
+          <h3>RRPP transparente, liquidación automática</h3>
+          <p>Cada RRPP con su URL única, su comisión configurada y su panel propio. Liquidación semanal vía Stripe. Cero discusiones a las 5 AM. Tus mejores promotores se quedan.</p>
+          <ul><li>Comisión configurable por evento</li><li>Liquidación semanal automática</li><li>Trazabilidad código por código</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M9 14h6"/></svg></div><span class="num">04</span></div>
+          <h3>Settlement con la sala en 24 horas</h3>
+          <p>El cierre Z se firma en el iPad la misma noche. El reparto de taquilla, comisión a la sala, IRPF y SGAE se calculan al instante. La sala recibe su parte vía Stripe Connect en 24h.</p>
+          <ul><li>Cierre Z firmable in situ</li><li>Stripe Connect a la sala</li><li>Hash auditable por edición</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/><path d="M12 12l9-4.5M12 12v9M12 12L3 7.5"/></svg></div><span class="num">05</span></div>
+          <h3>CRM portátil entre ciudades y salas</h3>
+          <p>Tu fan de Madrid vino a tu fiesta de Barcelona. Tu CRM lo sabe — aunque la sala fuera distinta. Cuando vuelves a Madrid, tienes 600 fans recurrentes a quienes avisar antes de que se entere Instagram.</p>
+          <ul><li>Histórico cross-ciudad y cross-sala</li><li>Lookalike audiences nativos</li><li>Export · API · RGPD-clean</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg></div><span class="num">06</span></div>
+          <h3>Analytics que entiende a una promotora</h3>
+          <p>No solo "cuánto se vendió". Quién compró, cuántas fiestas tuyas vino antes, qué canal le trajo (IG · TikTok · RRPP · orgánico), conversion rate por creativo, ROAS por canal.</p>
+          <ul><li>Atribución por canal de marketing</li><li>ROAS por edición</li><li>Lookalike y retargeting nativo</li></ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">03 /</span> Operativa real</span>
+        <h2>Una pop-up con Pasify, día por día.</h2>
+        <p class="sub">No es una demo: es lo que vive el equipo de una promotora indie que organiza una fiesta pop-up en una sala alquilada. Desde el cierre del deal hasta la liquidación con el venue.</p>
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="tl-row"><div><div class="time">M−1</div><div class="day">Mes anterior</div></div><div class="body"><h4>Cierre de deal con la sala</h4><p>Hablas con el manager. Cierras: alquiler 1.500€ + 70/30 sobre taquilla excedente. Pasify importa el deal, lo vincula al evento, configura el reparto automáticamente. La sala firma desde su iPad.</p><span class="tag">Deal firmado</span></div></div>
+        <div class="tl-row"><div><div class="time">D−21</div><div class="day">Anuncio</div></div><div class="body"><h4>Lanzamiento en IG · creatividades brandeadas</h4><p>Subes el evento. Pasify genera tu landing en <code>tickets.tumarca.com/sabotaje-mad-jul</code> con tu look. Compartes el link en historia, post, Linktree. Cero "powered by Pasify" visible al fan.</p><span class="tag">Brand-first</span></div></div>
+        <div class="tl-row"><div><div class="time">D−14</div><div class="day">Early bird</div></div><div class="body"><h4>Apertura early bird · 200 entradas a 12€</h4><p>El precio está configurado para subir automáticamente al agotarse el stock. La conversión Instagram → checkout es 56% — porque tu landing carga en tu dominio, con tu marca, en 1.4s.</p><span class="tag">Saltos auto</span></div></div>
+        <div class="tl-row"><div><div class="time">D−7</div><div class="day">Push fans</div></div><div class="body"><h4>Email a 4.200 fans recurrentes</h4><p>Pasify segmenta tu CRM: 4.200 fans que vinieron a alguna pop-up tuya en los últimos 12 meses. Email con descuento exclusivo. Conversión: 38%. La fiesta se vende sola sin gastar en ads.</p><span class="tag">Retargeting</span></div></div>
+        <div class="tl-row"><div><div class="time">D−2</div><div class="day">RRPP & lista</div></div><div class="body"><h4>Activación de RRPP · sold-out</h4><p>15 RRPP activos con su URL. Comisión 2€ por entrada vendida. Pasify alerta: "evento sold-out a las 22:14". Cierras venta general, dejas activo solo "lista RRPP" por si quieres meter última gente.</p><span class="tag">Sold-out</span></div></div>
+        <div class="tl-row peak"><div><div class="time">D0</div><div class="day">Vie · pop-up</div></div><div class="body"><h4>Puertas, escáner offline, aforo 100%</h4><p>Tres taquilleros con tu logo en el iPad. 1.180 personas escaneadas en 90 minutos sin caída. La sala ve sus números en su instancia, tú ves los tuyos. Cero confusión sobre quién entró cuándo.</p><span class="tag">Modo offline</span></div></div>
+        <div class="tl-row"><div><div class="time">D0 · 03:00</div><div class="day">Cierre</div></div><div class="body"><h4>Cierre Z firmado en iPad por sala y promotora</h4><p>Taquilla 14.4K€ · 30% IVA + comisión sala restada · 70% para ti = 10.080€. RRPP devengado: 1.640€. Sala recibe su parte en 24h vía Stripe Connect. Tú firmas, sala firma, hash auditable. Fin.</p><span class="tag">Settlement</span></div></div>
+        <div class="tl-row"><div><div class="time">D+1</div><div class="day">Sáb · liquidación</div></div><div class="body"><h4>Stripe Connect dispara los pagos</h4><p>10.080€ a tu cuenta · 1.640€ repartidos entre 15 RRPP automáticamente · 4.320€ a la sala. Cero transferencias manuales, cero "te lo paso el lunes". Cero llamadas el domingo por la mañana.</p><span class="tag">Pagos auto</span></div></div>
+        <div class="tl-row"><div><div class="time">D+3</div><div class="day">Lun · próxima ciudad</div></div><div class="body"><h4>Replicación a Barcelona en 1 click</h4><p>Pasify duplica el evento para la siguiente ciudad: misma marca, misma estructura de tickets, RRPP locales activados. Importas 1.840 fans recurrentes de tu CRM en BCN. Empezamos otra vez — pero ya con datos.</p><span class="tag">Multi-ciudad</span></div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">04 /</span> Lo que ves desde el office</span>
+        <h2>Un dashboard pensado para una promotora multi-ciudad.</h2>
+        <p class="sub">Una pantalla. Cuatro ciudades. Datos vivos. Esto es lo que vería tu equipo durante una semana de tour con tres pop-ups confirmados y una en pre-venta.</p>
+      </div>
+
+      <div class="mock" aria-label="Demostración visual del dashboard">
+        <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">app.pasify.com/promo/sabotaje/tour-jul · vie 26 jul · 21:14</span></div>
+        <div class="mock-body">
+          <div class="mock-head"><h4>Sabotaje · Tour Jul · Multi-ciudad</h4><span class="date">Vie 26 jul · 21:14 · MAD live</span></div>
+
+          <div class="mock-kpi">
+            <div><div class="l">Entradas tour</div><div class="v">3<em>.</em>240 <em>/ 4K</em></div><div class="d">81% · 4 ciudades</div></div>
+            <div><div class="l">Ingresos tour</div><div class="v">38<em>.</em>880<em>€</em></div><div class="d">+22% vs tour anterior</div></div>
+            <div><div class="l">Comisión RRPP</div><div class="v">5<em>.</em>184<em>€</em></div><div class="d">42 promotores · pagados</div></div>
+            <div><div class="l">Conversión IG</div><div class="v">56<em>%</em></div><div class="d">white-label landing</div></div>
+          </div>
+
+          <div class="mock-split">
+            <div class="mock-tbl">
+              <div class="ttl"><span>Tour por ciudad</span><span class="live">live</span></div>
+              <div class="mock-tbl-row h"><span>Ciudad · Sala</span><span>Vendidas</span><span>Cap</span><span>Estado</span></div>
+              <div class="mock-tbl-row"><span class="name">Madrid · Eclipse</span><span class="ppl">1.180</span><span class="min">1.200</span><span class="st warn">98% · LIVE</span></div>
+              <div class="mock-tbl-row"><span class="name">Barcelona · Reactor</span><span class="ppl">820</span><span class="min">900</span><span class="st ok">91% · 02 ago</span></div>
+              <div class="mock-tbl-row"><span class="name">Valencia · Nova</span><span class="ppl">680</span><span class="min">800</span><span class="st ok">85% · 09 ago</span></div>
+              <div class="mock-tbl-row"><span class="name">Bilbao · Almacén</span><span class="ppl">560</span><span class="min">700</span><span class="st wait">80% · 16 ago</span></div>
+              <div class="mock-tbl-row"><span class="name">Sevilla · Arpegio</span><span class="ppl">0</span><span class="min">600</span><span class="st gone">PRE-VENTA</span></div>
+              <div class="mock-tbl-row"><span class="name">Total tour 26→16 ago</span><span class="ppl">3.240</span><span class="min">4.200</span><span class="st vip">77% · TOTAL</span></div>
+            </div>
+
+            <div class="mock-feed">
+              <div class="ttl">Últimos eventos</div>
+              <div class="feed-row"><span class="t">21:14</span><span class="body"><b>MAD aforo 98%</b> · cierre walk-up</span></div>
+              <div class="feed-row"><span class="t">21:11</span><span class="body"><b>RRPP "MarV"</b> · 18 entradas · 36€ comisión</span></div>
+              <div class="feed-row"><span class="t">21:08</span><span class="body"><b>BCN venta</b> +24 entradas · early bird</span></div>
+              <div class="feed-row"><span class="t">21:05</span><span class="body"><b>Reservados Eclipse</b> · 22/22 dentro</span></div>
+              <div class="feed-row"><span class="t">21:00</span><span class="body"><b>Sponsor "BeerCo"</b> · activación MAD lista</span></div>
+              <div class="feed-row"><span class="t">20:56</span><span class="body"><b>Settlement preview MAD</b> · <span class="acc">10.080€</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">05 /</span> White-label</span>
+      </div>
+
+      <div class="res-split">
+        <div class="text">
+          <h2>Tu marca al final del checkout. <em>No</em> la nuestra.</h2>
+          <p class="sub">Una promotora que no controla la última pantalla del fan está alquilando su marca al marketplace. Pasify hace lo opuesto: tu landing en tu dominio, tu logo en el email, tu look en el ticket, tu brand en la app de puerta. Pasify desaparece. Tu fan recuerda tu fiesta — no a quién la procesó.</p>
+
+          <ul class="checks">
+            <li><span class="ck">✓</span><div><b>Custom domain.</b> <code>tickets.tumarca.com</code> con DNS gestionado y certificado SSL automático. Setup en 15 min con un humano.</div></li>
+            <li><span class="ck">✓</span><div><b>Tema visual completo.</b> Logo, paleta, tipografía, fondo, tono de mensajes. El fan no sabe que existe Pasify.</div></li>
+            <li><span class="ck">✓</span><div><b>Email transaccional con tu marca.</b> Confirmación, recordatorio, ticket — desde tu dominio (<code>tickets@tumarca.com</code>) con tu firma.</div></li>
+            <li><span class="ck">✓</span><div><b>App de puerta brandeable.</b> Tus taquilleros usan tu app. El fan ve tu logo al escanear su QR. Cero "powered by".</div></li>
+            <li><span class="ck">✓</span><div><b>Apple Wallet con tu look.</b> El ticket en el iPhone del fan tiene tu logo y tus colores. No el azul genérico de la plataforma.</div></li>
+          </ul>
+        </div>
+
+        <aside class="wl-card" aria-label="Vista previa landing white-label">
+          <div class="wl-browser"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span class="url">tickets.sabotaje.es/madrid-jul-26</span></div>
+          <div class="wl-body">
+            <div class="wl-brand">
+              <span class="mark">SB</span>
+              <span class="nb">Sabotaje</span>
+            </div>
+            <div class="wl-event">
+              <div class="lab">Madrid · 26 jul · 23:30</div>
+              <div class="ti">Sabotaje vol.&nbsp;14 — pop-up techno</div>
+              <div class="meta">Sala Eclipse · 1.200 cap · 21+</div>
+            </div>
+            <div class="wl-tickets">
+              <div class="wl-tk">
+                <div><div class="nm">Early bird</div><div class="sm">agotado · 200 vendidas</div></div>
+                <div class="pr" style="text-decoration:line-through;color:var(--ink-3)">12€</div>
+              </div>
+              <div class="wl-tk">
+                <div><div class="nm">General</div><div class="sm">820 vendidas / 1.000</div></div>
+                <div class="pr">15€</div>
+              </div>
+              <div class="wl-tk last">
+                <div><div class="nm">Last entry</div><div class="sm">últimas 38 · cierra a las 02:00</div></div>
+                <div class="pr">20€</div>
+              </div>
+            </div>
+            <div class="wl-cta">Comprar ahora <span style="font-size:13px">→</span></div>
+            <div class="wl-foot">Pago seguro · Apple Wallet · Bizum · <em>0% comisión añadida al fan</em></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
+        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
+        <p class="sub">Comparamos las tres opciones típicas para una promotora: usar el sistema de la sala (forzado), un marketplace global, o construirte un Stripe + Linktree casero. Pasify combina lo mejor de cada uno.</p>
+      </div>
+
+      <div class="cmp" role="region" aria-label="Comparativa">
+        <table>
+          <thead><tr><th></th><th class="hl">Pasify</th><th>Sistema de la sala</th><th>Marketplace global</th></tr></thead>
+          <tbody>
+            <tr><th>Comisión por entrada</th><td class="hl"><span class="pct">0%</span> al fan · 4–6% a ti</td><td>5–8% al fan</td><td>10–15% al fan</td></tr>
+            <tr><th>White-label · tu marca, tu URL</th><td class="hl yes">Sí · custom domain</td><td class="no">No · marca de la sala</td><td class="no">No</td></tr>
+            <tr><th>Multi-ciudad bajo un dashboard</th><td class="hl yes">Sí · vista global tour</td><td class="no">No · solo esa sala</td><td>Sí · pero comisión alta</td></tr>
+            <tr><th>RRPP nativo + liquidación auto</th><td class="hl yes">Sí · semanal</td><td>Parcial</td><td class="no">No</td></tr>
+            <tr><th>Settlement con sala automático</th><td class="hl yes">Sí · 24h vía Stripe Connect</td><td>—</td><td class="no">No</td></tr>
+            <tr><th>CRM exportable propio</th><td class="hl yes">Sí · CSV + API</td><td class="no">Es de la sala</td><td class="no">Solo dentro</td></tr>
+            <tr><th>Atribución por canal de marketing</th><td class="hl yes">Sí · IG · TikTok · ads · orgánico</td><td class="no">No</td><td>Limitado</td></tr>
+            <tr><th>Soporte humano viernes 03:00</th><td class="hl yes">Sí · WhatsApp · 4 min</td><td>—</td><td>Email · 24h</td></tr>
+            <tr><th>Permanencia mínima</th><td class="hl"><span class="pct">0</span> meses</td><td>Acuerdo con sala</td><td>0–6 meses</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
+        <h2>Tres formas de medir si Pasify funciona en promotoras.</h2>
+        <p class="sub">Tres promotoras de tres escalas. Nombres anonimizados a petición — algunas trabajan con clubs específicos y prefieren no nombrarlos.</p>
+      </div>
+
+      <div class="quotes">
+        <article class="q reveal"><div class="mark">"</div><blockquote>El fan compra entradas en mi <em>dominio</em>, recibe email con mi logo, escanea mi QR. Por primera vez en seis años mi marca aparece al final del funnel, no la del marketplace.</blockquote><div class="who"><div class="av"></div><div><div class="nm">N.M. · Founder</div><div class="role">Colectivo techno · multi-ciudad</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>Pasamos de discutir liquidación con cada sala a recibir el pago en <em>24 horas</em> automáticamente. Mi gestor me llama menos. Mi cuenta está siempre cuadrada.</blockquote><div class="who"><div class="av b"></div><div><div class="nm">R.G. · Promoter</div><div class="role">Pop-up urban · BCN/MAD/VLC</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>Mis tres mejores RRPP <em>se quedaron</em>. La transparencia de comisiones les hace dormir mejor — y a mí también. Cero discusiones a las 5 AM.</blockquote><div class="who"><div class="av c"></div><div><div class="nm">A.V. · Marketing Lead</div><div class="role">Promotora corporativa · 12 ciudades</div></div></div></article>
+      </div>
+    </section>
+
+    <section class="sec compact reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <h2>Encaja con el stack de una promotora moderna.</h2>
+        <p class="sub">Pasify habla con tu Linktree, tu Beatport, tu Mailchimp y tus pixels de tracking. Y te da la API si necesitas algo más.</p>
+      </div>
+
+      <div class="ints">
+        <div class="int"><div class="nm">Stripe Connect</div><div class="cat">Settlement</div></div>
+        <div class="int"><div class="nm">Bizum</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Apple Wallet</div><div class="cat">Tickets</div></div>
+        <div class="int"><div class="nm">Linktree</div><div class="cat">Discovery</div></div>
+        <div class="int"><div class="nm">Beatport</div><div class="cat">Discovery</div></div>
+        <div class="int"><div class="nm">Resident Advisor</div><div class="cat">Discovery</div></div>
+        <div class="int"><div class="nm">Spotify Artists</div><div class="cat">Lineup</div></div>
+        <div class="int"><div class="nm">Instagram</div><div class="cat">Pixel + ads</div></div>
+        <div class="int"><div class="nm">TikTok Pixel</div><div class="cat">Atribución</div></div>
+        <div class="int"><div class="nm">Meta Ads</div><div class="cat">Marketing</div></div>
+        <div class="int"><div class="nm">WhatsApp Biz</div><div class="cat">CRM directo</div></div>
+        <div class="int"><div class="nm">Mailchimp</div><div class="cat">Email</div></div>
+        <div class="int"><div class="nm">Holded</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Looker Studio</div><div class="cat">Analytics</div></div>
+        <div class="int"><div class="nm">Zapier</div><div class="cat">Webhooks</div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <h2>Lo que preguntan las promotoras antes de firmar.</h2>
+      </div>
+
+      <div class="faq">
+        <details><summary>¿Cómo funciona el white-label exactamente?<span class="plus">+</span></summary><div class="answer"><p>Te damos un <code>subdominio</code> custom (ej. <code>tickets.tumarca.com</code>) con SSL automático. Subes tu logo, defines tu paleta, tipografía y tono de email. La landing, los emails, el ticket en Apple Wallet y la app de puerta heredan tu marca completa. Pasify solo aparece en una pequeña línea legal del footer (obligatoria por TOS), tipo "Procesado por Pasify".</p><p>Setup completo en <b>15 minutos</b> con un humano nuestro por videollamada. Si tienes un equipo de diseño y quieres iterar, te pasamos un Figma con los componentes editables.</p></div></details>
+        <details><summary>¿La sala se entera de que uso Pasify?<span class="plus">+</span></summary><div class="answer"><p>Sí — y es bueno que sea así. La sala recibe su parte vía <code>Stripe Connect</code> directamente y firma el cierre Z digital. Pasify es transparente con la sala: ven los números reales de taquilla, su corte, su comisión, su pago programado. Esto suele <b>fortalecer</b> tu relación con la sala, no debilitarla — porque ya no hay discusiones de liquidación.</p><p>Algunas salas, al ver el sistema, deciden adoptar Pasify para sus propios eventos. Si pasa, no cobramos comisión doble — eres tú quien negocia.</p></div></details>
+        <details><summary>¿Soporta giras multi-ciudad reales?<span class="plus">+</span></summary><div class="answer"><p>Sí. Una "tour instance" agrupa N eventos (uno por ciudad/sala). Cada uno con su deal con su sala, su RRPP local, su precio. El dashboard te da vista global (% sold-through del tour, ingresos consolidados, ciudades en pico) y vista por evento. CRM cross-ciudad — el fan que vino a tu Madrid se segmenta cuando vuelves.</p></div></details>
+        <details><summary>¿Cómo se calculan las comisiones de RRPP?<span class="plus">+</span></summary><div class="answer"><p>Configurable: importe fijo por entrada vendida (ej. 2€), porcentaje (ej. 10%) o tier (ej. 1€ las primeras 50, 2€ las siguientes). Cada RRPP tiene su URL única — la entrada vendida le queda atribuida sin ambigüedad.</p><p>Pago automático vía <b>Stripe Connect</b> semanalmente. El RRPP ve su panel con sus ventas, sus pagos pendientes y su histórico. Cero "te lo paso el lunes que viene".</p></div></details>
+        <details><summary>¿Y la fiscalidad? IRPF de RRPP, IVA, retenciones<span class="plus">+</span></summary><div class="answer"><p>Pasify retiene IRPF a RRPP que lo necesiten (15% o el que corresponda), genera el certificado anual, y exporta directamente a tu gestoría. Cumple <code>Veri*Factu</code> 2026.</p><p>El IVA del espectáculo (10%) se aplica automáticamente en la venta. Si tu evento tiene un IVA distinto (educativo, cultural exento, etc.) se configura una vez por evento.</p></div></details>
+        <details><summary>¿Puedo migrar mi base de fans desde Eventbrite o Fourvenues?<span class="plus">+</span></summary><div class="answer"><p>Sí, gratis. Importamos: contactos, histórico de eventos, segmentos guardados, tags, opt-ins. La migración tarda 24–72h y la lleva un humano nuestro. <b>El opt-in del fan se preserva</b> — no le mandamos nada hasta que tú lo decidas.</p></div></details>
+        <details><summary>¿Cuánto cobra Pasify exactamente?<span class="plus">+</span></summary><div class="answer"><p>Tarifa fija mensual (desde <code>89€/mes</code> para promotoras pequeñas) + comisión del 4–6% sobre la venta. <b>Cero comisión añadida al fan.</b> Si tu volumen es estacional (giras de verano, fin de año), tarifa por evento disponible.</p><p>Sin setup fee. Sin coste por evento. Sin coste por usuario. Sin permanencia.</p></div></details>
+        <details><summary>¿Puedo probarlo con un solo evento antes de comprometerme?<span class="plus">+</span></summary><div class="answer"><p>Sí. Primer evento <b>gratis</b>, sin tarjeta. Crea el evento, vende, opera la noche, cobra la liquidación. Si no encaja, te llevas tu data limpia sin pagar. La mayoría de promotoras que prueban siguen — pero la decisión es tuya.</p></div></details>
+      </div>
+    </section>
+
+    <section class="cta-banner reveal">
+      <div class="left">
+        <div class="lab">Empieza con tu próxima fiesta</div>
+        <h2>Tu marca, tu fan, tu <em>data</em>. Sin comisiones a tu cliente, sin Excel los lunes.</h2>
+        <p class="sub">Primer evento gratis para probarlo. Migración asistida desde Eventbrite o Fourvenues. White-label completo configurado en 15 minutos por videollamada.</p>
+        <div class="ctas">
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
+        </div>
+      </div>
+      <ul class="bulls">
+        <li><span class="ck">✓</span><div><b>White-label en tu dominio · 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Custom domain, SSL, branding completo, email transaccional con tu marca.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Multi-ciudad · vista global del tour</b><br><span style="color:var(--ink-2);font-size:13px">Mismo dashboard, distintas salas, distintos deals — un solo CRM.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Settlement con sala en 24h</b><br><span style="color:var(--ink-2);font-size:13px">Stripe Connect transfiere automático. Cero discusiones el lunes.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Tu CRM, tu propiedad · siempre</b><br><span style="color:var(--ink-2);font-size:13px">Export CSV+API. Lookalikes para próximas pop-ups. RGPD-clean.</span></div></li>
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
+</main>
+
+<script src="../soluciones/_header.js"></script>
+<script>
+  (function(){
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+      return;
+    }
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }});
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  })();
+</script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
+</body>
+</html>

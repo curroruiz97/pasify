@@ -1,0 +1,1988 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasify — El sistema operativo de los eventos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0908;
+    --bg-2:#13100E;
+    --bg-3:#1A1612;
+    --line:#26211C;
+    --line-2:#332C25;
+    --ink:#F4EEE2;
+    --ink-2:#C9BFA8;
+    --ink-3:#8A8275;
+    --ink-4:#5C544A;
+    --accent:#E8542A;
+    --accent-2:#FF7A4D;
+    --accent-deep:#B8381A;
+    --accent-soft:rgba(232,84,42,.12);
+    --warm:#E8B04C;
+    --success:#4DB87A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Geist',ui-sans-serif,system-ui,sans-serif;font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body{min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent);color:#fff}
+  .mono{font-family:'Geist Mono',ui-monospace,monospace}
+  .serif{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400}
+  .wrap{max-width:1340px;margin:0 auto;padding:0 28px}
+
+  /* Grain layer */
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.4;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+  /* ============ LOGO ============ */
+  .logo{display:inline-flex;align-items:center;font-weight:600;letter-spacing:-0.045em;color:var(--ink);line-height:.95;text-decoration:none}
+  .logo img{height:1.55em;width:auto;display:block}
+  .logo .dot{width:.18em;height:.18em;background:var(--accent);border-radius:50%;display:inline-block;margin:.18em .03em 0 .03em;align-self:flex-start}
+  .logo .y{color:var(--accent);font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;margin-left:-.04em;letter-spacing:-0.02em}
+
+  /* ============ HEADER ============ */
+  .header{position:fixed;top:0;left:0;right:0;z-index:100;transition:background .3s ease, border-color .3s ease;border-bottom:1px solid transparent}
+  .header.scrolled,.header.menu-open{background:rgba(11,9,8,.85);backdrop-filter:blur(20px);border-bottom-color:var(--line)}
+  .header-inner{max-width:1340px;margin:0 auto;padding:16px 28px;display:flex;align-items:center;gap:32px}
+  .header .logo{font-size:42px}
+  .nav{display:flex;gap:6px;font-size:14px;color:var(--ink-2);font-weight:400}
+  .nav-item{position:relative}
+  .nav-trigger{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;color:var(--ink-2);cursor:pointer;border-radius:8px;transition:color .2s ease, background .2s ease;background:none;border:none;font:inherit}
+  .nav-trigger:hover,.nav-item.open .nav-trigger{color:var(--ink);background:rgba(244,238,226,.04)}
+  .nav-trigger svg{transition:transform .25s ease}
+  .nav-item.open .nav-trigger svg{transform:rotate(180deg);color:var(--accent)}
+  .header .spacer{flex:1}
+  .header .login{font-size:14px;color:var(--ink-2);padding:8px 16px;border-radius:999px;letter-spacing:-0.005em;background:rgba(244,238,226,.03);border:1px solid rgba(244,238,226,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:color .2s ease, background .25s ease, border-color .25s ease, transform .15s ease}
+  .header .login:hover{color:var(--ink);background:rgba(244,238,226,.08);border-color:rgba(244,238,226,.18);transform:translateY(-1px)}
+  .header .cta{font-size:14px;background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;padding:10px 18px;border-radius:999px;font-weight:500;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(80,20,5,.22);transition:transform .15s ease, box-shadow .25s ease, filter .2s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 5px 14px -4px rgba(232,84,42,.5),0 12px 28px -10px rgba(184,56,26,.5)}
+  .header .cta:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 9px 20px -4px rgba(232,84,42,.6),0 18px 40px -10px rgba(184,56,26,.55)}
+
+  /* MEGAMENU */
+  .mega-wrap{position:fixed;top:64px;left:0;right:0;z-index:99;pointer-events:none;opacity:0;transform:translateY(-8px);transition:opacity .25s ease, transform .25s ease}
+  .mega-wrap.open{opacity:1;transform:translateY(0);pointer-events:auto}
+  .mega{max-width:1340px;margin:0 auto;background:rgba(15,13,11,.96);backdrop-filter:blur(24px);border:1px solid var(--line);border-radius:18px;padding:36px 40px;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
+  .mega-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:36px}
+  .mega-col h6{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .mega-col h6::before{content:"";width:14px;height:1px;background:var(--accent)}
+  .mega-col ul{list-style:none;display:flex;flex-direction:column;gap:2px}
+  .mega-link{display:flex;align-items:center;gap:10px;padding:9px 10px;margin-left:-10px;border-radius:8px;font-size:14px;color:var(--ink);transition:background .2s ease, color .2s ease}
+  .mega-link:hover{background:rgba(232,84,42,.08);color:var(--accent)}
+  .mega-link .pill{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;background:var(--accent);color:#fff;padding:2px 6px;border-radius:999px;margin-left:auto}
+  .mega-link .ico{width:28px;height:28px;border-radius:7px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mega-link .ico svg{width:14px;height:14px}
+  .mega-link.has-sub{flex-direction:column;align-items:flex-start;gap:6px;line-height:1.2}
+  .mega-link.has-sub .ttl{font-size:14px;font-weight:500;letter-spacing:-0.005em}
+  .mega-link.has-sub .sublabel{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);line-height:1.45;font-weight:400}
+  .mega-link.has-sub:hover .sublabel,.mega-link.has-sub.current .sublabel{color:var(--ink-2)}
+  .mega-feature{background:linear-gradient(160deg,#1A0F08,#3D1F12);border-radius:14px;padding:24px;border:1px solid rgba(232,84,42,.25);position:relative;overflow:hidden}
+  .mega-feature::before{content:"";position:absolute;width:200px;height:200px;background:var(--accent);filter:blur(80px);opacity:.3;top:-60px;right:-60px}
+  .mega-feature .lab{position:relative;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .mega-feature h5{position:relative;font-size:18px;font-weight:600;letter-spacing:-0.02em;margin-top:8px;color:var(--ink)}
+  .mega-feature p{position:relative;font-size:13px;color:var(--ink-2);line-height:1.5;margin-top:8px}
+  .mega-feature a{position:relative;display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+
+  /* MOBILE NAV */
+  .burger{display:none;width:42px;height:42px;border:1px solid var(--line-2);border-radius:10px;background:transparent;cursor:pointer;align-items:center;justify-content:center;color:var(--ink)}
+  .burger span{display:block;width:18px;height:1.5px;background:currentColor;position:relative;transition:transform .2s ease}
+  .burger span::before,.burger span::after{content:"";position:absolute;left:0;width:18px;height:1.5px;background:currentColor;transition:transform .2s ease, top .2s ease}
+  .burger span::before{top:-6px}.burger span::after{top:6px}
+  .burger.open span{background:transparent}
+  .burger.open span::before{top:0;transform:rotate(45deg)}
+  .burger.open span::after{top:0;transform:rotate(-45deg)}
+  /* Search dock */
+  .search-dock{position:relative;width:40px;height:40px;flex-shrink:0;margin-right:6px}
+  .search-trigger{position:absolute;inset:0;width:40px;height:40px;border-radius:999px;border:1px solid var(--line-2);background:rgba(244,238,226,.04);display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:opacity .2s ease,transform .2s ease,color .2s ease,border-color .2s ease,background .2s ease;padding:0}
+  .search-trigger:hover{color:var(--ink);border-color:rgba(232,84,42,.4);background:rgba(232,84,42,.06)}
+  .search-trigger svg{width:16px;height:16px}
+  .search-form{position:absolute;top:0;right:0;height:40px;width:320px;border-radius:999px;background:rgba(20,17,14,0.92);border:1px solid var(--line-2);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;opacity:0;pointer-events:none;transform:scaleX(.125);transform-origin:right center;transition:transform .35s cubic-bezier(0.16,1,0.3,1),opacity .25s ease;overflow:hidden;z-index:5}
+  .search-form .search-ico{padding:0 6px 0 16px;display:flex;align-items:center;color:var(--ink-3)}
+  .search-form .search-ico svg{width:14px;height:14px}
+  .search-form input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:var(--ink);font-family:inherit;font-size:13px;padding:0 6px}
+  .search-form input::placeholder{color:var(--ink-3)}
+  .search-form .search-close{flex-shrink:0;margin-right:4px;width:28px;height:28px;border:0;background:transparent;border-radius:999px;display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease;padding:0}
+  .search-form .search-close:hover{background:rgba(244,238,226,.08);color:var(--accent);transform:scale(1.08)}
+  .search-form .search-close svg{width:14px;height:14px}
+  .search-dock.open .search-trigger{opacity:0;transform:scale(.6);pointer-events:none}
+  .search-dock.open .search-form{transform:scaleX(1);opacity:1;pointer-events:auto}
+  .search-results{position:absolute;top:48px;right:0;width:320px;background:rgba(20,17,14,0.96);border:1px solid var(--line-2);border-radius:14px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:6px;max-height:360px;overflow-y:auto;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .2s ease,transform .2s ease;z-index:6;box-shadow:0 12px 40px -12px rgba(0,0,0,.6)}
+  .search-dock.has-results .search-results{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .search-result{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .15s ease;text-decoration:none;color:var(--ink)}
+  .search-result:hover,.search-result.active{background:rgba(232,84,42,.10)}
+  .search-result .lab{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);flex-shrink:0;min-width:78px}
+  .search-result .ttl{font-size:13px;color:var(--ink);flex:1;line-height:1.25}
+  .search-result.active .lab,.search-result:hover .lab{color:var(--accent)}
+  .search-empty{padding:18px 14px;font-size:12px;color:var(--ink-3);text-align:center;line-height:1.5}
+  @media (max-width:880px){.search-form,.search-results{width:min(280px,calc(100vw - 120px))}}
+  @media (max-width:520px){.search-dock{display:none}}
+  .mobile-drawer{position:fixed;inset:64px 0 0 0;z-index:98;background:rgba(11,9,8,.98);backdrop-filter:blur(20px);padding:24px 28px 80px;overflow-y:auto;transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column;gap:8px}
+  .mobile-drawer.open{transform:translateX(0)}
+  .mobile-drawer details{border-bottom:1px solid var(--line)}
+  .mobile-drawer summary{padding:18px 4px;font-size:18px;font-weight:500;list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:var(--ink)}
+  .mobile-drawer summary::-webkit-details-marker{display:none}
+  .mobile-drawer summary::after{content:"+";font-family:'Geist Mono',monospace;font-size:20px;color:var(--accent);transition:transform .2s ease}
+  .mobile-drawer details[open] summary::after{transform:rotate(45deg)}
+  .mobile-drawer .sub{display:flex;flex-direction:column;gap:2px;padding:0 0 18px 4px}
+  .mobile-drawer .sub a{padding:10px 0;color:var(--ink-2);font-size:15px}
+  .mobile-drawer .ctas{margin-top:24px;display:flex;flex-direction:column;gap:10px}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;min-height:100vh;padding:140px 0 80px;display:flex;align-items:center;overflow:hidden;isolation:isolate}
+  .hero-bg{position:absolute;inset:0;z-index:-1}
+  .blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.55;animation:float 18s ease-in-out infinite}
+  .blob.b1{width:520px;height:520px;background:#E8542A;top:-120px;left:-80px;animation-delay:0s}
+  .blob.b2{width:420px;height:420px;background:#7A2A0F;top:30%;right:-60px;animation-delay:-6s;opacity:.45}
+  .blob.b3{width:380px;height:380px;background:#3A1F0F;bottom:-100px;left:30%;animation-delay:-12s;opacity:.7}
+  @keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-30px) scale(1.05)}66%{transform:translate(-30px,40px) scale(.95)}}
+  .hero-grid{position:absolute;inset:0;background-image:
+    linear-gradient(to right, rgba(244,238,226,.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(244,238,226,.04) 1px, transparent 1px);
+    background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 75%)}
+  .hero-content{position:relative;width:100%}
+  .hero .eyebrow{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-2);background:rgba(244,238,226,.02);backdrop-filter:blur(10px)}
+  .hero .eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
+  .hero h1{font-size:clamp(48px,7.4vw,108px);font-weight:600;letter-spacing:-0.045em;line-height:.94;margin-top:24px;max-width:14ch}
+  .hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .hero h1 .underline-word{position:relative;display:inline-block}
+  .hero h1 .underline-word::after{content:"";position:absolute;left:-1%;right:-1%;bottom:.08em;height:.18em;background:var(--accent);z-index:-1;transform:skewY(-1.5deg);animation:slide-in 1.1s .9s cubic-bezier(.7,0,.3,1) backwards;transform-origin:left}
+  @keyframes slide-in{from{transform:scaleX(0) skewY(-1.5deg)}to{transform:scaleX(1) skewY(-1.5deg)}}
+  .hero .lede{font-size:clamp(17px,1.5vw,21px);line-height:1.5;color:var(--ink-2);max-width:62ch;margin-top:32px}
+  .hero .ctas{display:flex;gap:14px;margin-top:44px;flex-wrap:wrap;align-items:center}
+  .hero .meta-row{margin-top:64px;padding-top:32px;border-top:1px solid var(--line);display:flex;gap:48px;flex-wrap:wrap}
+  .hero .meta-row .stat .num{font-size:32px;font-weight:600;letter-spacing:-0.03em;font-family:'Geist Mono',monospace;color:var(--ink)}
+  .hero .meta-row .stat .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+  /* Hero side card */
+  .hero-side{position:absolute;right:28px;top:50%;transform:translateY(-50%);width:340px;display:none;z-index:2}
+  @media (min-width:1280px){.hero-side{display:block}.hero-content{padding-right:380px}}
+  @media (min-width:1480px){.hero-side{width:380px;right:28px}.hero-content{padding-right:420px}}
+  .ticket-card{background:linear-gradient(180deg,#1A1612 0%,#0F0D0B 100%);border:1px solid var(--line-2);border-radius:18px;padding:0;overflow:hidden;position:relative;transform:rotate(-3deg);box-shadow:0 40px 80px -30px rgba(232,84,42,.35), 0 30px 60px -30px rgba(0,0,0,.6);animation:cardFloat 6s ease-in-out infinite}
+  @keyframes cardFloat{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-2deg) translateY(-12px)}}
+  .ticket-card::before,.ticket-card::after{content:"";position:absolute;width:24px;height:24px;background:var(--bg);border-radius:50%;left:50%;transform:translateX(-50%)}
+  .ticket-card::before{top:64%}
+  .ticket-card .img{height:200px;background:linear-gradient(135deg,#3D1F12 0%,#7A2A0F 50%,#E8542A 100%),url("uploads/pera%20fiesta.jpg") center/cover no-repeat;background-blend-mode:multiply;position:relative;overflow:hidden}
+  .ticket-card .img::after{content:"";position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><circle cx='20' cy='20' r='1' fill='white' opacity='0.2'/></svg>") repeat;opacity:.6}
+  .ticket-card .img-content{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;justify-content:space-between;color:#fff}
+  .ticket-card .img-content .top{display:flex;justify-content:space-between;align-items:start}
+  .ticket-card .img-content .date{background:rgba(255,255,255,.95);color:#1A1714;padding:6px 10px;border-radius:8px;text-align:center;font-family:'Geist Mono',monospace;line-height:1}
+  .ticket-card .img-content .date .d{font-size:18px;font-weight:600;letter-spacing:-0.02em}
+  .ticket-card .img-content .date .m{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#5C544A;margin-top:2px}
+  .ticket-card .img-content .glyph{font-family:'Instrument Serif',serif;font-style:italic;font-size:32px;line-height:1;letter-spacing:-0.02em}
+  .ticket-card .body{padding:22px 22px 24px}
+  .ticket-card .venue{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .ticket-card .title{font-size:17px;font-weight:600;letter-spacing:-0.015em;margin-top:6px;color:var(--ink)}
+  .ticket-card .qrow{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-top:18px;border-top:1px dashed var(--line-2)}
+  .ticket-card .qr{width:54px;height:54px;background:#fff;border-radius:6px;padding:5px}
+  .ticket-card .qr svg{width:100%;height:100%}
+  .ticket-card .price-block{text-align:right}
+  .ticket-card .price-block .p{font-family:'Geist Mono',monospace;font-size:22px;font-weight:600;color:var(--ink)}
+  .ticket-card .price-block .l{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--ink-3);text-transform:uppercase}
+
+  /* mini floating badges */
+  .float-badge{position:absolute;background:rgba(11,9,8,.85);backdrop-filter:blur(14px);border:1px solid var(--line-2);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px -20px rgba(0,0,0,.6)}
+  .float-badge .ico{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);font-size:18px}
+  .float-badge .meta{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .float-badge .val{font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--ink);margin-top:2px}
+  .float-badge.f1{top:-5%;right:62%;animation:cardFloat 5s -1s ease-in-out infinite}
+  .float-badge.f2{bottom:-2%;left:60%;animation:cardFloat 7s -3s ease-in-out infinite}
+
+  /* ============ BUTTONS ============ */
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:15px;font-weight:500;padding:13px 20px;border-radius:11px;border:1px solid transparent;cursor:pointer;transition:all .2s ease;text-decoration:none;line-height:1;white-space:nowrap}
+  .btn-primary{background:linear-gradient(180deg,#FF7A4D 0%,var(--accent) 55%,var(--accent-deep) 100%);color:#fff;border-radius:999px;letter-spacing:-0.005em;text-shadow:0 1px 1px rgba(80,20,5,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(80,20,5,.22),0 6px 16px -4px rgba(232,84,42,.5),0 14px 32px -10px rgba(184,56,26,.5)}
+  .btn-primary:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,20,5,.25),0 10px 22px -4px rgba(232,84,42,.6),0 22px 44px -10px rgba(184,56,26,.55)}
+  .btn-primary:active{transform:translateY(0);filter:brightness(.98);box-shadow:inset 0 2px 4px rgba(80,20,5,.32),0 4px 10px -4px rgba(232,84,42,.45)}
+  .btn-outline{background:rgba(244,238,226,.04);color:var(--ink);border:1px solid rgba(244,238,226,.18);border-radius:999px;letter-spacing:-0.005em;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.20),0 4px 14px -4px rgba(0,0,0,.30),0 10px 28px -10px rgba(0,0,0,.25)}
+  .btn-outline:hover{transform:translateY(-2px);background:rgba(244,238,226,.09);border-color:rgba(244,238,226,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(0,0,0,.25),0 8px 22px -4px rgba(0,0,0,.40),0 18px 40px -10px rgba(0,0,0,.30)}
+  .btn-outline:active{transform:translateY(0);box-shadow:inset 0 2px 4px rgba(0,0,0,.20)}
+  .btn-ghost{background:transparent;color:var(--ink-2);border:1px solid transparent;border-radius:999px;letter-spacing:-0.005em}
+  .btn-ghost:hover{color:var(--ink);background:rgba(244,238,226,.05);transform:translateY(-1px)}
+  .btn .arrow{display:inline-block;transition:transform .2s ease}
+  .btn:hover .arrow{transform:translateX(3px)}
+
+  /* ============ TICKER ============ */
+  .ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 0;overflow:hidden;background:var(--bg-2);position:relative;z-index:2}
+  .ticker .track{display:flex;gap:64px;animation:scroll 40s linear infinite;width:max-content}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .ticker .item{display:flex;align-items:center;gap:14px;font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);font-weight:500;white-space:nowrap}
+  .ticker .item .dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  .ticker .item .num{color:var(--accent);font-weight:600}
+
+  /* ============ SECTIONS ============ */
+  section{position:relative;z-index:2}
+  .sec{padding:120px 0}
+  .sec-head{margin-bottom:64px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:18px}
+  .eyebrow::before{content:"";width:24px;height:1px;background:var(--accent)}
+  .h2{font-size:clamp(34px,4.6vw,64px);font-weight:600;letter-spacing:-0.035em;line-height:1.02;max-width:18ch}
+  .h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sec-sub{font-size:19px;line-height:1.55;color:var(--ink-2);max-width:62ch;margin-top:24px}
+
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s cubic-bezier(.2,.6,.2,1), transform .8s cubic-bezier(.2,.6,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  /* LOGO STRIP */
+  .logo-strip{padding:60px 0 40px;border-bottom:1px solid var(--line)}
+  .logo-strip-label{text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);margin-bottom:32px}
+  .logo-strip-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:32px;align-items:center;justify-items:center}
+  .logo-strip-grid .brand-logo{height:40px;width:auto;max-width:100%;object-fit:contain;filter:brightness(0) invert(1);opacity:.62;transition:opacity .25s ease, transform .25s ease}
+  .logo-strip-grid .brand-logo:hover{opacity:1;transform:translateY(-2px)}
+  /* Per-logo height tweaks for visual balance across different aspect ratios */
+  .logo-strip-grid .brand-logo[data-brand="ultramarinos"]{height:46px}
+  .logo-strip-grid .brand-logo[data-brand="toninos"]{height:36px}
+  .logo-strip-grid .brand-logo[data-brand="pera"]{height:44px}
+  .logo-strip-grid .brand-logo[data-brand="lucense"]{height:46px}
+  .logo-strip-grid .brand-logo[data-brand="raza"]{height:30px}
+  .logo-strip-grid .brand-logo[data-brand="greca"]{height:42px}
+  .logo-strip-grid .brand-logo[data-brand="flamma"]{height:42px}
+
+  /* MODULES */
+  .modules{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .module{background:var(--bg-2);border:1px solid var(--line);border-radius:20px;padding:32px;position:relative;overflow:hidden;transition:transform .3s ease, border-color .3s ease}
+  .module:hover{border-color:var(--line-2);transform:translateY(-4px)}
+  .module .ico{width:48px;height:48px;border-radius:12px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);margin-bottom:24px;border:1px solid rgba(232,84,42,.25)}
+  .module .ico svg{width:22px;height:22px}
+  .module h3{font-size:22px;font-weight:600;letter-spacing:-0.02em;margin-bottom:12px}
+  .module p{font-size:15px;line-height:1.55;color:var(--ink-2)}
+  .module .feat{margin-top:24px;padding-top:24px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+  .module .feat .row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2)}
+  .module .feat .row svg{flex-shrink:0;color:var(--accent)}
+  .module.wide{grid-column:span 2}
+  .module .glow{position:absolute;width:240px;height:240px;background:var(--accent);filter:blur(120px);opacity:0;top:-40px;right:-40px;transition:opacity .4s ease}
+  .module:hover .glow{opacity:.18}
+
+  /* PRODUCT MOCK */
+  .prod-mock{background:linear-gradient(180deg,#0F0D0B,#13100E);border:1px solid var(--line);border-radius:20px;padding:0;overflow:hidden;position:relative;height:100%;min-height:420px}
+  .prod-mock .top-bar{display:flex;align-items:center;gap:6px;padding:14px 18px;border-bottom:1px solid var(--line);font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3)}
+  .prod-mock .dots{display:flex;gap:5px;margin-right:14px}
+  .prod-mock .dots span{width:9px;height:9px;border-radius:50%;background:#332C25}
+  .prod-mock .body{padding:24px}
+  .prod-mock .grid-2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .prod-mock .stat-tile{background:#0B0908;border:1px solid var(--line);border-radius:10px;padding:12px}
+  .prod-mock .stat-tile .l{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .prod-mock .stat-tile .v{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);margin-top:4px;letter-spacing:-0.01em}
+  .prod-mock .stat-tile .v.up{color:var(--accent)}
+  .prod-mock .chart{height:180px;background:#0B0908;border:1px solid var(--line);border-radius:10px;padding:14px;position:relative;overflow:hidden}
+  .prod-mock .chart svg{width:100%;height:100%}
+
+  /* SECTORES */
+  .sectors{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .sector{position:relative;height:340px;border-radius:18px;overflow:hidden;border:1px solid var(--line);cursor:pointer;transition:transform .3s ease}
+  .sector:hover{transform:translateY(-4px)}
+  .sector .bg{position:absolute;inset:0;transition:transform .6s ease}
+  .sector:hover .bg{transform:scale(1.05)}
+  .sector.s1 .bg{background:linear-gradient(160deg,#3D1F12,#7A2A0F 60%,#E8542A 100%),url("uploads/discoteca.webp") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s2 .bg{background:linear-gradient(160deg,#1A0F2E,#3A1F5C 60%,#7B3CCC 100%),url("uploads/promotora.jpg") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s3 .bg{background:linear-gradient(160deg,#0B2E2C,#1F4D58 60%,#3CB5C7 100%),url("uploads/beach%20club.jpg") center/cover no-repeat;background-blend-mode:multiply}
+  .sector.s4 .bg{background:linear-gradient(160deg,#2E1A0B,#5C3A0F 60%,#E8B04C 100%),url("uploads/festival.webp") center/cover no-repeat;background-blend-mode:multiply}
+  .sector .grain{position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay;opacity:.4;pointer-events:none}
+  .sector .overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 25%,rgba(11,9,8,.55) 60%,rgba(11,9,8,.92) 100%)}
+  .sector .content{position:absolute;inset:0;padding:24px;display:flex;flex-direction:column;justify-content:space-between;color:#fff}
+  .sector .content .top{display:flex;justify-content:space-between;align-items:start}
+  .sector .content .ico{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);backdrop-filter:blur(10px);display:grid;place-items:center;color:#fff;border:1px solid rgba(255,255,255,.2)}
+  .sector .content .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;color:rgba(255,255,255,.7)}
+  .sector .content h3{font-size:30px;font-weight:600;letter-spacing:-0.025em;line-height:1}
+  .sector .content p{font-size:13px;color:rgba(255,255,255,.75);margin-top:8px;max-width:24ch;line-height:1.4}
+  .sector .content .arrow{margin-top:14px;display:inline-flex;align-items:center;gap:8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#fff;transition:gap .2s ease}
+  .sector:hover .content .arrow{gap:14px}
+  /* Glassmorphism CTA reveal — GPU-accelerated slide-up with staggered content */
+  .sector .info{transition:transform .55s cubic-bezier(0.16,1,0.3,1), opacity .35s ease;will-change:transform}
+  .sector:hover .info{transform:translateY(-72px);opacity:.92}
+  .sector .info .arrow{display:none}
+  .sector .reveal-cta{position:absolute;left:0;right:0;bottom:0;height:64px;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 20px;background:linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.10) 100%);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border-top:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 -10px 30px -8px rgba(0,0,0,.35);font-family:'Geist',sans-serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3);transform:translateY(100%);opacity:0;pointer-events:none;transition:transform .6s cubic-bezier(0.16,1,0.3,1), opacity .35s ease;will-change:transform, opacity;z-index:3}
+  .sector:hover .reveal-cta{transform:translateY(0);opacity:1;pointer-events:auto}
+  .sector .reveal-cta .label-text{display:inline-block;transform:translateY(10px);opacity:0;transition:transform .5s cubic-bezier(0.16,1,0.3,1) .15s, opacity .35s ease .15s}
+  .sector:hover .reveal-cta .label-text{transform:translateY(0);opacity:1}
+  .sector .reveal-cta .arr{display:inline-block;transform:translateX(-10px);opacity:0;font-weight:400;transition:transform .5s cubic-bezier(0.16,1,0.3,1) .25s, opacity .35s ease .25s}
+  .sector:hover .reveal-cta .arr{transform:translateX(0);opacity:1}
+
+  /* TIMELINE / PRE-DURING-POST */
+  .timeline{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
+  .tl-tabs{display:flex;flex-direction:column;border-left:1px solid var(--line)}
+  .tl-tab{position:relative;padding:28px 28px;cursor:pointer;transition:all .25s ease;border-left:1px solid transparent;margin-left:-1px}
+  .tl-tab.active{border-left-color:var(--accent);background:linear-gradient(90deg,rgba(232,84,42,.06) 0%,transparent 100%)}
+  .tl-tab .stage{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+  .tl-tab.active .stage{color:var(--accent)}
+  .tl-tab h4{font-size:24px;font-weight:600;letter-spacing:-0.02em;margin-top:8px;color:var(--ink-3);transition:color .25s ease}
+  .tl-tab.active h4{color:var(--ink)}
+  .tl-tab p{font-size:14px;line-height:1.55;color:var(--ink-3);margin-top:8px;max-height:0;overflow:hidden;transition:max-height .35s ease, margin-top .35s ease, opacity .25s ease;opacity:0}
+  .tl-tab.active p{max-height:160px;margin-top:12px;opacity:1}
+  .tl-tab .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:0;max-height:0;overflow:hidden;transition:max-height .35s ease, margin-top .25s ease}
+  .tl-tab.active .pills{max-height:160px;margin-top:14px}
+  .tl-tab .pill{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.06em;padding:5px 9px;background:rgba(232,84,42,.08);color:var(--accent);border:1px solid rgba(232,84,42,.2);border-radius:999px}
+  .tl-visual{position:sticky;top:120px;background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:24px;min-height:480px;overflow:hidden}
+
+  /* TESTIMONIALS */
+  .testimonials{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .testimonial{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px;position:relative}
+  .testimonial .quote{font-size:19px;line-height:1.5;letter-spacing:-0.01em;color:var(--ink)}
+  .testimonial .quote::before{content:"";display:block;width:32px;height:2px;background:var(--accent);margin-bottom:18px}
+  .testimonial .author{margin-top:32px;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .testimonial .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-deep));display:grid;place-items:center;color:#fff;font-weight:600;font-size:16px}
+  .testimonial .who{font-size:14px;font-weight:500}
+  .testimonial .role{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
+
+  /* MARKETPLACE GRID */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:32px}
+  .chip{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;padding:8px 14px;border-radius:999px;border:1px solid var(--line-2);background:transparent;color:var(--ink-2);cursor:pointer;transition:all .2s ease}
+  .chip:hover{color:var(--ink);border-color:var(--ink-3)}
+  .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .events-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .ev-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;cursor:pointer;transition:transform .3s ease, border-color .3s ease, box-shadow .3s ease}
+  .ev-card:hover{transform:translateY(-4px);border-color:var(--line-2);box-shadow:0 30px 60px -30px rgba(232,84,42,.3)}
+  .ev-card .img{aspect-ratio:4/5;position:relative;overflow:hidden}
+  .ev-card .img .bg{position:absolute;inset:0;transition:transform .6s ease}
+  .ev-card:hover .img .bg{transform:scale(1.05)}
+  .ev-card .img.a .bg{background:linear-gradient(135deg,#3D1F12,#7A2A0F 50%,#E8542A 100%)}
+  .ev-card .img.b .bg{background:linear-gradient(160deg,#16183C,#3A2D6B 60%,#9B5BC9 100%)}
+  .ev-card .img.c .bg{background:linear-gradient(140deg,#0B2618,#1F4D2C 50%,#56B36C 100%)}
+  .ev-card .img.d .bg{background:linear-gradient(140deg,#2E1A0B,#7A4F1F 50%,#E8B04C 100%)}
+  .ev-card .img .top{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:start;gap:8px;z-index:2}
+  .ev-card .img .date{background:rgba(244,238,226,.95);color:#1A1714;padding:6px 10px;border-radius:8px;text-align:center;font-family:'Geist Mono',monospace;line-height:1}
+  .ev-card .img .date .d{font-size:18px;font-weight:600;letter-spacing:-0.02em}
+  .ev-card .img .date .m{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#5C544A;margin-top:2px}
+  .ev-card .img .glyph{position:absolute;bottom:18px;left:18px;color:#fff;font-family:'Instrument Serif',serif;font-style:italic;font-size:32px;letter-spacing:-0.02em;line-height:1;max-width:80%;z-index:2}
+  .ev-card .body{padding:16px 18px 20px}
+  .ev-card .body .venue{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase}
+  .ev-card .body .title{font-size:16px;font-weight:600;letter-spacing:-0.015em;margin-top:6px}
+  .ev-card .body .row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .ev-card .body .price{font-family:'Geist Mono',monospace;font-size:14px;font-weight:600}
+  .ev-card .body .price small{color:var(--ink-3);font-weight:400;font-size:10px;margin-right:4px}
+  .badge{font-family:'Geist Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.04em;padding:4px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;text-transform:uppercase;border:1px solid transparent;line-height:1}
+  .badge.hot{background:rgba(232,176,76,.15);color:var(--warm);border-color:rgba(232,176,76,.25)}
+  .badge.last{background:var(--accent);color:#fff}
+  .badge.free{background:rgba(77,184,122,.15);color:var(--success);border-color:rgba(77,184,122,.25)}
+  .badge.vip{background:#0B0908;color:var(--ink);border-color:var(--line-2)}
+
+  /* PRICING */
+  .pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
+  .plan{background:var(--bg-2);border:1px solid var(--line);border-radius:20px;padding:36px 32px;display:flex;flex-direction:column;position:relative}
+  .plan.featured{background:linear-gradient(180deg,rgba(232,84,42,.08),var(--bg-2));border-color:rgba(232,84,42,.4)}
+  .plan .ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:5px 14px;border-radius:999px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:500}
+  .plan h3{font-size:18px;font-weight:600;letter-spacing:-0.01em;color:var(--ink-2)}
+  .plan .price{margin-top:18px;display:flex;align-items:baseline;gap:8px}
+  .plan .price .amt{font-family:'Geist',sans-serif;font-size:54px;font-weight:600;letter-spacing:-0.04em;color:var(--ink);line-height:1}
+  .plan .price .per{font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink-3);letter-spacing:.1em}
+  .plan .price .from{font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.16em;text-transform:uppercase}
+  .plan .desc{font-size:14px;color:var(--ink-2);line-height:1.55;margin-top:14px}
+  .plan ul{list-style:none;margin-top:28px;padding-top:24px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:11px;flex:1}
+  .plan li{display:flex;gap:10px;font-size:14px;color:var(--ink-2);line-height:1.45}
+  .plan li svg{flex-shrink:0;color:var(--accent);margin-top:2px}
+  .plan .btn{width:100%;justify-content:center;margin-top:24px}
+
+  /* CASES */
+  .cases{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .case{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:0;overflow:hidden;cursor:pointer;transition:all .3s ease}
+  .case:hover{border-color:var(--line-2);transform:translateY(-3px)}
+  .case .img{height:200px;position:relative;overflow:hidden}
+  .case .img.a{background:linear-gradient(135deg,#1F0F08,#5C2A0F 60%,#E8542A 100%)}
+  .case .img.b{background:linear-gradient(160deg,#0B0F2E,#1F2A5C 60%,#3C5BCC 100%)}
+  .case .img.c{background:linear-gradient(140deg,#0B2E1A,#1F5C3A 60%,#3CCC7A 100%)}
+  .case .img .grain-l{position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay}
+  .case .img .glyph{position:absolute;bottom:18px;left:20px;color:#fff;font-family:'Instrument Serif',serif;font-style:italic;font-size:30px;letter-spacing:-0.02em}
+  .case .img .city{position:absolute;top:18px;right:20px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.85)}
+  .case .body{padding:24px}
+  .case .meta{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .case h4{font-size:18px;font-weight:600;letter-spacing:-0.015em;margin-top:6px}
+  .case .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+  .case .stats .v{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--accent);letter-spacing:-0.01em}
+  .case .stats .l{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-top:2px}
+
+  /* CTA BANNER */
+  .cta-banner{background:linear-gradient(135deg,#1A0F08 0%,#3D1F12 50%,#7A2A0F 100%);border-radius:24px;padding:80px 64px;position:relative;overflow:hidden;border:1px solid rgba(232,84,42,.3)}
+  .cta-banner::before{content:"";position:absolute;width:600px;height:600px;background:var(--accent);filter:blur(120px);opacity:.3;top:-200px;right:-200px}
+  .cta-banner::after{content:"";position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay;opacity:.4;pointer-events:none}
+  .cta-banner .inner{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:48px;flex-wrap:wrap}
+  .cta-banner h2{font-size:clamp(34px,4vw,56px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;max-width:18ch}
+  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;color:var(--ink)}
+  .cta-banner p{font-size:17px;line-height:1.5;color:rgba(244,238,226,.75);max-width:48ch;margin-top:18px}
+  .cta-banner .ctas{display:flex;flex-direction:column;gap:14px;flex-shrink:0}
+
+  /* FOOTER */
+  footer{background:var(--bg-2);border-top:1px solid var(--line);padding:80px 0 32px;margin-top:80px;position:relative;z-index:2}
+  .footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:48px;margin-bottom:64px}
+  footer .col h5{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:20px}
+  footer .col ul{list-style:none;display:flex;flex-direction:column;gap:12px}
+  footer .col a{font-size:14px;color:var(--ink-2);transition:color .2s ease}
+  footer .col a:hover{color:var(--accent)}
+  footer .brand-col .logo{font-size:36px;margin-bottom:18px}
+  footer .brand-col p{font-size:14px;color:var(--ink-3);line-height:1.55;max-width:32ch}
+  footer .brand-col .socials{display:flex;gap:8px;margin-top:20px}
+  footer .brand-col .socials a{width:36px;height:36px;border:1px solid var(--line-2);border-radius:10px;display:grid;place-items:center;color:var(--ink-2);transition:all .2s ease}
+  footer .brand-col .socials a:hover{border-color:var(--accent);color:var(--accent)}
+  .footer-bottom{padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);flex-wrap:wrap;gap:16px}
+  .footer-bottom .legal{display:flex;gap:24px}
+  .footer-bottom .legal a:hover{color:var(--accent)}
+
+  /* HUGE WORDMARK */
+  .huge-mark{padding:60px 0 0;text-align:center;overflow:hidden}
+  .huge-mark .logo-svg{width:100%;max-width:1280px;height:auto;display:block;margin:0 auto}
+
+  /* FAQ */
+  .faq{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .faq-item{border-bottom:1px solid var(--line);padding:0;cursor:pointer;transition:background .2s ease}
+  .faq-item:hover{background:rgba(244,238,226,.02)}
+  .faq-q{padding:28px 0;display:flex;justify-content:space-between;align-items:center;gap:24px}
+  .faq-q h4{font-size:19px;font-weight:500;letter-spacing:-0.015em;color:var(--ink)}
+  .faq-q .toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;flex-shrink:0;transition:all .25s ease;color:var(--ink-2)}
+  .faq-item.open .faq-q .toggle{background:var(--accent);border-color:var(--accent);color:#fff;transform:rotate(45deg)}
+  .faq-a{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1), padding .35s ease;font-size:15px;line-height:1.6;color:var(--ink-2)}
+  .faq-item.open .faq-a{max-height:300px;padding:0 0 28px}
+
+  /* RESPONSIVE */
+  @media (max-width:1280px){
+    .hero h1{max-width:18ch}
+    .hero .lede{max-width:54ch}
+  }
+  @media (max-width:1100px){
+    .events-grid{grid-template-columns:repeat(3,1fr)}
+    .testimonials,.modules,.cases,.pricing,.sectors{grid-template-columns:repeat(2,1fr)}
+    .module.wide{grid-column:span 2}
+    .timeline{grid-template-columns:1fr;gap:32px}
+    .tl-visual{position:static;min-height:340px}
+    .footer-grid{grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+    .cta-banner{padding:64px 40px}
+    .mega-grid{grid-template-columns:repeat(3,1fr);gap:28px}
+    .mega-feature{display:none}
+  }
+  @media (max-width:960px){
+    .nav{display:none}
+    .burger{display:inline-flex}
+    .header .login{display:none}
+    .header .cta{display:none}
+    .events-grid{grid-template-columns:repeat(2,1fr)}
+  }
+  @media (max-width:720px){
+    .wrap{padding:0 20px}
+    .header-inner{padding:14px 20px;gap:16px}
+    .header .logo{font-size:32px}
+    .events-grid,.testimonials,.modules,.cases,.pricing,.sectors{grid-template-columns:1fr}
+    .module.wide{grid-column:span 1}
+    .footer-grid{grid-template-columns:1fr 1fr;gap:28px}
+    .footer-bottom{flex-direction:column;align-items:flex-start}
+    .footer-bottom .legal{flex-wrap:wrap;gap:14px}
+    .cta-banner{padding:40px 24px;border-radius:18px}
+    .cta-banner .inner{flex-direction:column;align-items:flex-start;gap:24px}
+    .cta-banner .ctas{width:100%}
+    .cta-banner .ctas .btn{width:100%;justify-content:center}
+    .sec{padding:72px 0}
+    .sec-head{margin-bottom:40px}
+    .hero{padding:120px 0 56px;min-height:auto}
+    .hero .meta-row{gap:24px 36px;margin-top:48px;padding-top:24px}
+    .hero .meta-row .stat .num{font-size:26px}
+    .hero .ctas{margin-top:32px}
+    .hero .ctas .btn{flex:1;justify-content:center}
+    .ticker{padding:14px 0}
+    .ticker .item{font-size:12px;gap:10px}
+    .ticker .track{gap:40px}
+    .logo-strip-grid{grid-template-columns:repeat(4,1fr);gap:24px}
+    .logo-strip-grid .brand-logo{height:34px}
+    .logo-strip-grid .brand-logo[data-brand="ultramarinos"],
+    .logo-strip-grid .brand-logo[data-brand="lucense"]{height:40px}
+    .logo-strip-grid .brand-logo[data-brand="raza"]{height:26px}
+    .testimonial{padding:24px}
+    .testimonial .quote{font-size:17px}
+    .module{padding:24px}
+    .plan{padding:28px 24px}
+    .plan .price .amt{font-size:46px}
+    .ev-card .body{padding:14px 16px 18px}
+    .ev-card .body .title{font-size:15px}
+    .filters{gap:6px;margin-bottom:24px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+    .filters::-webkit-scrollbar{display:none}
+    .chip{flex-shrink:0}
+    .case .img{height:160px}
+    .case .body{padding:20px}
+    .case .stats{gap:8px}
+    .case .stats .v{font-size:16px}
+    footer{padding:60px 0 24px;margin-top:48px}
+    .footer-grid{margin-bottom:40px}
+    .huge-mark{padding:32px 0 0}
+    .faq-q{padding:22px 0}
+    .faq-q h4{font-size:16px}
+    .tl-tab{padding:20px 16px}
+    .tl-tab h4{font-size:20px}
+    .prod-mock .body{padding:16px}
+    .prod-mock .grid-2{grid-template-columns:repeat(2,1fr)}
+  }
+  @media (max-width:420px){
+    .hero h1{font-size:44px;line-height:.95;max-width:100%}
+    .hero .lede{font-size:16px;margin-top:24px}
+    .hero .eyebrow{font-size:10px;padding:6px 12px}
+    .hero .meta-row{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .h2{font-size:32px}
+    .cta-banner h2{font-size:30px}
+    .footer-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<!-- ============ HEADER ============ -->
+<header class="header" id="header">
+  <div class="header-inner">
+    <a href="#top" class="logo" aria-label="Pasify">
+      <img src="uploads/pasify-logo.png" alt="Pasify">
+    </a>
+    <nav class="nav" id="nav">
+      <div class="nav-item" data-menu="soluciones">
+        <button class="nav-trigger" type="button">Soluciones <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="nav-item" data-menu="sectores">
+        <button class="nav-trigger" type="button">Sectores <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="nav-item" data-menu="recursos">
+        <button class="nav-trigger" type="button">Recursos <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="nav-item" data-menu="nosotros">
+        <button class="nav-trigger" type="button">Nosotros <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <a href="#precios" class="nav-trigger" style="text-decoration:none">Pricing</a>
+    </nav>
+    <span class="spacer"></span>
+    <div class="search-dock" id="search-dock">
+      <button type="button" class="search-trigger" id="search-trigger" aria-label="Abrir búsqueda">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+      <form class="search-form" id="search-form" role="search" autocomplete="off">
+        <span class="search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input type="search" id="search-input" placeholder="Busca soluciones, sectores, recursos…" />
+        <button type="button" class="search-close" id="search-close" aria-label="Cerrar búsqueda">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </form>
+      <div class="search-results" id="search-results" role="listbox"></div>
+    </div>
+    <a href="/#/login" target="_top" class="login">Entrar</a>
+    <a href="/#/register-client" target="_top" class="cta">Crear cuenta →</a>
+    <button class="burger" id="burger" aria-label="Menú"><span></span></button>
+  </div>
+
+  <!-- MEGAMENU PANELS -->
+  <div class="mega-wrap" id="mega-wrap">
+    <div class="mega" data-panel="soluciones" hidden>
+      <div class="mega-grid">
+        <div class="mega-col">
+          <h6>Gestión de venta</h6>
+          <ul>
+            <li><a class="mega-link" href="soluciones/entradas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3z"/><path d="M2 12h20"/></svg></span>Venta de entradas</a></li>
+            <li><a class="mega-link" href="soluciones/taquilla.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span>Venta en taquilla</a></li>
+            <li><a class="mega-link" href="soluciones/vip.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.5 5 5.5.8-4 3.9.9 5.5L12 14.6 7.1 17.2 8 11.7 4 7.8l5.5-.8z"/></svg></span>Reservados VIP</a></li>
+            <li><a class="mega-link" href="soluciones/invitados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h4v16h-4M4 4h4v16H4M8 12h8"/></svg></span>Listas de invitados</a></li>
+            <li><a class="mega-link" href="soluciones/rrpp.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11l2 2 4-4"/></svg></span>Gestión de RRPP</a></li>
+            <li><a class="mega-link" href="soluciones/canales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>Canales de venta</a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Operación</h6>
+          <ul>
+            <li><a class="mega-link" href="operacion/control-acceso.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M21 21v-7M17 17h4"/></svg></span>Control de acceso QR <span class="pill">Hot</span></a></li>
+            <li><a class="mega-link" href="operacion/tpv.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg></span>Software TPV</a></li>
+            <li><a class="mega-link" href="operacion/recepcion.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Recepción de eventos</a></li>
+            <li><a class="mega-link" href="operacion/soporte.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>Soporte personalizado</a></li>
+            <li><a class="mega-link" href="operacion/pases-temporada.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>Pases de temporada</a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Data &amp; Marketing</h6>
+          <ul>
+            <li><a class="mega-link" href="data/crm.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12a9 9 0 0 0 9 9V12z" fill="currentColor"/></svg></span>CRM &amp; Real time data</a></li>
+            <li><a class="mega-link" href="data/marketing.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-6"/></svg></span>Marketing digital</a></li>
+            <li><a class="mega-link" href="data/informes.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 18h4"/></svg></span>Informes de eventos</a></li>
+            <li><a class="mega-link" href="data/api.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2M9 12l2 2 4-4"/></svg></span>API &amp; Integraciones</a></li>
+          </ul>
+        </div>
+        <div class="mega-feature">
+          <span class="lab">Novedad 2026</span>
+          <h5>Pasify Live: aforo en tiempo real</h5>
+          <p>Mide entradas, salidas y consumo medio por zona desde una sola pantalla. Decide subidas de precio sin parar la fiesta.</p>
+          <a href="#producto">Descubrir →</a>
+        </div>
+      </div>
+    </div>
+    <div class="mega" data-panel="sectores" hidden>
+      <div class="mega-grid">
+        <div class="mega-col">
+          <h6>Por tipo de negocio</h6>
+          <ul>
+            <li><a class="mega-link" href="sectores/discotecas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>Discotecas</a></li>
+            <li><a class="mega-link" href="sectores/salas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 20V9l7-5 7 5v11M9 20v-6h6v6"/></svg></span>Salas de conciertos</a></li>
+            <li><a class="mega-link" href="sectores/beach-clubs.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4M2 18h20M8 14V6a4 4 0 0 1 8 0v8"/></svg></span>Beach Clubs</a></li>
+            <li><a class="mega-link" href="sectores/festivales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l9-18 9 18M3 21h18M9 14h6"/></svg></span>Festivales</a></li>
+            <li><a class="mega-link" href="sectores/promotoras.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Promotoras</a></li>
+            <li><a class="mega-link" href="sectores/eventos-privados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v12H3z"/><path d="M9 21v-7h6v7"/></svg></span>Eventos privados</a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Casos de uso</h6>
+          <ul>
+            <li><a class="mega-link" href="recursos/blog.html">Apertura de temporada</a></li>
+            <li><a class="mega-link" href="recursos/blog.html">Festival multi-escenario</a></li>
+            <li><a class="mega-link" href="recursos/blog.html">Reapertura post-reforma</a></li>
+            <li><a class="mega-link" href="recursos/blog.html">Tour internacional</a></li>
+            <li><a class="mega-link" href="recursos/blog.html">White label para promotor</a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Tamaño</h6>
+          <ul>
+            <li><a class="mega-link" href="#precios">Sala &lt; 500 personas</a></li>
+            <li><a class="mega-link" href="#precios">Sala 500–2.000</a></li>
+            <li><a class="mega-link" href="#precios">Festival &gt; 5.000</a></li>
+            <li><a class="mega-link" href="#precios">Cadena multi-local</a></li>
+          </ul>
+        </div>
+        <div class="mega-feature">
+          <span class="lab">Caso destacado</span>
+          <h5>Sonora Festival → +34% ventas online</h5>
+          <p>Cómo un festival de 18.000 asistentes pasó de 3 plataformas a Pasify y redujo el check-in 70%.</p>
+          <a href="recursos/blog.html">Leer caso →</a>
+        </div>
+      </div>
+    </div>
+    <div class="mega" data-panel="recursos" hidden>
+      <div class="mega-grid">
+        <div class="mega-col">
+          <h6>Aprende</h6>
+          <ul>
+            <li><a class="mega-link" href="recursos/academy.html">Pasify Academy</a></li>
+            <li><a class="mega-link has-sub" href="recursos/blog.html">
+              <span class="ttl">Blogs &amp; Newsletter</span>
+              <span class="sublabel">Blog · Newsletter · Webinars &amp; eventos</span>
+            </a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Ayuda</h6>
+          <ul>
+            <li><a class="mega-link has-sub" href="recursos/ayuda.html">
+              <span class="ttl">Centro de ayuda</span>
+              <span class="sublabel">Changelog · Estado del sistema · Soporte 24/7</span>
+            </a></li>
+            <li><a class="mega-link" href="recursos/api-docs.html">API e integraciones</a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Comunidad</h6>
+          <ul>
+            <li><a class="mega-link has-sub" href="recursos/pro-network.html">
+              <span class="ttl">Partners &amp; Promotores</span>
+              <span class="sublabel">Programa de partners · Programa de embajadores RRPP</span>
+            </a></li>
+          </ul>
+        </div>
+        <div class="mega-feature">
+          <span class="lab">Recurso gratuito</span>
+          <h5>El estado de los eventos 2026</h5>
+          <p>Informe con datos de +12.000 eventos: ticket medio, hora pico, géneros que crecen y por qué.</p>
+          <a href="recursos/blog.html">Descargar PDF →</a>
+        </div>
+      </div>
+    </div>
+    <div class="mega" data-panel="nosotros" hidden>
+      <div class="mega-grid">
+        <div class="mega-col">
+          <h6>Pasify</h6>
+          <ul>
+            <li><a class="mega-link has-sub" href="nosotros/sobre.html">
+              <span class="ttl">Sobre nosotros</span>
+              <span class="sublabel">Manifiesto · Equipo · Sostenibilidad</span>
+            </a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Confianza</h6>
+          <ul>
+            <li><a class="mega-link has-sub" href="nosotros/seguridad.html">
+              <span class="ttl">Seguridad y privacidad</span>
+              <span class="sublabel">Privacidad de datos · Seguridad</span>
+            </a></li>
+          </ul>
+        </div>
+        <div class="mega-col">
+          <h6>Contacto</h6>
+          <ul>
+            <li><a class="mega-link has-sub" href="nosotros/contacto.html">
+              <span class="ttl">Solicitar demo</span>
+              <span class="sublabel">Hablar con ventas</span>
+            </a></li>
+            <li><a class="mega-link has-sub" href="nosotros/oficinas.html">
+              <span class="ttl">Contacto</span>
+              <span class="sublabel">Formulario · Oficinas</span>
+            </a></li>
+          </ul>
+        </div>
+        <div class="mega-feature">
+          <span class="lab">Estamos contratando</span>
+          <h5>+12 posiciones abiertas</h5>
+          <p>Diseño, ingeniería, ventas y soporte. Construye el sistema operativo de los eventos con nosotros.</p>
+          <a href="nosotros/equipo.html">Ver vacantes →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE DRAWER -->
+  <aside class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
+    <details>
+      <summary>Soluciones</summary>
+      <div class="sub">
+        <a href="soluciones/entradas.html">Venta de entradas</a>
+        <a href="soluciones/taquilla.html">Venta en taquilla</a>
+        <a href="soluciones/vip.html">Reservados VIP</a>
+        <a href="soluciones/invitados.html">Listas de invitados</a>
+        <a href="soluciones/rrpp.html">Gestión de RRPP</a>
+        <a href="soluciones/canales.html">Canales de venta</a>
+      </div>
+    </details>
+    <details>
+      <summary>Sectores</summary>
+      <div class="sub">
+        <a href="sectores/discotecas.html">Discotecas</a>
+        <a href="sectores/beach-clubs.html">Beach Clubs</a>
+        <a href="sectores/festivales.html">Festivales</a>
+        <a href="sectores/promotoras.html">Promotoras</a>
+      </div>
+    </details>
+    <details>
+      <summary>Recursos</summary>
+      <div class="sub">
+        <a href="recursos/academy.html">Pasify Academy</a>
+        <a href="recursos/blog.html">Blogs &amp; Newsletter</a>
+        <a href="recursos/ayuda.html">Centro de ayuda</a>
+        <a href="recursos/api-docs.html">API e integraciones</a>
+        <a href="recursos/pro-network.html">Partners &amp; Promotores</a>
+      </div>
+    </details>
+    <details>
+      <summary>Nosotros</summary>
+      <div class="sub">
+        <a href="nosotros/sobre.html">Sobre nosotros</a>
+        <a href="nosotros/seguridad.html">Seguridad y privacidad</a>
+        <a href="nosotros/contacto.html">Solicitar demo</a>
+        <a href="nosotros/oficinas.html">Contacto</a>
+      </div>
+    </details>
+    <a href="#precios" style="padding:18px 4px;font-size:18px;font-weight:500;border-bottom:1px solid var(--line);color:var(--ink)">Pricing</a>
+    <div class="ctas">
+      <a href="/#/login" target="_top" class="btn btn-ghost" style="justify-content:center">Entrar</a>
+      <a href="/#/register-client" target="_top" class="btn btn-primary" style="justify-content:center">Crear cuenta →</a>
+    </div>
+  </aside>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="hero-bg">
+    <div class="hero-grid"></div>
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+  </div>
+  <div class="wrap hero-content">
+    <div class="eyebrow"><span class="pulse"></span><span>Pasify · Software para eventos</span></div>
+    <h1>Domina cada <em>beat</em> de tu <span class="underline-word">noche</span>.</h1>
+    <p class="lede">El sistema operativo de los eventos modernos. Vende entradas, controla el aforo, gestiona reservas y RRPP — todo desde una sola app, sin papel, sin fila, sin fricción.</p>
+    <div class="ctas">
+      <a href="#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+      <a href="#producto" class="btn btn-outline">Ver producto en acción</a>
+      <span class="mono" style="font-size:12px;color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase;margin-left:8px">★ 4.8 / 5 · Trustpilot</span>
+    </div>
+    <div class="meta-row">
+      <div class="stat"><div class="num" data-counter="12000">0</div><div class="lab">Eventos vendidos / mes</div></div>
+      <div class="stat"><div class="num" data-counter="850">0</div><div class="lab">Locales activos</div></div>
+      <div class="stat"><div class="num" data-counter="34" data-suffix="%">0%</div><div class="lab">Más ventas vs Eventbrite</div></div>
+      <div class="stat"><div class="num" data-counter="70" data-suffix="%">0%</div><div class="lab">Menos tiempo en check-in</div></div>
+    </div>
+
+    <div class="hero-side">
+      <div class="ticket-card">
+        <div class="img">
+          <div class="img-content">
+            <div class="top">
+              <div class="date"><div class="d">14</div><div class="m">Jun</div></div>
+              <span class="badge last">Últimas 12</span>
+            </div>
+            <div class="glyph">Pera<br>Limonera</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="venue">Valladolid · Restaurante · 21:00</div>
+          <div class="title">Pera Limonera</div>
+          <div class="qrow">
+            <div class="qr">
+              <svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+                <rect width="50" height="50" fill="#fff"/>
+                <!-- Finder patterns: outer dark squares -->
+                <rect x="2" y="2" width="14" height="14" fill="#1A1714"/>
+                <rect x="34" y="2" width="14" height="14" fill="#1A1714"/>
+                <rect x="2" y="34" width="14" height="14" fill="#1A1714"/>
+                <!-- Finder patterns: white ring (1-module gap) -->
+                <rect x="4" y="4" width="10" height="10" fill="#fff"/>
+                <rect x="36" y="4" width="10" height="10" fill="#fff"/>
+                <rect x="4" y="36" width="10" height="10" fill="#fff"/>
+                <!-- Finder patterns: dark 3x3 module center -->
+                <rect x="6" y="6" width="6" height="6" fill="#1A1714"/>
+                <rect x="38" y="6" width="6" height="6" fill="#1A1714"/>
+                <rect x="6" y="38" width="6" height="6" fill="#1A1714"/>
+                <!-- Data modules: dense pseudo-random pattern (2x2 cells) -->
+                <path fill="#1A1714" d="M18 0h2v2h-2zM22 0h2v2h-2zM26 0h2v2h-2zM30 0h2v2h-2zM18 2h2v2h-2zM24 2h2v2h-2zM28 2h2v2h-2zM32 2h2v2h-2zM20 4h2v2h-2zM26 4h2v2h-2zM30 4h2v2h-2zM16 6h2v2h-2zM22 6h2v2h-2zM28 6h2v2h-2zM32 6h2v2h-2zM18 8h2v2h-2zM24 8h2v2h-2zM32 8h2v2h-2zM20 10h2v2h-2zM26 10h2v2h-2zM30 10h2v2h-2zM16 12h2v2h-2zM20 12h2v2h-2zM24 12h2v2h-2zM28 12h2v2h-2zM32 12h2v2h-2zM40 12h2v2h-2zM44 12h2v2h-2zM48 12h2v2h-2zM18 14h2v2h-2zM22 14h2v2h-2zM28 14h2v2h-2zM0 16h2v2h-2zM4 16h2v2h-2zM10 16h2v2h-2zM12 16h2v2h-2zM20 16h2v2h-2zM26 16h2v2h-2zM30 16h2v2h-2zM34 16h2v2h-2zM40 16h2v2h-2zM46 16h2v2h-2zM2 18h2v2h-2zM6 18h2v2h-2zM14 18h2v2h-2zM16 18h2v2h-2zM20 18h2v2h-2zM24 18h2v2h-2zM30 18h2v2h-2zM38 18h2v2h-2zM42 18h2v2h-2zM46 18h2v2h-2zM8 20h2v2h-2zM12 20h2v2h-2zM18 20h2v2h-2zM26 20h2v2h-2zM32 20h2v2h-2zM34 20h2v2h-2zM40 20h2v2h-2zM44 20h2v2h-2zM48 20h2v2h-2zM4 22h2v2h-2zM10 22h2v2h-2zM14 22h2v2h-2zM22 22h2v2h-2zM28 22h2v2h-2zM36 22h2v2h-2zM42 22h2v2h-2zM46 22h2v2h-2zM6 24h2v2h-2zM12 24h2v2h-2zM16 24h2v2h-2zM20 24h2v2h-2zM24 24h2v2h-2zM30 24h2v2h-2zM34 24h2v2h-2zM40 24h2v2h-2zM44 24h2v2h-2zM2 26h2v2h-2zM14 26h2v2h-2zM22 26h2v2h-2zM26 26h2v2h-2zM32 26h2v2h-2zM38 26h2v2h-2zM42 26h2v2h-2zM48 26h2v2h-2zM4 28h2v2h-2zM10 28h2v2h-2zM12 28h2v2h-2zM18 28h2v2h-2zM24 28h2v2h-2zM30 28h2v2h-2zM36 28h2v2h-2zM40 28h2v2h-2zM46 28h2v2h-2zM8 30h2v2h-2zM16 30h2v2h-2zM20 30h2v2h-2zM26 30h2v2h-2zM32 30h2v2h-2zM34 30h2v2h-2zM44 30h2v2h-2zM48 30h2v2h-2zM0 32h2v2h-2zM12 32h2v2h-2zM14 32h2v2h-2zM22 32h2v2h-2zM28 32h2v2h-2zM38 32h2v2h-2zM40 32h2v2h-2zM46 32h2v2h-2zM16 34h2v2h-2zM20 34h2v2h-2zM24 34h2v2h-2zM32 34h2v2h-2zM38 34h2v2h-2zM42 34h2v2h-2zM48 34h2v2h-2zM16 36h2v2h-2zM22 36h2v2h-2zM28 36h2v2h-2zM40 36h2v2h-2zM44 36h2v2h-2zM18 38h2v2h-2zM24 38h2v2h-2zM30 38h2v2h-2zM32 38h2v2h-2zM36 38h2v2h-2zM42 38h2v2h-2zM46 38h2v2h-2zM20 40h2v2h-2zM26 40h2v2h-2zM38 40h2v2h-2zM44 40h2v2h-2zM16 42h2v2h-2zM22 42h2v2h-2zM28 42h2v2h-2zM40 42h2v2h-2zM46 42h2v2h-2zM18 44h2v2h-2zM24 44h2v2h-2zM30 44h2v2h-2zM36 44h2v2h-2zM40 44h2v2h-2zM44 44h2v2h-2zM20 46h2v2h-2zM26 46h2v2h-2zM32 46h2v2h-2zM38 46h2v2h-2zM46 46h2v2h-2zM16 48h2v2h-2zM22 48h2v2h-2zM28 48h2v2h-2zM44 48h2v2h-2zM48 48h2v2h-2z"/>
+              </svg>
+            </div>
+            <div class="price-block">
+              <div class="l">General</div>
+              <div class="p">18€</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="float-badge f1">
+        <div class="ico">€</div>
+        <div>
+          <div class="meta">Ingresos hoy</div>
+          <div class="val">14.286 €</div>
+        </div>
+      </div>
+      <div class="float-badge f2">
+        <div class="ico">↗</div>
+        <div>
+          <div class="meta">Aforo en tiempo real</div>
+          <div class="val">847 / 950</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ TICKER ============ -->
+<div class="ticker">
+  <div class="track">
+    <div class="item"><span class="dot"></span><span>+12.000 eventos / mes</span></div>
+    <div class="item"><span class="num">0%</span><span>de comisión para el local</span></div>
+    <div class="item"><span class="dot"></span><span>Check-in en 0,8s</span></div>
+    <div class="item"><span class="num">+34%</span><span>de ventas vs Eventbrite</span></div>
+    <div class="item"><span class="dot"></span><span>API y marca blanca</span></div>
+    <div class="item"><span class="num">850</span><span>locales en España, LATAM e Ibiza</span></div>
+    <div class="item"><span class="dot"></span><span>Pago al instante</span></div>
+    <div class="item"><span class="num">★ 4.8</span><span>en Trustpilot</span></div>
+    <!-- duplicado para loop infinito -->
+    <div class="item"><span class="dot"></span><span>+12.000 eventos / mes</span></div>
+    <div class="item"><span class="num">0%</span><span>de comisión para el local</span></div>
+    <div class="item"><span class="dot"></span><span>Check-in en 0,8s</span></div>
+    <div class="item"><span class="num">+34%</span><span>de ventas vs Eventbrite</span></div>
+    <div class="item"><span class="dot"></span><span>API y marca blanca</span></div>
+    <div class="item"><span class="num">850</span><span>locales en España, LATAM e Ibiza</span></div>
+    <div class="item"><span class="dot"></span><span>Pago al instante</span></div>
+    <div class="item"><span class="num">★ 4.8</span><span>en Trustpilot</span></div>
+  </div>
+</div>
+
+<!-- ============ LOGO STRIP ============ -->
+<div class="logo-strip">
+  <div class="wrap">
+    <div class="logo-strip-label">Confían en Pasify</div>
+    <div class="logo-strip-grid">
+      <img class="brand-logo" data-brand="ultramarinos" src="uploads/Ultramarinos%20Maricarmen.png" alt="Ultramarinos Maricarmen">
+      <img class="brand-logo" data-brand="toninos" src="uploads/toninos.png" alt="Tonino's Cucina Italiana">
+      <img class="brand-logo" data-brand="pera" src="uploads/Pera%20Limonera.svg" alt="Pera Limonera">
+      <img class="brand-logo" data-brand="lucense" src="uploads/Lucense.svg" alt="Lucense">
+      <img class="brand-logo" data-brand="raza" src="uploads/Raza.svg" alt="Raza">
+      <img class="brand-logo" data-brand="greca" src="uploads/Crema.svg" alt="Greca">
+      <img class="brand-logo" data-brand="flamma" src="uploads/Flamma.png" alt="Flamma · Parrilla y Vinos">
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODULES (Producto) ============ -->
+<section class="sec" id="producto">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">All-in-one software</div>
+      <h2 class="h2">Una plataforma. Seis <em>módulos</em>. Cero fricción.</h2>
+      <p class="sec-sub">Desde la primera entrada vendida hasta el último brindis a las 6am. Pasify cubre el ciclo completo del evento — y te da la data para ganar el siguiente.</p>
+    </div>
+
+    <div class="modules">
+      <div class="module reveal">
+        <div class="glow"></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 9.5V7a2 2 0 012-2h16a2 2 0 012 2v2.5a1.5 1.5 0 000 3V15a2 2 0 01-2 2H4a2 2 0 01-2-2v-2.5a1.5 1.5 0 000-3z"/><line x1="9" y1="5" x2="9" y2="17" stroke-dasharray="2 2"/></svg></div>
+        <h3>Venta de entradas</h3>
+        <p>Online, en taquilla y por revendedores. Saltos de precio automáticos, complementos por entrada y reportes en tiempo real.</p>
+        <div class="feat">
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Saltos de precio dinámicos</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Marca blanca en tu dominio</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Pago al instante</div>
+        </div>
+      </div>
+
+      <div class="module reveal">
+        <div class="glow"></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M15 17v-1a3 3 0 013-3h1a3 3 0 013 3v1"/></svg></div>
+        <h3>Listas RRPP</h3>
+        <p>Cada relaciones públicas con su link, su comisión y sus métricas. Tú ves quién mete gente — ellos ven cuánto facturan.</p>
+        <div class="feat">
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Comisiones automáticas</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>App móvil para RRPP</div>
+        </div>
+      </div>
+
+      <div class="module reveal">
+        <div class="glow"></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        <h3>Reservas de mesa</h3>
+        <p>Mapa interactivo de tu local. Asigna mesas, mínimos de consumo y prepagos. Tu jefe de sala lo ve todo desde el iPad.</p>
+        <div class="feat">
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Mapa drag &amp; drop</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Mínimos por mesa</div>
+        </div>
+      </div>
+
+      <div class="module wide reveal">
+        <div class="glow"></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><line x1="14" y1="14" x2="21" y2="14"/><line x1="14" y1="17" x2="17" y2="17"/><line x1="14" y1="20" x2="21" y2="20"/></svg></div>
+        <h3>Control de acceso · Escáner QR</h3>
+        <p>App de check-in que lee QR, NFC o pulsera RFID en 0,8 segundos. Funciona offline y se sincroniza al reconectar. Tu portero ya no necesita una pinza ni una libreta.</p>
+        <div class="feat" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px;padding-top:24px;border-top:1px solid var(--line)">
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>QR + NFC + pulsera</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Modo offline</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Multi-puerta</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Aforo en vivo</div>
+        </div>
+      </div>
+
+      <div class="module reveal">
+        <div class="glow"></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l4-5 4 3 5-7"/></svg></div>
+        <h3>Analytics</h3>
+        <p>Facturación por canal, ticket medio, conversión, edad media, género. Todo conectado a Meta y Google Ads.</p>
+        <div class="feat">
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Cohortes y CRM integrado</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TIMELINE PRE-DURING-POST ============ -->
+<section class="sec" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Pre · Durante · Post</div>
+      <h2 class="h2">Domina cada <em>beat</em> en tus eventos.</h2>
+      <p class="sec-sub">Pasify trabaja en los tres tiempos del evento. Antes, llenas. Durante, controlas. Después, entiendes — y vendes la próxima fiesta sin levantarte del sofá.</p>
+    </div>
+
+    <div class="timeline">
+      <div class="tl-tabs" id="tlTabs">
+        <div class="tl-tab active" data-tab="pre">
+          <div class="stage">Gestión Pre-evento</div>
+          <h4>Un fiestón antes de abrir puertas.</h4>
+          <p>Gestiona todos tus canales de venta desde una sola app. Integra la venta en tu web, listas de invitados, RRPP, Meta, Google y marketplace.</p>
+          <div class="pills">
+            <span class="pill">Marca blanca</span>
+            <span class="pill">Listas de invitados</span>
+            <span class="pill">Gestión RRPP</span>
+            <span class="pill">Venta de entradas</span>
+            <span class="pill">Marketing</span>
+          </div>
+        </div>
+        <div class="tl-tab" data-tab="during">
+          <div class="stage">Gestión Durante el evento</div>
+          <h4>Tu sesión en tu mano y en tiempo real.</h4>
+          <p>Controla aforo y consumo, estados de reservas y flujo en taquilla. Cambia precios y modifica la noche en vivo desde tu móvil.</p>
+          <div class="pills">
+            <span class="pill">Reservas en vivo</span>
+            <span class="pill">Box Office</span>
+            <span class="pill">POS</span>
+            <span class="pill">Recepción</span>
+            <span class="pill">Soporte 24/7</span>
+          </div>
+        </div>
+        <div class="tl-tab" data-tab="post">
+          <div class="stage">Gestión Post-evento</div>
+          <h4>La data que vende la próxima noche.</h4>
+          <p>Reporting automatizado por canal, ticket medio, edad media, género. CRM de asistentes 100% privado — la base de datos es tuya, no nuestra.</p>
+          <div class="pills">
+            <span class="pill">Reporting</span>
+            <span class="pill">CRM privado</span>
+            <span class="pill">Cohortes</span>
+            <span class="pill">Audiencias para Meta/Ads</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-visual" id="tlVisual">
+        <!-- pre -->
+        <div class="tl-stage" data-stage="pre" style="display:block">
+          <div class="prod-mock" style="border:none;background:transparent">
+            <div class="top-bar">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span>pasify.app · Mondo Disko Vol. 2</span>
+            </div>
+            <div class="body">
+              <div class="grid-2" style="grid-template-columns:repeat(2,1fr)">
+                <div class="stat-tile"><div class="l">Tickets</div><div class="v up">1.836</div></div>
+                <div class="stat-tile"><div class="l">Predicción final</div><div class="v">2.042</div></div>
+              </div>
+              <div class="chart" style="height:160px">
+                <svg viewBox="0 0 360 140" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0" stop-color="#E8542A" stop-opacity=".5"/>
+                      <stop offset="1" stop-color="#E8542A" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M0,120 L20,110 L40,108 L60,90 L80,95 L100,80 L120,75 L140,60 L160,52 L180,48 L200,40 L220,35 L240,28 L260,30 L280,22 L300,18 L320,14 L340,10 L360,8 L360,140 L0,140 Z" fill="url(#g1)"/>
+                  <path d="M0,120 L20,110 L40,108 L60,90 L80,95 L100,80 L120,75 L140,60 L160,52 L180,48 L200,40 L220,35 L240,28 L260,30 L280,22 L300,18 L320,14 L340,10 L360,8" fill="none" stroke="#E8542A" stroke-width="2"/>
+                </svg>
+              </div>
+              <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0B0908;border:1px solid var(--line);border-radius:10px;font-size:13px"><span style="color:var(--ink-2)">Web oficial</span><span class="mono" style="color:var(--accent)">62%</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0B0908;border:1px solid var(--line);border-radius:10px;font-size:13px"><span style="color:var(--ink-2)">RRPP — Marcos L.</span><span class="mono" style="color:var(--accent)">22%</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0B0908;border:1px solid var(--line);border-radius:10px;font-size:13px"><span style="color:var(--ink-2)">Marketplace</span><span class="mono" style="color:var(--accent)">16%</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- during -->
+        <div class="tl-stage" data-stage="during" style="display:none">
+          <div class="prod-mock" style="border:none;background:transparent">
+            <div class="top-bar">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span>Box Office · Sala principal</span>
+            </div>
+            <div class="body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                <div class="stat-tile"><div class="l">Aforo en vivo</div><div class="v up">847 / 950</div></div>
+                <div class="stat-tile"><div class="l">Check-in / min</div><div class="v">68</div></div>
+              </div>
+              <div style="background:#0B0908;border:1px solid var(--line);border-radius:10px;padding:14px">
+                <div class="mono" style="font-size:10px;letter-spacing:.18em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">Mapa de mesas — Main Room</div>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">201</div>
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">202</div>
+                  <div style="height:38px;background:#7A2A0F;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">203</div>
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">204</div>
+                  <div style="height:38px;background:#332C25;border-radius:6px;display:grid;place-items:center;font-size:10px;color:var(--ink-2);font-family:'Geist Mono',monospace">205</div>
+                  <div style="height:38px;background:#E8542A;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">206</div>
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">207</div>
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">208</div>
+                  <div style="height:38px;background:#7A2A0F;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">209</div>
+                  <div style="height:38px;background:#332C25;border-radius:6px;display:grid;place-items:center;font-size:10px;color:var(--ink-2);font-family:'Geist Mono',monospace">210</div>
+                  <div style="height:38px;background:#1F4D2C;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">211</div>
+                  <div style="height:38px;background:#E8542A;border-radius:6px;display:grid;place-items:center;font-size:10px;color:#fff;font-family:'Geist Mono',monospace">212</div>
+                </div>
+                <div style="display:flex;gap:14px;margin-top:14px;font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink-3)">
+                  <span><span style="display:inline-block;width:8px;height:8px;background:#1F4D2C;border-radius:2px;margin-right:5px"></span>Disponible</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;background:#7A2A0F;border-radius:2px;margin-right:5px"></span>Reservada</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;background:#E8542A;border-radius:2px;margin-right:5px"></span>VIP</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- post -->
+        <div class="tl-stage" data-stage="post" style="display:none">
+          <div class="prod-mock" style="border:none;background:transparent">
+            <div class="top-bar">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span>Reporting · Mondo Disko Vol. 2 · 14 Jun</span>
+            </div>
+            <div class="body">
+              <div class="grid-2">
+                <div class="stat-tile"><div class="l">Facturación</div><div class="v up">37.842€</div></div>
+                <div class="stat-tile"><div class="l">Entradas</div><div class="v">2.042</div></div>
+                <div class="stat-tile"><div class="l">Ticket medio</div><div class="v">18,53€</div></div>
+                <div class="stat-tile"><div class="l">Edad media</div><div class="v">26</div></div>
+              </div>
+              <div style="margin-top:14px;display:flex;gap:10px">
+                <div style="flex:1;background:#0B0908;border:1px solid var(--line);border-radius:10px;padding:14px">
+                  <div class="mono" style="font-size:10px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase">Género</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+                    <div style="height:8px;flex:0 0 58%;background:var(--accent);border-radius:4px"></div>
+                    <span class="mono" style="font-size:11px;color:var(--ink-2)">M 58%</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                    <div style="height:8px;flex:0 0 42%;background:var(--warm);border-radius:4px"></div>
+                    <span class="mono" style="font-size:11px;color:var(--ink-2)">F 42%</span>
+                  </div>
+                </div>
+                <div style="flex:1;background:#0B0908;border:1px solid var(--line);border-radius:10px;padding:14px">
+                  <div class="mono" style="font-size:10px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase">Conversión</div>
+                  <div style="font-family:'Geist Mono',monospace;font-size:28px;font-weight:600;color:var(--accent);margin-top:10px;letter-spacing:-0.02em">7,4%</div>
+                  <div style="font-size:11px;color:var(--ink-3);margin-top:2px">vs 4,1% media sector</div>
+                </div>
+              </div>
+              <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:14px;font-size:13px">Sincronizar audiencia con Meta Ads →</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTORES ============ -->
+<section class="sec" id="sectores">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Para cada tipo de noche</div>
+      <h2 class="h2">Tecnología hecha por y para nuestra <em>industria</em>.</h2>
+    </div>
+    <div class="sectors">
+      <a href="sectores/discotecas.html" class="sector s1 reveal">
+        <div class="bg"></div>
+        <div class="grain"></div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="top">
+            <div class="ico" title="Discotecas — bola de disco"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="10" y1="3" x2="14" y2="3"/><line x1="5" y1="14" x2="19" y2="14"/><path d="M5.6 11c2-1.2 4.5-1.8 6.4-1.8s4.4.6 6.4 1.8"/><path d="M5.6 17c2 1.2 4.5 1.8 6.4 1.8s4.4-.6 6.4-1.8"/><line x1="8.5" y1="7.6" x2="9.5" y2="20.4"/><line x1="15.5" y1="7.6" x2="14.5" y2="20.4"/></svg></div>
+            <span class="num">01</span>
+          </div>
+          <div class="info">
+            <h3>Discotecas</h3>
+            <p>Listas, mesas, RRPP y aforo. Lo que ya hacías, sin papel.</p>
+            <div class="arrow">Ver software <span>→</span></div>
+          </div>
+        </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software para discotecas</span><span class="arr">→</span></div>
+      </a>
+      <a href="sectores/promotoras.html" class="sector s2 reveal">
+        <div class="bg"></div>
+        <div class="grain"></div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="top">
+            <div class="ico" title="Promotoras — megáfono"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 5v-15l-4 5H4a1 1 0 0 0-1 1z"/><path d="M10 5l11-3v20l-11-3"/><path d="M16 8v8"/></svg></div>
+            <span class="num">02</span>
+          </div>
+          <div class="info">
+            <h3>Promotoras</h3>
+            <p>Centraliza y controla todos tus eventos con la mayor precisión.</p>
+            <div class="arrow">Software para promotoras <span>→</span></div>
+          </div>
+        </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software para promotoras</span><span class="arr">→</span></div>
+      </a>
+      <a href="sectores/beach-clubs.html" class="sector s3 reveal">
+        <div class="bg"></div>
+        <div class="grain"></div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="top">
+            <div class="ico" title="Beach Clubs — sol y olas"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="3"/><line x1="12" y1="3" x2="12" y2="4.5"/><line x1="12" y1="13.5" x2="12" y2="15"/><line x1="6" y1="9" x2="4.5" y2="9"/><line x1="19.5" y1="9" x2="18" y2="9"/><line x1="7.76" y1="4.76" x2="6.7" y2="3.7"/><line x1="17.3" y1="14.3" x2="16.24" y2="13.24"/><line x1="7.76" y1="13.24" x2="6.7" y2="14.3"/><line x1="17.3" y1="3.7" x2="16.24" y2="4.76"/><path d="M3 18.5c1.5-1 3 0 4.5 0s3-1 4.5-1 3 1 4.5 1 3-1 4.5-1"/><path d="M3 21.5c1.5-1 3 0 4.5 0s3-1 4.5-1 3 1 4.5 1 3-1 4.5-1"/></svg></div>
+            <span class="num">03</span>
+          </div>
+          <div class="info">
+            <h3>Beach Clubs</h3>
+            <p>Day-life, DJ residentes, mesa con mínimo. Toda la temporada en una app.</p>
+            <div class="arrow">Ver beach club <span>→</span></div>
+          </div>
+        </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software para beach clubs</span><span class="arr">→</span></div>
+      </a>
+      <a href="sectores/festivales.html" class="sector s4 reveal">
+        <div class="bg"></div>
+        <div class="grain"></div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="top">
+            <div class="ico" title="Festivales — escenario y audio"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="14"/><line x1="9" y1="20" x2="9" y2="10"/><line x1="14" y1="20" x2="14" y2="6"/><line x1="19" y1="20" x2="19" y2="12"/><line x1="2" y1="20" x2="22" y2="20"/><circle cx="14" cy="4" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+            <span class="num">04</span>
+          </div>
+          <div class="info">
+            <h3>Festivales</h3>
+            <p>Multi-zona, multi-día, multi-pulsera. Aforo global y por escenario.</p>
+            <div class="arrow">Ver festivales <span>→</span></div>
+          </div>
+        </div>
+        <div class="reveal-cta" aria-hidden="true"><span class="label-text">Software para festivales</span><span class="arr">→</span></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TESTIMONIALS ============ -->
+<section class="sec" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Lo que dice la industria</div>
+      <h2 class="h2">Pasifyers. <em>Gente</em> que ya no levanta la voz para llenar.</h2>
+    </div>
+    <div class="testimonials">
+      <div class="testimonial reveal">
+        <p class="quote">"Pasamos de tres apps mal cosidas a una. La primera noche con Pasify cobramos 14 mil euros en mesa antes de abrir puerta — y mi jefe de sala me llamó para darme las gracias."</p>
+        <div class="author">
+          <div class="avatar">M</div>
+          <div>
+            <div class="who">Marta Vidal</div>
+            <div class="role">Booker · Sala Apolo Lab, Madrid</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <p class="quote">"Mi mejor RRPP movió 380 entradas en una noche y se enteró de su comisión por notificación push. Antes era yo a las 3am con un Excel. Ahora duermo."</p>
+        <div class="author">
+          <div class="avatar">J</div>
+          <div>
+            <div class="who">Javier Almodóvar</div>
+            <div class="role">Director · Sutton Club, Barcelona</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <p class="quote">"El check-in pasó de 11 segundos a menos de uno. La fila desaparece, la gente entra de buen rollo y el portero ya no es el malo. Eso vale más que cualquier número."</p>
+        <div class="author">
+          <div class="avatar">S</div>
+          <div>
+            <div class="who">Sara Domínguez</div>
+            <div class="role">Operations · Pacha Ibiza Underground</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HUGE WORDMARK ============ -->
+<div class="huge-mark">
+  <div class="wrap">
+    <svg class="logo-svg" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="hm-white" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="30%" stop-color="#F4EEE2" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#F4EEE2" stop-opacity="0.05"/>
+        </linearGradient>
+        <linearGradient id="hm-accent" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="30%" stop-color="#E8542A" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#E8542A" stop-opacity="0.1"/>
+        </linearGradient>
+      </defs>
+      <text id="hm-text" x="600" y="240" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-weight="700" font-size="280" letter-spacing="-14" fill="url(#hm-white)"><tspan>Pas</tspan><tspan id="hm-i-stem">&#305;</tspan><tspan>f</tspan><tspan dx="-6" font-family="'Instrument Serif', serif" font-style="italic" font-weight="400" font-size="320" fill="url(#hm-accent)">y</tspan></text>
+      <circle id="hm-dot" cx="691" cy="62" r="22" fill="#E8542A"/>
+    </svg>
+  </div>
+</div>
+
+<!-- ============ MARKETPLACE ============ -->
+<section class="sec" id="descubre">
+  <div class="wrap">
+    <div class="sec-head reveal" style="display:flex;justify-content:space-between;align-items:end;gap:32px;flex-wrap:wrap;margin-bottom:32px">
+      <div>
+        <div class="eyebrow">Marketplace · B2C</div>
+        <h2 class="h2">Esta noche, en tu <em>ciudad</em>.</h2>
+      </div>
+      <a href="recursos/blog.html" class="btn btn-ghost">Ver todos <span class="arrow">→</span></a>
+    </div>
+    <div class="filters reveal" id="filters">
+      <button class="chip active" data-f="all">Todos</button>
+      <button class="chip" data-f="madrid">Madrid</button>
+      <button class="chip" data-f="barcelona">Barcelona</button>
+      <button class="chip" data-f="ibiza">Ibiza</button>
+      <button class="chip" data-f="valencia">Valencia</button>
+      <button class="chip" data-f="techno">Techno</button>
+      <button class="chip" data-f="reggaeton">Reggaeton</button>
+      <button class="chip" data-f="house">House</button>
+      <button class="chip" data-f="indie">Indie</button>
+    </div>
+    <div class="events-grid reveal">
+      <a href="#" class="ev-card" data-tags="madrid techno">
+        <div class="img a">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">14</div><div class="m">Jun</div></div><span class="badge last">Últimas 12</span></div>
+          <div class="glyph">Mondo<br>Disko</div>
+        </div>
+        <div class="body">
+          <div class="venue">Madrid · Sala · 23:30</div>
+          <div class="title">Mondo Disko Vol. 2 — Techno Diaspora</div>
+          <div class="row"><div class="price"><small>desde</small> 18€</div><span class="badge hot">★ Hot</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="barcelona reggaeton">
+        <div class="img b">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">21</div><div class="m">Jun</div></div><span class="badge vip">VIP</span></div>
+          <div class="glyph">Sutton<br>Club</div>
+        </div>
+        <div class="body">
+          <div class="venue">Barcelona · Club · 00:00</div>
+          <div class="title">Sutton — Reggaeton All Stars</div>
+          <div class="row"><div class="price"><small>desde</small> 25€</div><span class="badge hot">★ Hot</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="valencia indie">
+        <div class="img c">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">28</div><div class="m">Jun</div></div><span class="badge free">Free entry</span></div>
+          <div class="glyph">Florida<br>135</div>
+        </div>
+        <div class="body">
+          <div class="venue">Valencia · Festival · 22:00</div>
+          <div class="title">Florida 135 — Indie Garden</div>
+          <div class="row"><div class="price"><small>desde</small> 0€</div><span class="badge">Lista</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="ibiza house">
+        <div class="img d">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">05</div><div class="m">Jul</div></div><span class="badge last">8 mesas</span></div>
+          <div class="glyph">Pacha<br>Underground</div>
+        </div>
+        <div class="body">
+          <div class="venue">Ibiza · Club · 23:00</div>
+          <div class="title">Pacha Underground — Solomun B2B</div>
+          <div class="row"><div class="price"><small>desde</small> 45€</div><span class="badge hot">★ Hot</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="madrid house">
+        <div class="img b">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">12</div><div class="m">Jul</div></div></div>
+          <div class="glyph">Perro<br>Negro</div>
+        </div>
+        <div class="body">
+          <div class="venue">Madrid · Sala · 00:30</div>
+          <div class="title">Perro Negro — Deep Sessions</div>
+          <div class="row"><div class="price"><small>desde</small> 12€</div><span class="badge">Última hora</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="ibiza house">
+        <div class="img a">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">19</div><div class="m">Jul</div></div><span class="badge vip">VIP</span></div>
+          <div class="glyph">Cova<br>Santa</div>
+        </div>
+        <div class="body">
+          <div class="venue">Ibiza · Beach · 18:00</div>
+          <div class="title">Cova Santa — Sunset Series</div>
+          <div class="row"><div class="price"><small>desde</small> 35€</div><span class="badge hot">★ Hot</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="barcelona techno">
+        <div class="img c">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">26</div><div class="m">Jul</div></div></div>
+          <div class="glyph">Razzmatazz<br>Lab</div>
+        </div>
+        <div class="body">
+          <div class="venue">Barcelona · Sala · 01:00</div>
+          <div class="title">Razzmatazz — Industrial Techno</div>
+          <div class="row"><div class="price"><small>desde</small> 22€</div><span class="badge">2x1 antes 00h</span></div>
+        </div>
+      </a>
+      <a href="#" class="ev-card" data-tags="valencia reggaeton">
+        <div class="img d">
+          <div class="bg"></div>
+          <div class="top"><div class="date"><div class="d">02</div><div class="m">Ago</div></div><span class="badge last">Casi sold out</span></div>
+          <div class="glyph">Sonora<br>Festival</div>
+        </div>
+        <div class="body">
+          <div class="venue">Valencia · Festival · 20:00</div>
+          <div class="title">Sonora — Latino Block Party</div>
+          <div class="row"><div class="price"><small>desde</small> 28€</div><span class="badge hot">★ Hot</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="sec" id="precios">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Precios</div>
+      <h2 class="h2">Sin permanencia. Sin <em>letra pequeña</em>.</h2>
+      <p class="sec-sub">Tres planes que crecen contigo. El local no paga comisión por entrada en Pro y Enterprise — el ticket se compra a precio neto y la fee la pone el comprador.</p>
+    </div>
+    <div class="pricing">
+      <div class="plan reveal">
+        <h3>Starter</h3>
+        <div class="price">
+          <span class="amt">0€</span>
+          <span class="per">/mes</span>
+        </div>
+        <p class="desc">Para locales que empiezan o que prueban su primer evento ticketizado.</p>
+        <ul>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Hasta 200 entradas / mes</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>1 evento simultáneo</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Escáner QR básico</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Listas RRPP — 3 promotores</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Comisión 4,9% + 0,30€ / entrada</li>
+        </ul>
+        <a href="#contacto" class="btn btn-outline">Empieza gratis</a>
+      </div>
+
+      <div class="plan featured reveal">
+        <span class="ribbon">Más elegido</span>
+        <h3>Pro</h3>
+        <div class="price">
+          <span class="amt">149€</span>
+          <span class="per">/mes</span>
+        </div>
+        <p class="desc">Para salas y promotoras con eventos recurrentes que quieren la suite completa.</p>
+        <ul>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Entradas ilimitadas</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Reservas de mesa + mapa interactivo</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Marca blanca en tu dominio</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>RRPP ilimitados con comisión auto</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>POS + Box Office + Recepción</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>0% comisión para el local</li>
+        </ul>
+        <a href="#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+      </div>
+
+      <div class="plan reveal">
+        <h3>Enterprise</h3>
+        <div class="price">
+          <span class="from">desde</span>
+        </div>
+        <div class="price" style="margin-top:0">
+          <span class="amt">A medida</span>
+        </div>
+        <p class="desc">Para grupos hosteleros, festivales multi-día y operadores con necesidades de integración.</p>
+        <ul>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Multi-local y multi-marca</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>API y SSO</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Pulseras RFID + cashless</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>SLA 99,99% + soporte 24/7</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Customer success dedicado</li>
+        </ul>
+        <a href="#contacto" class="btn btn-outline">Hablar con ventas</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CASES ============ -->
+<section class="sec" id="casos">
+  <div class="wrap">
+    <div class="sec-head reveal" style="display:flex;justify-content:space-between;align-items:end;gap:32px;flex-wrap:wrap">
+      <div>
+        <div class="eyebrow">Casos de éxito</div>
+        <h2 class="h2">Locales que <em>llenan</em> con Pasify.</h2>
+      </div>
+      <a href="recursos/blog.html" class="btn btn-ghost">Ver todos <span class="arrow">→</span></a>
+    </div>
+    <div class="cases">
+      <a href="#" class="case reveal">
+        <div class="img a">
+          <span class="city">Madrid</span>
+          <span class="glyph">Apolo Lab</span>
+          <div class="grain-l"></div>
+        </div>
+        <div class="body">
+          <div class="meta">Sala · 1.200 aforo</div>
+          <h4>Cómo Apolo Lab pasó de 60% a 95% de ocupación en 4 meses.</h4>
+          <div class="stats">
+            <div><div class="v">+58%</div><div class="l">Ventas online</div></div>
+            <div><div class="v">−72%</div><div class="l">Tiempo check-in</div></div>
+            <div><div class="v">12</div><div class="l">RRPP activos</div></div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="case reveal">
+        <div class="img b">
+          <span class="city">Ibiza</span>
+          <span class="glyph">Pacha Underground</span>
+          <div class="grain-l"></div>
+        </div>
+        <div class="body">
+          <div class="meta">Club · Temporada Ibiza</div>
+          <h4>Una temporada en Ibiza sin papel y con cashless en pulsera.</h4>
+          <div class="stats">
+            <div><div class="v">2,4M€</div><div class="l">Facturación temporada</div></div>
+            <div><div class="v">95k</div><div class="l">Pulseras RFID</div></div>
+            <div><div class="v">0</div><div class="l">Incidencias críticas</div></div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="case reveal">
+        <div class="img c">
+          <span class="city">Valencia</span>
+          <span class="glyph">Sonora Festival</span>
+          <div class="grain-l"></div>
+        </div>
+        <div class="body">
+          <div class="meta">Festival · 3 días · 4 escenarios</div>
+          <h4>Sonora Festival y los datos que llenaron la próxima edición.</h4>
+          <div class="stats">
+            <div><div class="v">42k</div><div class="l">Asistentes</div></div>
+            <div><div class="v">+34%</div><div class="l">Vs Eventbrite '24</div></div>
+            <div><div class="v">7,4%</div><div class="l">CTR audiencias Meta</div></div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="sec" style="padding-top:0">
+  <div class="wrap" style="max-width:920px">
+    <div class="sec-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2 class="h2">Lo que se nos pregunta <em>antes</em> de cada demo.</h2>
+    </div>
+    <div class="faq reveal" id="faq">
+      <div class="faq-item open">
+        <div class="faq-q"><h4>¿Pasify cobra comisión al local?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">No en los planes Pro y Enterprise. La service fee la asume el comprador y tú recibes el ticket a precio neto. En Starter cobramos 4,9% + 0,30€ por entrada vendida.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q"><h4>¿Quién es dueño de la base de datos de mis clientes?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">Tú. La base de datos es 100% privada — ni nosotros ni tus competidores la usamos. Puedes exportarla a Meta, Google o tu CRM cuando quieras.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q"><h4>¿Cuánto tarda el onboarding?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">48 horas para Starter, 5–7 días para Pro (te montamos la marca blanca y migramos eventos), 2–4 semanas para Enterprise con integraciones a medida.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q"><h4>¿Funciona el escáner sin conexión?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">Sí. La app de control de acceso descarga la lista de QRs antes del evento y trabaja en local. Cuando recupera red, sincroniza el aforo entre todas las puertas.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q"><h4>¿Qué países soportáis?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">España, Portugal, Italia, México, Colombia, Argentina y Chile. Pagos en EUR y USD, factura SII para España, integración con Stripe, Redsys y Adyen.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q"><h4>¿Puedo migrar desde Eventbrite o Fourvenues?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-a">Sí. Tenemos importadores listos. Migramos eventos activos, base de clientes y entradas vendidas sin que el comprador se entere de nada.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA BANNER ============ -->
+<section class="sec" id="contacto" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="cta-banner reveal">
+      <div class="inner">
+        <div>
+          <div class="eyebrow" style="color:var(--accent-2)">Solicita demo</div>
+          <h2>Tu próxima noche, sin <em>fila</em>, sin papel, sin fricción.</h2>
+          <p>15 minutos con un experto del sector. Te montamos un evento de prueba con tu marca, tu mapa de mesas y tu equipo de RRPP — y decides.</p>
+        </div>
+        <div class="ctas">
+          <a href="nosotros/contacto.html" class="btn btn-primary" style="font-size:16px;padding:16px 24px">Reservar 15 min <span class="arrow">→</span></a>
+          <a href="nosotros/ventas.html" class="btn btn-outline" style="background:transparent;color:var(--ink);border-color:rgba(244,238,226,.3)">Hablar por WhatsApp</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="col brand-col">
+        <a href="#top" class="logo" aria-label="Pasify">
+          <img src="uploads/pasify-logo.png" alt="Pasify">
+        </a>
+        <p>El sistema operativo de los eventos modernos. Hecho en Valladolid. Funciona en Madrid, Barcelona, Ibiza, Ciudad de México y donde haya una buena fiesta.</p>
+        <div class="socials">
+          <a href="#" aria-label="Instagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".7" fill="currentColor"/></svg></a>
+          <a href="#" aria-label="TikTok"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8.4V14a4.5 4.5 0 11-4.5-4.5h.5v2.5h-.5A2 2 0 1013.5 14V3h2.5a4 4 0 004 4v2.5a6.4 6.4 0 01-4-1.1z"/></svg></a>
+          <a href="#" aria-label="LinkedIn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v4H4zM4 10h4v10H4zM10 10h4v1.5a3.5 3.5 0 016 2.5V20h-4v-5.5a1.5 1.5 0 00-3 0V20h-3z"/></svg></a>
+          <a href="#" aria-label="YouTube"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12s0-3.5-.5-5c-.3-1-1-1.7-2-2C17.5 4.5 12 4.5 12 4.5s-5.5 0-7.5.5c-1 .3-1.7 1-2 2C2 8.5 2 12 2 12s0 3.5.5 5c.3 1 1 1.7 2 2 2 .5 7.5.5 7.5.5s5.5 0 7.5-.5c1-.3 1.7-1 2-2 .5-1.5.5-5 .5-5zM10 8.5L15 12l-5 3.5z"/></svg></a>
+        </div>
+      </div>
+      <div class="col">
+        <h5>Soluciones</h5>
+        <ul>
+          <li><a href="soluciones/entradas.html">Venta de entradas</a></li>
+          <li><a href="soluciones/taquilla.html">Venta en taquilla</a></li>
+          <li><a href="soluciones/vip.html">Reservados VIP</a></li>
+          <li><a href="soluciones/invitados.html">Listas de invitados</a></li>
+          <li><a href="soluciones/rrpp.html">Gestión de RRPP</a></li>
+          <li><a href="soluciones/canales.html">Canales de venta</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h5>Sectores</h5>
+        <ul>
+          <li><a href="sectores/discotecas.html">Discotecas</a></li>
+          <li><a href="sectores/salas.html">Salas de conciertos</a></li>
+          <li><a href="sectores/beach-clubs.html">Beach Clubs</a></li>
+          <li><a href="sectores/festivales.html">Festivales</a></li>
+          <li><a href="sectores/promotoras.html">Promotoras</a></li>
+          <li><a href="sectores/eventos-privados.html">Eventos privados</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h5>Recursos</h5>
+        <ul>
+          <li><a href="recursos/academy.html">Pasify Academy</a></li>
+          <li><a href="recursos/blog.html">Blogs &amp; Newsletter</a></li>
+          <li><a href="recursos/ayuda.html">Centro de ayuda</a></li>
+          <li><a href="recursos/api-docs.html">API e integraciones</a></li>
+          <li><a href="recursos/pro-network.html">Partners &amp; Promotores</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h5>Nosotros</h5>
+        <ul>
+          <li><a href="nosotros/sobre.html">Sobre nosotros</a></li>
+          <li><a href="nosotros/seguridad.html">Seguridad y privacidad</a></li>
+          <li><a href="nosotros/contacto.html">Solicitar demo</a></li>
+          <li><a href="nosotros/oficinas.html">Contacto</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Pasify, Inc · Hecho en Valladolid con ☕ y poco sueño</span>
+      <div class="legal">
+        <a href="nosotros/seguridad.html#privacidad">Privacidad</a>
+        <a href="nosotros/seguridad.html#terminos">Términos</a>
+        <a href="nosotros/seguridad.html#cookies">Cookies</a>
+        <a href="#">ES / EN / PT</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Center the orange dot exactly on the rendered "ı" stem.
+  // Uses getBBox on the dedicated tspan, which gives the true rendered bounds
+  // of just that glyph — independent of font metrics or side bearings.
+  function centerHugeMarkDot(){
+    var stem = document.getElementById('hm-i-stem');
+    var dot  = document.getElementById('hm-dot');
+    if(!stem || !dot) return;
+    try{
+      var bb = stem.getBBox();
+      if(bb && bb.width > 0){
+        dot.setAttribute('cx', bb.x + bb.width / 2);
+      }
+    }catch(err){ /* ignore */ }
+  }
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(centerHugeMarkDot);
+  }
+  window.addEventListener('load', centerHugeMarkDot);
+  window.addEventListener('resize', centerHugeMarkDot);
+
+  // Stop placeholder links (href="#") from adding "#" to the URL
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a');
+    if(a && a.getAttribute('href') === '#'){ e.preventDefault(); }
+  });
+
+  // ===== SEARCH INDEX (global · idéntico al de _header.js) =====
+  (function(global){
+    if (global.PasifySearch) return;
+    var SUB_FOLDERS_S = ['/soluciones/','/operacion/','/data/','/sectores/','/recursos/','/nosotros/'];
+    var INDEX = [
+      { title:'Venta de entradas',     section:'Soluciones', url:'soluciones/entradas.html',          keywords:['entradas','venta','tickets','ticket','vender entradas','online','aforo'] },
+      { title:'Venta en taquilla',     section:'Soluciones', url:'soluciones/taquilla.html',          keywords:['taquilla','taquillero','cobro en puerta','presencial','box office'] },
+      { title:'Reservados VIP',        section:'Soluciones', url:'soluciones/vip.html',               keywords:['vip','reservados','reservas de mesa','mesas','reserva','botella','minimo'] },
+      { title:'Listas de invitados',   section:'Soluciones', url:'soluciones/invitados.html',         keywords:['invitados','lista','listas','guest list','invitacion','cortesia'] },
+      { title:'Gestión de RRPP',       section:'Soluciones', url:'soluciones/rrpp.html',              keywords:['rrpp','relaciones publicas','rrpp top','comisiones rrpp','embajadores'] },
+      { title:'Canales de venta',      section:'Soluciones', url:'soluciones/canales.html',           keywords:['canales','canales de venta','distribucion','multicanal','revendedores'] },
+      { title:'Control de acceso QR',  section:'Operación',  url:'operacion/control-acceso.html',     keywords:['control de acceso','acceso','qr','scanner','aforo','validacion','puerta','multipuerta'] },
+      { title:'Software TPV',          section:'Operación',  url:'operacion/tpv.html',                keywords:['tpv','caja','pos','cierre z','barra','cobro','propinas'] },
+      { title:'Recepción de eventos',  section:'Operación',  url:'operacion/recepcion.html',          keywords:['recepcion','check in','check-in','puerta','identificacion','acreditacion','pulsera'] },
+      { title:'Soporte personalizado', section:'Operación',  url:'operacion/soporte.html',            keywords:['soporte','soporte 24/7','whatsapp','account manager','onboarding','ayuda en evento'] },
+      { title:'Pases de temporada',    section:'Operación',  url:'operacion/pases-temporada.html',    keywords:['pases','abonos','temporada','suscripcion','renovacion','socios','fidelizacion'] },
+      { title:'CRM y datos en tiempo real', section:'Data',  url:'data/crm.html',                     keywords:['crm','datos','real time','segmentos','perfil 360','rgpd','base de datos'] },
+      { title:'Marketing digital',     section:'Data',       url:'data/marketing.html',               keywords:['marketing','marketing digital','campanas','meta','google','tiktok','atribucion','roi','capi'] },
+      { title:'Informes de eventos',   section:'Data',       url:'data/informes.html',                keywords:['informes','informe','reporte','reportes','kpi','cierre evento','heatmap','mapa de calor'] },
+      { title:'API e integraciones',   section:'Data',       url:'data/api.html',                     keywords:['api','integraciones','webhooks','rest','graphql','sdk','sandbox','conectores'] },
+      { title:'Discotecas',            section:'Sectores',   url:'sectores/discotecas.html',          keywords:['discoteca','discotecas','club','clubs','nightclub','sala'] },
+      { title:'Salas de conciertos',   section:'Sectores',   url:'sectores/salas.html',               keywords:['salas','salas de conciertos','conciertos','salas en vivo','venue','live','concierto'] },
+      { title:'Beach Clubs',           section:'Sectores',   url:'sectores/beach-clubs.html',         keywords:['beach','beach clubs','beach club','playa','chiringuito','verano'] },
+      { title:'Festivales',            section:'Sectores',   url:'sectores/festivales.html',          keywords:['festival','festivales','macroevento','open air'] },
+      { title:'Promotoras',            section:'Sectores',   url:'sectores/promotoras.html',          keywords:['promotora','promotoras','promotor','productora'] },
+      { title:'Eventos privados',      section:'Sectores',   url:'sectores/eventos-privados.html',    keywords:['eventos privados','privados','boda','bodas','corporativo','aniversario','cumpleanos'] },
+      { title:'Pasify Academy',        section:'Recursos',   url:'recursos/academy.html',             keywords:['academy','cursos','formacion','aprender','pasify pro','certificacion','diploma'] },
+      { title:'Blogs y Newsletter',    section:'Recursos',   url:'recursos/blog.html',                keywords:['blog','blogs','newsletter','casos de exito','webinars','noticias','articulos'] },
+      { title:'Centro de ayuda',       section:'Recursos',   url:'recursos/ayuda.html',               keywords:['ayuda','centro de ayuda','soporte','changelog','estado del sistema','faq'] },
+      { title:'Documentación API',     section:'Recursos',   url:'recursos/api-docs.html',            keywords:['documentacion','docs','sdk','rest','graphql','webhooks','api docs','postman','insomnia'] },
+      { title:'Partners y Promotores', section:'Recursos',   url:'recursos/pro-network.html',         keywords:['partners','promotores','comunidad','embajadores','comisiones','red','slack'] },
+      { title:'Sobre nosotros',        section:'Nosotros',   url:'nosotros/sobre.html',               keywords:['sobre','sobre nosotros','equipo','manifiesto','historia','mision','quienes somos'] },
+      { title:'Seguridad y privacidad',section:'Nosotros',   url:'nosotros/seguridad.html',           keywords:['seguridad','privacidad','rgpd','iso','soc','compliance','dpa','pci'] },
+      { title:'Solicitar demo',        section:'Nosotros',   url:'nosotros/contacto.html',            keywords:['demo','solicitar demo','agendar','reunion','enterprise','llamada','videollamada'] },
+      { title:'Contacto y oficinas',   section:'Nosotros',   url:'nosotros/oficinas.html',            keywords:['oficinas','direccion','contacto','sedes','telefono','email','formulario'] },
+      { title:'Pricing',               section:'Precios',    url:'pasify.html#precios',               keywords:['precio','precios','pricing','planes','tarifa','coste','cuanto cuesta'] }
+    ];
+    function normalize(s){
+      return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    function score(entry, q){
+      var titleN = normalize(entry.title);
+      var s = 0;
+      if (titleN === q) s = 200;
+      else if (titleN.indexOf(q) === 0) s = 130;
+      else if (titleN.indexOf(' ' + q) !== -1) s = 100;
+      else if (titleN.indexOf(q) !== -1) s = 80;
+      for (var i = 0; i < entry.keywords.length; i++) {
+        var k = normalize(entry.keywords[i]);
+        var ks = 0;
+        if (k === q) ks = 110;
+        else if (k.indexOf(q) === 0) ks = 70;
+        else if (k.indexOf(q) !== -1) ks = 50;
+        else if (q.length >= 4 && k.length >= 4 && q.indexOf(k) !== -1) ks = 30;
+        if (ks > s) s = ks;
+      }
+      return s;
+    }
+    function findMany(query, max){
+      var q = normalize((query || '').trim());
+      if (!q) return [];
+      var out = [];
+      for (var i = 0; i < INDEX.length; i++) {
+        var sc = score(INDEX[i], q);
+        if (sc > 0) out.push({ entry: INDEX[i], score: sc });
+      }
+      out.sort(function(a, b){ return b.score - a.score; });
+      return out.slice(0, max || 6).map(function(r){ return r.entry; });
+    }
+    function find(query){
+      var matches = findMany(query, 1);
+      return matches.length ? matches[0] : null;
+    }
+    function resolveUrl(url){
+      if (!url) return '#';
+      if (url.indexOf('http') === 0 || url.indexOf('//') === 0) return url;
+      var inSub = SUB_FOLDERS_S.some(function(f){ return location.pathname.indexOf(f) !== -1; });
+      var pre = inSub ? '../' : '';
+      return pre + url;
+    }
+    global.PasifySearch = { INDEX: INDEX, find: find, findMany: findMany, resolveUrl: resolveUrl };
+  })(window);
+
+  // ===== SEARCH DOCK =====
+  (function(){
+    var dock = document.getElementById('search-dock');
+    if(!dock || dock.dataset.bound === '1' || !window.PasifySearch) return;
+    var trigger = dock.querySelector('#search-trigger');
+    var form    = dock.querySelector('#search-form');
+    var input   = dock.querySelector('#search-input');
+    var close   = dock.querySelector('#search-close');
+    var results = dock.querySelector('#search-results');
+    if(!trigger || !form || !input || !close || !results) return;
+    dock.dataset.bound = '1';
+
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+    function renderResults(query){
+      var matches = window.PasifySearch.findMany(query, 6);
+      if (!matches.length) {
+        dock.classList.add('has-results');
+        results.innerHTML = '<div class="search-empty">Sin resultados para «' + escapeHtml(query) + '».<br/>Pulsa Enter para buscar en el centro de ayuda.</div>';
+        return;
+      }
+      dock.classList.add('has-results');
+      results.innerHTML = matches.map(function(m, i){
+        return '<a class="search-result' + (i===0?' active':'') + '" href="' + window.PasifySearch.resolveUrl(m.url) + '" role="option">' +
+               '<span class="lab">' + escapeHtml(m.section) + '</span>' +
+               '<span class="ttl">' + escapeHtml(m.title) + '</span>' +
+               '</a>';
+      }).join('');
+    }
+
+    function clearResults(){ dock.classList.remove('has-results'); results.innerHTML = ''; }
+
+    function openSearch(){ dock.classList.add('open'); setTimeout(function(){ input.focus(); }, 200); }
+    function closeSearch(){ dock.classList.remove('open'); input.value = ''; clearResults(); }
+
+    trigger.addEventListener('click', openSearch);
+    close.addEventListener('click', closeSearch);
+
+    input.addEventListener('input', function(){
+      var q = input.value.trim();
+      if (!q) { clearResults(); return; }
+      renderResults(q);
+    });
+
+    input.addEventListener('keydown', function(e){
+      if (!dock.classList.contains('has-results')) return;
+      var items = results.querySelectorAll('.search-result');
+      if (!items.length) return;
+      var activeIdx = -1;
+      for (var i = 0; i < items.length; i++) { if (items[i].classList.contains('active')) { activeIdx = i; break; } }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (activeIdx >= 0) items[activeIdx].classList.remove('active');
+        var next = (activeIdx + 1) % items.length;
+        items[next].classList.add('active');
+        items[next].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (activeIdx >= 0) items[activeIdx].classList.remove('active');
+        var prev = (activeIdx - 1 + items.length) % items.length;
+        items[prev].classList.add('active');
+        items[prev].scrollIntoView({ block: 'nearest' });
+      }
+    });
+
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && dock.classList.contains('open')) closeSearch();
+    });
+
+    document.addEventListener('click', function(e){
+      if (dock.classList.contains('open') && !dock.contains(e.target)) closeSearch();
+    });
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var active = results.querySelector('.search-result.active');
+      if (active) { location.href = active.getAttribute('href'); return; }
+      var q = input.value.trim();
+      if (!q) return;
+      var match = window.PasifySearch.find(q);
+      if (match) location.href = window.PasifySearch.resolveUrl(match.url);
+      else location.href = window.PasifySearch.resolveUrl('recursos/ayuda.html') + '?q=' + encodeURIComponent(q);
+    });
+  })();
+
+  // header scroll
+  const header = document.getElementById('header');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 30) header.classList.add('scrolled');
+    else header.classList.remove('scrolled');
+  });
+
+  // ===== MEGAMENU =====
+  const megaWrap = document.getElementById('mega-wrap');
+  const navItems = document.querySelectorAll('.nav-item[data-menu]');
+  const panels = document.querySelectorAll('.mega[data-panel]');
+  let openMenu = null;
+  let closeTimer = null;
+
+  function showPanel(name){
+    clearTimeout(closeTimer);
+    panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
+    navItems.forEach(i => i.classList.toggle('open', i.dataset.menu === name));
+    megaWrap.classList.add('open');
+    header.classList.add('menu-open');
+    openMenu = name;
+  }
+  function hidePanel(){
+    megaWrap.classList.remove('open');
+    header.classList.remove('menu-open');
+    navItems.forEach(i => i.classList.remove('open'));
+    openMenu = null;
+  }
+  function scheduleHide(){
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(hidePanel, 180);
+  }
+  navItems.forEach(item => {
+    const name = item.dataset.menu;
+    item.addEventListener('mouseenter', () => showPanel(name));
+    item.addEventListener('mouseleave', scheduleHide);
+    item.querySelector('.nav-trigger').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (openMenu === name) hidePanel(); else showPanel(name);
+    });
+  });
+  megaWrap.addEventListener('mouseenter', () => clearTimeout(closeTimer));
+  megaWrap.addEventListener('mouseleave', scheduleHide);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hidePanel(); });
+
+  // ===== MOBILE DRAWER =====
+  const burger = document.getElementById('burger');
+  const drawer = document.getElementById('mobile-drawer');
+  if (burger && drawer) {
+    burger.addEventListener('click', () => {
+      const isOpen = drawer.classList.toggle('open');
+      burger.classList.toggle('open', isOpen);
+      document.body.style.overflow = isOpen ? 'hidden' : '';
+    });
+    drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+      drawer.classList.remove('open');
+      burger.classList.remove('open');
+      document.body.style.overflow = '';
+    }));
+  }
+
+  // reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // counters
+  function animateCounter(el) {
+    const target = parseFloat(el.dataset.counter);
+    const suffix = el.dataset.suffix || '';
+    const duration = 1600;
+    const start = performance.now();
+    const startVal = 0;
+    function tick(now){
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const val = Math.floor(startVal + (target - startVal) * eased);
+      el.textContent = val.toLocaleString('es-ES') + suffix;
+      if (t < 1) requestAnimationFrame(tick);
+      else el.textContent = target.toLocaleString('es-ES') + suffix;
+    }
+    requestAnimationFrame(tick);
+  }
+  const counterIo = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        animateCounter(e.target);
+        counterIo.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.4 });
+  document.querySelectorAll('[data-counter]').forEach(el => counterIo.observe(el));
+
+  // timeline tabs
+  const tlTabs = document.querySelectorAll('.tl-tab');
+  const tlStages = document.querySelectorAll('.tl-stage');
+  tlTabs.forEach(t => t.addEventListener('click', () => {
+    tlTabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const tab = t.dataset.tab;
+    tlStages.forEach(s => s.style.display = s.dataset.stage === tab ? 'block' : 'none');
+  }));
+  // auto-rotate timeline
+  let tlIdx = 0;
+  const tlNames = ['pre','during','post'];
+  setInterval(() => {
+    tlIdx = (tlIdx + 1) % 3;
+    document.querySelector(`.tl-tab[data-tab="${tlNames[tlIdx]}"]`)?.click();
+  }, 5500);
+
+  // filters
+  const chips = document.querySelectorAll('.chip');
+  const cards = document.querySelectorAll('.events-grid .ev-card');
+  chips.forEach(c => c.addEventListener('click', () => {
+    chips.forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    const f = c.dataset.f;
+    cards.forEach(card => {
+      const tags = (card.dataset.tags || '').split(' ');
+      const show = f === 'all' || tags.includes(f);
+      card.style.display = show ? '' : 'none';
+    });
+  }));
+
+  // faq
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.querySelector('.faq-q').addEventListener('click', () => {
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+</script>
+</body>
+</html>

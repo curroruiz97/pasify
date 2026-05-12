@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/update-password",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/password-recovery",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/e/:id",
+      "destination": "/api/e/:id"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

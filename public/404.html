@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>StudentsLife - Redirecting...</title>
+  <script>
+    // GitHub Pages 404 handler - redirect to hash router
+    (function() {
+      var pathname = window.location.pathname;
+      var hash = window.location.hash;
+      var search = window.location.search;
+      
+      // Handle password recovery redirect
+      if (pathname === '/password-recovery' || pathname === '/update-password') {
+        if (hash.includes('access_token')) {
+          // Tokens in hash: #access_token=xxx&refresh_token=xxx
+          var tokens = hash.substring(1);
+          window.location.replace(window.location.origin + '/#/update-password?' + tokens);
+        } else if (hash.includes('error')) {
+          // Error in hash: #error=access_denied&error_code=otp_expired
+          window.location.replace(window.location.origin + '/#/login?password_error=expired');
+        } else {
+          // No tokens, redirect to login
+          window.location.replace(window.location.origin + '/#/login');
+        }
+      } else {
+        // For any other 404, redirect to home with hash routing
+        window.location.replace(window.location.origin + '/#' + pathname + search + hash);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting...</p>
+</body>
+</html>

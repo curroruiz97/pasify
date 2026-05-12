@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pasify</string>
+    <string name="title_activity_main">Pasify</string>
+    <string name="package_name">es.pasify.app</string>
+    <string name="custom_url_scheme">es.pasify.app</string>
+</resources>
