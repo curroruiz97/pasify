@@ -1,301 +1,369 @@
-// Webhook Stripe per Studentslife: aggiorna partner_subscriptions in DB,
-// invia email di benvenuto / fattura / pagamento fallito al Partner.
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Pasify · stripe-webhook
+// Procesa eventos Stripe (platform + Connect accounts) con idempotencia
+// vía stripe_webhook_events.event_id UNIQUE.
+//
+// Handled events:
+//   checkout.session.completed   → mark_order_paid + send-ticket-email + loyalty
+//   checkout.session.expired     → marca order como 'expired'
+//   payment_intent.succeeded     → confirma
+//   charge.refunded              → mark_refund_processed
+//   customer.subscription.*      → upsert partner_subscriptions
+//   invoice.paid / payment_failed → update subscription state + email
+//   account.updated              → sync Connect onboarded state
+//   payout.paid / payout.failed  → insert stripe_payouts + email partner
+//   application_fee.created      → insert application_fees_ledger
+//
+// Idempotencia: stripe_webhook_events.event_id UNIQUE. Retries seguros.
+// verify_jwt = false (config.toml) — usamos Stripe signature.
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@14";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { sendEmail } from "../_shared/gmail.ts";
+import { supabaseAdmin } from "../_shared/supabase.ts";
+import { requireStripe, STRIPE_WEBHOOK_SECRET } from "../_shared/stripe.ts";
+import { logger } from "../_shared/logger.ts";
+import { enqueueNotification } from "../_shared/notify.ts";
+import { sendEmail } from "../_shared/resend.ts";
+import { ticketPurchasedEmail, partnerApprovedEmail, payoutArrivedEmail } from "../_shared/email-templates.ts";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2024-06-20",
-});
+const log = logger.child({ function: "stripe-webhook" });
 
-const supabaseAdmin = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
-
-const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
-const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") || "stud3nts1ife.info@gmail.com";
-
-const ISSUER = {
-  name: "Jose Pingo",
-  nif: "Z1527925V",
-  address: "C. Canovas del Castillo, 47002 Valladolid, España",
-  regime: "Autónomo",
-  brand: "StudentsLife",
-};
-
-serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const orderId = session.metadata?.order_id;
+  if (!orderId) {
+    log.warn("checkout_session_completed_no_order_id", { session_id: session.id });
+    return;
   }
+  const pi = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
+  const totalCents = session.amount_total ?? 0;
+  const feeCents = (session.payment_intent && typeof session.payment_intent !== "string"
+    ? session.payment_intent.application_fee_amount
+    : 0) ?? 0;
+
+  await supabaseAdmin.rpc("mark_order_paid", {
+    _session_id: session.id,
+    _payment_intent_id: pi,
+    _amount_total_cents: totalCents,
+    _application_fee_cents: feeCents,
+  });
+
+  // Cargar order + tickets para enviar email
+  const { data: order } = await supabaseAdmin
+    .from("ticket_orders")
+    .select("id, buyer_email, buyer_first_name, buyer_user_id, total_cents, event_id, org_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return;
+
+  const { data: event } = await supabaseAdmin
+    .from("events")
+    .select("title, date_start, venue_name, city")
+    .eq("id", order.event_id)
+    .maybeSingle();
+
+  const { data: tickets } = await supabaseAdmin
+    .from("tickets")
+    .select("id, qr_token, amount_paid_cents, tier_id, ticket_tiers(name)")
+    .eq("order_id", order.id);
+
+  if (event && tickets && tickets.length > 0) {
+    const email = ticketPurchasedEmail({
+      firstName: order.buyer_first_name,
+      eventTitle: event.title,
+      eventDate: new Date(event.date_start).toLocaleString("es-ES", { dateStyle: "long", timeStyle: "short" }),
+      venueName: event.venue_name ?? event.city,
+      tickets: tickets.map((t: any) => ({
+        tierName: t.ticket_tiers?.name ?? "General",
+        qrToken: t.qr_token,
+        amountCents: t.amount_paid_cents,
+      })),
+      totalCents: order.total_cents,
+      orderId: order.id,
+    });
+    await sendEmail({ to: order.buyer_email, ...email, idempotencyKey: `order-${order.id}` }).catch((e) =>
+      log.warn("ticket_email_send_failed", { error: String(e), order_id: order.id })
+    );
+  }
+
+  // Loyalty points: 1 punto por euro
+  if (order.buyer_user_id) {
+    const points = Math.floor(order.total_cents / 100);
+    if (points > 0) {
+      await supabaseAdmin.rpc("loyalty_grant_points", {
+        _user_id: order.buyer_user_id,
+        _amount: points,
+        _reason: `Compra ticket ${event?.title ?? ""}`,
+        _reason_code: "ticket_purchase",
+        _event_id: order.event_id,
+      });
+    }
+  }
+
+  // Notif in-app
+  if (order.buyer_user_id) {
+    await enqueueNotification({
+      user_id: order.buyer_user_id,
+      category: "tickets",
+      kind: "ticket_paid",
+      title: "Compra confirmada",
+      body: `Tus entradas para ${event?.title ?? "el evento"} están en tu Wallet.`,
+      link: "/#/client-dashboard",
+      payload: { order_id: order.id },
+    }).catch((e) => log.warn("notify_buyer_failed", { error: String(e) }));
+  }
+
+  // Notif al partner (org owner/managers)
+  if (order.org_id) {
+    const { data: members } = await supabaseAdmin
+      .from("organization_members")
+      .select("user_id")
+      .eq("org_id", order.org_id)
+      .in("role", ["owner", "admin", "manager"])
+      .eq("status", "active");
+    if (members) {
+      for (const m of members) {
+        if (m.user_id) {
+          await enqueueNotification({
+            user_id: m.user_id,
+            category: "tickets",
+            kind: "ticket_sold",
+            title: `Venta: ${event?.title ?? "evento"}`,
+            body: `${tickets?.length ?? 0} × tickets · €${(order.total_cents / 100).toFixed(2)}`,
+            link: "/#/partner-dashboard",
+            payload: { order_id: order.id, event_id: order.event_id },
+          }).catch(() => null);
+        }
+      }
+    }
+
+    // Insertar application_fees_ledger
+    await supabaseAdmin.from("application_fees_ledger").insert({
+      org_id: order.org_id,
+      ticket_order_id: order.id,
+      stripe_payment_intent_id: pi,
+      amount_cents: feeCents,
+      gross_cents: totalCents,
+      net_to_partner_cents: totalCents - feeCents,
+      currency: session.currency?.toUpperCase() ?? "EUR",
+    }).catch((e) => log.warn("fee_ledger_insert_failed", { error: String(e) }));
+  }
+}
+
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  const refundList = charge.refunds?.data ?? [];
+  for (const r of refundList) {
+    await supabaseAdmin.rpc("mark_refund_processed", {
+      _stripe_refund_id: r.id,
+      _amount_refunded_cents: r.amount,
+      _payment_intent_id: typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id ?? "",
+    });
+  }
+}
+
+async function handleAccountUpdated(account: Stripe.Account) {
+  const orgId = account.metadata?.pasify_org_id;
+  const charges = account.charges_enabled ?? false;
+  const payouts = account.payouts_enabled ?? false;
+  const details = account.details_submitted ?? false;
+
+  // Update por stripe_connect_account_id (preferred)
+  const { data: org } = await supabaseAdmin
+    .from("organizations")
+    .update({
+      stripe_connect_charges_enabled: charges,
+      stripe_connect_payouts_enabled: payouts,
+      stripe_connect_onboarded: details && charges,
+    })
+    .eq("stripe_connect_account_id", account.id)
+    .select("id, owner_id, name")
+    .maybeSingle();
+
+  if (org && details && charges) {
+    await sendEmail({
+      to: account.email ?? "",
+      ...partnerApprovedEmail({ businessName: org.name }),
+    }).catch(() => null);
+
+    if (org.owner_id) {
+      await enqueueNotification({
+        user_id: org.owner_id,
+        category: "system",
+        kind: "stripe_connect_ready",
+        title: "Stripe Connect listo",
+        body: "Tu cuenta puede recibir pagos ya mismo.",
+        link: "/#/partner-dashboard",
+      });
+    }
+  }
+}
+
+async function handlePayoutPaid(payout: Stripe.Payout, account: string | null) {
+  if (!account) return;
+  const { data: org } = await supabaseAdmin
+    .from("organizations")
+    .select("id, owner_id, name")
+    .eq("stripe_connect_account_id", account)
+    .maybeSingle();
+  if (!org) return;
+
+  await supabaseAdmin.from("stripe_payouts").upsert({
+    stripe_payout_id: payout.id,
+    stripe_account_id: account,
+    org_id: org.id,
+    amount_cents: payout.amount,
+    currency: (payout.currency ?? "eur").toUpperCase(),
+    status: payout.status as any,
+    arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString().slice(0, 10) : null,
+    method: payout.method ?? null,
+    paid_at: payout.status === "paid" ? new Date().toISOString() : null,
+  }, { onConflict: "stripe_payout_id" });
+
+  if (org.owner_id && payout.status === "paid") {
+    await enqueueNotification({
+      user_id: org.owner_id,
+      category: "system",
+      kind: "payout_arrived",
+      title: "Payout en camino",
+      body: `${(payout.amount / 100).toFixed(2)} ${(payout.currency ?? "eur").toUpperCase()}`,
+      link: "/#/partner-dashboard",
+    });
+
+    // Email owner
+    const { data: ownerProfile } = await supabaseAdmin.from("profiles").select("email").eq("id", org.owner_id).maybeSingle();
+    if (ownerProfile?.email) {
+      await sendEmail({
+        to: ownerProfile.email,
+        ...payoutArrivedEmail({
+          businessName: org.name,
+          amountCents: payout.amount,
+          currency: (payout.currency ?? "eur").toUpperCase(),
+          arrivalDate: payout.arrival_date ? new Date(payout.arrival_date * 1000).toLocaleDateString("es-ES") : "próximamente",
+        }),
+      }).catch(() => null);
+    }
+  }
+}
+
+async function handleSubscriptionEvent(sub: Stripe.Subscription) {
+  const orgId = sub.metadata?.pasify_org_id;
+  const planCode = sub.metadata?.pasify_plan_code ?? null;
+  if (!orgId) {
+    log.warn("subscription_event_no_org_id", { sub_id: sub.id });
+    return;
+  }
+
+  const { data: plan } = planCode
+    ? await supabaseAdmin.from("subscription_plans").select("id").eq("code", planCode).maybeSingle()
+    : { data: null };
+
+  await supabaseAdmin.from("partner_subscriptions").upsert({
+    org_id: orgId,
+    plan_id: plan?.id ?? null,
+    plan_code: planCode,
+    stripe_subscription_id: sub.id,
+    stripe_customer_id: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
+    stripe_price_id: sub.items.data[0]?.price.id ?? null,
+    status: sub.status as any,
+    billing_interval: sub.items.data[0]?.price.recurring?.interval === "year" ? "yearly" : "monthly",
+    current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
+    current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+    trial_starts_at: sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null,
+    trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+    cancel_at_period_end: sub.cancel_at_period_end,
+    cancelled_at: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "org_id" });
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const sig = req.headers.get("stripe-signature");
   if (!sig) return new Response("Missing signature", { status: 400 });
 
   const rawBody = await req.text();
-  let event: Stripe.Event;
+  const stripe = requireStripe();
 
+  let event: Stripe.Event;
   try {
-    event = await stripe.webhooks.constructEventAsync(rawBody, sig, WEBHOOK_SECRET);
+    event = await stripe.webhooks.constructEventAsync(rawBody, sig, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error("Signature verification failed:", (err as Error).message);
+    log.error("signature_verification_failed", { error: (err as Error).message });
     return new Response(`Webhook error: ${(err as Error).message}`, { status: 400 });
   }
 
-  console.log("📨 Stripe event:", event.type);
+  log.info("webhook_received", { event_id: event.id, type: event.type, livemode: event.livemode });
 
-  // Log evento ricevuto. UPSERT su event_id (UNIQUE) per idempotenza:
-  // se Stripe ritenta lo stesso evento, incrementiamo attempt_count.
-  await supabaseAdmin.from("stripe_webhook_events").upsert(
-    {
-      event_id: event.id,
-      event_type: event.type,
-      status: "received",
-      livemode: event.livemode,
-      payload: event as unknown as Record<string, unknown>,
-      received_at: new Date().toISOString(),
-    },
-    { onConflict: "event_id", ignoreDuplicates: false },
-  );
+  // Idempotency upsert
+  await supabaseAdmin.from("stripe_webhook_events").upsert({
+    event_id: event.id,
+    event_type: event.type,
+    livemode: event.livemode,
+    payload: event as unknown as Record<string, unknown>,
+    status: "received",
+    received_at: new Date().toISOString(),
+  }, { onConflict: "event_id", ignoreDuplicates: false });
+
+  // Check if already processed
+  const { data: existing } = await supabaseAdmin
+    .from("stripe_webhook_events")
+    .select("status")
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (existing?.status === "processed") {
+    log.info("duplicate_event_skipped", { event_id: event.id });
+    return new Response(JSON.stringify({ received: true, duplicate: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   try {
     switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      case "checkout.session.expired":
+        await supabaseAdmin
+          .from("ticket_orders")
+          .update({ status: "expired" })
+          .eq("stripe_session_id", (event.data.object as Stripe.Checkout.Session).id);
+        break;
+      case "charge.refunded":
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+      case "account.updated":
+        await handleAccountUpdated(event.data.object as Stripe.Account);
+        break;
+      case "payout.paid":
+      case "payout.failed":
+        await handlePayoutPaid(event.data.object as Stripe.Payout, event.account ?? null);
+        break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
-        await upsertSubscription(event.data.object as Stripe.Subscription);
-        break;
-
       case "customer.subscription.deleted":
-        await markCancelled(event.data.object as Stripe.Subscription);
+        await handleSubscriptionEvent(event.data.object as Stripe.Subscription);
         break;
-
-      case "invoice.paid":
-        await handleInvoicePaid(event.data.object as Stripe.Invoice);
-        break;
-
-      case "invoice.payment_failed":
-        await handlePaymentFailed(event.data.object as Stripe.Invoice);
-        break;
-
-      case "checkout.session.completed":
-        // Subscription created handler già gestisce il salvataggio
-        console.log("checkout.session.completed:", (event.data.object as Stripe.Checkout.Session).id);
-        break;
-
       default:
-        console.log("Unhandled event:", event.type);
+        log.info("event_unhandled", { event_id: event.id, type: event.type });
     }
 
-    // Log success
     await supabaseAdmin
       .from("stripe_webhook_events")
-      .update({ status: "succeeded", processed_at: new Date().toISOString() })
+      .update({ status: "processed", processed_at: new Date().toISOString() })
       .eq("event_id", event.id);
 
     return new Response(JSON.stringify({ received: true }), {
-      status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    const errorMessage = (err as Error).message;
-    console.error("Webhook handler error:", err);
-
-    // Log failure — utile per dashboard admin e alert
+    log.error("webhook_processing_failed", { event_id: event.id, error: String(err) });
     await supabaseAdmin
       .from("stripe_webhook_events")
       .update({
         status: "failed",
-        error_message: errorMessage,
-        processed_at: new Date().toISOString(),
+        last_error: err instanceof Error ? err.message : String(err),
+        attempt_count: (existing as any)?.attempt_count ? (existing as any).attempt_count + 1 : 1,
       })
       .eq("event_id", event.id);
-
-    return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
+    return new Response("Webhook processing failed", { status: 500 });
   }
 });
-
-async function upsertSubscription(sub: Stripe.Subscription) {
-  const partnerId = sub.metadata?.partner_id;
-  if (!partnerId) {
-    console.warn("Subscription without partner_id metadata:", sub.id);
-    return;
-  }
-
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-  const item = sub.items.data[0];
-  // Normalize to monthly cents. Stripe returns unit_amount in the price's
-  // own interval; collapse "year" into a /12 monthly figure so the admin's
-  // MRR stat is comparable across plans.
-  const unitAmount = item?.price?.unit_amount ?? null;
-  const interval = item?.price?.recurring?.interval ?? "month";
-  let monthlyAmountCents: number | null = null;
-  if (unitAmount != null) {
-    if (interval === "year") monthlyAmountCents = Math.round(unitAmount / 12);
-    else if (interval === "week") monthlyAmountCents = Math.round((unitAmount * 52) / 12);
-    else if (interval === "day") monthlyAmountCents = Math.round((unitAmount * 365) / 12);
-    else monthlyAmountCents = unitAmount; // month
-  }
-
-  const payload = {
-    partner_id: partnerId,
-    stripe_customer_id: customerId,
-    stripe_subscription_id: sub.id,
-    stripe_price_id: item?.price.id,
-    status: sub.status,
-    current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-    cancel_at_period_end: sub.cancel_at_period_end,
-    monthly_amount_cents: monthlyAmountCents,
-    updated_at: new Date().toISOString(),
-  };
-
-  // Pattern robusto: UPDATE prima, INSERT solo se nessuna riga matcha.
-  const { data: updated, error: updateError } = await supabaseAdmin
-    .from("partner_subscriptions")
-    .update(payload)
-    .eq("partner_id", partnerId)
-    .select("id");
-
-  if (updateError) {
-    console.error("update error:", updateError);
-    return;
-  }
-
-  if (!updated || updated.length === 0) {
-    const { error: insertError } = await supabaseAdmin
-      .from("partner_subscriptions")
-      .insert(payload);
-    if (insertError) {
-      console.error("insert error:", insertError);
-      return;
-    }
-    console.log(`✅ Subscription ${sub.id} INSERTED for partner ${partnerId}`);
-  } else {
-    console.log(`✅ Subscription ${sub.id} UPDATED for partner ${partnerId}`);
-  }
-}
-
-async function markCancelled(sub: Stripe.Subscription) {
-  await supabaseAdmin
-    .from("partner_subscriptions")
-    .update({ status: "canceled", cancel_at_period_end: false })
-    .eq("stripe_subscription_id", sub.id);
-}
-
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const customer = await stripe.customers.retrieve(invoice.customer as string);
-  if ((customer as Stripe.Customer).deleted) return;
-  const cust = customer as Stripe.Customer;
-
-  const totalCents = invoice.amount_paid ?? invoice.total ?? 0;
-  // In API 2024-06-20 `invoice.tax` può essere 0/null; calcoliamo l'IVA
-  // dalla differenza total − total_excluding_tax (robusto anche per reverse charge).
-  const subtotalCents = (invoice as any).total_excluding_tax ?? invoice.subtotal ?? 0;
-  const taxCents = Math.max(0, totalCents - subtotalCents);
-  const total = (totalCents / 100).toFixed(2);
-  const subtotal = (subtotalCents / 100).toFixed(2);
-  const tax = (taxCents / 100).toFixed(2);
-  const country = invoice.customer_address?.country || "";
-  const customerTaxIds = invoice.customer_tax_ids || [];
-  const hasEuVat = customerTaxIds.some((t) => t.type === "eu_vat");
-
-  let taxClause = "";
-  if (country === "ES") {
-    taxClause = "IVA 21% aplicado según normativa vigente en España.";
-  } else if (hasEuVat && country !== "ES") {
-    taxClause = "Operación intracomunitaria — Inversión del sujeto pasivo (art. 84.Uno.2º LIVA).";
-  } else if (country && !["ES","AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","SE"].includes(country)) {
-    taxClause = "Operación no sujeta a IVA por aplicación del art. 69.Uno.2º LIVA (servicio prestado a cliente fuera de la UE).";
-  } else {
-    taxClause = "IVA aplicado según normativa vigente.";
-  }
-
-  const html = invoiceEmailHtml({
-    name: cust.name || cust.email?.split("@")[0] || "Partner",
-    invoiceNumber: invoice.number || "",
-    date: new Date(invoice.created * 1000).toLocaleDateString("es-ES"),
-    description: invoice.lines?.data[0]?.description || "Suscripción Partner StudentsLife",
-    subtotal, tax, total, taxClause,
-    pdfUrl: invoice.invoice_pdf || "",
-    hostedUrl: invoice.hosted_invoice_url || "",
-  });
-
-  await sendEmail({
-    to: cust.email!,
-    subject: `Tu factura StudentsLife #${invoice.number}`,
-    html,
-  });
-
-  await sendEmail({
-    to: ADMIN_EMAIL,
-    subject: `[COPIA] Nueva factura pagada #${invoice.number}`,
-    html,
-  });
-}
-
-async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const customer = await stripe.customers.retrieve(invoice.customer as string);
-  if ((customer as Stripe.Customer).deleted) return;
-  const cust = customer as Stripe.Customer;
-
-  await sendEmail({
-    to: ADMIN_EMAIL,
-    subject: `⚠️ Pago fallido StudentsLife — ${cust.email}`,
-    html: `
-      <h2>Pago Fallido</h2>
-      <p><strong>Cliente:</strong> ${cust.name || cust.email}</p>
-      <p><strong>Email:</strong> ${cust.email}</p>
-      <p><strong>Factura:</strong> #${invoice.number}</p>
-      <p><strong>Importe:</strong> €${(invoice.amount_due / 100).toFixed(2)}</p>
-      <p><a href="https://dashboard.stripe.com/invoices/${invoice.id}">Ver en Stripe</a></p>
-    `,
-  });
-}
-
-function invoiceEmailHtml(d: {
-  name: string;
-  invoiceNumber: string;
-  date: string;
-  description: string;
-  subtotal: string;
-  tax: string;
-  total: string;
-  taxClause: string;
-  pdfUrl: string;
-  hostedUrl: string;
-}) {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f5f7fb;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:40px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.08);">
-    <tr><td style="background:linear-gradient(135deg,#4F9CF9 0%,#3B82F6 100%);padding:40px 30px;text-align:center;">
-      <h1 style="color:#fff;margin:0;font-size:24px;">StudentsLife</h1>
-      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">Factura Pagada</p>
-    </td></tr>
-    <tr><td style="padding:40px 30px;">
-      <p style="font-size:15px;color:#333;">Hola <strong>${d.name}</strong>,</p>
-      <p style="font-size:15px;color:#555;line-height:1.6;">¡Gracias por tu pago! Aquí los detalles de tu factura:</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#f8f9ff;border-radius:12px;">
-        <tr><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;color:#666;">Número factura</td><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;text-align:right;font-weight:600;color:#333;">#${d.invoiceNumber}</td></tr>
-        <tr><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;color:#666;">Fecha</td><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;text-align:right;font-weight:600;color:#333;">${d.date}</td></tr>
-        <tr><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;color:#666;">Descripción</td><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;text-align:right;font-weight:600;color:#333;">${d.description}</td></tr>
-        <tr><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;color:#666;">Subtotal</td><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;text-align:right;font-weight:600;color:#333;">€${d.subtotal}</td></tr>
-        <tr><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;color:#666;">IVA</td><td style="padding:14px 18px;border-bottom:1px solid #e8ebf5;text-align:right;font-weight:600;color:#333;">€${d.tax}</td></tr>
-        <tr><td style="padding:14px 18px;color:#333;font-weight:700;">Total pagado</td><td style="padding:14px 18px;text-align:right;font-weight:700;color:#3B82F6;font-size:18px;">€${d.total}</td></tr>
-      </table>
-      <div style="background:#fff7ed;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:6px;font-size:13px;color:#92400e;margin:16px 0;">${d.taxClause}</div>
-      <div style="text-align:center;margin:24px 0;">
-        ${d.pdfUrl ? `<a href="${d.pdfUrl}" style="display:inline-block;background:#3B82F6;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:6px;">Descargar PDF</a>` : ""}
-        ${d.hostedUrl ? `<a href="${d.hostedUrl}" style="display:inline-block;background:#374151;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:6px;">Ver online</a>` : ""}
-      </div>
-      <div style="background:#f9fafb;padding:14px 18px;border-radius:8px;font-size:12px;color:#555;line-height:1.6;margin-top:24px;">
-        <strong>${ISSUER.name}</strong><br>
-        NIF: ${ISSUER.nif}<br>
-        ${ISSUER.address}<br>
-        Régimen: ${ISSUER.regime}
-      </div>
-    </td></tr>
-  </table>
-</body></html>`;
-}

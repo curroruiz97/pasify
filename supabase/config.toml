@@ -1,65 +1,30 @@
-project_id = "vlupmjsbobdnsmittdfs"
+project_id = "ixkyfwzkknehvsqpopof"
 
-[functions.send-approval-email]
-verify_jwt = false
+# Edge functions del nuevo Pasify (post-refactor)
+# `verify_jwt = false` solo para webhooks (Stripe firma), magic links públicos
+# y endpoints públicos de salud/captcha. El resto valida JWT en el código
+# mediante supabaseAdmin.auth.getUser(token).
 
-[functions.notify-admin-message]
-verify_jwt = false
-
-[functions.test-email]
-verify_jwt = false
-
-[functions.notify-new-registration]
-verify_jwt = false
-
-[functions.send-chat-notification]
-verify_jwt = false
-
-[functions.delete-own-account]
-verify_jwt = false
-
-[functions.moderate-content]
-verify_jwt = false
-
-[functions.send-marketing-email]
-verify_jwt = false
-
-[functions.send-partner-reminder]
-verify_jwt = false
-
-
-[functions.send-event-confirmation]
-verify_jwt = false
-
-[functions.send-password-reset]
-verify_jwt = false
-
-[functions.delete-user]
-verify_jwt = false
-
-[functions.stripe-webhook-test]
-verify_jwt = false
-
-# Disabilito verify_jwt a livello gateway perché il progetto usa JWT ES256
-# che il gateway non supporta. La validazione avviene lato codice con
-# supabaseAdmin.auth.getUser(token).
-[functions.stripe-create-checkout-test]
-verify_jwt = false
-
-[functions.stripe-create-portal-test]
-verify_jwt = false
-
-[functions.stripe-create-checkout]
-verify_jwt = false
-
-[functions.stripe-create-portal]
-verify_jwt = false
-
+# -------- Stripe webhooks (firma Stripe, no JWT) --------
 [functions.stripe-webhook]
 verify_jwt = false
 
-[functions.stripe-sync-session-test]
+# -------- Public endpoints (no JWT) --------
+[functions.health-check]
 verify_jwt = false
 
-[functions.debug-stripe-config]
+[functions.verify-captcha]
 verify_jwt = false
+
+[functions.resolve-whitelabel-host]
+verify_jwt = false
+
+# -------- Magic links (token propio) --------
+[functions.accept-ticket-transfer]
+verify_jwt = false
+
+[functions.accept-team-invitation]
+verify_jwt = false
+
+# -------- Authenticated edge functions (JWT requerido) --------
+# El resto (40+) usa verify_jwt = true por defecto.

@@ -1,57 +1,57 @@
 import { useCallback, useEffect, useState } from "react";
-
-const KEY = "pasify.fav.partners.v1";
-
-const readStorage = (): string[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is string => typeof x === "string");
-  } catch {
-    return [];
-  }
-};
+import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Locali (partner) salvati come favoriti — solo lista di id in localStorage.
- * I dati del locale vivono già nel DB o nell'array demo, quindi qui basta l'id.
- * Distinto da useFavorites (che invece serializza l'intero snapshot di un evento).
+ * useFavoritePartners · backend-backed (partner_favorites).
+ * RLS asegura que cada user solo ve los suyos.
  */
 export const useFavoritePartners = () => {
-  const [ids, setIds] = useState<string[]>(readStorage);
+  const [partnerIds, setPartnerIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const fetchAll = useCallback(async (uid: string) => {
+    setLoading(true);
+    const { data } = await supabase.from("partner_favorites").select("org_id").eq("user_id", uid);
+    setPartnerIds(new Set((data ?? []).map((r) => r.org_id)));
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(ids));
-    } catch {
-      /* storage piena / disabilitata */
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        setUserId(data.user.id);
+        await fetchAll(data.user.id);
+      } else setLoading(false);
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_, s) => {
+      const uid = s?.user?.id ?? null;
+      setUserId(uid);
+      if (uid) fetchAll(uid);
+      else setPartnerIds(new Set());
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [fetchAll]);
+
+  const toggle = useCallback(async (orgId: string) => {
+    if (!userId) return false;
+    if (partnerIds.has(orgId)) {
+      await supabase.from("partner_favorites").delete().eq("user_id", userId).eq("org_id", orgId);
+    } else {
+      await supabase.from("partner_favorites").insert({ user_id: userId, org_id: orgId });
     }
-  }, [ids]);
+    await fetchAll(userId);
+    return !partnerIds.has(orgId);
+  }, [partnerIds, userId, fetchAll]);
 
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== KEY) return;
-      try {
-        const next = e.newValue ? (JSON.parse(e.newValue) as unknown) : [];
-        if (Array.isArray(next)) {
-          setIds(next.filter((x): x is string => typeof x === "string"));
-        }
-      } catch {
-        /* noop */
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  const isFavorite = useCallback((id: string) => ids.includes(id), [ids]);
-
-  const toggle = useCallback((id: string) => {
-    setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }, []);
-
-  return { ids, isFavorite, toggle };
+  const isFav = (id: string) => partnerIds.has(id);
+  return {
+    partnerIds,
+    loading,
+    toggle,
+    isFav,
+    // Alias legacy (ClientDashboard usaba { isFavorite, toggle })
+    isFavorite: isFav,
+  };
 };

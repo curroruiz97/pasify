@@ -97,13 +97,18 @@ const PartnerOnboarding = () => {
   const uploadImage = async (file: File, kind: "avatar" | "post") => {
     if (!user?.id) throw new Error("No user");
     const compressed = kind === "avatar" ? await compressAvatar(file) : await compressPostImage(file);
+    // Pasify storage buckets:
+    //  - avatars       → fotos de perfil (logo del local en partner)
+    //  - event-images  → portadas de eventos, banners, cover del negocio
+    // El bucket `posts` (legacy Students Life) fue eliminado.
+    const bucket = kind === "avatar" ? "avatars" : "event-images";
     const fileName = `${user.id}/${kind}-${Date.now()}.jpg`;
-    const { error: upErr } = await supabase.storage.from("posts").upload(fileName, compressed, {
+    const { error: upErr } = await supabase.storage.from(bucket).upload(fileName, compressed, {
       upsert: true,
       contentType: "image/jpeg",
     });
     if (upErr) throw upErr;
-    const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
+    const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
     return data.publicUrl;
   };
 

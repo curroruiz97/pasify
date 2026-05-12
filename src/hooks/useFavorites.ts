@@ -1,11 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-const KEY = "pasify.fav.events.v3";
-
-/**
- * Snapshot di un evento favoritato (salviamo i dati che servono in lista, così
- * la view "Favoritos" funziona anche per eventi demo che non vivono in DB).
- */
 export type FavEvent = {
   id: string;
   partnerId: string;
@@ -20,60 +15,118 @@ export type FavEvent = {
   image_url: string | null;
 };
 
-const isValidFavEvent = (x: unknown): x is FavEvent =>
-  !!x &&
-  typeof x === "object" &&
-  typeof (x as any).id === "string" &&
-  typeof (x as any).title === "string" &&
-  typeof (x as any).date_start === "string" &&
-  !Number.isNaN(new Date((x as any).date_start).getTime());
+interface DbRow {
+  event_id: string;
+  events: {
+    id: string;
+    partner_id: string;
+    title: string;
+    description: string | null;
+    date_start: string;
+    city: string;
+    price_cents: number;
+    capacity: number | null;
+    tickets_sold: number;
+    image_url: string | null;
+    profiles?: { business_name: string | null };
+  };
+}
 
-const readStorage = (): FavEvent[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidFavEvent);
-  } catch {
-    return [];
-  }
-};
-
+/**
+ * useFavorites · backend-backed sobre favorites_v2.
+ * Sustituye al hook localStorage anterior. RLS asegura aislamiento por user.
+ */
 export const useFavorites = () => {
-  const [events, setEvents] = useState<FavEvent[]>(readStorage);
+  const [favEvents, setFavEvents] = useState<FavEvent[]>([]);
+  const [favIds, setFavIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(events));
-    } catch {
-      /* storage piena / disabilitata */
+  const fetchFavs = useCallback(async (uid: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("favorites_v2")
+      .select(
+        "event_id, events!inner(id, partner_id, title, description, date_start, city, price_cents, capacity, tickets_sold, image_url, profiles!events_partner_id_fkey(business_name))"
+      )
+      .eq("user_id", uid)
+      .not("event_id", "is", null)
+      .order("created_at", { ascending: false });
+    if (error) {
+      setLoading(false);
+      return;
     }
-  }, [events]);
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== KEY) return;
-      try {
-        setEvents(e.newValue ? (JSON.parse(e.newValue) as FavEvent[]) : []);
-      } catch {
-        /* noop */
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const events = ((data ?? []) as unknown as DbRow[]).map((r) => ({
+      id: r.events.id,
+      partnerId: r.events.partner_id,
+      partnerName: r.events.profiles?.business_name ?? undefined,
+      title: r.events.title,
+      description: r.events.description,
+      date_start: r.events.date_start,
+      city: r.events.city,
+      price_cents: r.events.price_cents,
+      capacity: r.events.capacity,
+      tickets_sold: r.events.tickets_sold,
+      image_url: r.events.image_url,
+    }));
+    setFavEvents(events);
+    setFavIds(new Set(events.map((e) => e.id)));
+    setLoading(false);
   }, []);
 
-  const isFavorite = (id: string) => events.some((e) => e.id === id);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        setUserId(data.user.id);
+        await fetchFavs(data.user.id);
+      } else {
+        setLoading(false);
+      }
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+      if (uid) fetchFavs(uid);
+      else {
+        setFavEvents([]);
+        setFavIds(new Set());
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [fetchFavs]);
 
-  const toggle = (event: FavEvent) => {
-    setEvents((prev) =>
-      prev.some((e) => e.id === event.id)
-        ? prev.filter((e) => e.id !== event.id)
-        : [...prev, event]
-    );
+  const toggleFav = useCallback(async (event: { id: string; partnerId?: string }) => {
+    if (!userId) return false;
+    if (favIds.has(event.id)) {
+      await supabase.from("favorites_v2").delete().eq("user_id", userId).eq("event_id", event.id);
+    } else {
+      await supabase.from("favorites_v2").insert({ user_id: userId, event_id: event.id });
+    }
+    await fetchFavs(userId);
+    return !favIds.has(event.id);
+  }, [favIds, userId, fetchFavs]);
+
+  const isFav = useCallback((eventId: string) => favIds.has(eventId), [favIds]);
+  const refetch = useCallback(() => {
+    if (userId) return fetchFavs(userId);
+    return Promise.resolve();
+  }, [userId, fetchFavs]);
+
+  return {
+    // API canónica
+    favEvents,
+    favIds,
+    loading,
+    toggleFav,
+    isFav,
+    refetch,
+    // Aliases legacy (ClientDashboard / EventListCard / etc.). Mantienen
+    // compatibilidad con el destructuring anterior `{ events, ids, toggle, isFavorite }`.
+    // `ids` se expone como Array (no Set) porque consumers viejos usan `.length`.
+    events: favEvents,
+    ids: Array.from(favIds),
+    toggle: toggleFav,
+    isFavorite: isFav,
   };
-
-  return { events, ids: events.map((e) => e.id), isFavorite, toggle };
 };

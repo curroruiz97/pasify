@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, MapPin, ChevronDown, Sparkles, LayoutGrid, CalendarDays } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -7,13 +7,18 @@ import { useCalendarEvents, useInvalidateEvents } from "@/hooks/useEvents";
 import { type CalendarEvent } from "@/components/calendar/EventListCard";
 import EventPosterCard from "@/components/calendar/EventPosterCard";
 import MonthCalendarView from "@/components/calendar/MonthCalendarView";
-import CitySelector from "@/components/social/CitySelector";
+import CitySelector from "@/components/shared/CitySelector";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedMarqueeHero } from "@/components/ui/hero-3";
 import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_CITY } from "@/constants/spanishCities";
 import { DEFAULT_COUNTRY, getCountryByCode } from "@/constants/countries";
+
+// Stable empty array — usado como fallback cuando react-query aún no tiene
+// data, así el useEffect que depende de `events` no se re-dispara por un
+// `[]` literal nuevo en cada render.
+const EMPTY_EVENTS: CalendarEvent[] = [];
 
 // Temporary placeholder images for the hero marquee. The user will swap
 // these for real Spanish party flyers — keep them here as a single source
@@ -68,7 +73,12 @@ const Calendar = () => {
     });
   }, []);
 
-  const { data: events = [], isLoading } = useCalendarEvents(selectedCity, selectedCountry);
+  const { data: eventsData, isLoading } = useCalendarEvents(selectedCity, selectedCountry);
+  // Estabilizamos la referencia de events: si data llega undefined (durante el
+  // primer fetch), devolvemos siempre el MISMO array vacío para que el
+  // useEffect que depende de `events` no caiga en loop por cambio de
+  // referencia. Es la misma técnica que usa react-query con su cache interna.
+  const events = useMemo(() => eventsData ?? EMPTY_EVENTS, [eventsData]);
   const { invalidateAll } = useInvalidateEvents();
 
   // Once we know the user + the visible events, fetch which of those they
@@ -76,24 +86,33 @@ const Calendar = () => {
   // of "Participar".
   useEffect(() => {
     if (!authedUserId || events.length === 0) {
-      setParticipantIds(new Set());
+      // Solo limpiar si ya hay algo (evita re-renders innecesarios → loops).
+      setParticipantIds((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
     const eventIds = (events as CalendarEvent[]).map((e) => e.id);
     let cancelled = false;
     (async () => {
+      // Pasify: la participación se materializa con un ticket pagado, no con
+      // un row en `event_participants`. Consultamos `tickets` con status
+      // 'paid' o 'used' para saber a qué eventos ya tiene acceso el user.
       const { data } = await supabase
-        .from("event_participants")
+        .from("tickets")
         .select("event_id")
-        .eq("user_id", authedUserId)
-        .in("event_id", eventIds);
+        .eq("buyer_user_id", authedUserId)
+        .in("event_id", eventIds)
+        .in("status", ["paid", "used"]);
       if (cancelled) return;
       setParticipantIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)));
     })();
     return () => {
       cancelled = true;
     };
-  }, [authedUserId, events]);
+    // Solo nos importa cuántos eventos hay (length) y el user, no la
+    // identidad del array (react-query nos da una referencia nueva al refetch
+    // aunque los IDs no cambien).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authedUserId, events.length]);
 
   // Anchor for the hero CTA — scrolls the user from the marquee section
   // straight to the event list below.
@@ -162,30 +181,67 @@ const Calendar = () => {
     }
     setParticipatingIds((prev) => new Set(prev).add(event.id));
     try {
-      const newCode = `EVT-${event.id.substring(0, 8)}-${Date.now().toString(36)}`.toUpperCase();
-      const { error: partErr } = await supabase
-        .from("event_participants")
-        .insert({ event_id: event.id, user_id: authedUserId });
-      if (partErr) throw partErr;
-      await supabase.from("qr_codes").insert({
-        event_id: event.id,
-        client_id: authedUserId,
-        code: newCode,
+      // Pasify: la compra real de tickets se hace vía Stripe Checkout.
+      // El edge function `stripe-create-checkout` crea el ticket_order +
+      // tickets pending y redirige al hosted checkout. Si el function aún
+      // no está desplegado (caso del entorno actual), degradamos con un
+      // toast informativo en lugar de crashear.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
+
+      const checkoutFnName =
+        import.meta.env.VITE_STRIPE_TEST_MODE === "true"
+          ? "stripe-create-checkout-test"
+          : "stripe-create-checkout";
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${checkoutFnName}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "payment",
+          event_id: event.id,
+          qty: 1,
+          locale: "es",
+          successUrl: `${window.location.origin}/#/client-dashboard?wallet={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${window.location.origin}/#/calendar`,
+        }),
       });
-      setParticipantIds((prev) => new Set(prev).add(event.id));
-      toast({
-        title: t("events.participationSuccess", "¡Participación confirmada!"),
-        description: t("events.qrSavedInWallet", "Encuentra tu QR en el wallet."),
-      });
-      // After a successful insert, drop the user straight into the
-      // Wallet on the matching QR card. Same destination used by the
-      // "Mi entrada" tap: ClientDashboard reads ?wallet=<id> at mount.
-      navigate(`/client-dashboard?wallet=${encodeURIComponent(event.id)}`);
-    } catch (e: any) {
+
+      if (resp.status === 404) {
+        // Edge function aún no desplegada en producción.
+        toast({
+          title: "Checkout próximamente",
+          description:
+            "El sistema de pago está siendo desplegado. Vuelve a intentarlo en unos minutos.",
+        });
+        return;
+      }
+
+      const raw = await resp.text();
+      if (!resp.ok) {
+        let detail = raw;
+        try {
+          const parsed = JSON.parse(raw);
+          detail = parsed?.error || parsed?.message || parsed?.code || raw;
+        } catch { /* noop */ }
+        throw new Error(`${resp.status}: ${detail}`);
+      }
+      const data = JSON.parse(raw);
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error("Respuesta inesperada del servidor de pagos.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
       console.error("[Calendar] participate error:", e);
       toast({
         title: t("common.error", "Error"),
-        description: e?.message,
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -261,7 +317,7 @@ const Calendar = () => {
         }
         description={t(
           "calendar.heroDescription",
-          "Descubre los mejores eventos universitarios, conciertos y fiestas de tu ciudad. Únete a la comunidad de estudiantes que ya está dentro."
+          "Descubre los eventos, conciertos y fiestas más calientes de tu ciudad. Pasify reúne en un solo sitio todo lo que la noche tiene esta semana."
         )}
         ctaText={t("calendar.heroCta", "Ver eventos")}
         images={HERO_MARQUEE_IMAGES}

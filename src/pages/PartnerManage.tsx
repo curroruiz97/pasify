@@ -117,7 +117,7 @@ const PartnerManage = () => {
     if (isNative) {
       toast({
         title: "Activa desde la web",
-        description: "Accede a studentslife.app desde un navegador.",
+        description: "Accede a pasifyy.vercel.app desde un navegador.",
       });
       return;
     }

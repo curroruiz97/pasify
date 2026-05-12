@@ -2,20 +2,26 @@ import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "@/integrations/supabase/client";
 
-// URL pubblico del sito (dove gira Vercel). Obbligatorio hardcode perché
-// nell'app nativa `window.location.origin` è `http://localhost` (WebView).
-const WEB_BASE = import.meta.env.VITE_PUBLIC_WEB_URL || "https://studentslife.es";
+// URL pública del sitio (dominio Vercel temporal o definitivo). Hardcode
+// obligatorio porque en app nativa `window.location.origin` es `http://localhost`
+// (WebView). Configurable vía env var `VITE_PUBLIC_WEB_URL` para que el
+// switch dev/staging/prod sea una sola línea en .env.
+const WEB_BASE =
+  import.meta.env.VITE_PUBLIC_WEB_URL ||
+  import.meta.env.VITE_APP_BASE_URL ||
+  "https://pasifyy.vercel.app";
 
 /**
- * Apre una pagina del sito web in Safari/Chrome di sistema passando i token
- * della sessione corrente così l'utente è loggato senza reinserire credenziali.
+ * Abre una página del sitio web en Safari/Chrome de sistema pasando los tokens
+ * de la sesión actual para que el usuario quede logueado sin reintroducir
+ * credenciales.
  *
- * Flusso:
- *   app nativa → crea URL https://studentslife.es/#/auth/bridge?access=...&refresh=...&next=<path>
- *   → apre con Capacitor Browser plugin (SFSafariViewController / Custom Tabs)
- *   → il web legge i token, fa setSession e reindirizza a next
+ * Flujo:
+ *   app nativa → crea URL https://pasifyy.vercel.app/#/auth/bridge?access=...&refresh=...&next=<path>
+ *   → abre con plugin Capacitor Browser (SFSafariViewController / Custom Tabs)
+ *   → el web lee los tokens, hace setSession y redirige a `next`
  *
- * Su web standard usa window.open in nuova tab.
+ * En web normal usa window.open en nueva tab.
  */
 export async function openWebWithAuth(nextPath: string): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();

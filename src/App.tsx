@@ -28,11 +28,6 @@ const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const PartnerDetails = lazy(() => import("./pages/PartnerDetails"));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard"));
-const Social = lazy(() => import("./pages/Social"));
-const Chats = lazy(() => import("./pages/Chats"));
-const ChatConversation = lazy(() => import("./pages/ChatConversation"));
-const UserProfile = lazy(() => import("./pages/UserProfile"));
-const Badges = lazy(() => import("./pages/Badges"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
@@ -49,10 +44,12 @@ const PublicPartnerPage = lazy(() => import("./pages/PublicPartnerPage"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PartnerGate from "./components/auth/PartnerGate";
 import DataPrefetcher from "./components/shared/DataPrefetcher";
+import PanelSwitcher from "./components/shared/PanelSwitcher";
 import LoaderOne from "@/components/ui/loader-one";
 
 // Usa il sistema di auth centralizzato
 import { useAuth } from "@/hooks/useAuth";
+import { useFCMToken } from "@/hooks/useFCMToken";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 
 // React Query persister: usa la libreria ufficiale TanStack +
@@ -149,12 +146,18 @@ const NotificationDeepLinkHandler = () => {
   useEffect(() => {
     const resolveRoute = (data: Record<string, unknown>): string => {
       const type = data.type as string | undefined;
-      if (data.conversationId) return `/chat/${data.conversationId}`;
-      if (type === "chat" && data.id) return `/chat/${data.id}`;
-      if (type === "event" || type === "discount") return "/client-dashboard";
-      if (type === "post" || type === "like" || type === "comment") return "/social";
+      // Soporte (chat tri-direccional): aterriza directo en el client/partner
+      // dashboard donde el SupportChat drawer se abre automáticamente leyendo
+      // el query string `?support=<conversation_id>`.
+      if (data.conversationId || type === "support_reply") {
+        const cid = (data.conversationId as string) || (data.id as string) || "";
+        return cid ? `/client-dashboard?support=${cid}` : "/client-dashboard";
+      }
+      if (type === "event" || type === "ticket_paid" || type === "discount") return "/client-dashboard";
+      if (type === "refund_decided" && data.refundId) return `/client-dashboard?refund=${data.refundId}`;
       if (type === "partner" && data.partnerId) return `/partner/${data.partnerId}`;
-      if (type === "participant" || type === "participation") return "/partner-dashboard";
+      if (type === "participant" || type === "participation" || type === "payout_arrived") return "/partner-dashboard";
+      if (type === "ai_recommendation" || type === "compliance_alert") return "/partner-dashboard";
       return "/client-dashboard";
     };
 
@@ -257,6 +260,8 @@ const OfflineBanner = () => {
 
 const App = () => {
   const { session, loading } = useAuth();
+  // FCM token registration (no-op on web)
+  useFCMToken();
 
   // Listen for foreground push notifications and show toast
   // Skip city notifications (event/discount) - native push is enough
@@ -299,10 +304,12 @@ const App = () => {
       }
 
       // 2) App Links shareable URLs (Android verified or iOS Universal):
-      //    https://studentslife.es/e/<id>           → /calendar?event=<id>
-      //    https://studentslife.es/calendar?event=  → stesso
-      //    https://studentslife.es/p/<id>           → /p/<id>
-      //    https://studentslife.es/client-dashboard?wallet=<id> → wallet
+      //    https://pasify.es/e/<id>            → /calendar?event=<id>
+      //    https://pasify.es/calendar?event=   → stesso
+      //    https://pasify.es/p/<id>            → /p/<id>
+      //    https://pasify.es/client-dashboard?wallet=<id> → wallet
+      //    https://pasify.es/t/<qr_token>      → ticket detail
+      //    https://pasify.es/refund/<id>       → refund flow
       // Tutti vengono ridiretti al corrispondente HashRouter target.
       const path = urlObj.pathname;
       const search = urlObj.search;
@@ -346,6 +353,9 @@ const App = () => {
         <DataPrefetcher userId={session?.user?.id} />
         <HashRouter>
           <NotificationDeepLinkHandler />
+          {/* Floating multi-role switcher (visible when user tiene 2+ roles
+              y está en una ruta de dashboard). */}
+          <PanelSwitcher />
           <Suspense fallback={<PageLoader />}>
             <PageTransitions>
             <Routes>
@@ -411,46 +421,9 @@ const App = () => {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/social"
-                element={
-                  <ProtectedRoute>
-                    <Social />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/chats"
-                element={
-                  <ProtectedRoute>
-                    <Chats />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/chat/:conversationId"
-                element={
-                  <ProtectedRoute>
-                    <ChatConversation />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile/:userId?"
-                element={
-                  <ProtectedRoute>
-                    <UserProfile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/badges"
-                element={
-                  <ProtectedRoute>
-                    <Badges />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Legacy Students Life routes (social/chats/profile/badges) removed
+                  in favor of Pasify support flow (support_conversations table)
+                  and clean event-only client surface. */}
               <Route
                 path="/admin"
                 element={

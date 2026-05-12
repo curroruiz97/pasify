@@ -42,3 +42,13 @@ android/app/key.properties
 
 # Accidental filename (Windows path concatenated)
 C:UsersjosepAndroidStudioProjectsstudentslife-mainscriptsevents_to_migrate.json
+"C\357\200\272UsersjosepAndroidStudioProjectsstudentslife-mainscriptsevents_to_migrate.json"
+secrets.env
+
+# Supabase CLI runtime artifacts (project ref, pooler URL, etc.)
+supabase/.temp/
+supabase/.branches/
+
+# Vercel local build artifacts
+.vercel/
+.next/

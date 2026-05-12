@@ -122,10 +122,35 @@ const trySaveFcmToken = async () => {
 };
 
 
-// Pasify: PushNotifications disabilitato finché non aggiungiamo Firebase
-// (google-services.json). Senza FCM init il plugin crasha al register().
-// Re-abilitare dopo aver configurato Firebase Cloud Messaging.
-void PushNotifications;
+// Pasify: PushNotifications REACTIVADOS (Fase production).
+// Requiere google-services.json (Android) + GoogleService-Info.plist (iOS)
+// configurados en el proyecto Capacitor antes de build.
+// El hook useFCMToken (en src/hooks/useFCMToken.ts) hace el registro completo
+// dentro de componentes React. Aquí solo enganchamos los listeners globales
+// para foreground notifications + deep linking en notification tap.
+const initPushNotifications = async () => {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    // Listener: foreground notification (la app está abierta)
+    await PushNotifications.addListener("pushNotificationReceived", (notif) => {
+      console.info("[FCM] foreground notification", notif);
+      // Mostrar como toast in-app vía CustomEvent que App.tsx escucha
+      window.dispatchEvent(new CustomEvent("pasify:push-received", { detail: notif }));
+    });
+    // Listener: notification tapped (open app desde notification)
+    await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+      console.info("[FCM] notification tapped", action);
+      const link = (action.notification?.data as Record<string, string> | undefined)?.click_action
+        || (action.notification?.data as Record<string, string> | undefined)?.link;
+      if (link) {
+        window.dispatchEvent(new CustomEvent("notification-tap", { detail: { link } }));
+      }
+    });
+  } catch (err) {
+    console.warn("[FCM] initPushNotifications failed", err);
+  }
+};
+initPushNotifications();
 void trySaveFcmToken;
 
 // Pasify: no-op. profiles.last_active_at non esiste nel nostro schema;

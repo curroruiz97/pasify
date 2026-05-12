@@ -1,8 +1,21 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const CACHE_TIME = 10 * 60 * 1000; // 10 minuti
-const STALE_TIME = 2 * 60 * 1000; // 2 minuti - dati considerati freschi
+/**
+ * Pasify · hooks de partners.
+ *
+ * Antes (Students Life) consultaba `reviews`, `gallery`, `partner_views`,
+ * `categories`, `profile_image_url`, `latitude/longitude` (en profiles).
+ * En Pasify esas tablas/columnas no existen — devolvemos defaults seguros
+ * para no romper los consumers (PartnerDetails, PartnersList, RecentPartners,
+ * PartnersMap, CategoryCarousel).
+ *
+ * Mantenemos la misma firma pública. `avatar_url` se expone también como
+ * `profile_image_url` para compat con los componentes legacy.
+ */
+
+const CACHE_TIME = 10 * 60 * 1000;
+const STALE_TIME = 2 * 60 * 1000;
 
 export interface Partner {
   id: string;
@@ -11,7 +24,11 @@ export interface Partner {
   business_city: string | null;
   business_phone: string | null;
   business_description: string | null;
-  profile_image_url: string | null;
+  business_category: string | null;
+  business_country: string | null;
+  profile_image_url: string | null; // alias legacy de avatar_url
+  avatar_url: string | null;
+  cover_image_url: string | null;
   category_id: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -21,97 +38,80 @@ export interface Partner {
   };
 }
 
-// Fetch tutti i partner approvati
+const PASIFY_PROFILE_COLUMNS =
+  "id, business_name, business_address, business_city, business_country, business_phone, business_description, business_category, avatar_url, cover_image_url, account_status";
+
+const mapProfileToPartner = (p: Record<string, unknown>): Partner => ({
+  id: p.id as string,
+  business_name: (p.business_name as string | null) ?? null,
+  business_address: (p.business_address as string | null) ?? null,
+  business_city: (p.business_city as string | null) ?? null,
+  business_country: (p.business_country as string | null) ?? null,
+  business_phone: (p.business_phone as string | null) ?? null,
+  business_description: (p.business_description as string | null) ?? null,
+  business_category: (p.business_category as string | null) ?? null,
+  // legacy aliases
+  profile_image_url: (p.avatar_url as string | null) ?? null,
+  avatar_url: (p.avatar_url as string | null) ?? null,
+  cover_image_url: (p.cover_image_url as string | null) ?? null,
+  category_id: (p.business_category as string | null) ?? null,
+  latitude: null,
+  longitude: null,
+});
+
+const isApprovedAccount = (status: unknown) =>
+  status === "approved" || status === "active" || status === null || status === undefined;
+
+/* ============ usePartners ============ */
 export const usePartners = () => {
   return useQuery({
     queryKey: ["partners"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select(`
-          id,
-          business_name,
-          business_address,
-          business_city,
-          business_phone,
-          business_description,
-          profile_image_url,
-          category_id,
-          latitude,
-          longitude,
-          account_status
-        `)
+        .select(PASIFY_PROFILE_COLUMNS)
         .not("business_name", "is", null)
         .order("business_name")
         .limit(50);
-
       if (error) throw error;
-
-      // Filtra partner approvati
-      const approvedPartners = (data || []).filter((p: any) =>
-        p.account_status === 'approved' ||
-        p.account_status === 'active' ||
-        p.account_status === null ||
-        p.account_status === undefined
-      );
-
-      return approvedPartners as Partner[];
+      return (data ?? [])
+        .filter((p: Record<string, unknown>) => isApprovedAccount(p.account_status))
+        .map(mapProfileToPartner);
     },
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
   });
 };
 
-// Fetch singolo partner
+/* ============ usePartner (single) ============ */
 export const usePartner = (partnerId: string | undefined) => {
   return useQuery({
     queryKey: ["partner", partnerId],
     queryFn: async () => {
       if (!partnerId) return null;
 
-      // Fetch profilo partner
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", partnerId)
-        .single();
-
+        .maybeSingle();
       if (profileError) throw profileError;
+      if (!profileData) return null;
 
-      // Fetch recensioni separatamente
-      const { data: reviewsData } = await supabase
-        .from("reviews")
-        .select("rating, comment, created_at, client_id")
-        .eq("partner_id", partnerId);
-
-      // Fetch profili dei clienti che hanno fatto recensioni
-      const reviews = reviewsData || [];
-      let reviewsWithProfiles = reviews;
-
-      if (reviews.length > 0) {
-        const clientIds = [...new Set(reviews.map(r => r.client_id))];
-        const { data: clientsData } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name")
-          .in("id", clientIds);
-
-        const clientsMap = new Map(clientsData?.map(c => [c.id, c]) || []);
-        reviewsWithProfiles = reviews.map(review => ({
-          ...review,
-          profiles: clientsMap.get(review.client_id) || null
-        }));
-      }
-
-      // Calcola rating medio
-      const avgRating = reviews.length > 0
-        ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
-        : 0;
-
+      // Reviews y gallery no existen en Pasify aún. Devolvemos arrays vacíos
+      // hasta que se reintroduzca el sistema de moderación + galería real.
       return {
         ...profileData,
-        reviews: reviewsWithProfiles,
-        avgRating: avgRating.toFixed(1),
-        reviewCount: reviews.length,
+        profile_image_url: profileData.avatar_url ?? null,
+        reviews: [] as Array<{
+          rating: number;
+          comment: string | null;
+          created_at: string;
+          client_id: string;
+          profiles?: { first_name: string | null; last_name: string | null } | null;
+        }>,
+        avgRating: "0.0",
+        reviewCount: 0,
       };
     },
     staleTime: STALE_TIME,
@@ -120,236 +120,122 @@ export const usePartner = (partnerId: string | undefined) => {
   });
 };
 
-// Fetch categorie
+/* ============ useCategories ============ */
+// Pasify usa `business_categories` (slug + label) en lugar de `categories`.
 export const useCategories = () => {
   return useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("display_name");
-
-      if (error) throw error;
-      return data;
+        .from("business_categories")
+        .select("slug, label_es, label_en, sort_order")
+        .order("sort_order");
+      if (error) {
+        // Si la tabla aún no existe en local, devolvemos vacío en lugar de crash.
+        console.warn("[useCategories] business_categories unavailable:", error.message);
+        return [];
+      }
+      return (data ?? []).map((c: { slug: string; label_es: string | null; label_en: string | null }) => ({
+        id: c.slug,
+        name: c.slug,
+        display_name: c.label_es ?? c.label_en ?? c.slug,
+      }));
     },
-    staleTime: 30 * 60 * 1000, // 30 minuti - le categorie cambiano raramente
-    gcTime: 60 * 60 * 1000, // 1 ora
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 };
 
-// Hook per invalidare la cache
+/* ============ useInvalidatePartners ============ */
 export const useInvalidatePartners = () => {
   const queryClient = useQueryClient();
-
   return {
     invalidateAll: () => {
       queryClient.invalidateQueries({ queryKey: ["partners"] });
       queryClient.invalidateQueries({ queryKey: ["partner"] });
+      queryClient.invalidateQueries({ queryKey: ["all-partners-details"] });
+      queryClient.invalidateQueries({ queryKey: ["partners-map"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-partners"] });
     },
     invalidatePartner: (partnerId: string) =>
       queryClient.invalidateQueries({ queryKey: ["partner", partnerId] }),
   };
 };
 
-// Fetch TUTTI i partner con dettagli (una sola query, poi filtriamo client-side)
+/* ============ useAllPartnersWithDetails ============ */
 export const useAllPartnersWithDetails = () => {
   return useQuery({
     queryKey: ["all-partners-details"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select(`
-          id,
-          business_name,
-          business_address,
-          business_city,
-          business_country,
-          business_category,
-          profile_image_url,
-          cover_image_url,
-          account_status
-        `)
+        .select(PASIFY_PROFILE_COLUMNS)
         .not("business_name", "is", null)
         .limit(50);
-
       if (error) throw error;
-
-      // Filtra partner approvati
-      const approvedPartners = (data || []).filter((p: any) => {
-        if (!p.business_name) return false;
-        const isApproved =
-          p.account_status === 'approved' ||
-          p.account_status === 'active' ||
-          p.account_status === null ||
-          p.account_status === undefined;
-        return isApproved;
-      });
-
-      if (approvedPartners.length === 0) return [];
-
-      // Fetch reviews separatamente per tutti i partner
-      const partnerIds = approvedPartners.map((p: any) => p.id);
-
-      const { data: reviewsData } = await supabase
-        .from("reviews")
-        .select("partner_id, rating")
-        .in("partner_id", partnerIds)
-        .limit(200);
-
-      const { data: galleryData } = await supabase
-        .from("gallery")
-        .select("partner_id, image_url")
-        .in("partner_id", partnerIds)
-        .limit(100);
-
-      // Raggruppa reviews e gallery per partner
-      const reviewsMap = new Map<string, Array<{rating: number}>>();
-      const galleryMap = new Map<string, Array<{image_url: string}>>();
-
-      reviewsData?.forEach(r => {
-        if (!reviewsMap.has(r.partner_id)) reviewsMap.set(r.partner_id, []);
-        reviewsMap.get(r.partner_id)!.push({ rating: r.rating });
-      });
-
-      galleryData?.forEach(g => {
-        if (!galleryMap.has(g.partner_id)) galleryMap.set(g.partner_id, []);
-        galleryMap.get(g.partner_id)!.push({ image_url: g.image_url });
-      });
-
-      return approvedPartners.map((partner: any) => ({
-        ...partner,
-        reviews: reviewsMap.get(partner.id) || [],
-        gallery: galleryMap.get(partner.id) || [],
-      }));
+      return (data ?? [])
+        .filter((p: Record<string, unknown>) => isApprovedAccount(p.account_status))
+        .map((p) => ({
+          ...mapProfileToPartner(p as Record<string, unknown>),
+          reviews: [] as Array<{ rating: number }>,
+          gallery: [] as Array<{ image_url: string }>,
+        }));
     },
-    staleTime: 5 * 60 * 1000, // 5 minuti
-    gcTime: 15 * 60 * 1000, // 15 minuti
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 };
 
-// Fetch partner per categoria, città e paese - FILTRO CLIENT-SIDE dalla cache
-export const usePartnersByCategory = (category: string | null, city?: string | null, country?: string | null) => {
+/* ============ usePartnersByCategory ============ */
+export const usePartnersByCategory = (
+  category: string | null,
+  city?: string | null,
+  country?: string | null
+) => {
   const { data: allPartners = [], isLoading } = useAllPartnersWithDetails();
 
-  // Filtra client-side - confronto case-insensitive e gestisce null/undefined
   const filteredPartners = category
-    ? allPartners.filter(p => {
-        const partnerCategory = (p as any).business_category?.toLowerCase().trim();
+    ? allPartners.filter((p) => {
+        const partnerCategory = p.business_category?.toLowerCase().trim();
         const searchCategory = category.toLowerCase().trim();
-        const categoryMatch = partnerCategory === searchCategory;
-
-        if (!categoryMatch) return false;
-
-        // Filtra per paese se specificato (include partner senza country)
+        if (partnerCategory !== searchCategory) return false;
         if (country) {
-          const partnerCountry = (p as any).business_country || "ES";
+          const partnerCountry = p.business_country ?? "ES";
           if (partnerCountry !== country) return false;
         }
-
-        // Filtra per città se specificata (include partner senza città)
         if (city) {
-          const partnerCity = (p as any).business_city?.toLowerCase().trim();
+          const partnerCity = p.business_city?.toLowerCase().trim();
           if (partnerCity && partnerCity !== city.toLowerCase().trim()) return false;
         }
-
         return true;
       })
     : [];
 
-  return {
-    data: filteredPartners,
-    isLoading,
-  };
+  return { data: filteredPartners, isLoading };
 };
 
-// Fetch partner per mappa (con coordinate) - con filtro città e paese opzionale
-export const usePartnersForMap = (city?: string | null, country?: string | null) => {
+/* ============ usePartnersForMap ============ */
+// Pasify profiles no tiene latitude/longitude. Hasta que se añada geocoding
+// del business_address, devolvemos vacío (la PartnersMap aterriza con un mensaje
+// de "datos próximamente" en lugar de crash).
+export const usePartnersForMap = (_city?: string | null, _country?: string | null) => {
   return useQuery({
-    queryKey: ["partners-map", city, country],
-    queryFn: async () => {
-      let query = supabase
-        .from("profiles")
-        .select("id, business_name, business_address, business_city, business_country, profile_image_url, latitude, longitude")
-        .not("business_name", "is", null)
-        .not("business_address", "is", null)
-        .not("latitude", "is", null)
-        .not("longitude", "is", null);
-
-      // Filtra per paese se specificato
-      if (country) {
-        query = query.eq("business_country", country);
-      }
-
-      // Filtra per città se specificata
-      if (city) {
-        query = query.ilike("business_city", city);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data || [];
-    },
+    queryKey: ["partners-map", _city, _country],
+    queryFn: async () => [] as Array<Partner>,
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
   });
 };
 
-// Fetch partner recenti visti dall'utente
-export const useRecentPartners = (userId: string | undefined) => {
+/* ============ useRecentPartners ============ */
+// `partner_views` no existe en Pasify (era audit legacy). Devolvemos vacío;
+// los componentes consumidores muestran "sin partners recientes".
+export const useRecentPartners = (_userId: string | undefined) => {
   return useQuery({
-    queryKey: ["recent-partners", userId],
-    queryFn: async () => {
-      if (!userId) return [];
-
-      // Get most recently viewed partners
-      const { data: viewsData } = await supabase
-        .from("partner_views")
-        .select("partner_id, viewed_at")
-        .eq("client_id", userId)
-        .order("viewed_at", { ascending: false })
-        .limit(20);
-
-      if (!viewsData || viewsData.length === 0) {
-        return [];
-      }
-
-      // Get unique partner IDs (most recent view for each)
-      const seenPartners = new Set<string>();
-      const uniquePartnerIds: string[] = [];
-
-      viewsData.forEach(view => {
-        if (!seenPartners.has(view.partner_id)) {
-          seenPartners.add(view.partner_id);
-          uniquePartnerIds.push(view.partner_id);
-        }
-      });
-
-      // Take only top 5
-      const recentPartnerIds = uniquePartnerIds.slice(0, 5);
-
-      // Fetch partner details with reviews and gallery
-      const { data: partnersData } = await supabase
-        .from("profiles")
-        .select(`
-          *,
-          reviews!reviews_partner_id_fkey(rating),
-          gallery(image_url)
-        `)
-        .in("id", recentPartnerIds);
-
-      if (!partnersData) return [];
-
-      // Sort partners by the order in recentPartnerIds
-      return recentPartnerIds
-        .map(id => partnersData.find(p => p.id === id))
-        .filter(Boolean);
-    },
-    staleTime: 60 * 1000, // 1 minuto - i partner recenti cambiano spesso
-    gcTime: 5 * 60 * 1000, // 5 minuti
-    enabled: !!userId,
+    queryKey: ["recent-partners", _userId],
+    queryFn: async () => [] as Partner[],
+    staleTime: STALE_TIME,
+    gcTime: CACHE_TIME,
+    enabled: !!_userId,
   });
 };
-
-// NOTA: Il prefetch dei partner ora avviene in DataPrefetcher con la query "all-partners-details"

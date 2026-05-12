@@ -44,6 +44,7 @@ import {
   Receipt,
   FileText,
   Music,
+  Trash2,
   Menu,
   Settings,
   HelpCircle,
@@ -80,8 +81,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 type Section =
@@ -127,6 +139,7 @@ type Profile = {
   business_name: string | null;
   business_category: string | null;
   city: string | null;
+  business_city: string | null;
   account_status: string;
   stripe_connect_account_id: string | null;
   stripe_connect_onboarded: boolean;
@@ -143,6 +156,10 @@ const PartnerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [festivalOpen, setFestivalOpen] = useState(false);
+  // Confirmación de borrado: se guarda el evento target hasta que el usuario
+  // confirma o cancela. AlertDialog se monta al final del árbol.
+  const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -153,7 +170,7 @@ const PartnerDashboard = () => {
 
       const { data: p } = await supabase
         .from("profiles")
-        .select("id, business_name, business_category, city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
+        .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
         .eq("id", uid)
         .maybeSingle();
       if (p) setProfile(p as Profile);
@@ -217,6 +234,33 @@ const PartnerDashboard = () => {
       )}.`,
     });
     if (userId) await loadEvents(userId);
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!deleteTarget || !userId) return;
+    setDeleting(true);
+    const { error } = await supabase.from("events").delete().eq("id", deleteTarget.id);
+    setDeleting(false);
+    if (error) {
+      // Si el evento ya tiene tickets vendidos, la RLS / FK lo impedirá.
+      // Mostramos el motivo real para que el partner sepa qué pasa.
+      toast({
+        title: "No se pudo eliminar",
+        description:
+          error.message.includes("foreign key") || error.message.includes("violates")
+            ? "El evento tiene tickets vendidos o relacionados. Cancélalo en lugar de borrarlo."
+            : error.message,
+        variant: "destructive",
+      });
+      setDeleteTarget(null);
+      return;
+    }
+    toast({
+      title: "Evento eliminado",
+      description: `"${deleteTarget.title}" ya no aparece en tu lista.`,
+    });
+    setDeleteTarget(null);
+    await loadEvents(userId);
   };
 
   // Mobile Settings/Help sheets — state lifted al padre para que
@@ -470,7 +514,7 @@ const PartnerDashboard = () => {
                   </DialogTrigger>
                   <CreateEventDialog
                     partnerId={userId}
-                    defaultCity={profile?.city ?? ""}
+                    defaultCity={profile?.city ?? profile?.business_city ?? ""}
                     cities={cities}
                     onCreated={async () => {
                       setCreateOpen(false);
@@ -574,6 +618,14 @@ const PartnerDashboard = () => {
                                   >
                                     <FileText className="mr-2 h-4 w-4" />
                                     Report PDF post-evento
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => setDeleteTarget(e)}
+                                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Eliminar evento
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -818,6 +870,46 @@ const PartnerDashboard = () => {
         role="partner"
         onOpenSupport={() => setSection("soporte")}
       />
+
+      {/* Confirmación de borrado de evento — destructive */}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este evento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vas a borrar <span className="font-semibold text-foreground">"{deleteTarget?.title}"</span>{" "}
+              de tu lista. Esta acción no se puede deshacer. Si el evento ya tiene tickets
+              vendidos, cancélalo en su lugar para mantener el historial.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(ev) => {
+                ev.preventDefault();
+                void handleDeleteEvent();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminando…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Sí, eliminar
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -1056,8 +1148,18 @@ const CreateEventDialog = ({
   const removeImage = () => setForm((f) => ({ ...f, image_url: "" }));
 
   const submit = async (status: "draft" | "published") => {
-    if (!form.title || !form.date_start || !form.city) {
-      toast({ title: "Faltan datos", description: "Título, fecha y ciudad son obligatorios.", variant: "destructive" });
+    const title = form.title.trim();
+    const city = form.city.trim();
+    if (!title || !form.date_start || !city) {
+      const missing: string[] = [];
+      if (!title) missing.push("título");
+      if (!form.date_start) missing.push("fecha y hora");
+      if (!city) missing.push("ciudad");
+      toast({
+        title: "Faltan datos",
+        description: `Completa: ${missing.join(", ")}.`,
+        variant: "destructive",
+      });
       return;
     }
     const priceCents = Math.round(parseFloat(form.price_eur || "0") * 100);
@@ -1070,9 +1172,9 @@ const CreateEventDialog = ({
     setSubmitting(true);
     const { error } = await supabase.from("events").insert({
       partner_id: partnerId,
-      title: form.title,
-      description: form.description || null,
-      city: form.city,
+      title,
+      description: form.description.trim() || null,
+      city,
       date_start: new Date(form.date_start).toISOString(),
       price_cents: priceCents,
       capacity,

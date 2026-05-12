@@ -1,17 +1,10 @@
-import nodemailer from "npm:nodemailer@6";
+// Pasify · gmail.ts DEPRECATED · shim hacia Resend.
+// Mantiene la firma sendEmail() para compatibilidad con edge functions legacy.
+// Migrar todos los consumidores a `_shared/resend.ts` directamente.
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: Deno.env.get("GMAIL_USER"),
-    pass: Deno.env.get("GMAIL_APP_PASSWORD"),
-  },
-});
+import { sendEmail as sendViaResend } from "./resend.ts";
 
-const FROM_ADDRESS = `StudentsLife <${Deno.env.get("GMAIL_USER") || "stud3nts1ife.info@gmail.com"}>`;
-
+/** @deprecated Usa `sendEmail` de `_shared/resend.ts`. */
 export async function sendEmail(options: {
   to: string | string[];
   subject: string;
@@ -20,20 +13,13 @@ export async function sendEmail(options: {
   replyTo?: string;
   headers?: Record<string, string>;
 }) {
-  const { to, subject, html, text, replyTo, headers } = options;
-
-  console.log(`📧 Sending email to: ${Array.isArray(to) ? to.join(", ") : to}`);
-
-  const info = await transporter.sendMail({
-    from: FROM_ADDRESS,
-    to: Array.isArray(to) ? to.join(", ") : to,
-    subject,
-    html,
-    text,
-    replyTo,
-    headers,
+  // eslint-disable-next-line no-console
+  console.warn("[Pasify] _shared/gmail.ts is DEPRECATED — switch to _shared/resend.ts");
+  return sendViaResend({
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text,
+    replyTo: options.replyTo,
   });
-
-  console.log(`✅ Email sent successfully. MessageId: ${info.messageId}`);
-  return info;
 }

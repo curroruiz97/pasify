@@ -1,8 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+/**
+ * useDiscounts · LEGACY NEUTRALIZED stub.
+ *
+ * En Students Life los partners tenían "discounts" (cupones canjeables vía QR).
+ * En Pasify el modelo cambió a venta directa de tickets (tabla `tickets` +
+ * `ticket_tiers` + Stripe Connect), así que `discounts` y `discount_scans` ya
+ * no existen. Mantenemos el export para que `PartnerDiscounts.tsx` (cliente)
+ * compile, pero devuelve lista vacía.
+ */
 
-const CACHE_TIME = 10 * 60 * 1000; // 10 minuti
-const STALE_TIME = 2 * 60 * 1000; // 2 minuti
+import { useQueryClient } from "@tanstack/react-query";
 
 export interface Discount {
   id: string;
@@ -13,67 +19,30 @@ export interface Discount {
   start_date: string;
   end_date: string;
   image_url: string | null;
-  link_url: string | null;
-  qr_enabled: boolean;
-  is_active: boolean;
+  category: string | null;
+  partner?: {
+    business_name: string | null;
+    business_city: string | null;
+  } | null;
 }
 
-// Fetch sconti di un partner
-export const usePartnerDiscounts = (partnerId: string | undefined) => {
-  return useQuery({
-    queryKey: ["discounts", partnerId],
-    queryFn: async () => {
-      if (!partnerId) return [];
+export const useAllDiscounts = () => ({
+  data: [] as Discount[],
+  isLoading: false,
+  error: null as Error | null,
+});
 
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("discounts")
-        .select("*")
-        .eq("partner_id", partnerId)
-        .eq("is_active", true)
-        .gte("end_date", now)
-        .order("created_at", { ascending: false });
+export const usePartnerDiscounts = (_partnerId?: string) => ({
+  data: [] as Discount[],
+  isLoading: false,
+  error: null as Error | null,
+});
 
-      if (error) throw error;
-      return (data || []) as Discount[];
-    },
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-    enabled: !!partnerId,
-  });
-};
-
-// Fetch tutti gli sconti attivi
-export const useAllDiscounts = () => {
-  return useQuery({
-    queryKey: ["all-discounts"],
-    queryFn: async () => {
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("discounts")
-        .select("*")
-        .eq("is_active", true)
-        .gte("end_date", now)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-  });
-};
-
-// Hook per invalidare la cache
 export const useInvalidateDiscounts = () => {
   const queryClient = useQueryClient();
-
   return {
     invalidateAll: () => {
       queryClient.invalidateQueries({ queryKey: ["discounts"] });
-      queryClient.invalidateQueries({ queryKey: ["all-discounts"] });
     },
-    invalidatePartnerDiscounts: (partnerId: string) =>
-      queryClient.invalidateQueries({ queryKey: ["discounts", partnerId] }),
   };
 };
