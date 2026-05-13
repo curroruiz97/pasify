@@ -1,9 +1,19 @@
-import { useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { haptic } from "@/lib/haptics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, XCircle, ScanLine, Camera, X } from "lucide-react";
+import {
+  Camera,
+  CameraOff,
+  CheckCircle2,
+  ChevronDown,
+  Keyboard,
+  RefreshCcw,
+  ScanLine,
+  X,
+  XCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import QrScanner from "qr-scanner";
 import {
@@ -12,6 +22,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+/**
+ * QRScanner — pantalla operativa de puerta para el partner.
+ *
+ * Diferencias respecto a la versión anterior:
+ *   - La cámara se abre AUTOMÁTICAMENTE al montar el componente (no hace
+ *     falta pulsar "Abrir cámara"). Si el navegador rechaza la petición
+ *     o no hay permiso, mostramos un fallback con CTA "Reintentar".
+ *   - El input manual está OCULTO por defecto detrás de un toggle, para
+ *     que la pantalla esté limpia (la cámara es el 95% del uso real).
+ *   - Chrome editorial Pasify: eyebrow mono · headline italic · viewport
+ *     16:9 con cornercitos terracota + scanline animada · pulse indicator
+ *     "En vivo" · contador de escaneos de la sesión + último escaneo.
+ *   - Cleanup robusto en unmount (libera la cámara siempre).
+ *
+ * Lógica de validación intacta: sigue llamando a la RPC server-side
+ * `scan_ticket` que es atómica + auditada (ticket_scan_logs).
+ */
+
+const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+const serif = {
+  fontFamily: "'Instrument Serif', Georgia, serif",
+  fontStyle: "italic" as const,
+  fontWeight: 400,
+};
 
 interface QRScannerProps {
   partnerId: string;
@@ -27,21 +62,33 @@ type ScanResult =
   | { valid: true; message: string; details: ResultDetails }
   | { valid: false; message: string };
 
-const QRScanner = ({ partnerId }: QRScannerProps) => {
+type CameraState = "idle" | "starting" | "live" | "denied" | "error";
+
+const QRScanner = ({ partnerId: _partnerId }: QRScannerProps) => {
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
+  const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [showResultDialog, setShowResultDialog] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [sessionScans, setSessionScans] = useState(0);
+  const [lastScanAt, setLastScanAt] = useState<Date | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
+  // Evita doble auto-start cuando React StrictMode monta dos veces en dev.
+  const startedOnceRef = useRef(false);
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
+      try {
+        qrScannerRef.current.stop();
+      } catch {
+        /* noop */
+      }
       qrScannerRef.current = null;
     }
     if (streamRef.current) {
@@ -51,14 +98,15 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    setScanning(false);
-  };
+    setCameraState("idle");
+  }, []);
 
   const handleCloseResultDialog = () => {
     setShowResultDialog(false);
     setResult(null);
+    // Reanudar escaneo si el video sigue activo
     setTimeout(() => {
-      if (qrScannerRef.current && scanning) {
+      if (qrScannerRef.current && streamRef.current) {
         try {
           qrScannerRef.current.start();
         } catch (err) {
@@ -68,18 +116,29 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
     }, 300);
   };
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
+    setErrMsg(null);
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        toast({
-          title: "Cámara no disponible",
-          description: "Tu navegador no soporta el acceso a la cámara.",
-          variant: "destructive",
-        });
+        setCameraState("error");
+        setErrMsg("Tu navegador no soporta acceso a cámara.");
         return;
       }
-      stopCamera();
+      // Limpieza por si hay un stream colgando.
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (qrScannerRef.current) {
+        try {
+          qrScannerRef.current.stop();
+        } catch {
+          /* noop */
+        }
+        qrScannerRef.current = null;
+      }
 
+      setCameraState("starting");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
@@ -89,56 +148,86 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
         audio: false,
       });
       streamRef.current = stream;
-      setScanning(true);
 
-      setTimeout(() => {
-        if (!videoRef.current) return;
-        const video = videoRef.current;
-        video.muted = true;
-        video.playsInline = true;
-        video.autoplay = true;
-        video.controls = false;
-        video.srcObject = stream;
+      // Espera al frame para enganchar el video element
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const video = videoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        setCameraState("error");
+        setErrMsg("No se pudo enganchar el preview de cámara.");
+        return;
+      }
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.controls = false;
+      video.srcObject = stream;
 
-        const qrScanner = new QrScanner(
-          video,
-          async (r) => {
-            const scannedCode = r.data;
-            setCode(scannedCode);
-            if (scannedCode && scannedCode.length >= 4) {
-              qrScanner.stop();
-              await handleScan(null, scannedCode);
-            }
-          },
-          {
-            returnDetailedScanResult: true,
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            maxScansPerSecond: 5,
-          }
-        );
-        qrScannerRef.current = qrScanner;
-        qrScanner.start();
-
-        video.play().catch((err) => console.error("video.play:", err));
-      }, 50);
-    } catch (err: any) {
+      const qrScanner = new QrScanner(
+        video,
+        async (r) => {
+          const scannedCode = r.data;
+          if (!scannedCode || scannedCode.length < 4) return;
+          setCode(scannedCode);
+          qrScanner.stop();
+          await handleScan(null, scannedCode);
+        },
+        {
+          returnDetailedScanResult: true,
+          highlightScanRegion: false,
+          highlightCodeOutline: false,
+          maxScansPerSecond: 5,
+        }
+      );
+      qrScannerRef.current = qrScanner;
+      await qrScanner.start();
+      try {
+        await video.play();
+      } catch (err) {
+        console.error("video.play:", err);
+      }
+      setCameraState("live");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "No se pudo abrir la cámara.";
+      const isDenied =
+        msg.toLowerCase().includes("permission") ||
+        msg.toLowerCase().includes("denied") ||
+        msg.toLowerCase().includes("notallowed");
       console.error("startCamera error:", err);
-      toast({
-        title: "Error cámara",
-        description: err?.message ?? "No se pudo abrir la cámara.",
-        variant: "destructive",
-      });
-      setScanning(false);
+      setCameraState(isDenied ? "denied" : "error");
+      setErrMsg(msg);
     }
-  };
+    // handleScan is captured below — eslint exhaustive-deps doesn't matter,
+    // we want a stable identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleScan = async (e: React.FormEvent | null, scannedCode?: string) => {
+  // Auto-start al montar. StrictMode-safe via ref.
+  useEffect(() => {
+    if (startedOnceRef.current) return;
+    startedOnceRef.current = true;
+    void startCamera();
+    return () => {
+      stopCamera();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleScan = async (
+    e: React.FormEvent | null,
+    scannedCode?: string
+  ) => {
     if (e) e.preventDefault();
     const codeToVerify = (scannedCode ?? code).trim();
 
     if (!codeToVerify) {
-      toast({ title: "Código no válido", description: "Introduce un código.", variant: "destructive" });
+      toast({
+        title: "Código no válido",
+        description: "Introduce un código.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -151,9 +240,6 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
       //   3. Verifica estado (paid → used; used → already_used; etc.)
       //   4. Marca como usado atomicamente
       //   5. SIEMPRE inserta una fila en ticket_scan_logs con result + meta
-      //
-      // Esto reemplaza la lógica client-side fragil y garantiza trazabilidad
-      // completa para el dashboard del partner (sección Asistentes).
       const { data: rows, error: rpcErr } = await supabase.rpc("scan_ticket", {
         _qr_token: codeToVerify,
         _device_info:
@@ -169,7 +255,10 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
 
       const row = Array.isArray(rows) ? rows[0] : rows;
       if (!row) {
-        setResult({ valid: false, message: "Respuesta inesperada del servidor." });
+        setResult({
+          valid: false,
+          message: "Respuesta inesperada del servidor.",
+        });
         haptic.error();
         setShowResultDialog(true);
         return;
@@ -185,21 +274,29 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
           message: "Acceso permitido",
           details: {
             event: row.event_title ?? "Evento",
-            date: row.scanned_at ? new Date(row.scanned_at).toLocaleString("es-ES") : "",
+            date: row.scanned_at
+              ? new Date(row.scanned_at).toLocaleString("es-ES")
+              : "",
             buyer,
           },
         });
         haptic.success();
+        setSessionScans((n) => n + 1);
+        setLastScanAt(new Date());
         setShowResultDialog(true);
         setCode("");
         return;
       }
 
-      // Fallos: mapeamos el enum result a mensajes accionables
+      // Fallos
       let msg: string;
       switch (row.result as string) {
         case "already_used":
-          msg = `Ticket ya usado · ${row.already_used_at ? new Date(row.already_used_at).toLocaleString("es-ES") : "fecha desconocida"}`;
+          msg = `Ticket ya usado · ${
+            row.already_used_at
+              ? new Date(row.already_used_at).toLocaleString("es-ES")
+              : "fecha desconocida"
+          }`;
           break;
         case "invalid_ticket":
           msg = "Ticket no encontrado. Verifica que el QR es válido.";
@@ -218,8 +315,9 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
       }
       setResult({ valid: false, message: msg });
       haptic.error();
+      setLastScanAt(new Date());
       setShowResultDialog(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Errore verifica:", err);
       setResult({ valid: false, message: "Error durante la verificación." });
       haptic.error();
@@ -229,112 +327,316 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
     }
   };
 
+  const isLive = cameraState === "live";
+  const isStarting = cameraState === "starting";
+
   return (
     <div className="space-y-6">
-      <div className="ios-card p-6">
-        <div className="text-center mb-6">
-          <ScanLine className="w-16 h-16 mx-auto mb-4 text-primary animate-pulse" />
-          <h2 className="text-xl font-bold mb-2">Escáner de tickets</h2>
-          <p className="text-muted-foreground text-sm">
-            Escanea el QR del cliente en la puerta para validar su entrada.
-          </p>
+      {/* Live status pill */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] uppercase"
+          style={{
+            ...mono,
+            letterSpacing: "0.2em",
+            background: isLive
+              ? "rgba(77,184,122,0.08)"
+              : isStarting
+              ? "rgba(232,84,42,0.10)"
+              : "rgba(255,255,255,0.04)",
+            borderColor: isLive
+              ? "rgba(77,184,122,0.40)"
+              : isStarting
+              ? "rgba(232,84,42,0.40)"
+              : "rgba(244,238,226,0.10)",
+            color: isLive
+              ? "#4DB87A"
+              : isStarting
+              ? "#FF7A4D"
+              : "#8A8275",
+          }}
+        >
+          <span className="relative inline-flex h-2 w-2">
+            {isLive && (
+              <span
+                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                style={{ background: "#4DB87A" }}
+              />
+            )}
+            <span
+              className="relative inline-flex h-2 w-2 rounded-full"
+              style={{
+                background: isLive
+                  ? "#4DB87A"
+                  : isStarting
+                  ? "#FF7A4D"
+                  : "#8A8275",
+              }}
+            />
+          </span>
+          {isLive
+            ? "Escaneando en vivo"
+            : isStarting
+            ? "Activando cámara"
+            : cameraState === "denied"
+            ? "Cámara denegada"
+            : cameraState === "error"
+            ? "Cámara no disponible"
+            : "Cámara apagada"}
         </div>
 
-        {scanning ? (
-          <div className="space-y-4">
-            <div className="relative rounded-lg overflow-hidden bg-black">
-              <video
-                ref={videoRef}
-                className="w-full h-[400px] object-cover"
-                playsInline
-                muted
-                autoPlay
-                controls={false}
-                style={{ backgroundColor: "#000", width: "100%", height: "400px", objectFit: "cover" }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="border-4 border-white/50 w-64 h-64 rounded-lg" />
-              </div>
-            </div>
+        {/* Stats row */}
+        <div
+          className="flex items-center gap-4 text-[10px] uppercase text-muted-foreground"
+          style={{ ...mono, letterSpacing: "0.18em" }}
+        >
+          <span>
+            <span className="text-foreground" style={mono}>
+              {String(sessionScans).padStart(2, "0")}
+            </span>{" "}
+            escaneos hoy
+          </span>
+          {lastScanAt && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span>
+                Último{" "}
+                <span className="text-foreground" style={mono}>
+                  {lastScanAt.toLocaleTimeString("es-ES", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  h
+                </span>
+              </span>
+            </>
+          )}
+        </div>
+      </div>
 
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-sm">
-              <p className="text-center text-primary">
-                💡 <strong>Tip:</strong> mantén el QR firme dentro del recuadro.
+      {/* Camera viewport */}
+      <div
+        className="relative overflow-hidden rounded-2xl border border-border bg-black"
+        style={{
+          aspectRatio: "16/10",
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.05) inset, 0 22px 50px -22px rgba(232,84,42,0.30)",
+        }}
+      >
+        {/* Video */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 h-full w-full object-cover"
+          playsInline
+          muted
+          autoPlay
+          controls={false}
+        />
+
+        {/* Vignette overlay para enfocar la mirada en el centro */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(closest-side at 50% 50%, transparent 0%, transparent 45%, rgba(0,0,0,0.55) 100%)",
+          }}
+        />
+
+        {/* Corner brackets */}
+        <CornerBrackets active={isLive} />
+
+        {/* Scan line animation cuando está live */}
+        {isLive && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{ width: "min(70%, 360px)", height: "min(70%, 360px)" }}
+          >
+            <div className="qr-scanline absolute left-0 right-0 h-[2px]" />
+          </div>
+        )}
+
+        {/* Loading state */}
+        {isStarting && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-white">
+            <Camera className="h-9 w-9 animate-pulse text-orange-400" />
+            <div
+              className="text-[11px] uppercase"
+              style={{ ...mono, letterSpacing: "0.22em" }}
+            >
+              Activando cámara…
+            </div>
+          </div>
+        )}
+
+        {/* Denied / Error state */}
+        {(cameraState === "denied" || cameraState === "error") && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/85 px-6 text-center text-white">
+            <CameraOff className="h-10 w-10 text-orange-400" />
+            <div className="max-w-sm">
+              <div className="text-base font-semibold">
+                {cameraState === "denied"
+                  ? "Permiso de cámara denegado"
+                  : "No se pudo abrir la cámara"}
+              </div>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-white/70">
+                {cameraState === "denied"
+                  ? "Habilita el permiso de cámara en tu navegador para escanear QRs en la puerta. Mientras tanto puedes usar el código manual abajo."
+                  : errMsg ?? "Comprueba que ningún otro programa esté usando la cámara."}
               </p>
             </div>
-
-            <Button onClick={stopCamera} variant="outline" className="w-full" size="lg">
-              <X className="w-4 h-4 mr-2" />
-              Cerrar cámara
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
             <Button
-              onClick={startCamera}
-              className="w-full mb-4 h-14 bg-gradient-to-br from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-              size="lg"
               type="button"
+              onClick={() => void startCamera()}
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
             >
-              <Camera className="w-5 h-5 mr-2" />
-              Abrir cámara
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Reintentar
             </Button>
           </div>
         )}
 
-        {/* Manual input */}
-        <form onSubmit={(e) => handleScan(e)} className="space-y-4">
-          <div className="relative my-4 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            <span>O introduce código manual</span>
-            <div className="h-px flex-1 bg-border" />
+        {/* Idle state — primer render antes de auto-start */}
+        {cameraState === "idle" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+            <Camera className="h-8 w-8 animate-pulse text-orange-400" />
           </div>
-          <Input
-            placeholder="Pega aquí el token del QR..."
-            value={code}
-            onChange={(ev) => setCode(ev.target.value)}
-            disabled={loading}
-          />
-          <Button type="submit" className="w-full" disabled={loading || !code.trim()}>
-            Validar
-          </Button>
-        </form>
+        )}
       </div>
+
+      {/* Action bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {isLive ? (
+            <Button
+              type="button"
+              onClick={stopCamera}
+              variant="outline"
+              className="h-10"
+            >
+              <X className="mr-1.5 h-4 w-4" />
+              Apagar cámara
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => void startCamera()}
+              disabled={isStarting}
+              className="h-10"
+              style={{
+                background:
+                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(232,84,42,0.5)",
+                color: "#fff",
+              }}
+            >
+              <Camera className="mr-1.5 h-4 w-4" />
+              {isStarting ? "Activando…" : "Abrir cámara"}
+            </Button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setManualOpen((o) => !o)}
+          className="group inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-orange-500/40 hover:text-foreground"
+          aria-expanded={manualOpen}
+        >
+          <Keyboard className="h-3.5 w-3.5" />
+          Código manual
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${manualOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
+
+      {/* Manual entry — colapsado por defecto */}
+      {manualOpen && (
+        <form
+          onSubmit={(e) => handleScan(e)}
+          className="space-y-3 rounded-2xl border border-border bg-card/40 p-4"
+        >
+          <div
+            className="inline-flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
+            style={{ ...mono, letterSpacing: "0.2em" }}
+          >
+            <Keyboard className="h-3 w-3 text-orange-500" />
+            Validación manual
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="Pega aquí el token del QR…"
+              value={code}
+              onChange={(ev) => setCode(ev.target.value)}
+              disabled={loading}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              disabled={loading || !code.trim()}
+              className="sm:w-auto"
+            >
+              <ScanLine className="mr-1.5 h-4 w-4" />
+              Validar
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Útil si el QR no se lee bien (impreso borroso, pantalla rota, etc.).
+          </p>
+        </form>
+      )}
 
       {/* Result Dialog */}
       <Dialog open={showResultDialog} onOpenChange={handleCloseResultDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="sr-only">{result?.valid ? "Válido" : "No válido"}</DialogTitle>
+            <DialogTitle className="sr-only">
+              {result?.valid ? "Válido" : "No válido"}
+            </DialogTitle>
           </DialogHeader>
 
           {result && (
-            <div className={`p-6 rounded-lg ${result.valid ? "bg-success/10" : "bg-destructive/10"}`}>
+            <div
+              className={`rounded-lg p-6 ${
+                result.valid ? "bg-success/10" : "bg-destructive/10"
+              }`}
+            >
               <div className="flex flex-col items-center gap-4 text-center">
                 {result.valid ? (
-                  <CheckCircle2 className="w-20 h-20 text-success" />
+                  <CheckCircle2 className="h-20 w-20 text-success" />
                 ) : (
-                  <XCircle className="w-20 h-20 text-destructive" />
+                  <XCircle className="h-20 w-20 text-destructive" />
                 )}
-                <h3 className={`text-2xl font-bold ${result.valid ? "text-success" : "text-destructive"}`}>
+                <h3
+                  className={`text-2xl font-bold ${
+                    result.valid ? "text-success" : "text-destructive"
+                  }`}
+                >
                   {result.message}
                 </h3>
 
                 {result.valid && (
                   <div className="space-y-1.5 text-base">
                     <p>
-                      <span className="font-semibold">Evento:</span> {result.details.event}
+                      <span className="font-semibold">Evento:</span>{" "}
+                      {result.details.event}
                     </p>
-                    <p className="text-sm text-muted-foreground">{result.details.date}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {result.details.date}
+                    </p>
                     <p>
-                      <span className="font-semibold">Comprador:</span> {result.details.buyer}
+                      <span className="font-semibold">Comprador:</span>{" "}
+                      {result.details.buyer}
                     </p>
                   </div>
                 )}
 
                 <Button
                   onClick={handleCloseResultDialog}
-                  className="w-full mt-2 h-12 text-lg"
+                  className="mt-2 h-12 w-full text-lg"
                   variant={result.valid ? "default" : "destructive"}
                 >
                   Cerrar
@@ -344,6 +646,67 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+// =================================================================
+// Sub-components
+// =================================================================
+
+const CornerBrackets = ({ active }: { active: boolean }) => {
+  const color = active ? "#FF7A4D" : "rgba(244,238,226,0.35)";
+  const glow = active ? `0 0 18px ${color}aa` : "none";
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      style={{ width: "min(70%, 360px)", height: "min(70%, 360px)" }}
+    >
+      {/* Top-left */}
+      <span
+        className="absolute left-0 top-0 h-7 w-7"
+        style={{
+          borderTop: `3px solid ${color}`,
+          borderLeft: `3px solid ${color}`,
+          borderTopLeftRadius: 6,
+          boxShadow: glow,
+          transition: "all .3s ease",
+        }}
+      />
+      {/* Top-right */}
+      <span
+        className="absolute right-0 top-0 h-7 w-7"
+        style={{
+          borderTop: `3px solid ${color}`,
+          borderRight: `3px solid ${color}`,
+          borderTopRightRadius: 6,
+          boxShadow: glow,
+          transition: "all .3s ease",
+        }}
+      />
+      {/* Bottom-left */}
+      <span
+        className="absolute bottom-0 left-0 h-7 w-7"
+        style={{
+          borderBottom: `3px solid ${color}`,
+          borderLeft: `3px solid ${color}`,
+          borderBottomLeftRadius: 6,
+          boxShadow: glow,
+          transition: "all .3s ease",
+        }}
+      />
+      {/* Bottom-right */}
+      <span
+        className="absolute bottom-0 right-0 h-7 w-7"
+        style={{
+          borderBottom: `3px solid ${color}`,
+          borderRight: `3px solid ${color}`,
+          borderBottomRightRadius: 6,
+          boxShadow: glow,
+          transition: "all .3s ease",
+        }}
+      />
     </div>
   );
 };

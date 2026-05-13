@@ -870,11 +870,32 @@ const PartnerDashboard = () => {
           {/* SCANNER */}
           {section === "scanner" && (
             <div>
-              <h1 className="mb-1 text-3xl font-bold tracking-tight">Escáner</h1>
-              <p className="mb-6 text-sm text-muted-foreground">
-                Valida la entrada de tus clientes escaneando el QR de su ticket.
-                Al escanear se registra automáticamente en la sección Asistentes.
-              </p>
+              <div className="mb-6">
+                <div
+                  className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+                  style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", letterSpacing: "0.22em" }}
+                >
+                  <span className="inline-block h-px w-5 bg-orange-500/70" />
+                  Control de puerta
+                </div>
+                <h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
+                  Escáner{" "}
+                  <span
+                    style={{
+                      fontFamily: "'Instrument Serif', Georgia, serif",
+                      fontStyle: "italic",
+                      fontWeight: 400,
+                    }}
+                    className="text-orange-500"
+                  >
+                    en vivo
+                  </span>
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  La cámara se activa automáticamente. Apunta al QR del cliente para
+                  validar su entrada. Cada escaneo se registra en Asistentes.
+                </p>
+              </div>
               {userId && <QRScanner partnerId={userId} />}
             </div>
           )}

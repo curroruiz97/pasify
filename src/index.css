@@ -209,6 +209,35 @@
     background: transparent;
   }
 
+  /* .qr-scanline — barra horizontal que recorre la zona de escaneo
+     verticalmente. Identifica visualmente que la cámara está activa. */
+  @keyframes qr-scanline-pulse {
+    0%   { top: 0%;   opacity: 0; }
+    8%   { opacity: 1; }
+    50%  { top: 100%; opacity: 1; }
+    58%  { opacity: 0; }
+    100% { top: 100%; opacity: 0; }
+  }
+  .qr-scanline {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 122, 77, 0.0) 5%,
+      rgba(255, 122, 77, 0.85) 50%,
+      rgba(255, 122, 77, 0.0) 95%,
+      transparent 100%
+    );
+    box-shadow: 0 0 14px rgba(255, 122, 77, 0.85);
+    animation: qr-scanline-pulse 2.4s cubic-bezier(0.55, 0, 0.45, 1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .qr-scanline {
+      animation: none;
+      top: 50%;
+      opacity: 0.5;
+    }
+  }
+
   /* .no-spinner — esconde los stepper nativos de <input type=number>
      en webkit/firefox para que podamos pintar nuestros propios
      controles (+/-) con estilo Pasify. */
