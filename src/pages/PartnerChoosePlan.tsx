@@ -1,29 +1,35 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Capacitor } from "@capacitor/core";
 import {
-  Gift,
   ArrowRight,
-  Loader2,
-  Lock,
-  ExternalLink,
-  ShieldCheck,
-  Receipt,
-  RefreshCw,
-  TrendingUp,
-  Sparkles,
-  Bell,
-  Users,
   Check,
-  CalendarRange,
+  CreditCard,
+  Loader2,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { openWebWithAuth } from "@/lib/openWebAuth";
 import Wordmark from "@/components/Wordmark";
 
-/* ============ DESIGN TOKENS — Pasify cream theme ============ */
+/**
+ * PartnerChoosePlan — selector de plan en una sola pantalla.
+ *
+ * Cambios vs. versión anterior:
+ *  - 2 planes claros: Gratuita (sin Stripe) y Premium (con Stripe).
+ *  - Free → llama RPC `claim_partner_free_plan` y navega a dashboard.
+ *    Crea org placeholder si hace falta (la migración 0040 hace UPSERT en
+ *    `partner_subscriptions` con `plan_code='free'`, `status='active'`).
+ *  - Premium → checkout Stripe (mismo flow que antes).
+ *  - Layout cream Pasify pero con `max-h: 100dvh` y `overflow:hidden`:
+ *    cabe entero en la pantalla sin scroll.
+ *  - Ancho generoso (max-w 7xl), 2 columnas en desktop, stack en mobile.
+ */
+
 const FONT_SERIF: React.CSSProperties = {
   fontFamily: "'Instrument Serif', Georgia, serif",
   fontStyle: "italic",
@@ -37,105 +43,90 @@ const FONT_DISPLAY: React.CSSProperties = {
 };
 
 const TOKEN = {
-  bg: "#0B0908",
-  ink: "#F4EEE2",
-  ink2: "#C9BFA8",
+  ink: "#1A1612",
+  ink2: "#5C544A",
   ink3: "#8A8275",
-  cream: "#F7F3EC",
-  line: "#26211C",
-  line2: "#332C25",
+  line: "rgba(26,22,18,0.10)",
+  line2: "rgba(26,22,18,0.18)",
+  cardBgFree: "#FBF7EE",
+  cardBgPremium: "#1A0F08",
   accent: "#E8542A",
   accent2: "#FF7A4D",
   accentDeep: "#B8381A",
-  warm: "#E8B04C",
   success: "#4DB87A",
 };
 
-const GRAIN_SVG_LIGHT =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.32 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
-
 const CREAM_BG = [
-  "radial-gradient(60% 80% at 18% 20%, #FBE4D3 0%, transparent 60%)",
+  "radial-gradient(55% 75% at 18% 22%, #FBE4D3 0%, transparent 60%)",
   "radial-gradient(45% 70% at 85% 30%, #FFE9C8 0%, transparent 60%)",
-  "radial-gradient(50% 50% at 70% 90%, #F4DDC8 0%, transparent 60%)",
+  "radial-gradient(50% 50% at 70% 92%, #F4DDC8 0%, transparent 60%)",
   "linear-gradient(180deg,#F7F3EC 0%, #F4EEE2 100%)",
 ].join(", ");
+
+const GRAIN_SVG =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.30 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 const PartnerChoosePlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [trialEnabled, setTrialEnabled] = useState<boolean>(true);
-  const [trialDays, setTrialDays] = useState<number>(15);
-  const [startingTrial, setStartingTrial] = useState(false);
-  const [startingCheckout, setStartingCheckout] = useState(false);
   const isNative = Capacitor.isNativePlatform();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [{ data: enabled }, { data: days }] = await Promise.all([
-          supabase.rpc("get_app_setting_bool", { _key: "partner_trial_enabled" }),
-          supabase.rpc("get_app_setting_int", { _key: "partner_trial_days" }),
-        ]);
-        if (typeof enabled === "boolean") setTrialEnabled(enabled);
-        if (typeof days === "number" && days > 0) setTrialDays(days);
-      } catch (err) {
-        console.error("Error cargando configuración trial:", err);
-      }
-    })();
-  }, []);
+  const [claimingFree, setClaimingFree] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
 
-  const handleStartTrial = async () => {
-    setStartingTrial(true);
+  // ---------------- Handlers ----------------
+  const handleClaimFree = async () => {
+    if (claimingFree || startingCheckout) return;
+    setClaimingFree(true);
     try {
-      // start_partner_trial v2 (mig 20260513130000) devuelve TABLE con
-      // `trial_ends_at` ya como TIMESTAMPTZ. Postgres → supabase-js mapea
-      // a array de rows; tomamos la primera.
-      const { data, error } = await supabase.rpc("start_partner_trial");
+      const { data, error } = await supabase.rpc("claim_partner_free_plan");
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      const trialEndsAt = row?.trial_ends_at ?? null;
-      const ends = trialEndsAt ? new Date(trialEndsAt) : null;
+      if (!row) throw new Error("Respuesta vacía del servidor");
+
       toast({
-        title: `¡Tu prueba de ${trialDays} días ha comenzado!`,
-        description: ends
-          ? `Acceso completo a Pasify hasta el ${ends.toLocaleDateString("es-ES")}.`
-          : "Ya puedes usar todas las funcionalidades Partner.",
+        title: "Plan gratuito activado",
+        description: "Acceso completo a Pasify. Cuando quieras, pasa a Premium.",
       });
       await supabase.auth.refreshSession();
       navigate("/partner-dashboard", { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "No se pudo iniciar la prueba";
+      const msg = err instanceof Error ? err.message : "No se pudo activar el plan gratuito";
       toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
-      setStartingTrial(false);
+      setClaimingFree(false);
     }
   };
 
-  const handlePayNow = async () => {
+  const handleGoPremium = async () => {
+    if (claimingFree || startingCheckout) return;
     if (isNative) {
       toast({
-        title: "Activa tu suscripción desde la web",
+        title: "Activa Premium desde la web",
         description: "Accede a pasifyy.vercel.app con tu cuenta para completar el pago.",
       });
       return;
     }
     setStartingCheckout(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        toast({ title: "Sesión expirada", description: "Vuelve a iniciar sesión.", variant: "destructive" });
+        toast({
+          title: "Sesión expirada",
+          description: "Vuelve a iniciar sesión.",
+          variant: "destructive",
+        });
         navigate("/login");
         return;
       }
-      // Siempre `stripe-create-checkout` — test vs live se distingue en el
-      // server por STRIPE_SECRET_KEY.
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
       const resp = await fetch(url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -151,8 +142,9 @@ const PartnerChoosePlan = () => {
         try {
           const parsed = JSON.parse(raw);
           detail = parsed?.error || parsed?.message || parsed?.code || raw;
-        } catch (_) { /* noop */ }
-        console.error("checkout HTTP", resp.status, raw);
+        } catch (_) {
+          /* noop */
+        }
         throw new Error(`${resp.status}: ${detail}`);
       }
       const data = JSON.parse(raw);
@@ -166,728 +158,388 @@ const PartnerChoosePlan = () => {
     }
   };
 
-  const trialPerks = [
-    { Icon: TrendingUp, label: "Dashboard completo de eventos, tickets y aforo" },
-    { Icon: Sparkles, label: "Stripe Connect listo para cobrar" },
-    { Icon: Bell, label: "Push notifications a tu audiencia" },
-    { Icon: Users, label: "Sin tarjeta, sin compromiso" },
-  ];
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
 
-  const paidPerks = [
-    { Icon: ShieldCheck, label: "Todas las funciones desde el día 1" },
-    { Icon: Receipt, label: "Factura fiscal con IVA · invoice PDF mensual" },
-    { Icon: RefreshCw, label: "Cancela cuando quieras desde tu portal" },
-    { Icon: Bell, label: "Soporte prioritario en menos de 1h" },
+  const features = [
+    "Eventos ilimitados",
+    "Tickets, aforo y check-in",
+    "Asistentes en tiempo real",
+    "QR escáner integrado",
+    "Reports + exportación CSV",
+    "Stripe Connect listo",
   ];
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden"
+      className="relative flex flex-col overflow-hidden"
       style={{
         ...FONT_DISPLAY,
         background: CREAM_BG,
-        color: "#1A1612",
+        color: TOKEN.ink,
+        minHeight: "100dvh",
+        maxHeight: "100dvh",
+        height: "100dvh",
       }}
     >
       <style>{`
-        @keyframes pasify-float { 0%,100% { transform: translate(0,0) scale(1) } 33% { transform: translate(28px,-22px) scale(1.04) } 66% { transform: translate(-22px,30px) scale(.97) } }
         @keyframes pasify-pulse { 0% { box-shadow: 0 0 0 0 rgba(232,84,42,.55) } 70% { box-shadow: 0 0 0 12px rgba(232,84,42,0) } 100% { box-shadow: 0 0 0 0 rgba(232,84,42,0) } }
-        @keyframes pasify-slide-in { from { transform: scaleX(0) skewY(-1.5deg) } to { transform: scaleX(1) skewY(-1.5deg) } }
-        .pasify-arrow { display:inline-block; transition: transform .25s cubic-bezier(.4,0,.2,1) }
-        .pasify-cta:hover .pasify-arrow { transform: translateX(3px) }
-        .pasify-underline { position: relative; display: inline-block; }
-        .pasify-underline::after { content: ""; position: absolute; left: -2%; right: -2%; bottom: 0.08em; height: 0.22em; background: ${TOKEN.accent}; z-index: -1; transform: scaleX(1) skewY(-1.5deg); transform-origin: left; animation: pasify-slide-in 1s .35s cubic-bezier(.7,0,.3,1) backwards; }
-        @media (prefers-reduced-motion: reduce) { .pasify-anim { animation: none !important; transition: none !important; } }
+        .pasify-arrow { display:inline-block; transition: transform .25s cubic-bezier(.4,0,.2,1); }
+        .pasify-cta:hover .pasify-arrow { transform: translateX(3px); }
+        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
       `}</style>
 
       {/* Grain overlay */}
       <div
+        aria-hidden="true"
         className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: GRAIN_SVG_LIGHT,
-          mixBlendMode: "multiply",
-          opacity: 0.45,
-        }}
-      />
-
-      {/* Warm halos */}
-      <div
-        className="pasify-anim pointer-events-none absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full"
-        style={{
-          background: TOKEN.accent2,
-          filter: "blur(140px)",
-          opacity: 0.22,
-          animation: "pasify-float 22s ease-in-out infinite",
-        }}
-      />
-      <div
-        className="pasify-anim pointer-events-none absolute -bottom-40 -right-20 h-[420px] w-[420px] rounded-full"
-        style={{
-          background: TOKEN.warm,
-          filter: "blur(120px)",
-          opacity: 0.18,
-          animation: "pasify-float 26s -8s ease-in-out infinite",
-        }}
+        style={{ backgroundImage: GRAIN_SVG, mixBlendMode: "multiply", opacity: 0.55 }}
       />
 
       {/* Header */}
-      <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <button
-          onClick={() => navigate("/")}
-          className="inline-flex items-center transition hover:opacity-80"
-          aria-label="Pasify"
-        >
-          <Wordmark className="h-9 md:h-10" />
-        </button>
-
-        <div
-          className="hidden items-center gap-2 rounded-full border px-3 py-1.5 md:inline-flex"
-          style={{
-            ...FONT_MONO,
-            fontSize: 10.5,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            color: "#5C544A",
-            borderColor: "rgba(38,33,28,0.16)",
-            background: "rgba(255,255,255,0.6)",
-            backdropFilter: "blur(10px)",
-          }}
-        >
+      <header className="relative z-10 flex items-center justify-between px-6 pt-5 md:px-12 md:pt-7">
+        <div className="flex items-center gap-3">
+          <Wordmark height={28} />
           <span
-            className="pasify-anim relative inline-block h-1.5 w-1.5 rounded-full"
+            className="hidden rounded-full border px-2.5 py-0.5 text-[10px] uppercase sm:inline-flex"
             style={{
-              background: TOKEN.accent,
-              animation: "pasify-pulse 2.4s infinite",
+              ...FONT_MONO,
+              letterSpacing: "0.22em",
+              color: TOKEN.accent,
+              borderColor: "rgba(232,84,42,0.4)",
+              background: "rgba(232,84,42,0.08)",
             }}
-          />
-          Partner · onboarding
+          >
+            · Partner · Onboarding
+          </span>
         </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="text-[12px] font-medium underline-offset-4 hover:underline"
+          style={{ color: TOKEN.ink2 }}
+        >
+          Cerrar sesión
+        </button>
       </header>
 
-      <div className="relative z-10 mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 pb-24 pt-2 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:pt-8">
-        {/* ============ LEFT — hero ============ */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55 }}
-        >
-          {/* Eyebrow numerado */}
-          <div
-            className="mb-5 inline-flex items-center gap-3"
-            style={{
-              ...FONT_MONO,
-              fontSize: 11,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: TOKEN.accentDeep,
-            }}
-          >
-            <span
-              className="inline-block h-px w-7"
-              style={{ background: TOKEN.accent }}
-            />
-            01 / Bienvenido, Partner
+      {/* Main content — fills available height between header and footer */}
+      <main className="relative z-10 flex min-h-0 flex-1 flex-col px-6 py-5 md:px-12 md:py-7">
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
+          {/* Title section — compact */}
+          <div className="mb-4 max-w-3xl md:mb-6">
+            <div
+              className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase"
+              style={{ ...FONT_MONO, letterSpacing: "0.22em", color: TOKEN.accent }}
+            >
+              <span className="inline-block h-px w-5" style={{ background: TOKEN.accent }} />
+              Elige tu plan
+            </div>
+            <h1
+              className="text-[clamp(28px,4.5vw,52px)] font-bold leading-[1.05] tracking-tight"
+              style={{ color: TOKEN.ink }}
+            >
+              Empieza{" "}
+              <span style={FONT_SERIF} className="text-[1.05em]">
+                gratis
+              </span>
+              , crece cuando quieras.
+            </h1>
+            <p
+              className="mt-2 max-w-2xl text-[13.5px] leading-relaxed md:text-[15px]"
+              style={{ color: TOKEN.ink2 }}
+            >
+              Activa tu cuenta y entra al dashboard al instante. El plan gratuito ya incluye
+              todas las funciones del producto. Cuando vendas a escala, pasa a Premium en 1 click.
+            </p>
           </div>
 
-          <h1
-            className="mb-6 tracking-[-0.045em]"
-            style={{
-              fontSize: "clamp(42px, 6vw, 72px)",
-              fontWeight: 600,
-              lineHeight: 1.02,
-              color: "#1A1612",
-            }}
-          >
-            Empieza{" "}
-            <span className="pasify-underline">
-              <span style={{ color: "#1A1612" }}>como mejor</span>
-            </span>
-            <br />
-            te <span style={{ ...FONT_SERIF, color: TOKEN.accent }}>convenga</span>.
-          </h1>
-
-          <p
-            className="mb-8 max-w-[40ch] text-[15.5px] leading-[1.6]"
-            style={{ color: "#5C544A" }}
-          >
-            Prueba Pasify gratis durante <strong style={{ color: "#1A1612" }}>{trialDays} días</strong> o activa
-            tu suscripción con todas las funciones desde el primer minuto. Tú eliges, sin letra pequeña.
-          </p>
-
-          {/* Editorial divider */}
-          <div
-            className="mb-8 flex items-center gap-3"
-            style={{
-              ...FONT_MONO,
-              fontSize: 10,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: "#8A8275",
-            }}
-          >
-            <div className="h-px flex-1" style={{ background: "rgba(38,33,28,0.15)" }} />
-            <span>* lo que necesitas, ya incluido *</span>
-            <div className="h-px flex-1" style={{ background: "rgba(38,33,28,0.15)" }} />
-          </div>
-
-          {/* Inclusión list — editorial */}
-          <div className="mb-10 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            {[
-              { Icon: CalendarRange, label: "Publicación de eventos · ilimitados" },
-              { Icon: TrendingUp, label: "Ventas en tiempo real · LiveWarRoom" },
-              { Icon: Sparkles, label: "Marketing IA · audiencias listas" },
-              { Icon: ShieldCheck, label: "Stripe Connect verificado · payouts" },
-            ].map(({ Icon, label }) => (
-              <div
-                key={label}
-                className="flex items-start gap-3 rounded-2xl border px-4 py-3 transition"
-                style={{
-                  borderColor: "rgba(38,33,28,0.12)",
-                  background: "rgba(255,255,255,0.55)",
-                  backdropFilter: "blur(6px)",
-                }}
-              >
-                <span
-                  className="mt-0.5 grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(255,122,77,0.18), rgba(232,84,42,0.06))",
-                    color: TOKEN.accentDeep,
-                  }}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span
-                  className="text-[13.5px] leading-[1.45]"
-                  style={{ color: "#1A1612", fontWeight: 500 }}
-                >
-                  {label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Trust row */}
-          <div
-            className="grid max-w-md grid-cols-3 gap-4 border-t pt-6"
-            style={{ borderColor: "rgba(38,33,28,0.12)" }}
-          >
-            <Stat label="Prueba gratis" value={`${trialDays}d`} />
-            <Stat label="Soporte" value="24/7" />
-            <Stat label="Seguro" value="GDPR" />
-          </div>
-        </motion.div>
-
-        {/* ============ RIGHT — pricing cards ============ */}
-        <div className="flex flex-col gap-5 lg:sticky lg:top-8 lg:self-start">
-          {/* Card TRIAL */}
-          {trialEnabled && (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.08 }}
-              className="group relative overflow-hidden rounded-3xl border p-8 transition-all hover:-translate-y-[2px]"
+          {/* Plan cards — fill remaining space */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+            {/* ============ FREE ============ */}
+            <article
+              className="relative flex min-h-0 flex-col overflow-hidden rounded-[28px] border p-5 md:p-7"
               style={{
-                borderColor: "rgba(38,33,28,0.10)",
-                background:
-                  "linear-gradient(160deg, rgba(26,22,18,0.97) 0%, rgba(20,16,12,1) 100%)",
-                boxShadow:
-                  "0 32px 70px -28px rgba(232,84,42,.35), 0 4px 12px -4px rgba(0,0,0,.4)",
-                color: TOKEN.ink,
+                background: TOKEN.cardBgFree,
+                borderColor: TOKEN.line2,
+                boxShadow: "0 22px 50px -28px rgba(26,22,18,0.18)",
               }}
             >
-              {/* Warm corner accent */}
-              <div
-                className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full opacity-70"
-                style={{
-                  background:
-                    "radial-gradient(closest-side, rgba(232,84,42,0.32), transparent 70%)",
-                }}
-              />
-              {/* Grain on dark */}
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  backgroundImage:
-                    "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.14 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
-                  mixBlendMode: "overlay",
-                  opacity: 0.45,
-                  borderRadius: 24,
-                }}
-              />
-
-              <div className="relative">
-                <div className="mb-6 flex items-start justify-between gap-3">
+              <header className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <div
-                    className="grid h-11 w-11 place-items-center rounded-2xl"
-                    style={{
-                      background:
-                        "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                      boxShadow:
-                        "inset 0 1px 0 rgba(255,255,255,.45), 0 6px 16px -4px rgba(232,84,42,.55)",
-                    }}
+                    className="grid h-11 w-11 place-items-center rounded-xl"
+                    style={{ background: "rgba(26,22,18,0.08)", color: TOKEN.ink }}
                   >
-                    <Gift className="h-5 w-5 text-white" />
+                    <Sparkles className="h-5 w-5" />
                   </div>
-                  <span
-                    className="rounded-full border px-3 py-1"
-                    style={{
-                      ...FONT_MONO,
-                      fontSize: 9.5,
-                      letterSpacing: "0.22em",
-                      textTransform: "uppercase",
-                      color: TOKEN.ink2,
-                      borderColor: TOKEN.line2,
-                      background: "rgba(232,84,42,0.10)",
-                    }}
-                  >
-                    Elección popular
-                  </span>
-                </div>
-
-                <div
-                  className="mb-2"
-                  style={{
-                    ...FONT_MONO,
-                    fontSize: 11,
-                    letterSpacing: "0.2em",
-                    textTransform: "uppercase",
-                    color: TOKEN.accent2,
-                  }}
-                >
-                  Prueba sin compromiso
-                </div>
-                <h2
-                  className="mb-2 tracking-[-0.02em]"
-                  style={{
-                    fontSize: 36,
-                    fontWeight: 600,
-                    lineHeight: 1.02,
-                    color: TOKEN.ink,
-                  }}
-                >
-                  <span style={{ ...FONT_SERIF, color: TOKEN.accent2 }}>{trialDays}</span> días gratis
-                </h2>
-                <p
-                  className="mb-7 text-[14px] leading-[1.5]"
-                  style={{ color: TOKEN.ink2 }}
-                >
-                  Acceso completo a Pasify. Sin tarjeta de crédito.
-                </p>
-
-                <ul className="mb-8 space-y-3">
-                  {trialPerks.map(({ label }) => (
-                    <li
-                      key={label}
-                      className="flex items-start gap-3 text-[13.5px]"
-                      style={{ color: TOKEN.ink }}
+                  <div>
+                    <div
+                      className="text-[10px] uppercase"
+                      style={{ ...FONT_MONO, letterSpacing: "0.22em", color: TOKEN.ink3 }}
                     >
-                      <span
-                        className="mt-[3px] grid h-4 w-4 flex-shrink-0 place-items-center rounded-full"
-                        style={{
-                          background: TOKEN.accent,
-                          boxShadow: "0 4px 10px -2px rgba(232,84,42,.5)",
-                        }}
-                      >
-                        <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />
-                      </span>
-                      <span>{label}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <motion.button
-                  whileTap={{ scale: 0.985, y: 1 }}
-                  onClick={handleStartTrial}
-                  disabled={startingTrial}
-                  className="pasify-cta group/btn relative flex h-[54px] w-full items-center justify-center gap-2 rounded-full text-[14.5px] font-medium text-white transition-all disabled:opacity-60"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                    letterSpacing: "-0.005em",
-                    textShadow: "0 1px 1px rgba(80,20,5,.22)",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(80,20,5,.22), 0 6px 16px -4px rgba(232,84,42,.5), 0 14px 32px -10px rgba(184,56,26,.5)",
-                  }}
-                >
-                  {startingTrial ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Activando tu prueba…</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Empezar mi prueba</span>
-                      <ArrowRight className="pasify-arrow h-4 w-4" />
-                    </>
-                  )}
-                </motion.button>
-
-                <p
-                  className="mt-4 text-center"
-                  style={{
-                    ...FONT_MONO,
-                    fontSize: 10,
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    color: TOKEN.ink3,
-                  }}
-                >
-                  Activa la suscripción antes del fin para mantener el acceso
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Card PAGAR — light */}
-          {isNative ? (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.15 }}
-              className="relative overflow-hidden rounded-3xl border p-8 transition-all hover:-translate-y-[2px]"
-              style={{
-                borderColor: "rgba(38,33,28,0.10)",
-                background:
-                  "linear-gradient(160deg, rgba(255,255,255,0.92) 0%, rgba(247,243,236,0.92) 100%)",
-                backdropFilter: "blur(8px)",
-                boxShadow:
-                  "0 22px 50px -18px rgba(232,84,42,.18), 0 4px 12px -4px rgba(184,56,26,.06)",
-              }}
-            >
-              <div
-                className="mb-6 grid h-11 w-11 place-items-center rounded-2xl"
-                style={{
-                  background: "rgba(232,84,42,0.10)",
-                  color: TOKEN.accentDeep,
-                }}
-              >
-                <ExternalLink className="h-5 w-5" />
-              </div>
-              <div
-                className="mb-2"
-                style={{
-                  ...FONT_MONO,
-                  fontSize: 11,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: TOKEN.accentDeep,
-                }}
-              >
-                Gestión completa
-              </div>
-              <h2
-                className="mb-2 tracking-[-0.02em]"
-                style={{
-                  fontSize: 26,
-                  fontWeight: 600,
-                  lineHeight: 1.05,
-                  color: "#1A1612",
-                }}
-              >
-                Activar en el navegador
-              </h2>
-              <p className="mb-6 text-[14px] leading-[1.5]" style={{ color: "#5C544A" }}>
-                Gestiona tu cuenta Pasify completa desde el portal web en tu navegador.
-              </p>
-              <motion.button
-                whileTap={{ scale: 0.985 }}
-                onClick={() => openWebWithAuth("/partner/manage")}
-                className="pasify-cta group/btn flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[14.5px] font-medium text-white transition-all"
-                style={{
-                  background:
-                    "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,.45), 0 12px 28px -8px rgba(232,84,42,.5)",
-                }}
-              >
-                <ExternalLink className="mr-1 h-4 w-4" />
-                Abrir pasifyy.vercel.app
-                <ArrowRight className="pasify-arrow h-4 w-4" />
-              </motion.button>
-              <p
-                className="mt-4 text-center leading-relaxed"
-                style={{
-                  ...FONT_MONO,
-                  fontSize: 10,
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  color: TOKEN.ink3,
-                }}
-              >
-                Te llevamos al portal con sesión iniciada
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.15 }}
-              className="relative overflow-hidden rounded-3xl border p-8 transition-all hover:-translate-y-[2px]"
-              style={{
-                borderColor: "rgba(38,33,28,0.10)",
-                background:
-                  "linear-gradient(160deg, rgba(255,255,255,0.94) 0%, rgba(247,243,236,0.92) 100%)",
-                backdropFilter: "blur(8px)",
-                boxShadow:
-                  "0 22px 50px -18px rgba(232,84,42,.18), 0 4px 12px -4px rgba(184,56,26,.06)",
-              }}
-            >
-              {/* Top accent line */}
-              <div
-                className="absolute inset-x-0 top-0 h-[3px]"
-                style={{
-                  background:
-                    "linear-gradient(to right, transparent, #E8542A, #B8381A, transparent)",
-                }}
-              />
-
-              <div className="mb-6 flex items-start justify-between gap-3">
-                <div
-                  className="grid h-11 w-11 place-items-center rounded-2xl"
-                  style={{
-                    background: "rgba(232,84,42,0.10)",
-                    color: TOKEN.accentDeep,
-                  }}
-                >
-                  <Lock className="h-5 w-5" />
+                      Plan
+                    </div>
+                    <h2 className="text-xl font-bold tracking-tight md:text-2xl">
+                      Cuenta gratuita
+                    </h2>
+                  </div>
                 </div>
                 <span
-                  className="rounded-full border px-3 py-1"
+                  className="rounded-full border px-2 py-0.5 text-[10px] uppercase"
                   style={{
                     ...FONT_MONO,
-                    fontSize: 9.5,
-                    letterSpacing: "0.22em",
-                    textTransform: "uppercase",
-                    color: "#5C544A",
-                    borderColor: "rgba(38,33,28,0.16)",
-                    background: "rgba(255,255,255,0.6)",
+                    letterSpacing: "0.18em",
+                    borderColor: "rgba(77,184,122,0.45)",
+                    background: "rgba(77,184,122,0.10)",
+                    color: TOKEN.success,
                   }}
                 >
-                  Plan mensual
+                  Sin tarjeta
+                </span>
+              </header>
+
+              {/* Price */}
+              <div className="mt-4 flex items-end gap-2">
+                <span
+                  className="text-[clamp(40px,6vw,64px)] font-bold leading-none tracking-tight"
+                  style={{ color: TOKEN.ink }}
+                >
+                  0€
+                </span>
+                <span
+                  className="pb-2 text-[12px]"
+                  style={{ ...FONT_MONO, color: TOKEN.ink3 }}
+                >
+                  /siempre
                 </span>
               </div>
-
-              <div
-                className="mb-2"
-                style={{
-                  ...FONT_MONO,
-                  fontSize: 11,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: TOKEN.accentDeep,
-                }}
-              >
-                Suscripción Partner
-              </div>
-              <h2
-                className="mb-2 tracking-[-0.02em]"
-                style={{
-                  fontSize: 32,
-                  fontWeight: 600,
-                  lineHeight: 1.02,
-                  color: "#1A1612",
-                }}
-              >
-                Activa ahora
-              </h2>
-              <p className="mb-5 text-[14px] leading-[1.5]" style={{ color: "#5C544A" }}>
-                Todas las funciones de Pasify, desde el día 1.
+              <p className="mt-1 text-[12.5px]" style={{ color: TOKEN.ink2 }}>
+                Acceso inmediato al dashboard. Sin compromiso, sin caducidad.
               </p>
 
-              <div className="mb-6 flex items-end gap-1.5">
-                <span
-                  style={{
-                    ...FONT_MONO,
-                    fontSize: 18,
-                    color: "#8A8275",
-                    marginBottom: 8,
-                  }}
-                >
-                  €
-                </span>
-                <span
-                  style={{
-                    fontSize: 56,
-                    fontWeight: 600,
-                    lineHeight: 1,
-                    letterSpacing: "-0.04em",
-                    color: "#1A1612",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  29,99
-                </span>
-                <span
-                  className="mb-2"
-                  style={{
-                    ...FONT_MONO,
-                    fontSize: 12,
-                    letterSpacing: "0.04em",
-                    color: "#5C544A",
-                  }}
-                >
-                  <span style={FONT_SERIF}>/</span> mes + IVA
-                </span>
-              </div>
-
-              <ul className="mb-7 space-y-3">
-                {paidPerks.map(({ label }) => (
+              {/* Features */}
+              <ul className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                {features.map((f) => (
                   <li
-                    key={label}
-                    className="flex items-start gap-3 text-[13.5px]"
-                    style={{ color: "#1A1612" }}
+                    key={`free-${f}`}
+                    className="flex items-start gap-2 text-[13px] leading-snug"
+                    style={{ color: TOKEN.ink2 }}
                   >
-                    <span
-                      className="mt-[3px] grid h-4 w-4 flex-shrink-0 place-items-center rounded-full"
-                      style={{
-                        background: "rgba(232,84,42,0.14)",
-                        color: TOKEN.accentDeep,
-                      }}
-                    >
-                      <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
-                    </span>
-                    <span>{label}</span>
+                    <Check
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                      style={{ color: TOKEN.success }}
+                    />
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>
 
-              <motion.button
-                whileTap={{ scale: 0.985, y: 1 }}
-                onClick={handlePayNow}
-                disabled={startingCheckout}
-                className="pasify-cta group/btn relative flex h-[54px] w-full items-center justify-center gap-2 rounded-full text-[14.5px] font-medium text-white transition-all disabled:opacity-60"
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={handleClaimFree}
+                disabled={claimingFree || startingCheckout}
+                className="pasify-cta mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  background: TOKEN.ink,
+                  color: "#F7F3EC",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.10), 0 12px 30px -12px rgba(26,22,18,0.55)",
+                }}
+              >
+                {claimingFree ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Activando…
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="h-4 w-4" />
+                    Empezar gratis
+                    <ArrowRight className="pasify-arrow h-4 w-4" />
+                  </>
+                )}
+              </button>
+              <p
+                className="mt-2 text-center text-[10.5px] uppercase"
+                style={{ ...FONT_MONO, letterSpacing: "0.18em", color: TOKEN.ink3 }}
+              >
+                Entra al dashboard al instante
+              </p>
+            </article>
+
+            {/* ============ PREMIUM ============ */}
+            <article
+              className="relative flex min-h-0 flex-col overflow-hidden rounded-[28px] p-5 md:p-7"
+              style={{
+                background:
+                  "linear-gradient(140deg, #2A150A 0%, #1A0F08 55%, #0E0805 100%)",
+                color: "#F7F3EC",
+                boxShadow:
+                  "0 22px 50px -22px rgba(232,84,42,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              {/* Decorative glow */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full"
+                style={{ background: "rgba(232,84,42,0.22)", filter: "blur(80px)" }}
+              />
+
+              <header className="relative flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="grid h-11 w-11 place-items-center rounded-xl"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                      color: "#fff",
+                      boxShadow: "0 6px 16px -6px rgba(232,84,42,0.55)",
+                    }}
+                  >
+                    <Star className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div
+                      className="text-[10px] uppercase"
+                      style={{
+                        ...FONT_MONO,
+                        letterSpacing: "0.22em",
+                        color: "rgba(247,243,236,0.6)",
+                      }}
+                    >
+                      Plan
+                    </div>
+                    <h2 className="text-xl font-bold tracking-tight md:text-2xl">
+                      Partner Premium
+                    </h2>
+                  </div>
+                </div>
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[10px] uppercase"
+                  style={{
+                    ...FONT_MONO,
+                    letterSpacing: "0.18em",
+                    borderColor: "rgba(232,84,42,0.45)",
+                    background: "rgba(232,84,42,0.18)",
+                    color: "#FFC9B0",
+                  }}
+                >
+                  Elección popular
+                </span>
+              </header>
+
+              {/* Price */}
+              <div className="relative mt-4 flex items-end gap-2">
+                <span
+                  className="text-[clamp(40px,6vw,64px)] font-bold leading-none tracking-tight"
+                  style={{ color: "#fff" }}
+                >
+                  29,99€
+                </span>
+                <span
+                  className="pb-2 text-[12px]"
+                  style={{ ...FONT_MONO, color: "rgba(247,243,236,0.55)" }}
+                >
+                  /mes + IVA
+                </span>
+              </div>
+              <p
+                className="relative mt-1 text-[12.5px]"
+                style={{ color: "rgba(247,243,236,0.7)" }}
+              >
+                Factura fiscal, soporte prioritario y todas las funcionalidades
+                Premium futuras incluidas.
+              </p>
+
+              {/* Features */}
+              <ul className="relative mt-4 grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                {features.map((f) => (
+                  <li
+                    key={`prem-${f}`}
+                    className="flex items-start gap-2 text-[13px] leading-snug"
+                    style={{ color: "rgba(247,243,236,0.85)" }}
+                  >
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FFC9B0]" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+                <li
+                  className="flex items-start gap-2 text-[13px] leading-snug sm:col-span-2"
+                  style={{ color: "rgba(247,243,236,0.85)" }}
+                >
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FFC9B0]" />
+                  <span>Soporte prioritario · facturación fiscal · cancela cuando quieras</span>
+                </li>
+              </ul>
+
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={handleGoPremium}
+                disabled={claimingFree || startingCheckout || isNative}
+                className="pasify-cta relative mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
                 style={{
                   background:
                     "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                  letterSpacing: "-0.005em",
-                  textShadow: "0 1px 1px rgba(80,20,5,.22)",
+                  color: "#fff",
                   boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(80,20,5,.22), 0 6px 16px -4px rgba(232,84,42,.5), 0 14px 32px -10px rgba(184,56,26,.5)",
+                    "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
                 }}
               >
                 {startingCheckout ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Redirigiendo a Stripe…</span>
+                    Abriendo Stripe…
                   </>
                 ) : (
                   <>
-                    <Lock className="h-4 w-4" />
-                    <span>Pagar ahora</span>
+                    <CreditCard className="h-4 w-4" />
+                    Activar Premium
                     <ArrowRight className="pasify-arrow h-4 w-4" />
                   </>
                 )}
-              </motion.button>
-
-              {/* Trust row inside card */}
-              <div
-                className="mt-6 grid grid-cols-3 gap-3 border-t pt-5"
-                style={{ borderColor: "rgba(38,33,28,0.12)" }}
-              >
-                <TrustChip Icon={ShieldCheck} label="Pago seguro" />
-                <TrustChip Icon={Receipt} label="Factura PDF" />
-                <TrustChip Icon={RefreshCw} label="Cancela" />
-              </div>
-
+              </button>
               <p
-                className="mt-5 text-center leading-[1.55]"
+                className="relative mt-2 text-center text-[10.5px] uppercase"
                 style={{
                   ...FONT_MONO,
-                  fontSize: 10,
-                  letterSpacing: "0.14em",
-                  color: "#8A8275",
+                  letterSpacing: "0.18em",
+                  color: "rgba(247,243,236,0.55)",
                 }}
               >
-                Pago procesado por Stripe · IVA aplicado según país
+                Pago seguro vía Stripe · cancela cuando quieras
               </p>
-            </motion.div>
-          )}
-
-          {!trialEnabled && (
-            <p
-              className="text-center"
-              style={{
-                ...FONT_MONO,
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "#8A8275",
-              }}
-            >
-              La prueba gratuita está desactivada por el administrador
-            </p>
-          )}
+            </article>
+          </div>
         </div>
-      </div>
+      </main>
 
-      {/* Footer strip */}
-      <div
-        className="relative z-10 mt-2 flex items-center justify-between border-t px-6 py-4 md:px-12"
-        style={{
-          borderColor: "rgba(38,33,28,0.12)",
-          ...FONT_MONO,
-          fontSize: 10,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: "#5C544A",
-        }}
-      >
-        <span>Pasify · v0.1 · Partner onboarding</span>
-        <span className="inline-flex items-center gap-1.5">
-          <Sparkles size={11} style={{ color: TOKEN.accentDeep }} />
-          Hecho con cuidado en España
+      {/* Footer */}
+      <footer className="relative z-10 flex flex-wrap items-center justify-between gap-3 px-6 pb-5 md:px-12 md:pb-6">
+        <div
+          className="inline-flex items-center gap-3 text-[10.5px] uppercase"
+          style={{ ...FONT_MONO, letterSpacing: "0.18em", color: TOKEN.ink3 }}
+        >
+          <Zap className="h-3 w-3" style={{ color: TOKEN.accent }} />
+          Acceso inmediato
+          <span className="opacity-40">·</span>
+          GDPR / Stripe verified
+          <span className="opacity-40">·</span>
+          Soporte ES &lt; 5 min
+        </div>
+        <span
+          className="text-[10.5px] uppercase"
+          style={{ ...FONT_MONO, letterSpacing: "0.18em", color: TOKEN.ink3 }}
+        >
+          Puedes cambiar de plan en cualquier momento desde Configuración
         </span>
-      </div>
+      </footer>
     </div>
   );
 };
-
-/* ---------- Subcomponents ---------- */
-
-const Stat = ({ label, value }: { label: string; value: string }) => (
-  <div>
-    <div
-      style={{
-        ...FONT_MONO,
-        fontSize: 22,
-        fontWeight: 600,
-        letterSpacing: "-0.02em",
-        color: "#1A1612",
-      }}
-    >
-      {value}
-    </div>
-    <div
-      className="mt-1"
-      style={{
-        ...FONT_MONO,
-        fontSize: 9.5,
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        color: "#8A8275",
-      }}
-    >
-      {label}
-    </div>
-  </div>
-);
-
-const TrustChip = ({ Icon, label }: { Icon: typeof ShieldCheck; label: string }) => (
-  <div className="flex flex-col items-center gap-1.5">
-    <Icon className="h-4 w-4" style={{ color: TOKEN.accentDeep }} />
-    <span
-      style={{
-        ...FONT_MONO,
-        fontSize: 9.5,
-        letterSpacing: "0.16em",
-        textTransform: "uppercase",
-        color: "#5C544A",
-      }}
-    >
-      {label}
-    </span>
-  </div>
-);
 
 export default PartnerChoosePlan;
