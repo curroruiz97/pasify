@@ -23,7 +23,7 @@ interface CitySelectorProps {
 /**
  * Selector bottom-sheet de ciudad/país.
  * Reusado por Calendar y otras vistas que cambien la "city focus" del usuario.
- * Antes vivía en `components/social/` (legacy Students Life); ahora compartido.
+ * Antes vivía en `components/social/` (legacy Pasify); ahora compartido.
  */
 const CitySelector = ({
   open,

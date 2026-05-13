@@ -27,6 +27,8 @@ jobs:
         continue-on-error: true # No bloquea hasta limpiar warnings legacy
       - name: TypeScript check
         run: npm run typecheck
+      - name: i18n encoding check (no mojibake)
+        run: npm run i18n:check
 
   security:
     name: Security scan

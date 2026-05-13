@@ -67,7 +67,7 @@ serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 40px auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.1);">
               <tr>
                 <td style="background: white; padding: 40px 30px; text-align: center;">
-                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px;">
+                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px;">
                   <h1 style="color: #2563EB; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">¡Inscripción confirmada!</h1>
                   <p style="color: #64748B; margin: 8px 0 0 0; font-size: 16px;">Tu plaza está reservada</p>
                 </td>
@@ -114,8 +114,8 @@ serve(async (req) => {
                   </div>
                   ` : `
                   <div style="margin-top: 32px; text-align: center;">
-                    <a href="https://studentslife.es" style="display: inline-block; background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);">
-                      Ver mi ticket en StudentsLife
+                    <a href="https://pasify.es" style="display: inline-block; background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);">
+                      Ver mi ticket en Pasify
                     </a>
                   </div>
                   `}
@@ -125,10 +125,10 @@ serve(async (req) => {
               <tr>
                 <td style="background: #F8FAFC; padding: 24px 30px; text-align: center; border-top: 1px solid #E2E8F0;">
                   <p style="margin: 0; color: #64748B; font-size: 13px;">
-                    Este es un mensaje automático de <strong style="color: #3B82F6;">StudentsLife</strong>
+                    Este es un mensaje automático de <strong style="color: #3B82F6;">Pasify</strong>
                   </p>
                   <p style="margin: 8px 0 0 0; color: #94A3B8; font-size: 12px;">
-                    © ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.
+                    © ${new Date().getFullYear()} Pasify. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>

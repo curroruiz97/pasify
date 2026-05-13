@@ -15,7 +15,7 @@ const AdminSetup = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Setup Admin | Students Life";
+    document.title = "Setup Admin | Pasify";
   }, []);
 
   const handleSetAdmin = async (e: React.FormEvent) => {

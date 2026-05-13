@@ -249,7 +249,7 @@ const ClientSettingsSheet = ({ open, onOpenChange }: ClientSettingsSheetProps) =
             </div>
 
             <p className="pb-2 pt-1 text-center text-[11px] text-slate-400">
-              StudentsLife · v1.0
+              Pasify · v1.0
             </p>
           </div>
         </DrawerContent>

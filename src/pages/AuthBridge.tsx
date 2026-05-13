@@ -9,7 +9,7 @@ import LoaderOne from "@/components/ui/loader-one";
  * browser, poi reindirizza al path richiesto (es. /partner/manage).
  *
  * URL atteso:
- *   studentslife.app/#/auth/bridge?access=<at>&refresh=<rt>&next=/partner/manage
+ *   pasify.app/#/auth/bridge?access=<at>&refresh=<rt>&next=/partner/manage
  */
 const AuthBridge = () => {
   const navigate = useNavigate();

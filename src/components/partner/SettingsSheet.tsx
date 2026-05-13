@@ -269,7 +269,7 @@ const SettingsSheet = ({ open, onOpenChange }: SettingsSheetProps) => {
             </div>
 
             <p className="px-2 text-center text-[11px] text-slate-400">
-              StudentsLife · Partner v1.0
+              Pasify · Partner v1.0
             </p>
           </div>
         </DrawerContent>

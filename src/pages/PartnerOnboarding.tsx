@@ -100,7 +100,7 @@ const PartnerOnboarding = () => {
     // Pasify storage buckets:
     //  - avatars       → fotos de perfil (logo del local en partner)
     //  - event-images  → portadas de eventos, banners, cover del negocio
-    // El bucket `posts` (legacy Students Life) fue eliminado.
+    // El bucket `posts` (legacy Pasify) fue eliminado.
     const bucket = kind === "avatar" ? "avatars" : "event-images";
     const fileName = `${user.id}/${kind}-${Date.now()}.jpg`;
     const { error: upErr } = await supabase.storage.from(bucket).upload(fileName, compressed, {
@@ -158,7 +158,7 @@ const PartnerOnboarding = () => {
       }
 
       haptic.success();
-      toast({ title: "¡Listo!", description: "Bienvenido a StudentsLife." });
+      toast({ title: "¡Listo!", description: "Bienvenido a Pasify." });
       navigate("/partner-dashboard", { replace: true });
     } catch (err: unknown) {
       // Supabase returns plain objects (PostgrestError, StorageError) that

@@ -27,7 +27,7 @@ serve(async (req) => {
       to: [user_email],
       subject: user_type === 'partner'
         ? '🎉 ¡Tu cuenta de Partner ha sido aprobada!'
-        : '🎉 ¡Tu cuenta de StudentsLife ha sido aprobada!',
+        : '🎉 ¡Tu cuenta de Pasify ha sido aprobada!',
       html: `
         <!DOCTYPE html>
         <html>
@@ -39,7 +39,7 @@ serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 40px auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
               <tr>
                 <td style="background: linear-gradient(135deg, #4F9CF9 0%, #3B82F6 100%); padding: 40px 30px; text-align: center;">
-                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
                   <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">¡Felicidades, ${user_name}!</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 16px;">Tu cuenta ha sido aprobada</p>
                 </td>
@@ -48,7 +48,7 @@ serve(async (req) => {
               <tr>
                 <td style="padding: 40px 30px;">
                   <div style="background: linear-gradient(135deg, #E0F2FE 0%, #DBEAFE 100%); border-radius: 16px; padding: 24px; margin-bottom: 24px; border-left: 4px solid #3B82F6;">
-                    <h2 style="margin: 0 0 8px 0; color: #1E40AF; font-size: 18px; font-weight: 600;">🎉 ¡Bienvenido a StudentsLife!</h2>
+                    <h2 style="margin: 0 0 8px 0; color: #1E40AF; font-size: 18px; font-weight: 600;">🎉 ¡Bienvenido a Pasify!</h2>
                     <p style="margin: 0; color: #1E3A8A; font-size: 14px; opacity: 0.8;">Ya puedes acceder a todas las funcionalidades de la plataforma</p>
                   </div>
 
@@ -81,10 +81,10 @@ serve(async (req) => {
               <tr>
                 <td style="background: #F8FAFC; padding: 24px 30px; text-align: center; border-top: 1px solid #E2E8F0;">
                   <p style="margin: 0; color: #64748B; font-size: 13px;">
-                    Este es un mensaje automático de <strong style="color: #3B82F6;">StudentsLife</strong>
+                    Este es un mensaje automático de <strong style="color: #3B82F6;">Pasify</strong>
                   </p>
                   <p style="margin: 8px 0 0 0; color: #94A3B8; font-size: 12px;">
-                    © ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.
+                    © ${new Date().getFullYear()} Pasify. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>

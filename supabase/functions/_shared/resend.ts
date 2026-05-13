@@ -1,5 +1,5 @@
 // Pasify · Email transaccional vía Resend
-// Reemplaza completamente _shared/gmail.ts (Students Life legacy).
+// Reemplaza completamente _shared/gmail.ts (Pasify legacy).
 // Fallback opcional a Gmail SMTP si RESEND_API_KEY no está configurado.
 
 import { logger } from "./logger.ts";

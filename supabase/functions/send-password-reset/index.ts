@@ -34,7 +34,7 @@ serve(async (req) => {
       }
     );
 
-    const cleanRedirectUrl = 'https://www.studentslife.es/password-recovery';
+    const cleanRedirectUrl = 'https://www.pasify.es/password-recovery';
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
@@ -59,7 +59,7 @@ serve(async (req) => {
 
     await sendEmail({
       to: [email],
-      subject: '🔐 Restablece tu contraseña - StudentsLife',
+      subject: '🔐 Restablece tu contraseña - Pasify',
       html: `
         <!DOCTYPE html>
         <html>
@@ -71,7 +71,7 @@ serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 40px auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
               <tr>
                 <td style="background: linear-gradient(135deg, #4F9CF9 0%, #3B82F6 100%); padding: 40px 30px; text-align: center;">
-                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
                   <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Restablecer Contraseña</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 16px;">Has solicitado cambiar tu contraseña</p>
                 </td>
@@ -86,7 +86,7 @@ serve(async (req) => {
 
                   <div style="margin-bottom: 24px;">
                     <p style="color: #334155; font-size: 14px; line-height: 1.8; margin: 0;">
-                      Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de StudentsLife. Si no has sido tú quien ha solicitado este cambio, puedes ignorar este email de forma segura.
+                      Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de Pasify. Si no has sido tú quien ha solicitado este cambio, puedes ignorar este email de forma segura.
                     </p>
                   </div>
 
@@ -107,10 +107,10 @@ serve(async (req) => {
               <tr>
                 <td style="background: #F8FAFC; padding: 24px 30px; text-align: center; border-top: 1px solid #E2E8F0;">
                   <p style="margin: 0; color: #64748B; font-size: 13px;">
-                    Este es un mensaje automático de <strong style="color: #3B82F6;">StudentsLife</strong>
+                    Este es un mensaje automático de <strong style="color: #3B82F6;">Pasify</strong>
                   </p>
                   <p style="margin: 8px 0 0 0; color: #94A3B8; font-size: 12px;">
-                    © ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.
+                    © ${new Date().getFullYear()} Pasify. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>

@@ -23,7 +23,7 @@ const PartnerCancel = () => {
         <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
           <img
             src={logo}
-            alt="StudentsLife"
+            alt="Pasify"
             className="h-9 w-9 rounded-xl"
             style={{ filter: "drop-shadow(0 4px 10px rgba(14,165,233,0.25))" }}
           />

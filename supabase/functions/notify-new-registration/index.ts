@@ -17,7 +17,7 @@ interface RegistrationNotification {
   businessName?: string;
 }
 
-const ADMIN_EMAIL = "admin@studentslife.es";
+const ADMIN_EMAIL = "admin@pasify.es";
 
 // Helper function to convert base64url to base64
 function base64urlToBase64(base64url: string): string {
@@ -273,7 +273,7 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
           <div style="background: white; border-radius: 0 0 16px 16px; padding: 32px;">
             <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-              Un nuevo ${isPartner ? 'partner' : 'cliente'} se ha registrado en StudentsLife:
+              Un nuevo ${isPartner ? 'partner' : 'cliente'} se ha registrado en Pasify:
             </p>
 
             <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
@@ -298,13 +298,13 @@ const handler = async (req: Request): Promise<Response> => {
             </p>
 
             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-              <a href="https://www.studentslife.es/#/admin" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+              <a href="https://www.pasify.es/#/admin" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
                 Ir al Panel Admin
               </a>
             </div>
           </div>
           <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px;">
-            StudentsLife - La comunidad de los estudiantes
+            Pasify - La comunidad de los estudiantes
           </p>
         </div>
       </body>

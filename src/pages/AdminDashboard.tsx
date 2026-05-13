@@ -537,9 +537,80 @@ const AdminDashboard = () => {
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Chatea con el equipo Pasify. Te respondemos en menos de 5 minutos en horario laboral.
+                Inbox de conversaciones con clientes. Click en una para responder.
               </p>
-              <SupportChat mode="client" />
+
+              <div className="grid gap-4 md:grid-cols-[320px_1fr]">
+                {/* Conversation list */}
+                <div className="rounded-2xl border border-border bg-card max-h-[70vh] overflow-y-auto">
+                  {conversations.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-10 text-center text-sm text-muted-foreground">
+                      <MessageCircle className="mb-2 h-8 w-8 opacity-50" />
+                      Aún no hay conversaciones.
+                    </div>
+                  ) : (
+                    conversations.map((conv) => {
+                      const client = clientes.find((c) => c.id === conv.client_id) || null;
+                      const fullName =
+                        [client?.first_name, client?.last_name].filter(Boolean).join(" ") ||
+                        client?.email ||
+                        "Cliente sin nombre";
+                      const isActive = selectedClient?.id === conv.client_id;
+                      const unread = conv.unread_for_admin ?? 0;
+                      return (
+                        <button
+                          key={conv.id}
+                          onClick={() => setSelectedClient(client)}
+                          className={`flex w-full flex-col items-start gap-1 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 ${isActive ? "bg-muted/60" : ""}`}
+                        >
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate text-sm font-semibold">{fullName}</span>
+                            {unread > 0 && (
+                              <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                {unread}
+                              </span>
+                            )}
+                          </div>
+                          <p className="line-clamp-2 text-xs text-muted-foreground">
+                            {conv.last_message_preview || "(Sin mensajes)"}
+                          </p>
+                          {conv.last_message_at && (
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                              {new Date(conv.last_message_at).toLocaleString("es-ES", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Selected conversation */}
+                <div className="rounded-2xl border border-border bg-card min-h-[400px]">
+                  {selectedClient ? (
+                    <SupportChat
+                      mode="admin"
+                      selectedClientId={selectedClient.id}
+                      selectedClient={{
+                        id: selectedClient.id,
+                        first_name: selectedClient.first_name ?? null,
+                        last_name: selectedClient.last_name ?? null,
+                        email: selectedClient.email ?? null,
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center text-sm text-muted-foreground">
+                      <MessageCircle className="mb-3 h-10 w-10 opacity-40" />
+                      Selecciona una conversación de la izquierda para responder.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </main>

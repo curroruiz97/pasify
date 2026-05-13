@@ -44,7 +44,7 @@ const STEPS: OnboardingStep[] = [
   {
     id: "welcome",
     titleKey: "partnerOnboarding.welcome.title",
-    titleFallback: "¡Bienvenido a StudentsLife Partner! 🎉",
+    titleFallback: "¡Bienvenido a Pasify Partner! 🎉",
     descriptionKey: "partnerOnboarding.welcome.description",
     descriptionFallback:
       "Te damos un tour rápido para que descubras todas las herramientas para tu negocio.",

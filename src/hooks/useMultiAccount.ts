@@ -13,8 +13,8 @@ export interface SavedAccount {
   lastUsed: number;
 }
 
-const ACCOUNTS_KEY = "studentslife_saved_accounts";
-const ACTIVE_ACCOUNT_KEY = "studentslife_active_account";
+const ACCOUNTS_KEY = "pasify_saved_accounts";
+const ACTIVE_ACCOUNT_KEY = "pasify_active_account";
 
 export const useMultiAccount = () => {
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);

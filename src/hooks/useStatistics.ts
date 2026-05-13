@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Pasify · estadísticas globales para el Admin Dashboard.
  *
- * Antes (Students Life) agregaba sobre `qr_codes`, `access_logs`, `discount_scans`.
+ * Antes (Pasify) agregaba sobre `qr_codes`, `access_logs`, `discount_scans`.
  * Esas tablas ya no existen. Ahora medimos sobre el modelo Pasify:
  *
  *  - `totalPartners`        → profiles con business_name (approved)
