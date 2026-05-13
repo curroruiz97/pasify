@@ -140,6 +140,7 @@ export const PartnerAttendees = ({ events }: Props) => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [tierFilter, setTierFilter] = useState<string>("all");
 
   // Re-seleccionar si llegan eventos nuevos y el seleccionado deja de existir
   useEffect(() => {
@@ -211,10 +212,34 @@ export const PartnerAttendees = ({ events }: Props) => {
     };
   }, [selectedEventId, loadData]);
 
+  // Lista de tier names disponibles para el filtro — se calcula a partir de
+  // los asistentes cargados. "Sin tier" agrupa los tickets sin tier_id (caso
+  // legacy / festival pass sin asignar).
+  const availableTiers = useMemo(() => {
+    const set = new Map<string, string>();
+    for (const a of attendees) {
+      const key = a.tier_name ?? "__none__";
+      const label = a.tier_name ?? "Sin tier";
+      if (!set.has(key)) set.set(key, label);
+    }
+    return Array.from(set.entries()).map(([key, label]) => ({ key, label }));
+  }, [attendees]);
+
+  // Reset tier filter when the selected event changes (its tier list cambia)
+  useEffect(() => {
+    setTierFilter("all");
+  }, [selectedEventId]);
+
   const filtered = useMemo(() => {
     let list = attendees;
     if (statusFilter !== "all") {
       list = list.filter((a) => a.status === statusFilter);
+    }
+    if (tierFilter !== "all") {
+      list = list.filter((a) => {
+        const key = a.tier_name ?? "__none__";
+        return key === tierFilter;
+      });
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -229,7 +254,7 @@ export const PartnerAttendees = ({ events }: Props) => {
       });
     }
     return list;
-  }, [attendees, statusFilter, search]);
+  }, [attendees, statusFilter, tierFilter, search]);
 
   const exportCSV = () => {
     if (filtered.length === 0) {
@@ -416,13 +441,28 @@ export const PartnerAttendees = ({ events }: Props) => {
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="all">Todos los estados</SelectItem>
               <SelectItem value="paid">Pendientes de entrar</SelectItem>
               <SelectItem value="used">Han entrado</SelectItem>
               <SelectItem value="refunded">Reembolsados</SelectItem>
               <SelectItem value="cancelled">Cancelados</SelectItem>
             </SelectContent>
           </Select>
+          {availableTiers.length > 0 && (
+            <Select value={tierFilter} onValueChange={setTierFilter}>
+              <SelectTrigger className="w-full min-w-[180px] md:w-auto">
+                <SelectValue placeholder="Tipo de entrada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {availableTiers.map((t) => (
+                  <SelectItem key={t.key} value={t.key}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 

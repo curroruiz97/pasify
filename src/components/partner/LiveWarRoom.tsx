@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { es } from "date-fns/locale";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+import { supabase } from "@/integrations/supabase/client";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -39,10 +40,15 @@ interface Props {
 
 /**
  * War room del partner — pantalla operativa del día del evento.
- * Multi-zona aforo, velocidad de entrada, revenue en vivo y alertas.
  *
- * Funciona con datos reales cuando los hay, y con simulación local
- * cuando no (siempre algo visualmente útil para demo / dirección).
+ * Datos REALES por tipo de entrada vía RPC `partner_event_tier_live_stats`:
+ *   - Vendidas, dentro, pendientes, % check-in, ingresos, capacidad por tier
+ *   - Sumatorias agregadas en KPI cards arriba
+ *   - Alertas operativas reales (tier saturado, muchos pendientes, etc.)
+ *
+ * Reemplaza la versión anterior con "zonas simuladas" — todo lo que se ve
+ * en pantalla viene del DB. Refresca automáticamente via Supabase Realtime
+ * cuando un ticket cambia de estado (ej: tras un escaneo en puerta).
  */
 export const LiveWarRoom = ({ event }: Props) => {
   if (!event) {
@@ -50,15 +56,43 @@ export const LiveWarRoom = ({ event }: Props) => {
       <PasifyEmptyState
         icon={<Radio className="h-7 w-7" />}
         eyebrow="Sin eventos en directo"
-        title={<>Aún no hay evento <span style={serif} className="text-orange-500">en vivo</span>.</>}
-        subtitle="Cuando publiques un evento, esta pantalla mostrará aforo por zona, velocidad de entrada y revenue en tiempo real."
+        title={
+          <>
+            Aún no hay evento{" "}
+            <span style={serif} className="text-orange-500">
+              en vivo
+            </span>
+            .
+          </>
+        }
+        subtitle="Cuando publiques un evento, esta pantalla mostrará vendidos, check-ins y porcentaje de entrada por cada tipo de ticket en tiempo real."
       />
     );
   }
-
   return <LiveWarRoomContent event={event} />;
 };
 
+// =============================================================
+// Per-tier live stats row (server shape)
+// =============================================================
+type TierLiveStat = {
+  tier_id: string;
+  tier_name: string;
+  tier_status: string;
+  capacity: number | null;
+  sold_count: number;
+  used_count: number;
+  pending_count: number;
+  refunded_count: number;
+  revenue_cents: number;
+  checkin_pct: number;
+  has_sales: boolean;
+  sort_order: number;
+};
+
+// =============================================================
+// LiveWarRoomContent
+// =============================================================
 const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
   const startDate = new Date(event.date_start);
   const now = useTicker(60_000);
@@ -66,29 +100,147 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
   const isLive = diff <= 0 && diff > -8 * 60 * 60 * 1000;
   const isUpcoming = diff > 0;
   const isPast = diff <= -8 * 60 * 60 * 1000;
-
-  const capacity = event.capacity ?? 800;
-  const sold = event.tickets_sold ?? 0;
-  const occupied = isLive
-    ? Math.min(sold, Math.round(sold * 0.82)) // 82% han entrado ya en vivo
-    : isPast
-    ? sold
-    : 0;
-  const revenueCents = sold * event.price_cents;
-
-  const zones = useMemo(() => buildZones(event), [event]);
-
-  // Simulación: scans/min basado en hora del evento
-  const scansPerMin = useScansPerMin(isLive ? sold : 0, isLive);
-
   const status = isLive ? "live" : isUpcoming ? "upcoming" : "past";
+
+  const [tiers, setTiers] = useState<TierLiveStat[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const realtimeId = useId();
+
+  // Carga inicial + reload
+  const loadStats = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Cast hasta que se regeneren los types post-migration.
+      const rpcAny = supabase as unknown as {
+        rpc: (
+          name: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: TierLiveStat[] | null; error: { message: string } | null }>;
+      };
+      const { data, error } = await rpcAny.rpc("partner_event_tier_live_stats", {
+        _event_id: event.id,
+      });
+      if (!error) {
+        setTiers(data ?? []);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [event.id]);
+
+  useEffect(() => {
+    setLoading(true);
+    void loadStats().finally(() => setLoading(false));
+  }, [loadStats]);
+
+  // Realtime: refresca cuando un ticket de este evento cambia. Cada
+  // consumidor obtiene un canal con id único (useId) para evitar colisiones.
+  useEffect(() => {
+    if (!event.id) return;
+    const channel = supabase
+      .channel(`live-warroom-${event.id}-${realtimeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tickets",
+          filter: `event_id=eq.${event.id}`,
+        },
+        () => void loadStats()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tickets",
+          filter: `event_id=eq.${event.id}`,
+        },
+        () => void loadStats()
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [event.id, realtimeId, loadStats]);
+
+  // Totales agregados
+  const totals = useMemo(() => {
+    const sold = tiers.reduce((s, t) => s + (t.sold_count ?? 0), 0);
+    const used = tiers.reduce((s, t) => s + (t.used_count ?? 0), 0);
+    const pending = tiers.reduce((s, t) => s + (t.pending_count ?? 0), 0);
+    const revenue = tiers.reduce((s, t) => s + Number(t.revenue_cents ?? 0), 0);
+    const checkinPct = sold > 0 ? Math.round((used / sold) * 100 * 10) / 10 : 0;
+    return { sold, used, pending, revenue, checkinPct };
+  }, [tiers]);
+
+  // Capacidad total declarada por tiers (cuando todos tienen cupo). Fallback a event.capacity.
+  const declaredCapacity = useMemo(() => {
+    const caps = tiers.map((t) => t.capacity).filter((c): c is number => typeof c === "number");
+    if (caps.length === tiers.length && tiers.length > 0) {
+      return caps.reduce((a, b) => a + b, 0);
+    }
+    return event.capacity ?? null;
+  }, [tiers, event.capacity]);
+
+  // Alertas operativas calculadas a partir de stats reales
+  const alerts = useMemo(() => {
+    type AlertItem = {
+      level: "ok" | "info" | "warning" | "danger";
+      title: string;
+      detail: string;
+    };
+    const out: AlertItem[] = [];
+    for (const t of tiers) {
+      if (!t.capacity || t.capacity <= 0) continue;
+      const pct = (t.sold_count / t.capacity) * 100;
+      if (pct >= 100) {
+        out.push({
+          level: "danger",
+          title: `${t.tier_name}: aforo legal alcanzado`,
+          detail: `${t.sold_count} vendidas / ${t.capacity}`,
+        });
+      } else if (pct >= 85) {
+        out.push({
+          level: "warning",
+          title: `${t.tier_name}: cerca del aforo`,
+          detail: `${Math.round(pct)}% vendido · considera frenar venta`,
+        });
+      }
+      if (isLive && t.pending_count > 10 && t.sold_count > 0) {
+        const pendingPct = (t.pending_count / t.sold_count) * 100;
+        if (pendingPct > 50) {
+          out.push({
+            level: "info",
+            title: `${t.tier_name}: muchos pendientes de entrar`,
+            detail: `${t.pending_count} pendientes (${Math.round(pendingPct)}% sin escanear)`,
+          });
+        }
+      }
+    }
+    if (out.length === 0) {
+      out.push({
+        level: "ok",
+        title: isLive ? "Todo en orden" : "Sin incidencias detectadas",
+        detail: isLive
+          ? "Ningún tipo de ticket saturado ni con muchos pendientes."
+          : "Cuando empiece el evento veremos aforo y check-ins en vivo.",
+      });
+    }
+    return out;
+  }, [tiers, isLive]);
 
   return (
     <div className="space-y-6">
       {/* HERO del evento */}
       <header
         className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 md:p-7"
-        style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 6px 20px -10px rgba(0,0,0,0.5)" }}
+        style={{
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.02) inset, 0 6px 20px -10px rgba(0,0,0,0.5)",
+        }}
       >
         <div
           aria-hidden="true"
@@ -103,7 +255,10 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
             >
               <span className="inline-block h-px w-5 bg-orange-500/70" />
               {status === "live" && (
-                <span className="inline-flex items-center gap-2" style={{ color: "#4DB87A" }}>
+                <span
+                  className="inline-flex items-center gap-2"
+                  style={{ color: "#4DB87A" }}
+                >
                   <span className="relative inline-flex h-2 w-2">
                     <span
                       className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
@@ -117,8 +272,12 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
                   En directo
                 </span>
               )}
-              {status === "upcoming" && <span className="text-orange-500">Próximo evento</span>}
-              {status === "past" && <span className="text-muted-foreground">Evento finalizado</span>}
+              {status === "upcoming" && (
+                <span className="text-orange-500">Próximo evento</span>
+              )}
+              {status === "past" && (
+                <span className="text-muted-foreground">Evento finalizado</span>
+              )}
             </div>
             <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
               {event.title}
@@ -137,7 +296,6 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
             </div>
           </div>
 
-          {/* Countdown / status pill */}
           <div className="shrink-0">
             <div
               className="rounded-2xl border px-5 py-3 text-right"
@@ -160,7 +318,11 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
                 className="text-[10px] uppercase text-muted-foreground"
                 style={{ ...mono, letterSpacing: "0.2em" }}
               >
-                {status === "live" ? "Tiempo en vivo" : status === "upcoming" ? "Empieza en" : "Finalizó"}
+                {status === "live"
+                  ? "Tiempo en vivo"
+                  : status === "upcoming"
+                  ? "Empieza en"
+                  : "Finalizó"}
               </div>
               <div
                 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-2xl"
@@ -175,200 +337,118 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
         </div>
       </header>
 
-      {/* 4 KPI tiles */}
+      {/* KPI totales */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-        <KpiTile
-          icon={<Users className="h-4 w-4" />}
-          eyebrow="Aforo ahora"
-          value={`${Math.round((occupied / capacity) * 100)}%`}
-          sub={`${occupied} / ${capacity}`}
-          color="#FF7A4D"
-          pulse={isLive}
-        />
         <KpiTile
           icon={<Ticket className="h-4 w-4" />}
           eyebrow="Vendidos"
-          value={sold.toString()}
-          sub={`Cap. ${capacity}`}
-          color="#E8542A"
+          value={totals.sold.toString()}
+          sub={declaredCapacity != null ? `Cap. ${declaredCapacity}` : "Sin aforo definido"}
+          color="#FF7A4D"
+        />
+        <KpiTile
+          icon={<Users className="h-4 w-4" />}
+          eyebrow="Han entrado"
+          value={totals.used.toString()}
+          sub={`${totals.checkinPct}% check-in`}
+          color="#4DB87A"
+          pulse={isLive && totals.used > 0}
+        />
+        <KpiTile
+          icon={<ScanLine className="h-4 w-4" />}
+          eyebrow="Por entrar"
+          value={totals.pending.toString()}
+          sub={isLive ? "en puerta" : "antes de empezar"}
+          color="#E8B04C"
+          pulse={isLive && totals.pending > 0}
         />
         <KpiTile
           icon={<Euro className="h-4 w-4" />}
           eyebrow="Recaudado"
-          value={`${(revenueCents / 100).toFixed(0)}€`}
-          sub={`${(event.price_cents / 100).toFixed(2)}€/entrada`}
-          color="#E8B04C"
-        />
-        <KpiTile
-          icon={<ScanLine className="h-4 w-4" />}
-          eyebrow={isLive ? "Scans/min" : "Pico esperado"}
-          value={isLive ? scansPerMin.toString() : "23:45h"}
-          sub={isLive ? "Última hora" : "Pico de entrada"}
-          color="#4DB87A"
-          pulse={isLive}
+          value={`${(totals.revenue / 100).toFixed(0)}€`}
+          sub={`${tiers.length} ${tiers.length === 1 ? "tipo" : "tipos"} de ticket`}
+          color="#E8542A"
         />
       </div>
 
-      {/* Multi-zone aforo */}
+      {/* Per-tier breakdown */}
       <section
         className="rounded-2xl border border-border bg-card p-5 md:p-6"
-        style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
+        style={{
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
+        }}
       >
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <div
               className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
               style={{ ...mono, letterSpacing: "0.2em" }}
             >
               <span className="inline-block h-px w-5 bg-orange-500/70" />
-              Aforo por zona
+              Por tipo de entrada
             </div>
             <h3 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-              {zones.length} zonas activas
+              {tiers.length} {tiers.length === 1 ? "tipo activo" : "tipos activos"}
             </h3>
           </div>
           <div
-            className="hidden rounded-full border border-border px-3 py-1 text-[10px] uppercase text-muted-foreground sm:inline-block"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-[10px] uppercase text-muted-foreground"
             style={{ ...mono, letterSpacing: "0.18em" }}
           >
-            Actualizado en vivo
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${refreshing ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40"}`}
+              aria-hidden="true"
+            />
+            En vivo
           </div>
         </div>
 
-        <div className="space-y-4">
-          {zones.map((z) => {
-            const pct = Math.min(100, Math.round((z.current / z.capacity) * 100));
-            const color =
-              pct >= 100
-                ? "#B8381A"
-                : pct >= 85
-                ? "#E8B04C"
-                : pct >= 50
-                ? "#E8542A"
-                : "#FF7A4D";
-            return (
-              <div key={z.id}>
-                <div className="mb-1.5 flex items-end justify-between gap-2">
-                  <div>
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      {z.code}
-                    </div>
-                    <div className="text-sm font-semibold text-foreground md:text-base">
-                      {z.name}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div
-                      className="text-base font-bold text-foreground md:text-lg"
-                      style={mono}
-                    >
-                      {pct}%
-                    </div>
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.14em" }}
-                    >
-                      {z.current} / {z.capacity}
-                    </div>
-                  </div>
-                </div>
-                <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${pct}%`,
-                      background: `linear-gradient(90deg, ${color}aa 0%, ${color} 100%)`,
-                      boxShadow: `0 0 12px ${color}88`,
-                    }}
-                  />
-                  {pct >= 100 && (
-                    <span
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] uppercase text-white"
-                      style={{ ...mono, letterSpacing: "0.16em" }}
-                    >
-                      Cap. legal
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {loading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Cargando stats por tier…
+          </div>
+        ) : tiers.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card/40 px-4 py-6 text-center text-sm text-muted-foreground">
+            Este evento aún no tiene tipos de ticket configurados.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {tiers.map((t) => (
+              <TierRow key={t.tier_id} tier={t} />
+            ))}
+          </div>
+        )}
       </section>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Velocidad de entrada */}
-        <section
-          className="rounded-2xl border border-border bg-card p-5 md:p-6"
-          style={{
-            boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
-          }}
-        >
-          <div className="mb-4">
-            <div
-              className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-              style={{ ...mono, letterSpacing: "0.2em" }}
-            >
-              <Activity className="h-3 w-3" />
-              Velocidad de entrada
-            </div>
-            <h3 className="text-xl font-semibold tracking-tight text-foreground">
-              {isLive ? `${scansPerMin} scans/min` : "Sin actividad ahora"}
-            </h3>
-          </div>
-          <Sparkline isLive={isLive} />
+      {/* Alertas */}
+      <section
+        className="rounded-2xl border border-border bg-card p-5 md:p-6"
+        style={{
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
+        }}
+      >
+        <div className="mb-4">
           <div
-            className="mt-3 flex justify-between text-[10px] uppercase text-muted-foreground"
-            style={{ ...mono, letterSpacing: "0.16em" }}
+            className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+            style={{ ...mono, letterSpacing: "0.2em" }}
           >
-            <span>-30 min</span>
-            <span>Ahora</span>
+            <Zap className="h-3 w-3" />
+            Alertas operativas
           </div>
-        </section>
-
-        {/* Alertas operativas */}
-        <section
-          className="rounded-2xl border border-border bg-card p-5 md:p-6"
-          style={{
-            boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
-          }}
-        >
-          <div className="mb-4">
-            <div
-              className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-              style={{ ...mono, letterSpacing: "0.2em" }}
-            >
-              <Zap className="h-3 w-3" />
-              Alertas operativas
-            </div>
-            <h3 className="text-xl font-semibold tracking-tight text-foreground">
-              {isLive ? "2 abiertas" : "Sin alertas"}
-            </h3>
-          </div>
-          <ul className="space-y-2">
-            {isLive ? (
-              <>
-                <AlertRow
-                  level="warning"
-                  title="VIP cerca de aforo legal"
-                  detail="92% · Considera frenar venta de mesas"
-                />
-                <AlertRow
-                  level="info"
-                  title="Puerta 2 va más lento"
-                  detail="14 scans/min vs 22 de puerta 1"
-                />
-                <AlertRow level="ok" title="Stripe operativo" detail="0 fallos en última hora" />
-              </>
-            ) : (
-              <AlertRow level="ok" title="Todo en orden" detail="Sin incidencias detectadas" />
-            )}
-          </ul>
-        </section>
-      </div>
+          <h3 className="text-xl font-semibold tracking-tight text-foreground">
+            {alerts.length === 1 && alerts[0].level === "ok"
+              ? "Sin alertas"
+              : `${alerts.length} ${alerts.length === 1 ? "abierta" : "abiertas"}`}
+          </h3>
+        </div>
+        <ul className="space-y-2">
+          {alerts.map((a, i) => (
+            <AlertRow key={i} level={a.level} title={a.title} detail={a.detail} />
+          ))}
+        </ul>
+      </section>
     </div>
   );
 };
@@ -376,6 +456,107 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
 // =============================================================
 // Sub-components
 // =============================================================
+
+const TierRow = ({ tier }: { tier: TierLiveStat }) => {
+  const sold = tier.sold_count ?? 0;
+  const used = tier.used_count ?? 0;
+  const pending = tier.pending_count ?? 0;
+  const capacity = tier.capacity ?? null;
+  const occPct = capacity ? Math.min(100, Math.round((sold / capacity) * 100)) : null;
+  const checkinPct = tier.checkin_pct ?? 0;
+  const revenue = (Number(tier.revenue_cents ?? 0) / 100).toFixed(0);
+
+  const occColor =
+    occPct == null
+      ? "#FF7A4D"
+      : occPct >= 100
+      ? "#B8381A"
+      : occPct >= 85
+      ? "#E8B04C"
+      : occPct >= 50
+      ? "#E8542A"
+      : "#FF7A4D";
+
+  const inactive = tier.tier_status !== "active";
+
+  return (
+    <article
+      className={`rounded-2xl border border-border bg-card/40 p-4 transition ${inactive ? "opacity-70" : ""}`}
+    >
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div
+            className="text-[10px] uppercase text-muted-foreground"
+            style={{ ...mono, letterSpacing: "0.18em" }}
+          >
+            {inactive ? "Tipo oculto" : "Tipo activo"}
+          </div>
+          <div className="truncate text-base font-semibold text-foreground md:text-lg">
+            {tier.tier_name}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs uppercase text-muted-foreground" style={{ ...mono, letterSpacing: "0.16em" }}>
+            Ingresos
+          </div>
+          <div className="text-base font-bold text-foreground md:text-lg" style={mono}>
+            €{revenue}
+          </div>
+        </div>
+      </div>
+
+      {/* Mini-stats por tier */}
+      <div className="grid grid-cols-4 gap-2">
+        <MiniStat label="Vendidas" value={String(sold)} accent />
+        <MiniStat label="Dentro" value={String(used)} />
+        <MiniStat label="Pendientes" value={String(pending)} />
+        <MiniStat label="% Entrada" value={`${checkinPct}%`} />
+      </div>
+
+      {/* Bar: ocupación si hay capacity */}
+      {capacity != null && (
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase text-muted-foreground" style={{ ...mono, letterSpacing: "0.14em" }}>
+            <span>
+              {sold} / {capacity}{" "}
+              <span className="text-muted-foreground/60">vendidas</span>
+            </span>
+            <span style={mono}>{occPct}%</span>
+          </div>
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${occPct ?? 0}%`,
+                background: `linear-gradient(90deg, ${occColor}aa 0%, ${occColor} 100%)`,
+                boxShadow: `0 0 12px ${occColor}66`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </article>
+  );
+};
+
+const MiniStat = ({ label, value, accent }: { label: string; value: string; accent?: boolean }) => (
+  <div
+    className={`rounded-xl border ${accent ? "border-orange-500/30 bg-orange-500/5" : "border-border bg-card"} p-2.5`}
+  >
+    <div
+      className="text-[9.5px] uppercase text-muted-foreground"
+      style={{ ...mono, letterSpacing: "0.16em" }}
+    >
+      {label}
+    </div>
+    <div
+      className="mt-0.5 text-base font-bold leading-none text-foreground md:text-lg"
+      style={mono}
+    >
+      {value}
+    </div>
+  </div>
+);
 
 const KpiTile = ({
   icon,
@@ -395,7 +576,8 @@ const KpiTile = ({
   <div
     className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5"
     style={{
-      boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 12px -6px rgba(0,0,0,0.4)",
+      boxShadow:
+        "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 12px -6px rgba(0,0,0,0.4)",
     }}
   >
     <div
@@ -478,41 +660,6 @@ const AlertRow = ({
   );
 };
 
-const Sparkline = ({ isLive }: { isLive: boolean }) => {
-  // Genera 30 puntos pseudo-random pero determinístico
-  const points = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < 30; i++) {
-      const base = isLive ? 14 + Math.sin(i * 0.6) * 5 + (i / 30) * 12 : 0;
-      arr.push(Math.max(0, base + (i % 3 === 0 ? 3 : 0)));
-    }
-    return arr;
-  }, [isLive]);
-  const max = Math.max(1, ...points);
-
-  return (
-    <div className="flex h-20 items-end gap-1">
-      {points.map((p, i) => {
-        const h = (p / max) * 100;
-        const isLast = i === points.length - 1;
-        return (
-          <div
-            key={i}
-            className="flex-1 rounded-sm transition-all"
-            style={{
-              height: `${Math.max(4, h)}%`,
-              background: isLast
-                ? "linear-gradient(180deg, #FF7A4D 0%, #E8542A 100%)"
-                : `rgba(232,84,42,${0.35 + (i / points.length) * 0.5})`,
-              boxShadow: isLast ? "0 0 12px rgba(232,84,42,0.65)" : "none",
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
 // =============================================================
 // Helpers
 // =============================================================
@@ -524,78 +671,6 @@ const useTicker = (ms: number) => {
     return () => window.clearInterval(id);
   }, [ms]);
   return t;
-};
-
-const useScansPerMin = (sold: number, live: boolean) => {
-  const base = Math.round(sold / 200) * 5 + 12;
-  const [v, setV] = useState(base);
-  useEffect(() => {
-    if (!live) return;
-    const id = window.setInterval(() => setV(base + Math.floor(Math.random() * 8) - 3), 5_000);
-    return () => window.clearInterval(id);
-  }, [base, live]);
-  return Math.max(0, v);
-};
-
-interface Zone {
-  id: string;
-  code: string;
-  name: string;
-  capacity: number;
-  current: number;
-}
-
-const buildZones = (event: LiveWarRoomEvent): Zone[] => {
-  const category = event.partner_category?.toLowerCase() ?? "discoteca";
-  const totalCap = event.capacity ?? 800;
-  const sold = event.tickets_sold ?? 0;
-  const occupied = Math.min(sold, Math.round(sold * 0.82));
-
-  // Plantillas por categoría
-  let templates: Array<{ code: string; name: string; share: number; current: number }>;
-  if (category === "festival") {
-    templates = [
-      { code: "Z01", name: "Main Stage", share: 0.45, current: 0.88 },
-      { code: "Z02", name: "Second Stage", share: 0.3, current: 0.6 },
-      { code: "Z03", name: "Beach Stage", share: 0.15, current: 0.7 },
-      { code: "Z04", name: "VIP Lounge", share: 0.1, current: 0.92 },
-    ];
-  } else if (category === "beachclub" || category === "rooftop") {
-    templates = [
-      { code: "Z01", name: "Pool / Terraza", share: 0.5, current: 0.85 },
-      { code: "Z02", name: "Sand Bar", share: 0.3, current: 0.62 },
-      { code: "Z03", name: "VIP Loungers", share: 0.2, current: 0.96 },
-    ];
-  } else if (category === "sala" || category === "club") {
-    templates = [
-      { code: "Z01", name: "Pista principal", share: 0.6, current: 0.78 },
-      { code: "Z02", name: "Sala secundaria", share: 0.25, current: 0.55 },
-      { code: "Z03", name: "VIP", share: 0.15, current: 0.94 },
-    ];
-  } else if (category === "bar") {
-    templates = [
-      { code: "Z01", name: "Sala", share: 0.6, current: 0.7 },
-      { code: "Z02", name: "Terraza", share: 0.4, current: 0.45 },
-    ];
-  } else {
-    templates = [
-      { code: "Z01", name: "Sala principal", share: 0.55, current: 0.78 },
-      { code: "Z02", name: "Terraza", share: 0.2, current: 0.45 },
-      { code: "Z03", name: "VIP", share: 0.15, current: 0.92 },
-      { code: "Z04", name: "Beach Club", share: 0.1, current: 1.0 },
-    ];
-  }
-
-  return templates.map((t, i) => {
-    const capacity = Math.round(totalCap * t.share);
-    return {
-      id: `zone-${i}`,
-      code: t.code,
-      name: t.name,
-      capacity,
-      current: Math.round(capacity * t.current * Math.min(1, occupied / Math.max(1, sold))),
-    };
-  });
 };
 
 export default LiveWarRoom;

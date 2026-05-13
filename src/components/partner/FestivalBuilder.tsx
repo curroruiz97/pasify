@@ -1,18 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   CalendarDays,
   CalendarPlus,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
   Loader2,
   MapPin,
   Music,
   Plus,
+  Send,
   Sparkles,
+  Ticket as TicketIcon,
   Trash2,
   Upload,
   X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -37,26 +46,25 @@ import {
 } from "@/components/partner/EventDateTimeSection";
 
 /**
- * FestivalBuilder — wizard pro de festival multi-día con persistencia real.
+ * FestivalBuilder — wizard por fases para festival multi-día.
+ *
+ * Reemplaza el formulario antiguo "long-scroll" con un stepper de 6 fases:
+ *   01 Datos del festival
+ *   02 Ubicación
+ *   03 Días del festival (con TicketTiersBuilder por día)
+ *   04 Pase completo
+ *   05 Póster
+ *   06 Resumen + publicación
  *
  * Modelo de datos (post-migration 20260513180000):
- *   - Un evento PADRE con `is_festival = true`, date_start = primer día,
+ *   - 1 evento PADRE con `is_festival = true`, date_start = primer día,
  *     date_end = último día. Contiene info común (nombre, ciudad, venue,
  *     dirección, póster, descripción) + ticket_tier "Pase completo".
- *   - Un evento HIJO por cada día del festival con
- *     `festival_parent_id = <parent.id>`, date_start = ese día con su hora,
- *     y su propio conjunto de ticket_tiers (early bird, VIP, etc.).
+ *   - 1 evento HIJO por día con `festival_parent_id = <parent.id>`,
+ *     date_start = ese día con su hora, y su propio conjunto de ticket_tiers.
  *
- * El partner controla la puerta de cada día como cualquier evento Pasify
- * (sección Asistentes filtra por event_id). El cliente compra:
- *   - tickets por día → ticket_tiers del evento hijo
- *   - "Pase completo" → ticket_tier del evento padre (un único ticket que
- *     da acceso a todos los días — la validación en puerta usa el qr del
- *     padre y el partner ve "acceso pase completo" en Asistentes).
- *
- * Si la creación de algún día o tier falla, hacemos rollback manual
- * eliminando el padre (ON DELETE CASCADE en festival_parent_id limpia los
- * hijos). TODO: migrar a una RPC `create_festival_with_days` atómica.
+ * Rollback manual: si falla cualquier insert, DELETE padre →
+ * CASCADE limpia hijos via festival_parent_id ON DELETE CASCADE.
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -118,6 +126,21 @@ const addDays = (iso: string, n: number): string => {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 };
 
+interface StepDef {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const STEPS: StepDef[] = [
+  { id: "info", label: "Festival", icon: <TicketIcon className="h-3.5 w-3.5" /> },
+  { id: "location", label: "Ubicación", icon: <MapPin className="h-3.5 w-3.5" /> },
+  { id: "days", label: "Días", icon: <CalendarDays className="h-3.5 w-3.5" /> },
+  { id: "pass", label: "Pase completo", icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: "media", label: "Póster", icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { id: "review", label: "Resumen", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+];
+
 export const FestivalBuilder = ({
   open,
   onOpenChange,
@@ -130,7 +153,7 @@ export const FestivalBuilder = ({
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Estado
+  const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [city, setCity] = useState(defaultCity);
@@ -147,7 +170,7 @@ export const FestivalBuilder = ({
 
   useEffect(() => {
     if (open) {
-      // Reset al abrir (no persiste entre aperturas)
+      setStep(0);
       setName("");
       setDescription("");
       setCity(defaultCity);
@@ -210,52 +233,74 @@ export const FestivalBuilder = ({
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("event-images").getPublicUrl(path);
       setImageUrl(pub.publicUrl);
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message ?? "No se pudo subir la imagen.", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo subir la imagen.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const validateAll = (status: "draft" | "published"): string | null => {
-    if (!name.trim()) return "El festival necesita un nombre";
-    if (!city.trim()) return "Selecciona la ciudad del festival";
-    if (!address.trim()) return "Añade la dirección exacta";
-    if (days.length === 0) return "Añade al menos un día";
-    for (let i = 0; i < days.length; i++) {
-      const d = days[i];
-      if (!d.date) return `Falta la fecha del Día ${i + 1}`;
-      if (!d.startTime) return `Falta la hora de inicio del Día ${i + 1}`;
-      if (status === "published" && d.tiers.filter((t) => t.active).length === 0) {
-        return `Día ${i + 1} sin tickets activos — añade al menos uno`;
-      }
-      for (const t of d.tiers) {
-        if (!t.name.trim()) return `Día ${i + 1}: hay un ticket sin nombre`;
-        const p = parseFloat(t.priceEur);
-        if (!Number.isFinite(p) || p < 0)
-          return `Día ${i + 1}: el precio de "${t.name}" no es válido`;
+  // Per-step validation
+  const validateStep = (idx: number, statusForFinal: "draft" | "published" = "draft"): string | null => {
+    if (idx === 0) {
+      if (!name.trim()) return "El festival necesita un nombre";
+    }
+    if (idx === 1) {
+      if (!city.trim()) return "Selecciona la ciudad del festival";
+      if (!address.trim()) return "Añade la dirección exacta";
+    }
+    if (idx === 2) {
+      if (days.length === 0) return "Añade al menos un día";
+      for (let i = 0; i < days.length; i++) {
+        const d = days[i];
+        if (!d.date) return `Falta la fecha del Día ${i + 1}`;
+        if (!d.startTime) return `Falta la hora de inicio del Día ${i + 1}`;
+        if (statusForFinal === "published" && d.tiers.filter((t) => t.active).length === 0) {
+          return `Día ${i + 1} sin tickets activos — añade al menos uno`;
+        }
+        for (const t of d.tiers) {
+          if (!t.name.trim()) return `Día ${i + 1}: hay un ticket sin nombre`;
+          const p = parseFloat(t.priceEur);
+          if (!Number.isFinite(p) || p < 0)
+            return `Día ${i + 1}: el precio de "${t.name}" no es válido`;
+        }
       }
     }
-    for (const t of passTiers) {
-      if (!t.name.trim()) return "El pase completo necesita un nombre";
-      const p = parseFloat(t.priceEur);
-      if (!Number.isFinite(p) || p < 0)
-        return `Pase completo: el precio de "${t.name}" no es válido`;
+    if (idx === 3) {
+      for (const t of passTiers) {
+        if (!t.name.trim()) return "El pase completo necesita un nombre";
+        const p = parseFloat(t.priceEur);
+        if (!Number.isFinite(p) || p < 0)
+          return `Pase completo: el precio de "${t.name}" no es válido`;
+      }
     }
     return null;
   };
 
-  const submit = async (status: "draft" | "published") => {
-    const err = validateAll(status);
+  const goNext = () => {
+    const err = validateStep(step);
     if (err) {
-      toast({ title: "Faltan datos", description: err, variant: "destructive" });
+      toast({ title: "Falta algo", description: err, variant: "destructive" });
       return;
+    }
+    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  };
+  const goPrev = () => setStep((s) => Math.max(0, s - 1));
+
+  const submit = async (status: "draft" | "published") => {
+    for (let i = 0; i < STEPS.length - 1; i++) {
+      const err = validateStep(i, status);
+      if (err) {
+        toast({ title: "Faltan datos", description: err, variant: "destructive" });
+        setStep(i);
+        return;
+      }
     }
     setSubmitting(true);
     let parentId: string | null = null;
     try {
-      // Compute parent date_start (primer día start) y date_end (último día end)
       const firstDay = days[0];
       const lastDay = days[days.length - 1];
       const firstDt: DateTimeValue = {
@@ -271,7 +316,6 @@ export const FestivalBuilder = ({
       const firstCompose = composeIsoStartEnd(firstDt);
       const lastCompose = composeIsoStartEnd(lastDt);
 
-      // Min price aggregator para columna legacy
       const allActiveTierPrices = [
         ...days.flatMap((d) => d.tiers),
         ...passTiers,
@@ -281,7 +325,6 @@ export const FestivalBuilder = ({
       const minPriceCents =
         allActiveTierPrices.length > 0 ? Math.min(...allActiveTierPrices) : 0;
 
-      // 1) INSERT parent festival event
       const { data: parent, error: parentErr } = await supabase
         .from("events")
         .insert({
@@ -305,7 +348,6 @@ export const FestivalBuilder = ({
       if (parentErr || !parent) throw parentErr ?? new Error("No se pudo crear el festival");
       parentId = parent.id;
 
-      // 2) INSERT pase completo tiers en el padre
       if (passTiers.length > 0) {
         const passTierRows = passTiers.map((t, idx) => ({
           event_id: parent.id,
@@ -325,7 +367,6 @@ export const FestivalBuilder = ({
         if (passErr) throw passErr;
       }
 
-      // 3) INSERT child events (uno por día) + tiers de cada día
       for (let i = 0; i < days.length; i++) {
         const d = days[i];
         const dt: DateTimeValue = {
@@ -397,16 +438,15 @@ export const FestivalBuilder = ({
       });
       onCreated?.();
       onOpenChange(false);
-    } catch (e: any) {
-      // Rollback manual: si fallamos parte del proceso eliminamos el padre.
-      // CASCADE limpia hijos por festival_parent_id ON DELETE CASCADE.
+    } catch (e: unknown) {
       if (parentId) {
         await supabase.from("events").delete().eq("id", parentId);
       }
       setSubmitting(false);
+      const msg = e instanceof Error ? e.message : "Algo falló y se ha descartado todo.";
       toast({
         title: "Error al crear festival",
-        description: e?.message ?? "Algo falló y se ha descartado todo. Vuelve a intentarlo.",
+        description: msg,
         variant: "destructive",
       });
     }
@@ -414,421 +454,581 @@ export const FestivalBuilder = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-4xl lg:max-w-5xl">
-        <DialogHeader>
-          <div
-            className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-            style={{ ...mono, letterSpacing: "0.22em" }}
-          >
-            <span className="inline-block h-px w-5 bg-orange-500/70" />
-            Festival multi-día
-          </div>
-          <DialogTitle className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
-            Monta tu{" "}
-            <span style={serif} className="text-orange-500">
-              festival
-            </span>{" "}
-            día a día
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent
+        className="overflow-hidden p-0 sm:max-w-4xl lg:max-w-6xl"
+        style={{
+          maxHeight: "calc(100dvh - 32px)",
+          height: "min(880px, calc(100dvh - 32px))",
+        }}
+      >
+        <DialogTitle className="sr-only">Festival multi-día</DialogTitle>
 
-        <div className="space-y-6 py-4">
-          {/* Info básica */}
-          <FestivalSection
-            number="01"
-            title="Información del festival"
-            subtitle="Nombre, descripción y póster son comunes a todos los días."
-          >
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Nombre del festival *</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Pasify Summer · Ibiza 2026"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Descripción</Label>
-                <Textarea
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Concepto del festival, line-up general, edad mínima…"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          </FestivalSection>
-
-          {/* Ubicación */}
-          <FestivalSection
-            number="02"
-            title="Ubicación"
-            subtitle="Misma ubicación para todos los días."
-          >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs">Ciudad *</Label>
-                <Select value={city} onValueChange={setCity} disabled={submitting}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder="Madrid" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cities.map((c) => (
-                      <SelectItem key={c.id} value={c.name}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Nombre del recinto</Label>
-                <Input
-                  value={venueName}
-                  onChange={(e) => setVenueName(e.target.value)}
-                  placeholder="Recinto Ifema"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label className="text-xs flex items-center gap-2">
-                  <MapPin className="h-3.5 w-3.5 text-orange-500" />
-                  Ubicación exacta *
-                </Label>
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Av. Partenón, 5, 28042 Madrid"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          </FestivalSection>
-
-          {/* Días */}
-          <FestivalSection
-            number="03"
-            title={`Días del festival · ${days.length}`}
-            subtitle="Cada día se crea como un evento hijo independiente con sus propios tickets."
-          >
-            <div className="space-y-4">
-              {days.map((day, idx) => (
-                <article
-                  key={day._key}
-                  className="rounded-2xl border border-border bg-card/40 p-4"
+        <div className="flex h-full flex-col">
+          {/* Header */}
+          <header className="border-b border-border bg-card/60 px-5 py-4 md:px-7 md:py-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div
+                  className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+                  style={{ ...mono, letterSpacing: "0.22em" }}
                 >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold"
-                        style={{
-                          ...mono,
-                          background:
-                            "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
-                          color: "#FFC9B0",
-                        }}
-                      >
-                        D{idx + 1}
-                      </div>
-                      <Input
-                        value={day.title}
-                        onChange={(e) => updateDay(day._key, { title: e.target.value })}
-                        placeholder={`Día ${idx + 1}`}
-                        disabled={submitting}
-                        className="h-9 max-w-[200px] text-sm font-medium"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeDay(day._key)}
-                      disabled={submitting || days.length <= 1}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-destructive/60 hover:text-destructive disabled:opacity-40"
-                      aria-label="Eliminar día"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div>
-                      <Label className="text-xs flex items-center gap-1.5">
-                        <CalendarDays className="h-3 w-3 text-orange-500" />
-                        Fecha *
-                      </Label>
-                      <Input
-                        type="date"
-                        value={day.date}
-                        onChange={(e) => updateDay(day._key, { date: e.target.value })}
-                        disabled={submitting}
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Inicio *</Label>
-                      <Input
-                        type="time"
-                        value={day.startTime}
-                        onChange={(e) => updateDay(day._key, { startTime: e.target.value })}
-                        disabled={submitting}
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Fin</Label>
-                      <Input
-                        type="time"
-                        value={day.endTime}
-                        onChange={(e) => updateDay(day._key, { endTime: e.target.value })}
-                        disabled={submitting}
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div className="sm:col-span-3">
-                      <Label className="text-xs flex items-center gap-1.5">
-                        <Music className="h-3 w-3 text-orange-500" />
-                        Headliner / artista principal
-                      </Label>
-                      <Input
-                        value={day.headliner}
-                        onChange={(e) => updateDay(day._key, { headliner: e.target.value })}
-                        placeholder="DJ Snake b2b Carl Cox"
-                        disabled={submitting}
-                        className="mt-1.5"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <div
-                      className="mb-2 text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      Tickets del día
-                    </div>
-                    <TicketTiersBuilder
-                      tiers={day.tiers}
-                      onChange={(t) => updateDay(day._key, { tiers: t })}
-                      disabled={submitting}
-                    />
-                  </div>
-                </article>
-              ))}
-
-              <button
-                type="button"
-                onClick={addDay}
-                disabled={submitting}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-card/30 px-4 py-4 text-sm font-medium text-muted-foreground transition hover:border-orange-500/50 hover:text-orange-500 disabled:opacity-40"
-              >
-                <Plus className="h-4 w-4" />
-                Añadir día
-              </button>
-            </div>
-          </FestivalSection>
-
-          {/* Pase completo */}
-          <FestivalSection
-            number="04"
-            title="Pase completo"
-            subtitle="Ticket que da acceso a todos los días del festival. Se vende como un único QR."
-          >
-            <TicketTiersBuilder
-              tiers={passTiers}
-              onChange={setPassTiers}
-              disabled={submitting}
-            />
-          </FestivalSection>
-
-          {/* Imagen */}
-          <FestivalSection
-            number="05"
-            title="Póster del festival"
-            subtitle="La misma imagen 16:9 se usa para el festival completo y todos los días."
-          >
-            {imageUrl ? (
-              <div className="relative overflow-hidden rounded-2xl border border-border">
-                <img
-                  src={imageUrl}
-                  alt="Póster"
-                  className="aspect-[16/9] w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => setImageUrl("")}
-                  className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
-                  aria-label="Quitar imagen"
-                  disabled={submitting}
-                >
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || submitting}
-                className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-                    Subiendo imagen…
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-6 w-6 text-orange-500" />
-                    <span className="font-medium text-foreground">Subir póster</span>
-                    <span className="text-[11px]" style={mono}>
-                      JPG · PNG · WEBP · máx. 8 MB
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={handleFileSelect}
-            />
-          </FestivalSection>
-
-          {/* Publicación */}
-          <FestivalSection
-            number="06"
-            title="Publicación"
-            subtitle="Borrador o publicación inmediata."
-          >
-            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={willPublish}
-                  onCheckedChange={setWillPublish}
-                  disabled={submitting}
-                />
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {willPublish ? "Publicar al guardar" : "Guardar como borrador"}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {willPublish
-                      ? "Festival y todos los días serán visibles y comprables."
-                      : "Festival privado hasta que lo publiques."}
-                  </div>
+                  <span className="inline-block h-px w-5 bg-orange-500/70" />
+                  Festival multi-día
                 </div>
+                <h2 className="truncate text-xl font-bold leading-tight tracking-tight md:text-2xl">
+                  Monta tu{" "}
+                  <span style={serif} className="text-orange-500">
+                    festival
+                  </span>{" "}
+                  día a día
+                </h2>
               </div>
-
-              {/* Mini-stats */}
               <div
-                className="flex items-center gap-3 text-[10px] uppercase text-muted-foreground"
+                className="hidden shrink-0 rounded-full border border-border bg-card px-3 py-1 text-[10px] uppercase text-muted-foreground sm:inline-flex"
                 style={{ ...mono, letterSpacing: "0.18em" }}
               >
-                <span className="inline-flex items-center gap-1">
-                  <CalendarPlus className="h-3 w-3 text-orange-500" />
-                  {days.length} días
-                </span>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-orange-500" />
-                  {totalActiveTickets} tickets
-                </span>
-                {minPriceEur != null && (
-                  <>
-                    <span>·</span>
-                    <span>Desde {minPriceEur.toFixed(2)}€</span>
-                  </>
-                )}
+                Paso {String(step + 1).padStart(2, "0")} / {String(STEPS.length).padStart(2, "0")}
               </div>
             </div>
-          </FestivalSection>
-        </div>
 
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button
-            variant="outline"
-            disabled={submitting}
-            onClick={() => submit("draft")}
-            className="h-12 sm:w-auto"
-          >
-            Guardar borrador
-          </Button>
-          <Button
-            disabled={submitting}
-            onClick={() => submit(willPublish ? "published" : "draft")}
-            className="h-12 sm:w-auto"
-            style={{
-              background: submitting
-                ? undefined
-                : "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-              boxShadow: submitting
-                ? undefined
-                : "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-              color: "#fff",
-            }}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creando festival…
-              </>
-            ) : willPublish ? (
-              "Publicar festival"
-            ) : (
-              "Guardar borrador"
+            {/* Stepper */}
+            <ol className="mt-4 flex items-center gap-1.5 overflow-x-auto">
+              {STEPS.map((s, i) => {
+                const done = i < step;
+                const current = i === step;
+                return (
+                  <li key={s.id} className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (i <= step) {
+                          setStep(i);
+                          return;
+                        }
+                        for (let k = step; k < i; k++) {
+                          const err = validateStep(k);
+                          if (err) {
+                            toast({ title: "Completa el paso", description: err, variant: "destructive" });
+                            return;
+                          }
+                        }
+                        setStep(i);
+                      }}
+                      className={`group inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border px-2.5 py-1 text-left transition ${
+                        current
+                          ? "border-orange-500/60 bg-orange-500/10 text-orange-300"
+                          : done
+                          ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300"
+                          : "border-border bg-card/50 text-muted-foreground hover:border-orange-500/30"
+                      }`}
+                      aria-current={current ? "step" : undefined}
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                          current
+                            ? "bg-orange-500/30"
+                            : done
+                            ? "bg-emerald-500/30"
+                            : "bg-muted"
+                        }`}
+                        style={mono}
+                      >
+                        {done ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+                      </span>
+                      <span
+                        className={`truncate text-[10px] uppercase ${current ? "font-semibold" : "font-medium"}`}
+                        style={{ ...mono, letterSpacing: "0.18em" }}
+                      >
+                        {s.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </header>
+
+          {/* Body */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7 md:py-8">
+            {step === 0 && (
+              <StepShell
+                eyebrow="Paso 01"
+                title={<>Cuéntanos qué <span style={serif} className="text-orange-500">festival</span> es.</>}
+                subtitle="El nombre y la descripción son comunes a todos los días del festival."
+              >
+                <div className="mx-auto max-w-2xl space-y-5">
+                  <div>
+                    <Label className="text-xs">Nombre del festival *</Label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Pasify Summer · Ibiza 2026"
+                      disabled={submitting}
+                      className="mt-1.5 h-11"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Descripción</Label>
+                    <Textarea
+                      rows={4}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Concepto del festival, line-up general, edad mínima…"
+                      disabled={submitting}
+                      className="mt-1.5"
+                    />
+                  </div>
+                </div>
+              </StepShell>
             )}
-          </Button>
-        </DialogFooter>
+
+            {step === 1 && (
+              <StepShell
+                eyebrow="Paso 02"
+                title={<>¿Dónde es el <span style={serif} className="text-orange-500">festival</span>?</>}
+                subtitle="Misma ubicación para todos los días."
+              >
+                <div className="mx-auto max-w-2xl">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Ciudad *</Label>
+                      <Select value={city} onValueChange={setCity} disabled={submitting}>
+                        <SelectTrigger className="mt-1.5">
+                          <SelectValue placeholder="Madrid" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cities.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Nombre del recinto</Label>
+                      <Input
+                        value={venueName}
+                        onChange={(e) => setVenueName(e.target.value)}
+                        placeholder="Recinto Ifema"
+                        disabled={submitting}
+                        className="mt-1.5"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="flex items-center gap-2 text-xs">
+                        <MapPin className="h-3.5 w-3.5 text-orange-500" />
+                        Ubicación exacta *
+                      </Label>
+                      <Input
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Av. Partenón, 5, 28042 Madrid"
+                        disabled={submitting}
+                        className="mt-1.5"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </StepShell>
+            )}
+
+            {step === 2 && (
+              <StepShell
+                eyebrow="Paso 03"
+                title={<>Días del <span style={serif} className="text-orange-500">festival</span>.</>}
+                subtitle="Cada día se crea como un evento hijo independiente con sus propios tickets."
+              >
+                <div className="mx-auto max-w-4xl space-y-4">
+                  {days.map((day, idx) => (
+                    <article
+                      key={day._key}
+                      className="rounded-2xl border border-border bg-card/40 p-4"
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold"
+                            style={{
+                              ...mono,
+                              background:
+                                "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
+                              color: "#FFC9B0",
+                            }}
+                          >
+                            D{idx + 1}
+                          </div>
+                          <Input
+                            value={day.title}
+                            onChange={(e) => updateDay(day._key, { title: e.target.value })}
+                            placeholder={`Día ${idx + 1}`}
+                            disabled={submitting}
+                            className="h-9 max-w-[200px] text-sm font-medium"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDay(day._key)}
+                          disabled={submitting || days.length <= 1}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-destructive/60 hover:text-destructive disabled:opacity-40"
+                          aria-label="Eliminar día"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div>
+                          <Label className="flex items-center gap-1.5 text-xs">
+                            <CalendarDays className="h-3 w-3 text-orange-500" />
+                            Fecha *
+                          </Label>
+                          <Input
+                            type="date"
+                            value={day.date}
+                            onChange={(e) => updateDay(day._key, { date: e.target.value })}
+                            disabled={submitting}
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Inicio *</Label>
+                          <Input
+                            type="time"
+                            value={day.startTime}
+                            onChange={(e) => updateDay(day._key, { startTime: e.target.value })}
+                            disabled={submitting}
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Fin</Label>
+                          <Input
+                            type="time"
+                            value={day.endTime}
+                            onChange={(e) => updateDay(day._key, { endTime: e.target.value })}
+                            disabled={submitting}
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <Label className="flex items-center gap-1.5 text-xs">
+                            <Music className="h-3 w-3 text-orange-500" />
+                            Headliner / artista principal
+                          </Label>
+                          <Input
+                            value={day.headliner}
+                            onChange={(e) => updateDay(day._key, { headliner: e.target.value })}
+                            placeholder="DJ Snake b2b Carl Cox"
+                            disabled={submitting}
+                            className="mt-1.5"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <div
+                          className="mb-2 text-[10px] uppercase text-muted-foreground"
+                          style={{ ...mono, letterSpacing: "0.18em" }}
+                        >
+                          Tickets del día
+                        </div>
+                        <TicketTiersBuilder
+                          tiers={day.tiers}
+                          onChange={(t) => updateDay(day._key, { tiers: t })}
+                          disabled={submitting}
+                        />
+                      </div>
+                    </article>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={addDay}
+                    disabled={submitting}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-card/30 px-4 py-4 text-sm font-medium text-muted-foreground transition hover:border-orange-500/50 hover:text-orange-500 disabled:opacity-40"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Añadir día
+                  </button>
+                </div>
+              </StepShell>
+            )}
+
+            {step === 3 && (
+              <StepShell
+                eyebrow="Paso 04"
+                title={<>Pase <span style={serif} className="text-orange-500">completo</span>.</>}
+                subtitle="Tickets que dan acceso a todos los días del festival. Se venden como un único QR por comprador."
+              >
+                <div className="mx-auto max-w-3xl">
+                  <TicketTiersBuilder
+                    tiers={passTiers}
+                    onChange={setPassTiers}
+                    disabled={submitting}
+                  />
+                </div>
+              </StepShell>
+            )}
+
+            {step === 4 && (
+              <StepShell
+                eyebrow="Paso 05"
+                title={<>Póster del <span style={serif} className="text-orange-500">festival</span>.</>}
+                subtitle="La misma imagen 16:9 se usa para el festival completo y para cada día. JPG, PNG o WEBP."
+              >
+                <div className="mx-auto max-w-3xl">
+                  {imageUrl ? (
+                    <div className="relative overflow-hidden rounded-2xl border border-border">
+                      <img
+                        src={imageUrl}
+                        alt="Póster"
+                        className="aspect-[16/9] w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl("")}
+                        className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
+                        aria-label="Quitar imagen"
+                        disabled={submitting}
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading || submitting}
+                      className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+                          Subiendo imagen…
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-7 w-7 text-orange-500" />
+                          <span className="font-medium text-foreground">Subir póster</span>
+                          <span className="text-[11px]" style={mono}>
+                            JPG · PNG · WEBP · máx. 8 MB
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={handleFileSelect}
+                  />
+                </div>
+              </StepShell>
+            )}
+
+            {step === 5 && (
+              <StepShell
+                eyebrow="Paso 06"
+                title={<>Revisa antes de <span style={serif} className="text-orange-500">publicar</span>.</>}
+                subtitle="Comprueba que toda la información del festival es correcta antes de guardar o publicar."
+              >
+                <div className="mx-auto max-w-3xl space-y-5">
+                  <ReviewRow label="Nombre" value={name || "—"} />
+                  <ReviewRow
+                    label="Días"
+                    value={`${days.length} ${days.length === 1 ? "día" : "días"}`}
+                  />
+                  <ReviewRow label="Ubicación" value={[venueName, address, city].filter(Boolean).join(" · ") || "—"} />
+                  <ReviewRow
+                    label="Tickets activos"
+                    value={`${totalActiveTickets}${minPriceEur != null ? ` · desde ${minPriceEur.toFixed(2)}€` : ""}`}
+                  />
+                  <ReviewRow
+                    label="Pase completo"
+                    value={`${passTiers.filter((t) => t.active).length} tipo${passTiers.filter((t) => t.active).length === 1 ? "" : "s"}`}
+                  />
+
+                  <div className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex items-start gap-3">
+                      <Switch
+                        checked={willPublish}
+                        onCheckedChange={setWillPublish}
+                        disabled={submitting}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          {willPublish ? (
+                            <>
+                              <Eye className="h-4 w-4 text-orange-500" />
+                              Publicar al guardar
+                            </>
+                          ) : (
+                            <>
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                              Guardar como borrador
+                            </>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                          {willPublish
+                            ? "Festival y todos los días serán visibles y comprables."
+                            : "Festival privado hasta que lo publiques manualmente."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex items-start gap-2 rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 text-[11px] leading-relaxed text-orange-200"
+                  >
+                    <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    <span>
+                      Al guardar se crearán {days.length + 1} eventos en
+                      Supabase (1 festival padre + {days.length}{" "}
+                      día{days.length === 1 ? "" : "s"} hijo) y{" "}
+                      {totalActiveTickets} tipo{totalActiveTickets === 1 ? "" : "s"} de
+                      ticket. Si algo falla se hace rollback automático.
+                    </span>
+                  </div>
+                </div>
+              </StepShell>
+            )}
+          </div>
+
+          {/* Footer */}
+          <footer className="flex items-center justify-between gap-2 border-t border-border bg-card/60 px-5 py-3 md:px-7">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={goPrev}
+              disabled={submitting || step === 0}
+              className="h-10"
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Anterior
+            </Button>
+
+            <div className="flex items-center gap-2">
+              {step < STEPS.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={goNext}
+                  disabled={submitting}
+                  className="h-10"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(232,84,42,0.5)",
+                    color: "#fff",
+                  }}
+                >
+                  Siguiente
+                  <ArrowRight className="ml-1.5 h-4 w-4" />
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => submit("draft")}
+                    className="h-10"
+                  >
+                    {submitting ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Guardar borrador
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => submit(willPublish ? "published" : "draft")}
+                    className="h-10"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+                      color: "#fff",
+                    }}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        Creando festival…
+                      </>
+                    ) : willPublish ? (
+                      <>
+                        <Send className="mr-1.5 h-4 w-4" />
+                        Publicar festival
+                      </>
+                    ) : (
+                      <>
+                        <CalendarPlus className="mr-1.5 h-4 w-4" />
+                        Guardar borrador
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
+          </footer>
+        </div>
       </DialogContent>
     </Dialog>
   );
 };
 
-const FestivalSection = ({
-  number,
+// =================================================================
+// Sub-componentes
+// =================================================================
+
+const StepShell = ({
+  eyebrow,
   title,
   subtitle,
   children,
 }: {
-  number: string;
-  title: string;
-  subtitle?: string;
+  eyebrow: string;
+  title: React.ReactNode;
+  subtitle: string;
   children: React.ReactNode;
 }) => (
-  <section className="rounded-2xl border border-border bg-card/30 p-4 md:p-5">
-    <div className="mb-4 flex items-start gap-3">
+  <div className="space-y-6">
+    <header className="mx-auto max-w-3xl text-center md:text-left">
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
-        style={{
-          ...mono,
-          background:
-            "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
-          color: "#FFC9B0",
-          letterSpacing: "0.05em",
-        }}
+        className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+        style={{ ...mono, letterSpacing: "0.22em" }}
       >
-        {number}
+        <span className="inline-block h-px w-5 bg-orange-500/70" />
+        {eyebrow}
       </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="text-base font-semibold leading-tight tracking-tight text-foreground md:text-lg">
-          {title}
-        </h3>
-        {subtitle && (
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-            {subtitle}
-          </p>
-        )}
-      </div>
-    </div>
+      <h3 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
+        {title}
+      </h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+        {subtitle}
+      </p>
+    </header>
     {children}
-  </section>
+  </div>
+);
+
+const ReviewRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start gap-4 border-b border-border/60 pb-4">
+    <div
+      className="w-32 shrink-0 text-[10px] uppercase text-muted-foreground"
+      style={{ ...mono, letterSpacing: "0.18em" }}
+    >
+      {label}
+    </div>
+    <div className="flex-1 text-sm font-medium text-foreground">{value}</div>
+  </div>
 );
 
 export default FestivalBuilder;

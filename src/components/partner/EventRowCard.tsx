@@ -1,4 +1,4 @@
-import { Copy, FileText, MoreVertical, Music, Trash2 } from "lucide-react";
+import { Copy, FileText, MoreVertical, Music, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,6 +40,7 @@ export type EventRowCardEvent = {
 
 export interface EventRowCardProps {
   event: EventRowCardEvent;
+  onEdit?: () => void;
   onDuplicate?: () => void;
   onReportPdf?: () => void;
   onDelete?: () => void;
@@ -69,6 +70,7 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
 
 export const EventRowCard = ({
   event,
+  onEdit,
   onDuplicate,
   onReportPdf,
   onDelete,
@@ -162,6 +164,12 @@ export const EventRowCard = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onEdit && (
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar evento
+              </DropdownMenuItem>
+            )}
             {onDuplicate && (
               <DropdownMenuItem onClick={onDuplicate}>
                 <Copy className="mr-2 h-4 w-4" />
@@ -174,7 +182,7 @@ export const EventRowCard = ({
                 Report PDF post-evento
               </DropdownMenuItem>
             )}
-            {onDelete && (onDuplicate || onReportPdf) && (
+            {onDelete && (onEdit || onDuplicate || onReportPdf) && (
               <DropdownMenuSeparator />
             )}
             {onDelete && (

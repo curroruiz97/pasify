@@ -1,4 +1,4 @@
-import { Copy, Plus, Sparkles, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Copy, Lock, Plus, Sparkles, Ticket, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,23 +16,42 @@ import { Textarea } from "@/components/ui/textarea";
  *   - Límite por usuario (default 10)
  *   - Activo on/off
  *
+ * Modo edición: si se pasa `salesByDbId` (mapa dbId → contadores reales),
+ * los tiers con ventas se bloquean parcialmente:
+ *   - Precio no editable (no se puede cambiar el precio que ya pagó alguien).
+ *   - Capacity no puede bajar por debajo de las ventas ya hechas.
+ *   - No se puede eliminar (sólo ocultar via switch active=false).
+ *   - Muestra badge "X vendidas · Y dentro".
+ *
  * Maneja sus propios botones add / duplicate / remove. El partner DEBE
  * tener al menos un tier — el botón remove del último se desactiva.
  *
- * No persiste — el padre se encarga de insertar en `ticket_tiers` tras
- * crear el evento. Cada tier expone una key `id` interna (uuid) que el
- * padre usa de React key — no es el id de DB.
+ * No persiste — el padre se encarga de insertar/actualizar en `ticket_tiers`.
+ * Los tiers nuevos no tienen `dbId`; los existentes (edit) sí.
  */
 
 export interface TierDraft {
   /** id interno para React key. No se persiste — Supabase asigna su uuid. */
   _key: string;
+  /** id real de ticket_tiers cuando el tier viene de DB (modo edit). */
+  dbId?: string;
   name: string;
   description: string;
   priceEur: string;
   capacity: string;
   perUserMax: string;
   active: boolean;
+}
+
+export interface TierSales {
+  /** Tickets vendidos (paid + used). */
+  sold: number;
+  /** Tickets ya escaneados / used. */
+  used: number;
+  /** Pendientes de entrar (paid no used). */
+  pending: number;
+  /** Si el tier tiene aunque sea 1 ticket vendido (paid/used/refunded). */
+  hasSales: boolean;
 }
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -60,9 +79,16 @@ interface Props {
   onChange: (tiers: TierDraft[]) => void;
   /** Si true, todos los inputs están disabled (estado submitting). */
   disabled?: boolean;
+  /** Modo edición: mapa de dbId → contadores de ventas reales. */
+  salesByDbId?: Record<string, TierSales>;
 }
 
-export const TicketTiersBuilder = ({ tiers, onChange, disabled }: Props) => {
+export const TicketTiersBuilder = ({
+  tiers,
+  onChange,
+  disabled,
+  salesByDbId,
+}: Props) => {
   const updateTier = (key: string, patch: Partial<TierDraft>) => {
     onChange(tiers.map((t) => (t._key === key ? { ...t, ...patch } : t)));
   };
@@ -75,7 +101,14 @@ export const TicketTiersBuilder = ({ tiers, onChange, disabled }: Props) => {
   const duplicateTier = (key: string) => {
     const idx = tiers.findIndex((t) => t._key === key);
     if (idx < 0) return;
-    const copy = { ...tiers[idx], _key: createEmptyTier()._key };
+    const src = tiers[idx];
+    // Al duplicar: nuevo _key, sin dbId (es una nueva fila). Esto evita
+    // que cambiar el clon afecte al tier vendido del que viene.
+    const copy: TierDraft = {
+      ...src,
+      _key: createEmptyTier()._key,
+      dbId: undefined,
+    };
     const next = [...tiers];
     next.splice(idx + 1, 0, copy);
     onChange(next);
@@ -92,143 +125,209 @@ export const TicketTiersBuilder = ({ tiers, onChange, disabled }: Props) => {
 
   return (
     <div className="space-y-3">
-      {tiers.map((tier, idx) => (
-        <article
-          key={tier._key}
-          className={`relative rounded-2xl border bg-card p-4 transition ${
-            tier.active ? "border-border" : "border-border/40 opacity-70"
-          }`}
-          style={
-            tier.active
-              ? { boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }
-              : undefined
-          }
-        >
-          {/* Header tier */}
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background:
-                    "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
-                  color: "#FFC9B0",
-                }}
-                aria-hidden="true"
-              >
-                <Ticket className="h-4 w-4" />
+      {tiers.map((tier, idx) => {
+        const sales = tier.dbId ? salesByDbId?.[tier.dbId] : undefined;
+        const isLocked = !!sales?.hasSales;
+        return (
+          <article
+            key={tier._key}
+            className={`relative rounded-2xl border bg-card p-4 transition ${
+              tier.active ? "border-border" : "border-border/40 opacity-70"
+            }`}
+            style={
+              tier.active
+                ? { boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }
+                : undefined
+            }
+          >
+            {/* Header tier */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
+                    color: "#FFC9B0",
+                  }}
+                  aria-hidden="true"
+                >
+                  <Ticket className="h-4 w-4" />
+                </div>
+                <div
+                  className="text-[10px] uppercase text-muted-foreground"
+                  style={{ ...mono, letterSpacing: "0.18em" }}
+                >
+                  Tier {String(idx + 1).padStart(2, "0")}
+                </div>
+                {sales && (
+                  <span
+                    className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      isLocked
+                        ? "border-orange-500/40 bg-orange-500/10 text-orange-500"
+                        : "border-border bg-muted text-muted-foreground"
+                    }`}
+                    style={{ ...mono, letterSpacing: "0.14em" }}
+                    title={`Vendidas ${sales.sold} · Han entrado ${sales.used} · Pendientes ${sales.pending}`}
+                  >
+                    {sales.sold} vendidas · {sales.used} dentro
+                  </span>
+                )}
               </div>
-              <div
-                className="text-[10px] uppercase text-muted-foreground"
-                style={{ ...mono, letterSpacing: "0.18em" }}
-              >
-                Tier {String(idx + 1).padStart(2, "0")}
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={tier.active}
+                  onCheckedChange={(v) => updateTier(tier._key, { active: v })}
+                  disabled={disabled}
+                  aria-label="Activo"
+                />
+                <button
+                  type="button"
+                  onClick={() => duplicateTier(tier._key)}
+                  disabled={disabled}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-orange-500/50 hover:text-foreground disabled:opacity-40"
+                  aria-label="Duplicar tier"
+                  title="Duplicar"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeTier(tier._key)}
+                  disabled={disabled || tiers.length <= 1 || isLocked}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-destructive/60 hover:text-destructive disabled:opacity-40"
+                  aria-label="Eliminar tier"
+                  title={
+                    isLocked
+                      ? "Tiene ventas, sólo se puede ocultar"
+                      : tiers.length <= 1
+                      ? "Necesitas al menos un tier"
+                      : "Eliminar"
+                  }
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={tier.active}
-                onCheckedChange={(v) => updateTier(tier._key, { active: v })}
-                disabled={disabled}
-                aria-label="Activo"
-              />
-              <button
-                type="button"
-                onClick={() => duplicateTier(tier._key)}
-                disabled={disabled}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-orange-500/50 hover:text-foreground disabled:opacity-40"
-                aria-label="Duplicar tier"
-                title="Duplicar"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => removeTier(tier._key)}
-                disabled={disabled || tiers.length <= 1}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-destructive/60 hover:text-destructive disabled:opacity-40"
-                aria-label="Eliminar tier"
-                title={tiers.length <= 1 ? "Necesitas al menos un tier" : "Eliminar"}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
 
-          {/* Campos */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor={`tier-name-${tier._key}`} className="text-xs">
-                Nombre *
-              </Label>
-              <Input
-                id={`tier-name-${tier._key}`}
-                value={tier.name}
-                onChange={(e) => updateTier(tier._key, { name: e.target.value })}
-                placeholder="Entrada General"
-                disabled={disabled}
-              />
+            {/* Aviso de bloqueo si tiene ventas */}
+            {isLocked && (
+              <div
+                className="mb-3 flex items-start gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 p-2.5 text-[11px] leading-relaxed text-orange-200"
+                role="status"
+              >
+                <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0 text-orange-500" />
+                <span>
+                  Este tipo ya vendió{" "}
+                  <strong className="font-semibold">
+                    {sales?.sold ?? 0} entradas
+                  </strong>
+                  . No puedes cambiar el precio ni borrarlo. Puedes ocultarlo
+                  (futuras ventas) o ajustar el cupo siempre que sea ≥ vendidas.
+                </span>
+              </div>
+            )}
+
+            {/* Campos */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor={`tier-name-${tier._key}`} className="text-xs">
+                  Nombre *
+                </Label>
+                <Input
+                  id={`tier-name-${tier._key}`}
+                  value={tier.name}
+                  onChange={(e) => updateTier(tier._key, { name: e.target.value })}
+                  placeholder="Entrada General"
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <Label
+                  htmlFor={`tier-price-${tier._key}`}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  Precio (€) *
+                  {isLocked && (
+                    <Lock
+                      className="h-3 w-3 text-orange-500"
+                      aria-label="Bloqueado por ventas existentes"
+                    />
+                  )}
+                </Label>
+                <Input
+                  id={`tier-price-${tier._key}`}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tier.priceEur}
+                  onChange={(e) => updateTier(tier._key, { priceEur: e.target.value })}
+                  placeholder="15.00"
+                  disabled={disabled || isLocked}
+                  title={
+                    isLocked
+                      ? "No se puede cambiar el precio: este tier ya vendió entradas"
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor={`tier-desc-${tier._key}`} className="text-xs">
+                  Descripción
+                </Label>
+                <Textarea
+                  id={`tier-desc-${tier._key}`}
+                  rows={2}
+                  value={tier.description}
+                  onChange={(e) => updateTier(tier._key, { description: e.target.value })}
+                  placeholder="Acceso VIP · barra libre · zona reservada"
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <Label
+                  htmlFor={`tier-cap-${tier._key}`}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  Cupo
+                  {sales && sales.sold > 0 && (
+                    <span
+                      className="text-[10px] uppercase text-muted-foreground"
+                      style={{ ...mono, letterSpacing: "0.16em" }}
+                    >
+                      mín. {sales.sold}
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  id={`tier-cap-${tier._key}`}
+                  type="number"
+                  min={sales?.sold ?? 1}
+                  value={tier.capacity}
+                  onChange={(e) => updateTier(tier._key, { capacity: e.target.value })}
+                  placeholder={sales ? `≥ ${sales.sold}` : "Sin límite"}
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <Label htmlFor={`tier-max-${tier._key}`} className="text-xs">
+                  Máx. por usuario
+                </Label>
+                <Input
+                  id={`tier-max-${tier._key}`}
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={tier.perUserMax}
+                  onChange={(e) => updateTier(tier._key, { perUserMax: e.target.value })}
+                  placeholder="4"
+                  disabled={disabled}
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor={`tier-price-${tier._key}`} className="text-xs">
-                Precio (€) *
-              </Label>
-              <Input
-                id={`tier-price-${tier._key}`}
-                type="number"
-                step="0.01"
-                min="0"
-                value={tier.priceEur}
-                onChange={(e) => updateTier(tier._key, { priceEur: e.target.value })}
-                placeholder="15.00"
-                disabled={disabled}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor={`tier-desc-${tier._key}`} className="text-xs">
-                Descripción
-              </Label>
-              <Textarea
-                id={`tier-desc-${tier._key}`}
-                rows={2}
-                value={tier.description}
-                onChange={(e) => updateTier(tier._key, { description: e.target.value })}
-                placeholder="Acceso VIP · barra libre · zona reservada"
-                disabled={disabled}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`tier-cap-${tier._key}`} className="text-xs">
-                Cupo
-              </Label>
-              <Input
-                id={`tier-cap-${tier._key}`}
-                type="number"
-                min="1"
-                value={tier.capacity}
-                onChange={(e) => updateTier(tier._key, { capacity: e.target.value })}
-                placeholder="Sin límite"
-                disabled={disabled}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`tier-max-${tier._key}`} className="text-xs">
-                Máx. por usuario
-              </Label>
-              <Input
-                id={`tier-max-${tier._key}`}
-                type="number"
-                min="1"
-                max="10"
-                value={tier.perUserMax}
-                onChange={(e) => updateTier(tier._key, { perUserMax: e.target.value })}
-                placeholder="4"
-                disabled={disabled}
-              />
-            </div>
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
 
       {/* Add row con quick-presets */}
       <div className="rounded-2xl border border-dashed border-border bg-card/40 p-4">

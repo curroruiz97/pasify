@@ -62,8 +62,11 @@ const initialData: WizardData = {
 interface Props {
   /** Datos iniciales del partner (si los hay del perfil). */
   defaults?: Partial<WizardData>;
-  /** Callback al completar (recibe el snapshot final). */
-  onComplete?: (data: WizardData) => void;
+  /**
+   * Callback al completar — puede ser async para persistir antes de cerrar.
+   * Si la promesa lanza, el wizard se mantiene abierto y permite reintentar.
+   */
+  onComplete?: (data: WizardData) => Promise<void> | void;
   /** User id del partner — usado para scopear el localStorage key por usuario. */
   userId?: string | null;
   /**
@@ -96,6 +99,7 @@ export const PartnerOnboardingWizard = ({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>({ ...initialData, ...defaults });
+  const [completing, setCompleting] = useState(false);
 
   // Auto-open SOLO si: (a) el partner NO tiene actividad real Y (b) no ha
   // marcado el wizard como "done" para este user_id. Si `forceOpen` es true
@@ -135,15 +139,24 @@ export const PartnerOnboardingWizard = ({
     onClose?.();
   };
 
-  const complete = () => {
+  const complete = async () => {
+    setCompleting(true);
     try {
-      localStorage.setItem(storageKeyFor(userId), "done");
+      // Esperamos a que el padre persista. Si lanza, dejamos el wizard
+      // abierto para que el partner reintente sin perder lo introducido.
+      await Promise.resolve(onComplete?.(data));
+      try {
+        localStorage.setItem(storageKeyFor(userId), "done");
+      } catch {
+        /* noop */
+      }
+      setOpen(false);
+      onClose?.();
     } catch {
-      /* noop */
+      // Errores los gestiona el padre (toast); mantenemos el wizard abierto.
+    } finally {
+      setCompleting(false);
     }
-    setOpen(false);
-    onComplete?.(data);
-    onClose?.();
   };
 
   if (!open) {
@@ -264,8 +277,9 @@ export const PartnerOnboardingWizard = ({
             ) : (
               <button
                 type="button"
-                onClick={complete}
-                className="group/btn inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white"
+                onClick={() => void complete()}
+                disabled={completing}
+                className="group/btn inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                 style={{
                   background:
                     "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
@@ -274,7 +288,7 @@ export const PartnerOnboardingWizard = ({
                 }}
               >
                 <Rocket className="h-4 w-4" />
-                Empezar a vender
+                {completing ? "Guardando…" : "Empezar a vender"}
                 <ArrowRight className="h-4 w-4 transition group-hover/btn:translate-x-1" />
               </button>
             )}

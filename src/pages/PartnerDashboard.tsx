@@ -1,27 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -35,8 +17,6 @@ import {
   Ticket,
   Euro,
   Users as UsersIcon,
-  Upload,
-  X as XIcon,
   Loader2,
   Radio,
   Copy,
@@ -49,6 +29,7 @@ import {
   Settings,
   HelpCircle,
   MoreHorizontal,
+  Pencil,
 } from "lucide-react";
 import QRScanner from "@/components/partner/QRScanner";
 import Wordmark from "@/components/Wordmark";
@@ -57,23 +38,7 @@ import { LiveWarRoom } from "@/components/partner/LiveWarRoom";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
 import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
-import {
-  TicketTiersBuilder,
-  createEmptyTier,
-  type TierDraft,
-} from "@/components/partner/TicketTiersBuilder";
-import {
-  EventDateTimeSection,
-  composeIsoStartEnd,
-  validateDateTime,
-  type DateTimeValue,
-} from "@/components/partner/EventDateTimeSection";
-import {
-  EventLocationSection,
-  validateLocation,
-  type LocationValue,
-} from "@/components/partner/EventLocationSection";
-import { EventSummaryCard, type EventSummary } from "@/components/partner/EventSummaryCard";
+import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
 import { downloadEventReportPdf, buildDemoEventReport } from "@/lib/eventReportPdf";
 import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
@@ -113,7 +78,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
@@ -179,12 +143,20 @@ const PartnerDashboard = () => {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
   const [festivalOpen, setFestivalOpen] = useState(false);
+  // Editor state: única fuente para create/edit/duplicate. Cuando es null
+  // el modal está cerrado. Cuando hay objeto, el wizard se abre en el modo
+  // y con el evento indicado.
+  const [editor, setEditor] = useState<{ mode: EditorMode; eventId?: string } | null>(null);
   // Confirmación de borrado: se guarda el evento target hasta que el usuario
   // confirma o cancela. AlertDialog se monta al final del árbol.
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Server-side check de "actividad real" (org/venue/tickets) usado para
+  // gatear el onboarding wizard. Si true, el wizard no debe auto-abrir.
+  const [hasServerActivity, setHasServerActivity] = useState<boolean | null>(null);
+  // Permite reabrir manualmente el onboarding desde el HelpSheet.
+  const [reopenOnboarding, setReopenOnboarding] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -204,9 +176,139 @@ const PartnerDashboard = () => {
       setCities((c ?? []) as City[]);
 
       await loadEvents(uid);
+
+      // Server-side activity check: el partner ya tiene organización propia
+      // (owner_id) o pertenece a una org activa, o algún ticket_order ha
+      // pasado por sus eventos. Si alguno es true → no mostramos onboarding.
+      try {
+        const [{ count: orgCount }, { count: memberCount }, { data: anyOrder }] =
+          await Promise.all([
+            supabase
+              .from("organizations")
+              .select("id", { count: "exact", head: true })
+              .eq("owner_id", uid),
+            supabase
+              .from("organization_members")
+              .select("user_id", { count: "exact", head: true })
+              .eq("user_id", uid)
+              .eq("status", "active"),
+            supabase
+              .from("ticket_orders")
+              .select("id")
+              .eq("buyer_user_id", uid)
+              .limit(1),
+          ]);
+        const hasActivity =
+          (orgCount ?? 0) > 0 ||
+          (memberCount ?? 0) > 0 ||
+          (Array.isArray(anyOrder) && anyOrder.length > 0);
+        setHasServerActivity(hasActivity);
+      } catch {
+        // Si los queries fallan (RLS / schema), preferimos NO molestar:
+        // tratamos como "tiene actividad" para no abrir wizard agresivo.
+        setHasServerActivity(true);
+      }
+
       setLoading(false);
     })();
   }, []);
+
+  // Handler que el onboarding wizard usa al completar — persiste los datos
+  // del partner Y crea un primer evento en borrador con su tier "Entrada
+  // General". Si el partner solo rellena business info y deja en blanco el
+  // primer evento, sólo se actualiza profile y no se crea evento.
+  const persistOnboarding = async (data: {
+    businessName: string;
+    category: string;
+    city: string;
+    description: string;
+    logoUrl: string;
+    coverUrl: string;
+    firstEventTitle: string;
+    firstEventDate: string;
+    firstEventPrice: string;
+    firstEventCapacity: string;
+  }) => {
+    if (!userId) return;
+    try {
+      // 1) Update profile con la info del local
+      const profileUpdate: Record<string, unknown> = {
+        business_name: data.businessName.trim() || null,
+        business_category: data.category || null,
+        city: data.city.trim() || null,
+        business_city: data.city.trim() || null,
+      };
+      if (data.description.trim()) profileUpdate["business_description"] = data.description.trim();
+      if (data.logoUrl.trim()) profileUpdate["business_logo_url"] = data.logoUrl.trim();
+      if (data.coverUrl.trim()) profileUpdate["business_cover_url"] = data.coverUrl.trim();
+      const { error: profErr } = await supabase
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", userId);
+      if (profErr) {
+        // No abortamos por fallar el update de campos opcionales (logo_url
+        // o cover_url pueden no existir según schema). Sólo registramos.
+        console.warn("[onboarding] partial profile update error", profErr.message);
+      }
+
+      // 2) Si tiene primer evento con título + fecha → INSERT event + tier
+      if (data.firstEventTitle.trim() && data.firstEventDate) {
+        const price = Math.max(0, Math.round(parseFloat(data.firstEventPrice || "0") * 100));
+        const cap = parseInt(data.firstEventCapacity || "0", 10);
+        const isoDate = new Date(data.firstEventDate).toISOString();
+        const { data: evt, error: evtErr } = await supabase
+          .from("events")
+          .insert({
+            partner_id: userId,
+            title: data.firstEventTitle.trim(),
+            description: null,
+            city: data.city.trim() || "Madrid",
+            date_start: isoDate,
+            price_cents: price,
+            capacity: Number.isFinite(cap) && cap > 0 ? cap : null,
+            image_url: data.coverUrl.trim() || null,
+            status: "draft",
+          })
+          .select("id")
+          .single();
+        if (evtErr || !evt) throw new Error(evtErr?.message ?? "No se pudo crear el evento");
+
+        await supabase.from("ticket_tiers").insert({
+          event_id: evt.id,
+          name: "Entrada General",
+          description: "Acceso general al evento",
+          price_cents: price,
+          currency: "EUR",
+          capacity: Number.isFinite(cap) && cap > 0 ? cap : null,
+          per_user_max: 4,
+          status: "active",
+          sort_order: 0,
+        });
+      }
+
+      // 3) Refresh
+      await loadEvents(userId);
+      setHasServerActivity(true);
+      // Refrescar profile para que las stats del partner reflejen lo nuevo.
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
+        .eq("id", userId)
+        .maybeSingle();
+      if (p) setProfile(p as Profile);
+
+      toast({
+        title: "¡Listo!",
+        description: data.firstEventTitle.trim()
+          ? `Tu local está listo y tu primer evento "${data.firstEventTitle}" está en borrador.`
+          : "Tu local está listo. Crea tu primer evento cuando estés.",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error guardando onboarding";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      throw e; // Vuelve a propagar para que el wizard se quede abierto.
+    }
+  };
 
   const loadEvents = async (uid: string) => {
     // Multi-tenant load: el partner ve sus eventos si es partner_id directo
@@ -259,43 +361,17 @@ const PartnerDashboard = () => {
     navigate("/");
   };
 
-  const handleDuplicateEvent = async (source: EventRow) => {
+  // Abre el wizard en modo duplicate — clona el evento via wizard (no
+  // crea hasta que el partner confirma). Esto reemplaza el INSERT directo
+  // anterior, que duplicaba sin cargar los tiers ni dejar editar.
+  const handleDuplicateEvent = (source: EventRow) => {
     if (!userId) return;
-    // Shift por defecto: misma hora una semana después
-    const sourceDate = new Date(source.date_start);
-    const next = new Date(sourceDate);
-    next.setDate(next.getDate() + 7);
+    setEditor({ mode: "duplicate", eventId: source.id });
+  };
 
-    const payload = {
-      partner_id: userId,
-      title: `${source.title} (copia)`,
-      description: source.description,
-      city: source.city,
-      date_start: next.toISOString(),
-      price_cents: source.price_cents,
-      capacity: source.capacity,
-      tickets_sold: 0,
-      image_url: source.image_url,
-      status: "draft",
-    } as Record<string, unknown>;
-
-    const { error } = await supabase.from("events").insert(payload);
-    if (error) {
-      toast({
-        title: "No se pudo duplicar",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({
-      title: "Evento duplicado",
-      description: `Hemos creado "${payload.title}" en borrador para el ${next.toLocaleDateString(
-        "es-ES",
-        { day: "2-digit", month: "long" }
-      )}.`,
-    });
-    if (userId) await loadEvents(userId);
+  const handleEditEvent = (source: EventRow) => {
+    if (!userId) return;
+    setEditor({ mode: "edit", eventId: source.id });
   };
 
   const handleDeleteEvent = async () => {
@@ -304,14 +380,18 @@ const PartnerDashboard = () => {
     const { error } = await supabase.from("events").delete().eq("id", deleteTarget.id);
     setDeleting(false);
     if (error) {
-      // Si el evento ya tiene tickets vendidos, la RLS / FK lo impedirá.
-      // Mostramos el motivo real para que el partner sepa qué pasa.
+      // El trigger BD enforce_event_no_delete_on_sales bloquea el delete si
+      // hay tickets vendidos. Mostramos un mensaje útil según el motivo
+      // real del fallo para que el partner entienda la causa.
+      const msg = error.message ?? "";
+      const friendly = msg.includes("Cannot delete event")
+        ? "Este evento ya tiene entradas vendidas. No se puede eliminar — cámbialo a borrador o crea uno nuevo."
+        : msg.includes("foreign key") || msg.includes("violates")
+        ? "El evento tiene tickets vendidos o relacionados. Cancélalo en lugar de borrarlo."
+        : msg;
       toast({
         title: "No se pudo eliminar",
-        description:
-          error.message.includes("foreign key") || error.message.includes("violates")
-            ? "El evento tiene tickets vendidos o relacionados. Cancélalo en lugar de borrarlo."
-            : error.message,
+        description: friendly,
         variant: "destructive",
       });
       setDeleteTarget(null);
@@ -395,16 +475,25 @@ const PartnerDashboard = () => {
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <PartnerOnboardingWizard
         userId={userId || null}
-        // hasActivity = el partner ya tiene eventos creados o un business_name
-        // definido en profile. En cualquiera de los dos casos no abrimos el
-        // wizard. Crítico para super-admin testeando con cuenta de Francisco
-        // que ya tiene Avenue Media + Saturday loco: cero onboarding.
-        hasActivity={events.length > 0 || !!profile?.business_name}
+        // hasActivity combina señales server-side reales:
+        //  - events.length > 0 (lista cargada)
+        //  - profile.business_name presente (rellenado en cualquier sesión)
+        //  - hasServerActivity (org propia, member de org, o ticket_orders)
+        // Si cualquiera es true → wizard cerrado. Esto resuelve el caso
+        // super-admin Francisco con Avenue Media: cero onboarding.
+        hasActivity={
+          events.length > 0 ||
+          !!profile?.business_name ||
+          hasServerActivity === true
+        }
+        forceOpen={reopenOnboarding}
+        onClose={() => setReopenOnboarding(false)}
         defaults={{
           businessName: profile?.business_name ?? "",
           category: profile?.business_category ?? "discoteca",
           city: profile?.city ?? "",
         }}
+        onComplete={persistOnboarding}
       />
       <div className="flex min-h-screen flex-col md:flex-row">
         {/* Sidebar desktop */}
@@ -577,26 +666,35 @@ const PartnerDashboard = () => {
                     <Music className="mr-2 h-4 w-4" />
                     Festival multi-día
                   </Button>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="flex-1 md:flex-initial">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Nuevo evento
-                    </Button>
-                  </DialogTrigger>
-                  <CreateEventDialog
-                    partnerId={userId}
-                    defaultCity={profile?.city ?? profile?.business_city ?? ""}
-                    defaultVenueName={profile?.business_name ?? ""}
-                    cities={cities}
-                    onCreated={async () => {
-                      setCreateOpen(false);
-                      if (userId) await loadEvents(userId);
-                    }}
-                  />
-                </Dialog>
+                <Button
+                  className="flex-1 md:flex-initial"
+                  onClick={() => setEditor({ mode: "create" })}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuevo evento
+                </Button>
                 </div>
               </div>
+
+              {/* Editor unificado: create / edit / duplicate. La key remonta
+                  el wizard cuando el target cambia (importante porque el
+                  efecto de carga inicial corre on mount/open). */}
+              <EventEditorWizard
+                key={`${editor?.mode ?? "none"}-${editor?.eventId ?? "new"}`}
+                mode={editor?.mode ?? "create"}
+                open={editor !== null}
+                onOpenChange={(o) => {
+                  if (!o) setEditor(null);
+                }}
+                partnerId={userId}
+                eventId={editor?.eventId}
+                cities={cities}
+                defaultCity={profile?.city ?? profile?.business_city ?? ""}
+                defaultVenueName={profile?.business_name ?? ""}
+                onSaved={async () => {
+                  if (userId) await loadEvents(userId);
+                }}
+              />
 
               <FestivalBuilder
                 open={festivalOpen}
@@ -625,7 +723,7 @@ const PartnerDashboard = () => {
                   eyebrow="Sin eventos"
                   title={<>Tu primer <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>evento</span> está a un click.</>}
                   subtitle="Crea un evento, define tu aforo y tu precio, y empieza a vender entradas hoy mismo."
-                  action={{ label: "Nuevo evento", onClick: () => setCreateOpen(true) }}
+                  action={{ label: "Nuevo evento", onClick: () => setEditor({ mode: "create" }) }}
                 />
               ) : (
                 <>
@@ -674,6 +772,10 @@ const PartnerDashboard = () => {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleEditEvent(e)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Editar evento
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleDuplicateEvent(e)}>
                                       <Copy className="mr-2 h-4 w-4" />
                                       Duplicar evento
@@ -723,6 +825,7 @@ const PartnerDashboard = () => {
                       <EventRowCard
                         key={e.id}
                         event={e}
+                        onEdit={() => handleEditEvent(e)}
                         onDuplicate={() => handleDuplicateEvent(e)}
                         onReportPdf={() =>
                           downloadEventReportPdf(
@@ -976,6 +1079,7 @@ const PartnerDashboard = () => {
         onOpenChange={setHelpOpen}
         role="partner"
         onOpenSupport={() => setSection("soporte")}
+        onReopenOnboarding={() => setReopenOnboarding(true)}
       />
 
       {/* Confirmación de borrado de evento — destructive */}
@@ -1178,526 +1282,8 @@ const StatCard = ({
 );
 
 // StatusBadge moved to @/components/partner/StatusBadge (reused by EventRowCard).
-
-// ============================================================================
-// CreateEventDialog
-// ============================================================================
-
-/**
- * CreateEventDialog — wizard profesional con 6 secciones + resumen sticky.
- *
- * Reemplaza el dialog antiguo de 1 columna con `datetime-local`. Ahora:
- *   1) Información básica (título, descripción)
- *   2) Fecha y horario (día + hora inicio + hora fin con cross-midnight)
- *   3) Ubicación (ciudad + venue + dirección exacta)
- *   4) Tickets (multi-tier con presets Early Bird / VIP / etc.)
- *   5) Póster e imagen
- *   6) Publicación (draft / publicado)
- *
- * Persiste:
- *   - INSERT events con date_start, date_end, venue_name, address,
- *     price_cents (mínimo activo), capacity (suma de tiers con cupo),
- *     image_url, status
- *   - INSERT múltiple en ticket_tiers (uno por TierDraft)
- *   - Rollback manual: si tiers INSERT falla, DELETE el event creado
- *     para no dejar eventos "huérfanos" sin tickets vendibles. TODO:
- *     mover a una RPC `create_event_with_tiers` atómica.
- */
-const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-const serif = {
-  fontFamily: "'Instrument Serif', Georgia, serif",
-  fontStyle: "italic" as const,
-  fontWeight: 400,
-};
-
-const CreateEventDialog = ({
-  partnerId,
-  defaultCity,
-  defaultVenueName,
-  cities,
-  onCreated,
-}: {
-  partnerId: string;
-  defaultCity: string;
-  defaultVenueName?: string;
-  cities: City[];
-  onCreated: () => void;
-}) => {
-  const { toast } = useToast();
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Estado del formulario, organizado por secciones.
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dateTime, setDateTime] = useState<DateTimeValue>({
-    date: "",
-    startTime: "23:30",
-    endTime: "06:00",
-  });
-  const [location, setLocation] = useState<LocationValue>({
-    city: defaultCity,
-    venueName: defaultVenueName ?? "",
-    address: "",
-  });
-  const [tiers, setTiers] = useState<TierDraft[]>([createEmptyTier("Entrada General", "15.00")]);
-  const [imageUrl, setImageUrl] = useState<string>("");
-  const [willPublish, setWillPublish] = useState(true);
-
-  useEffect(
-    () => setLocation((l) => ({ ...l, city: l.city || defaultCity })),
-    [defaultCity]
-  );
-
-  // Stats agregados para el summary + para persistir en columnas legacy
-  const summary: EventSummary = useMemo(() => {
-    const activeTiers = tiers.filter((t) => t.active);
-    const prices = activeTiers
-      .map((t) => parseFloat(t.priceEur))
-      .filter((n) => Number.isFinite(n) && n >= 0);
-    const minPrice = prices.length > 0 ? Math.min(...prices) : null;
-
-    const caps = activeTiers
-      .map((t) => parseInt(t.capacity, 10))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const totalCap =
-      caps.length === activeTiers.length && caps.length > 0
-        ? caps.reduce((a, b) => a + b, 0)
-        : null;
-
-    const { crossesMidnight } = composeIsoStartEnd(dateTime);
-
-    return {
-      title,
-      city: location.city,
-      venueName: location.venueName,
-      address: location.address,
-      date: dateTime.date,
-      startTime: dateTime.startTime,
-      endTime: dateTime.endTime,
-      crossesMidnight,
-      ticketCount: activeTiers.length,
-      minPriceEur: minPrice,
-      totalCapacity: totalCap,
-      imageUrl: imageUrl || null,
-      willPublish,
-    };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish]);
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      toast({ title: "Imagen muy grande", description: "Máximo 8 MB.", variant: "destructive" });
-      return;
-    }
-    setUploading(true);
-    try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${partnerId}/event-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("event-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("event-images").getPublicUrl(path);
-      setImageUrl(pub.publicUrl);
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message ?? "No se pudo subir la imagen.", variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const validateAll = (status: "draft" | "published"): string | null => {
-    if (!title.trim()) return "El evento necesita un título";
-    const dtErr = validateDateTime(dateTime);
-    if (dtErr) return dtErr;
-    const locErr = validateLocation(location);
-    if (locErr) return locErr;
-    const activeTiers = tiers.filter((t) => t.active);
-    if (status === "published" && activeTiers.length === 0) {
-      return "Para publicar añade al menos un tipo de ticket activo";
-    }
-    for (const t of tiers) {
-      if (!t.name.trim()) return "Todos los tickets necesitan un nombre";
-      const p = parseFloat(t.priceEur);
-      if (!Number.isFinite(p) || p < 0) {
-        return `El precio del ticket "${t.name}" no es válido`;
-      }
-    }
-    return null;
-  };
-
-  const submit = async (status: "draft" | "published") => {
-    const err = validateAll(status);
-    if (err) {
-      toast({ title: "Faltan datos", description: err, variant: "destructive" });
-      return;
-    }
-
-    const { startIso, endIso } = composeIsoStartEnd(dateTime);
-    if (!startIso) {
-      toast({ title: "Fecha/hora inválida", variant: "destructive" });
-      return;
-    }
-
-    // Compute legacy fallbacks: precio = mínimo de tiers activos en cents,
-    // capacity = suma de cupos si todos los tiers activos tienen cupo, null si alguno no.
-    const activeTiers = tiers.filter((t) => t.active);
-    const tierPriceCents = activeTiers.map((t) =>
-      Math.round(parseFloat(t.priceEur || "0") * 100)
-    );
-    const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
-
-    const caps = activeTiers
-      .map((t) => parseInt(t.capacity, 10))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const totalCap =
-      caps.length === activeTiers.length && caps.length > 0
-        ? caps.reduce((a, b) => a + b, 0)
-        : null;
-
-    setSubmitting(true);
-    const { data: createdEvent, error } = await supabase
-      .from("events")
-      .insert({
-        partner_id: partnerId,
-        title: title.trim(),
-        description: description.trim() || null,
-        city: location.city.trim(),
-        venue_name: location.venueName.trim() || null,
-        address: location.address.trim() || null,
-        date_start: startIso,
-        date_end: endIso,
-        price_cents: minPriceCents,
-        capacity: totalCap,
-        image_url: imageUrl || null,
-        status,
-      })
-      .select("id")
-      .single();
-
-    if (error || !createdEvent) {
-      setSubmitting(false);
-      toast({
-        title: "Error al crear evento",
-        description: error?.message ?? "No se pudo crear",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Insertar todos los tiers en batch
-    const tiersToInsert = tiers.map((t, idx) => ({
-      event_id: createdEvent.id,
-      name: t.name.trim(),
-      description: t.description.trim() || null,
-      price_cents: Math.round(parseFloat(t.priceEur || "0") * 100),
-      currency: "EUR",
-      capacity: t.capacity ? parseInt(t.capacity, 10) : null,
-      per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
-      status: t.active ? "active" : "hidden",
-      sort_order: idx,
-    }));
-
-    const { error: tierErr } = await supabase.from("ticket_tiers").insert(tiersToInsert);
-
-    if (tierErr) {
-      // ROLLBACK manual: borramos el evento creado para no dejar entry
-      // huérfana sin tickets vendibles.
-      // TODO: migrar a una RPC `create_event_with_tiers` atómica con BEGIN/COMMIT.
-      await supabase.from("events").delete().eq("id", createdEvent.id);
-      setSubmitting(false);
-      toast({
-        title: "Error al crear tickets",
-        description: `${tierErr.message}. El evento se ha descartado, vuelve a intentarlo.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSubmitting(false);
-    toast({
-      title: status === "published" ? "Evento publicado" : "Borrador guardado",
-      description:
-        status === "published"
-          ? "Ya aparece en el calendario público y se puede comprar."
-          : "Lo encontrarás en Mis eventos. Publícalo cuando esté listo.",
-    });
-    onCreated();
-  };
-
-  return (
-    <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-4xl lg:max-w-5xl">
-      <DialogHeader>
-        <div
-          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.22em" }}
-        >
-          <span className="inline-block h-px w-5 bg-orange-500/70" />
-          Nuevo evento
-        </div>
-        <DialogTitle className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
-          Crea tu próximo{" "}
-          <span style={serif} className="text-orange-500">
-            evento
-          </span>
-        </DialogTitle>
-      </DialogHeader>
-
-      <div className="grid grid-cols-1 gap-6 py-4 lg:grid-cols-[1fr_320px]">
-        {/* Columna principal: 6 secciones */}
-        <div className="space-y-6">
-          {/* SECCIÓN 1 — Info básica */}
-          <Section
-            number="01"
-            title="Información básica"
-            subtitle="El nombre que verán los clientes en el calendario y en su ticket."
-          >
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="evt-title" className="text-xs">
-                  Título del evento *
-                </Label>
-                <Input
-                  id="evt-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Saturday Night · Halloween Edition"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="evt-desc" className="text-xs">
-                  Descripción
-                </Label>
-                <Textarea
-                  id="evt-desc"
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Line-up, código de vestimenta, edad mínima, otra info útil…"
-                  disabled={submitting}
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          </Section>
-
-          {/* SECCIÓN 2 — Fecha y horario */}
-          <Section
-            number="02"
-            title="Fecha y horario"
-            subtitle="Si el evento cruza medianoche detectamos automáticamente que finaliza al día siguiente."
-          >
-            <EventDateTimeSection
-              value={dateTime}
-              onChange={setDateTime}
-              disabled={submitting}
-            />
-          </Section>
-
-          {/* SECCIÓN 3 — Ubicación */}
-          <Section
-            number="03"
-            title="Ubicación"
-            subtitle="La dirección exacta aparece en el ticket del cliente para llegar a la puerta."
-          >
-            <EventLocationSection
-              value={location}
-              onChange={setLocation}
-              cities={cities}
-              disabled={submitting}
-            />
-          </Section>
-
-          {/* SECCIÓN 4 — Tickets */}
-          <Section
-            number="04"
-            title="Tickets y aforo"
-            subtitle="Crea varios tipos: Early Bird, General, VIP, Backstage… Cada uno con su precio y cupo."
-          >
-            <TicketTiersBuilder
-              tiers={tiers}
-              onChange={setTiers}
-              disabled={submitting}
-            />
-          </Section>
-
-          {/* SECCIÓN 5 — Imagen */}
-          <Section
-            number="05"
-            title="Póster del evento"
-            subtitle="Una imagen 16:9 funciona mejor en el calendario público y en el ticket digital."
-          >
-            {imageUrl ? (
-              <div className="relative overflow-hidden rounded-2xl border border-border">
-                <img
-                  src={imageUrl}
-                  alt="Póster"
-                  className="aspect-[16/9] w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => setImageUrl("")}
-                  className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
-                  aria-label="Quitar imagen"
-                  disabled={submitting}
-                >
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || submitting}
-                className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-                    Subiendo imagen…
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-6 w-6 text-orange-500" />
-                    <span className="font-medium text-foreground">Subir póster</span>
-                    <span className="text-[11px]" style={mono}>
-                      JPG · PNG · WEBP · máx. 8 MB
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={handleFileSelect}
-            />
-          </Section>
-
-          {/* SECCIÓN 6 — Publicación */}
-          <Section
-            number="06"
-            title="Publicación"
-            subtitle="Guárdalo como borrador para seguir ajustándolo o publícalo ya en el calendario."
-          >
-            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={willPublish}
-                  onCheckedChange={setWillPublish}
-                  disabled={submitting}
-                />
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {willPublish ? "Publicar al guardar" : "Guardar como borrador"}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {willPublish
-                      ? "El evento será visible en el calendario público y comprable inmediatamente."
-                      : "El evento queda privado en Mis eventos. Puedes publicarlo más tarde."}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Section>
-        </div>
-
-        {/* Columna lateral: resumen sticky */}
-        <div className="order-first lg:order-last">
-          <EventSummaryCard summary={summary} />
-        </div>
-      </div>
-
-      <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button
-          variant="outline"
-          disabled={submitting}
-          onClick={() => submit("draft")}
-          className="h-12 sm:w-auto"
-        >
-          {submitting && !willPublish ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
-          Guardar borrador
-        </Button>
-        <Button
-          disabled={submitting}
-          onClick={() => submit(willPublish ? "published" : "draft")}
-          className="h-12 sm:w-auto"
-          style={{
-            background: submitting
-              ? undefined
-              : "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-            boxShadow: submitting
-              ? undefined
-              : "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-            color: "#fff",
-          }}
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Guardando…
-            </>
-          ) : willPublish ? (
-            "Publicar evento"
-          ) : (
-            "Guardar borrador"
-          )}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  );
-};
-
-/** Section helper — numbered card layout reusable dentro del dialog. */
-const Section = ({
-  number,
-  title,
-  subtitle,
-  children,
-}: {
-  number: string;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) => (
-  <section className="rounded-2xl border border-border bg-card/30 p-4 md:p-5">
-    <div className="mb-4 flex items-start gap-3">
-      <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
-        style={{
-          ...mono,
-          background:
-            "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
-          color: "#FFC9B0",
-          letterSpacing: "0.05em",
-        }}
-        aria-hidden="true"
-      >
-        {number}
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="text-base font-semibold leading-tight tracking-tight text-foreground md:text-lg">
-          {title}
-        </h3>
-        {subtitle && (
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-            {subtitle}
-          </p>
-        )}
-      </div>
-    </div>
-    {children}
-  </section>
-);
+// CreateEventDialog inline ha sido extraído a EventEditorWizard.tsx, que es
+// reutilizado para create / edit / duplicate. Eso elimina ~450 LOC duplicadas
+// y garantiza que la edición sigue exactamente la misma UX que la creación.
 
 export default PartnerDashboard;

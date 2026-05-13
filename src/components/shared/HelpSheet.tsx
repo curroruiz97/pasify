@@ -46,6 +46,8 @@ interface Props {
   role: HelpRole;
   /** Callback opcional para que el host abra la conversación de soporte */
   onOpenSupport?: () => void;
+  /** Si está, muestra un quick-action para reabrir el onboarding (rol partner). */
+  onReopenOnboarding?: () => void;
 }
 
 interface FAQItem {
@@ -246,7 +248,13 @@ const CHANGELOG: ChangelogEntry[] = [
    HelpSheet — centro de ayuda completo, role-aware.
    ============================================================ */
 
-export const HelpSheet = ({ open, onOpenChange, role, onOpenSupport }: Props) => {
+export const HelpSheet = ({
+  open,
+  onOpenChange,
+  role,
+  onOpenSupport,
+  onReopenOnboarding,
+}: Props) => {
   const { toast } = useToast();
   const [query, setQuery] = useState("");
 
@@ -402,6 +410,17 @@ export const HelpSheet = ({ open, onOpenChange, role, onOpenSupport }: Props) =>
                   })
                 }
               />
+              {role === "partner" && onReopenOnboarding && (
+                <QuickAction
+                  icon={<Sparkles className="h-4 w-4" />}
+                  title="Volver al onboarding"
+                  subtitle="Reabre el wizard inicial"
+                  onPress={() => {
+                    onOpenChange(false);
+                    setTimeout(() => onReopenOnboarding(), 100);
+                  }}
+                />
+              )}
             </div>
 
             {/* FAQ */}
