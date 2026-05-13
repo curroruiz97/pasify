@@ -145,83 +145,80 @@ const QRScanner = ({ partnerId }: QRScannerProps) => {
     setLoading(true);
     setResult(null);
     try {
-      // 1) Trova ticket per qr_token. RLS limita ai ticket dei propri eventi.
-      const { data: ticket, error: tErr } = await supabase
-        .from("tickets")
-        .select("id, status, event_id, buyer_first_name, buyer_last_name, buyer_email")
-        .eq("qr_token", codeToVerify)
-        .maybeSingle();
-
-      if (tErr || !ticket) {
-        setResult({ valid: false, message: "Ticket no encontrado o no pertenece a tus eventos." });
-        haptic.error();
-        setShowResultDialog(true);
-        return;
-      }
-
-      // 2) Verifica evento + ownership
-      const { data: event } = await supabase
-        .from("events")
-        .select("title, date_start, partner_id")
-        .eq("id", ticket.event_id)
-        .maybeSingle();
-
-      if (!event || event.partner_id !== partnerId) {
-        setResult({ valid: false, message: "Este ticket no es para uno de tus eventos." });
-        haptic.error();
-        setShowResultDialog(true);
-        return;
-      }
-
-      // 3) Verifica stato
-      if (ticket.status === "used") {
-        setResult({ valid: false, message: "Ticket ya usado. Acceso denegado." });
-        haptic.error();
-        setShowResultDialog(true);
-        return;
-      }
-      if (ticket.status !== "paid") {
-        setResult({ valid: false, message: `Ticket no válido (estado: ${ticket.status}).` });
-        haptic.error();
-        setShowResultDialog(true);
-        return;
-      }
-
-      // 4) Marca come usato
-      const { error: uErr } = await supabase
-        .from("tickets")
-        .update({
-          status: "used",
-          used_at: new Date().toISOString(),
-          used_by_partner_id: partnerId,
-        })
-        .eq("id", ticket.id);
-
-      if (uErr) {
-        setResult({ valid: false, message: `Error al marcar usado: ${uErr.message}` });
-        haptic.error();
-        setShowResultDialog(true);
-        return;
-      }
-
-      // 5) Successo
-      const buyer =
-        `${ticket.buyer_first_name ?? ""} ${ticket.buyer_last_name ?? ""}`.trim() ||
-        ticket.buyer_email ||
-        "Invitado";
-
-      setResult({
-        valid: true,
-        message: "Acceso permitido",
-        details: {
-          event: event.title,
-          date: new Date(event.date_start).toLocaleString("es-ES"),
-          buyer,
-        },
+      // Llamada única a la RPC server-side `scan_ticket` que:
+      //   1. Valida que el ticket existe
+      //   2. Comprueba ownership (partner_id directo o org member con rol)
+      //   3. Verifica estado (paid → used; used → already_used; etc.)
+      //   4. Marca como usado atomicamente
+      //   5. SIEMPRE inserta una fila en ticket_scan_logs con result + meta
+      //
+      // Esto reemplaza la lógica client-side fragil y garantiza trazabilidad
+      // completa para el dashboard del partner (sección Asistentes).
+      const { data: rows, error: rpcErr } = await supabase.rpc("scan_ticket", {
+        _qr_token: codeToVerify,
+        _device_info:
+          typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : null,
       });
-      haptic.success();
+
+      if (rpcErr) {
+        setResult({ valid: false, message: `Error al validar: ${rpcErr.message}` });
+        haptic.error();
+        setShowResultDialog(true);
+        return;
+      }
+
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (!row) {
+        setResult({ valid: false, message: "Respuesta inesperada del servidor." });
+        haptic.error();
+        setShowResultDialog(true);
+        return;
+      }
+
+      if (row.success) {
+        const buyer =
+          `${row.buyer_first_name ?? ""} ${row.buyer_last_name ?? ""}`.trim() ||
+          row.buyer_email ||
+          "Invitado";
+        setResult({
+          valid: true,
+          message: "Acceso permitido",
+          details: {
+            event: row.event_title ?? "Evento",
+            date: row.scanned_at ? new Date(row.scanned_at).toLocaleString("es-ES") : "",
+            buyer,
+          },
+        });
+        haptic.success();
+        setShowResultDialog(true);
+        setCode("");
+        return;
+      }
+
+      // Fallos: mapeamos el enum result a mensajes accionables
+      let msg: string;
+      switch (row.result as string) {
+        case "already_used":
+          msg = `Ticket ya usado · ${row.already_used_at ? new Date(row.already_used_at).toLocaleString("es-ES") : "fecha desconocida"}`;
+          break;
+        case "invalid_ticket":
+          msg = "Ticket no encontrado. Verifica que el QR es válido.";
+          break;
+        case "wrong_event":
+          msg = "Este ticket no es para tu evento.";
+          break;
+        case "not_paid":
+          msg = "Ticket sin pago confirmado. Acceso denegado.";
+          break;
+        case "forbidden":
+          msg = "No tienes permisos para escanear este ticket.";
+          break;
+        default:
+          msg = `Ticket no válido (${row.result})`;
+      }
+      setResult({ valid: false, message: msg });
+      haptic.error();
       setShowResultDialog(true);
-      setCode("");
     } catch (err: any) {
       console.error("Errore verifica:", err);
       setResult({ valid: false, message: "Error durante la verificación." });

@@ -28,7 +28,10 @@ const serif = {
   fontWeight: 400,
 };
 
-const STORAGE_KEY = "pasify.partner.onboarding.v1";
+const STORAGE_KEY_BASE = "pasify.partner.onboarding.v2";
+
+const storageKeyFor = (userId?: string | null) =>
+  userId ? `${STORAGE_KEY_BASE}.${userId}` : STORAGE_KEY_BASE;
 
 interface WizardData {
   businessName: string;
@@ -61,34 +64,86 @@ interface Props {
   defaults?: Partial<WizardData>;
   /** Callback al completar (recibe el snapshot final). */
   onComplete?: (data: WizardData) => void;
+  /** User id del partner — usado para scopear el localStorage key por usuario. */
+  userId?: string | null;
+  /**
+   * Si `true`, el partner YA tiene actividad real (org/venue/evento/ticket
+   * vendido). En ese caso NUNCA forzamos auto-open. El partner puede abrirlo
+   * manualmente desde la nav si quiere reonboardingse.
+   */
+  hasActivity?: boolean;
+  /** Permite al padre forzar abrir/cerrar (botón "Volver al onboarding"). */
+  forceOpen?: boolean;
+  /** Notificar al padre cuando el wizard se cierra. */
+  onClose?: () => void;
 }
 
 /**
  * Wizard de 5 pasos overlay full-screen para que el partner monte
- * su primer evento en menos de 3 minutos. Persistente en localStorage,
- * skippable, y siempre puede reabrirse desde la dashboard.
+ * su primer evento en menos de 3 minutos. Auto-open SOLO si:
+ *   - El partner no ha completado el wizard antes (storage scoped por user_id)
+ *   - Y `hasActivity` es false (no tiene org, venue, evento o ticket vendido)
+ * Skippable, y siempre puede reabrirse desde la dashboard via `forceOpen`.
  */
-export const PartnerOnboardingWizard = ({ defaults, onComplete }: Props) => {
+export const PartnerOnboardingWizard = ({
+  defaults,
+  onComplete,
+  userId,
+  hasActivity = false,
+  forceOpen = false,
+  onClose,
+}: Props) => {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>({ ...initialData, ...defaults });
 
-  // Auto-open si nunca se completó
+  // Auto-open SOLO si: (a) el partner NO tiene actividad real Y (b) no ha
+  // marcado el wizard como "done" para este user_id. Si `forceOpen` es true
+  // (el partner pulsa "Volver al onboarding" en la nav), abrimos siempre.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const done = localStorage.getItem(STORAGE_KEY) === "done";
-    if (!done) setOpen(true);
-  }, []);
+    if (forceOpen) {
+      setOpen(true);
+      return;
+    }
+    if (hasActivity) {
+      // Partner ya tiene actividad real → no molestar. Y además marcamos
+      // como done para que no se abra en un futuro tras borrar localStorage.
+      try {
+        localStorage.setItem(storageKeyFor(userId), "done");
+      } catch {
+        /* localStorage puede no estar disponible (private mode iOS) */
+      }
+      return;
+    }
+    try {
+      const done = localStorage.getItem(storageKeyFor(userId)) === "done";
+      if (!done) setOpen(true);
+    } catch {
+      // Si localStorage falla, no abrimos por defecto — preferimos no molestar
+      // a abrir incorrectamente.
+    }
+  }, [userId, hasActivity, forceOpen]);
 
   const skipForever = () => {
-    localStorage.setItem(STORAGE_KEY, "done");
+    try {
+      localStorage.setItem(storageKeyFor(userId), "done");
+    } catch {
+      /* noop */
+    }
     setOpen(false);
+    onClose?.();
   };
 
   const complete = () => {
-    localStorage.setItem(STORAGE_KEY, "done");
+    try {
+      localStorage.setItem(storageKeyFor(userId), "done");
+    } catch {
+      /* noop */
+    }
     setOpen(false);
     onComplete?.(data);
+    onClose?.();
   };
 
   if (!open) {

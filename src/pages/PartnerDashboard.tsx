@@ -56,6 +56,7 @@ import SupportChat from "@/components/support/SupportChat";
 import { LiveWarRoom } from "@/components/partner/LiveWarRoom";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
+import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
 import { downloadEventReportPdf, buildDemoEventReport } from "@/lib/eventReportPdf";
 import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
@@ -107,6 +108,7 @@ type Section =
   | "forecast"
   | "pricing"
   | "eventos"
+  | "asistentes"
   | "scanner"
   | "door_vision"
   | "tpv"
@@ -189,10 +191,47 @@ const PartnerDashboard = () => {
   }, []);
 
   const loadEvents = async (uid: string) => {
+    // Multi-tenant load: el partner ve sus eventos si es partner_id directo
+    // (legacy) O si pertenece a la org que es dueña del evento. Esto resuelve
+    // el caso super-admin Francisco testeando con Avenue Media: como owner
+    // de la org, debe ver los eventos creados por la org aunque no estén
+    // técnicamente como partner_id=su_uid.
+    //
+    // Estrategia: primero traemos el conjunto de org_ids del partner via
+    // RPC tenant_for_user (cacheada), luego un único query con `or` que
+    // une partner_id+org_id.
+    let orgIds: string[] = [];
+    try {
+      const { data: orgs } = await supabase
+        .from("organization_members")
+        .select("org_id")
+        .eq("user_id", uid)
+        .eq("status", "active");
+      orgIds = (orgs ?? []).map((m: any) => m.org_id).filter(Boolean);
+
+      // Fallback: organizations donde el user es owner_id directo
+      const { data: owned } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("owner_id", uid);
+      for (const o of owned ?? []) {
+        if (!orgIds.includes((o as any).id)) orgIds.push((o as any).id);
+      }
+    } catch {
+      /* RLS o tabla no existente — caemos a sólo partner_id */
+    }
+
+    const filter =
+      orgIds.length > 0
+        ? `partner_id.eq.${uid},org_id.in.(${orgIds.join(",")})`
+        : `partner_id.eq.${uid}`;
+
     const { data } = await supabase
       .from("events")
-      .select("id, title, description, city, date_start, status, price_cents, capacity, tickets_sold, image_url")
-      .eq("partner_id", uid)
+      .select(
+        "id, title, description, city, date_start, status, price_cents, capacity, tickets_sold, image_url"
+      )
+      .or(filter)
       .order("date_start", { ascending: false });
     setEvents((data ?? []) as EventRow[]);
   };
@@ -291,6 +330,7 @@ const PartnerDashboard = () => {
     {
       kind: "group", id: "ops", label: "Operaciones", icon: <Workflow className="h-5 w-5" />,
       children: [
+        { id: "asistentes", label: "Asistentes", icon: <UsersIcon className="h-4 w-4" /> },
         { id: "scanner", label: "Escáner", icon: <ScanLine className="h-4 w-4" /> },
         { id: "tpv", label: "TPV", icon: <Receipt className="h-4 w-4" /> },
         { id: "cashless", label: "Cashless", icon: <Wifi className="h-4 w-4" /> },
@@ -336,6 +376,12 @@ const PartnerDashboard = () => {
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <PartnerOnboardingWizard
+        userId={userId || null}
+        // hasActivity = el partner ya tiene eventos creados o un business_name
+        // definido en profile. En cualquiera de los dos casos no abrimos el
+        // wizard. Crítico para super-admin testeando con cuenta de Francisco
+        // que ya tiene Avenue Media + Saturday loco: cero onboarding.
+        hasActivity={events.length > 0 || !!profile?.business_name}
         defaults={{
           businessName: profile?.business_name ?? "",
           category: profile?.business_category ?? "discoteca",
@@ -680,12 +726,30 @@ const PartnerDashboard = () => {
             </div>
           )}
 
+          {/* ASISTENTES — control de puerta estilo Eventbrite */}
+          {section === "asistentes" && (
+            <div>
+              <PartnerAttendees
+                events={events.map((e) => ({
+                  id: e.id,
+                  title: e.title,
+                  date_start: e.date_start,
+                  city: e.city,
+                  capacity: e.capacity,
+                  tickets_sold: e.tickets_sold,
+                  status: e.status,
+                }))}
+              />
+            </div>
+          )}
+
           {/* SCANNER */}
           {section === "scanner" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Escáner</h1>
               <p className="mb-6 text-sm text-muted-foreground">
                 Valida la entrada de tus clientes escaneando el QR de su ticket.
+                Al escanear se registra automáticamente en la sección Asistentes.
               </p>
               {userId && <QRScanner partnerId={userId} />}
             </div>
