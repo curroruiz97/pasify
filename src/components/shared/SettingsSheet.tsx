@@ -59,6 +59,10 @@ interface Props {
   email?: string | null;
   /** Nombre legible (Cliente: nombre · Partner: business_name · Admin: "Admin") */
   displayName?: string | null;
+  /** Slot opcional para inyectar contenido con persistencia real (e.g.
+   *  el bloque de Organización + Local del partner). Va arriba del
+   *  body, después de la account hero card. */
+  partnerSlot?: React.ReactNode;
 }
 
 /* ============================================================
@@ -67,7 +71,14 @@ interface Props {
    Cada sección sigue el patrón Pasify: eyebrow mono + heading + card rows.
    ============================================================ */
 
-export const SettingsSheet = ({ open, onOpenChange, role, email, displayName }: Props) => {
+export const SettingsSheet = ({
+  open,
+  onOpenChange,
+  role,
+  email,
+  displayName,
+  partnerSlot,
+}: Props) => {
   const { toast } = useToast();
 
   // Local controlled state. En prod estos vendrían del backend (Supabase).
@@ -204,6 +215,9 @@ export const SettingsSheet = ({ open, onOpenChange, role, email, displayName }: 
                 Editar perfil
               </Button>
             </section>
+
+            {/* === Partner real persistence slot === */}
+            {role === "partner" && partnerSlot}
 
             {/* === Cuenta === */}
             <SectionCard

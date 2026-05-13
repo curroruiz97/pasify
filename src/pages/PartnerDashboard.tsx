@@ -39,6 +39,7 @@ import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
 import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
 import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
+import { usePartnerContext } from "@/hooks/usePartnerContext";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
 import { downloadEventReportPdf, buildDemoEventReport } from "@/lib/eventReportPdf";
 import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
@@ -59,6 +60,7 @@ import { IndustryBenchmarks } from "@/components/admin/IndustryBenchmarks";
 import { Megaphone, Gem, Briefcase, Wand2, Brain, Gauge, Wifi, Plug, Crown, ScanFace, Bot, BarChart3, Workflow, ChevronRight } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
+import { PartnerSettingsBlock } from "@/components/shared/PartnerSettingsBlock";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import {
   DropdownMenu,
@@ -152,11 +154,15 @@ const PartnerDashboard = () => {
   // confirma o cancela. AlertDialog se monta al final del árbol.
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  // Server-side check de "actividad real" (org/venue/tickets) usado para
-  // gatear el onboarding wizard. Si true, el wizard no debe auto-abrir.
-  const [hasServerActivity, setHasServerActivity] = useState<boolean | null>(null);
+  // Email del user (para autocompletar email facturación del wizard)
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   // Permite reabrir manualmente el onboarding desde el HelpSheet.
   const [reopenOnboarding, setReopenOnboarding] = useState(false);
+
+  // Contexto de partner: organización, venue, brand y estado real del
+  // onboarding (server-truth, NO localStorage). Es la única fuente para
+  // decidir si el wizard debe abrirse.
+  const partnerCtx = usePartnerContext(userId || null);
 
   useEffect(() => {
     (async () => {
@@ -164,6 +170,7 @@ const PartnerDashboard = () => {
       const uid = u.user?.id;
       if (!uid) return;
       setUserId(uid);
+      setUserEmail(u.user?.email ?? null);
 
       const { data: p } = await supabase
         .from("profiles")
@@ -177,137 +184,29 @@ const PartnerDashboard = () => {
 
       await loadEvents(uid);
 
-      // Server-side activity check: el partner ya tiene organización propia
-      // (owner_id) o pertenece a una org activa, o algún ticket_order ha
-      // pasado por sus eventos. Si alguno es true → no mostramos onboarding.
-      try {
-        const [{ count: orgCount }, { count: memberCount }, { data: anyOrder }] =
-          await Promise.all([
-            supabase
-              .from("organizations")
-              .select("id", { count: "exact", head: true })
-              .eq("owner_id", uid),
-            supabase
-              .from("organization_members")
-              .select("user_id", { count: "exact", head: true })
-              .eq("user_id", uid)
-              .eq("status", "active"),
-            supabase
-              .from("ticket_orders")
-              .select("id")
-              .eq("buyer_user_id", uid)
-              .limit(1),
-          ]);
-        const hasActivity =
-          (orgCount ?? 0) > 0 ||
-          (memberCount ?? 0) > 0 ||
-          (Array.isArray(anyOrder) && anyOrder.length > 0);
-        setHasServerActivity(hasActivity);
-      } catch {
-        // Si los queries fallan (RLS / schema), preferimos NO molestar:
-        // tratamos como "tiene actividad" para no abrir wizard agresivo.
-        setHasServerActivity(true);
-      }
+      // El estado del onboarding ahora vive en `usePartnerContext` →
+      // RPC `partner_onboarding_status`. No mas localStorage ni checks
+      // imprecisos de hasActivity. La fuente de verdad es server-side.
 
       setLoading(false);
     })();
   }, []);
 
-  // Handler que el onboarding wizard usa al completar — persiste los datos
-  // del partner Y crea un primer evento en borrador con su tier "Entrada
-  // General". Si el partner solo rellena business info y deja en blanco el
-  // primer evento, sólo se actualiza profile y no se crea evento.
-  const persistOnboarding = async (data: {
-    businessName: string;
-    category: string;
-    city: string;
-    description: string;
-    logoUrl: string;
-    coverUrl: string;
-    firstEventTitle: string;
-    firstEventDate: string;
-    firstEventPrice: string;
-    firstEventCapacity: string;
-  }) => {
+  // Cuando el wizard finaliza, refrescamos profile + events + contexto.
+  const refreshAllPartnerData = async () => {
     if (!userId) return;
-    try {
-      // 1) Update profile con la info del local
-      const profileUpdate: Record<string, unknown> = {
-        business_name: data.businessName.trim() || null,
-        business_category: data.category || null,
-        city: data.city.trim() || null,
-        business_city: data.city.trim() || null,
-      };
-      if (data.description.trim()) profileUpdate["business_description"] = data.description.trim();
-      if (data.logoUrl.trim()) profileUpdate["business_logo_url"] = data.logoUrl.trim();
-      if (data.coverUrl.trim()) profileUpdate["business_cover_url"] = data.coverUrl.trim();
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update(profileUpdate)
-        .eq("id", userId);
-      if (profErr) {
-        // No abortamos por fallar el update de campos opcionales (logo_url
-        // o cover_url pueden no existir según schema). Sólo registramos.
-        console.warn("[onboarding] partial profile update error", profErr.message);
-      }
-
-      // 2) Si tiene primer evento con título + fecha → INSERT event + tier
-      if (data.firstEventTitle.trim() && data.firstEventDate) {
-        const price = Math.max(0, Math.round(parseFloat(data.firstEventPrice || "0") * 100));
-        const cap = parseInt(data.firstEventCapacity || "0", 10);
-        const isoDate = new Date(data.firstEventDate).toISOString();
-        const { data: evt, error: evtErr } = await supabase
-          .from("events")
-          .insert({
-            partner_id: userId,
-            title: data.firstEventTitle.trim(),
-            description: null,
-            city: data.city.trim() || "Madrid",
-            date_start: isoDate,
-            price_cents: price,
-            capacity: Number.isFinite(cap) && cap > 0 ? cap : null,
-            image_url: data.coverUrl.trim() || null,
-            status: "draft",
-          })
-          .select("id")
-          .single();
-        if (evtErr || !evt) throw new Error(evtErr?.message ?? "No se pudo crear el evento");
-
-        await supabase.from("ticket_tiers").insert({
-          event_id: evt.id,
-          name: "Entrada General",
-          description: "Acceso general al evento",
-          price_cents: price,
-          currency: "EUR",
-          capacity: Number.isFinite(cap) && cap > 0 ? cap : null,
-          per_user_max: 4,
-          status: "active",
-          sort_order: 0,
-        });
-      }
-
-      // 3) Refresh
-      await loadEvents(userId);
-      setHasServerActivity(true);
-      // Refrescar profile para que las stats del partner reflejen lo nuevo.
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
-        .eq("id", userId)
-        .maybeSingle();
-      if (p) setProfile(p as Profile);
-
-      toast({
-        title: "¡Listo!",
-        description: data.firstEventTitle.trim()
-          ? `Tu local está listo y tu primer evento "${data.firstEventTitle}" está en borrador.`
-          : "Tu local está listo. Crea tu primer evento cuando estés.",
-      });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error guardando onboarding";
-      toast({ title: "Error", description: msg, variant: "destructive" });
-      throw e; // Vuelve a propagar para que el wizard se quede abierto.
-    }
+    await Promise.all([
+      partnerCtx.refresh(),
+      loadEvents(userId),
+      (async () => {
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
+          .eq("id", userId)
+          .maybeSingle();
+        if (p) setProfile(p as Profile);
+      })(),
+    ]);
   };
 
   const loadEvents = async (uid: string) => {
@@ -473,27 +372,18 @@ const PartnerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* Onboarding wizard: usa estado server-side de partner_onboarding_state
+          via usePartnerContext. NUNCA depende de localStorage. */}
       <PartnerOnboardingWizard
         userId={userId || null}
-        // hasActivity combina señales server-side reales:
-        //  - events.length > 0 (lista cargada)
-        //  - profile.business_name presente (rellenado en cualquier sesión)
-        //  - hasServerActivity (org propia, member de org, o ticket_orders)
-        // Si cualquiera es true → wizard cerrado. Esto resuelve el caso
-        // super-admin Francisco con Avenue Media: cero onboarding.
-        hasActivity={
-          events.length > 0 ||
-          !!profile?.business_name ||
-          hasServerActivity === true
-        }
+        status={partnerCtx.status}
+        org={partnerCtx.org}
+        venue={partnerCtx.venue}
+        brand={partnerCtx.brand}
+        email={userEmail}
         forceOpen={reopenOnboarding}
         onClose={() => setReopenOnboarding(false)}
-        defaults={{
-          businessName: profile?.business_name ?? "",
-          category: profile?.business_category ?? "discoteca",
-          city: profile?.city ?? "",
-        }}
-        onComplete={persistOnboarding}
+        onContextRefresh={refreshAllPartnerData}
       />
       <div className="flex min-h-screen flex-col md:flex-row">
         {/* Sidebar desktop */}
@@ -503,8 +393,18 @@ const PartnerDashboard = () => {
             <Badge variant="outline" className="border-primary/40 text-primary">
               Local
             </Badge>
-            {profile?.business_name && (
-              <div className="truncate text-sm font-medium">{profile.business_name}</div>
+            {(partnerCtx.org?.name || profile?.business_name) && (
+              <div className="w-full">
+                <div className="truncate text-sm font-semibold leading-tight">
+                  {partnerCtx.org?.name || profile?.business_name}
+                </div>
+                {partnerCtx.venue && (
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {partnerCtx.venue.name}
+                    {partnerCtx.venue.city ? ` · ${partnerCtx.venue.city}` : ""}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
@@ -1092,8 +992,23 @@ const PartnerDashboard = () => {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         role="partner"
-        email={null}
-        displayName={profile?.business_name ?? "Tu local"}
+        email={userEmail}
+        displayName={partnerCtx.org?.name ?? profile?.business_name ?? "Tu local"}
+        partnerSlot={
+          userId ? (
+            <PartnerSettingsBlock
+              userId={userId}
+              org={partnerCtx.org}
+              venue={partnerCtx.venue}
+              status={partnerCtx.status}
+              onRefresh={refreshAllPartnerData}
+              onReopenOnboarding={() => {
+                setSettingsOpen(false);
+                setTimeout(() => setReopenOnboarding(true), 100);
+              }}
+            />
+          ) : null
+        }
       />
       <HelpSheet
         open={helpOpen}
