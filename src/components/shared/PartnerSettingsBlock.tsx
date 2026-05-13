@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   Building2,
   CheckCircle2,
   Coins,
+  Crown,
+  Gift,
   Globe2,
   Loader2,
   Mail,
@@ -27,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { PartnerOrg, PartnerVenue, OnboardingStatus } from "@/hooks/usePartnerContext";
+import { usePartnerSubscription } from "@/hooks/usePartnerSubscription";
 
 /**
  * PartnerSettingsBlock — sección de Configuración del partner con
@@ -155,6 +159,29 @@ export const PartnerSettingsBlock = ({
 
   const completed = status?.status === "completed";
   const hasOrgVenue = !!org && !!venue;
+
+  // Plan actual (Free / Premium / trialing / etc.) — leído de
+  // partner_subscriptions vía hook. Se muestra en el header con badge.
+  const sub = usePartnerSubscription({ orgId: org?.id ?? undefined });
+  const planLabel = (() => {
+    if (!sub.hasRecord) return null;
+    if (sub.planCode === "premium") return { label: "Premium", color: "#FF7A4D", Icon: Crown };
+    if (sub.planCode === "free") return { label: "Gratuito", color: "#4DB87A", Icon: Gift };
+    if (sub.isTrial) return { label: "Trial", color: "#E8B04C", Icon: Sparkles };
+    return { label: sub.planCode ?? sub.status ?? "—", color: "#8A8275", Icon: Gift };
+  })();
+
+  // Detectar org/venue placeholder: nombre derivado de email-username,
+  // venue 'Principal' sin direccion ni categoria. En ese caso queremos
+  // resaltar al partner que necesita rellenar sus datos reales.
+  const isPlaceholder = (() => {
+    if (!hasOrgVenue) return false;
+    const venuePlaceholder =
+      !venue?.address &&
+      !venue?.business_category &&
+      (!venue?.name || venue.name === "Principal");
+    return venuePlaceholder;
+  })();
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -290,7 +317,7 @@ export const PartnerSettingsBlock = ({
       style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }}
     >
       <header className="flex items-start justify-between gap-3 border-b border-border/60 p-4">
-        <div>
+        <div className="min-w-0">
           <div
             className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
             style={{ ...mono, letterSpacing: "0.22em" }}
@@ -298,29 +325,70 @@ export const PartnerSettingsBlock = ({
             <Building2 className="h-3 w-3" />
             Organización y local
           </div>
-          <h3 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">
+          <h3 className="mt-0.5 truncate text-base font-semibold tracking-tight text-foreground">
             Datos de {org?.name || "tu local"}
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Estos datos se ven en el ticket, la factura y la página pública. Guardar persiste en tu organización y local.
           </p>
         </div>
-        {completed && (
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase"
-            style={{
-              ...mono,
-              letterSpacing: "0.16em",
-              background: "rgba(77,184,122,0.10)",
-              borderColor: "rgba(77,184,122,0.32)",
-              color: "#4DB87A",
-            }}
-          >
-            <CheckCircle2 className="h-3 w-3" />
-            Onboarding completado
-          </span>
-        )}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {planLabel && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase"
+              style={{
+                ...mono,
+                letterSpacing: "0.16em",
+                background: `${planLabel.color}1A`,
+                borderColor: `${planLabel.color}52`,
+                color: planLabel.color,
+              }}
+              title={`Plan actual: ${planLabel.label}`}
+            >
+              <planLabel.Icon className="h-3 w-3" />
+              Plan {planLabel.label}
+            </span>
+          )}
+          {completed && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase"
+              style={{
+                ...mono,
+                letterSpacing: "0.16em",
+                background: "rgba(77,184,122,0.10)",
+                borderColor: "rgba(77,184,122,0.32)",
+                color: "#4DB87A",
+              }}
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              Onboarding completado
+            </span>
+          )}
+        </div>
       </header>
+
+      {/* Aviso si la org/venue es placeholder (creado por el botón
+          "Empezar gratis" sin pasar por el wizard). El partner DEBE
+          rellenar los datos reales para que aparezca correctamente en
+          tickets, factura y la página pública. */}
+      {isPlaceholder && (
+        <div
+          className="mx-4 mt-4 flex items-start gap-2 rounded-xl border p-3 text-[12px] leading-relaxed"
+          style={{
+            background: "rgba(232,176,76,0.08)",
+            borderColor: "rgba(232,176,76,0.40)",
+            color: "#E8B04C",
+          }}
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong className="font-semibold">Completa tu configuración:</strong>{" "}
+            tu local todavía es un placeholder. Rellena el nombre, dirección,
+            categoría y aforo abajo y pulsa <em>Guardar cambios</em>. Aparecerás
+            así en el ticket, la factura y tu página pública.
+          </span>
+        </div>
+      )}
 
       <div className="space-y-6 p-4">
         {/* Org */}
