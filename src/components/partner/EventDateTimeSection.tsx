@@ -1,6 +1,7 @@
 import { CalendarDays, Clock, Moon } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasifyDateInput } from "@/components/ui/pasify-date-input";
+import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
 
 /**
  * EventDateTimeSection — selector fecha + hora inicio + hora fin separados.
@@ -96,44 +97,44 @@ export const EventDateTimeSection = ({ value, onChange, disabled }: Props) => {
             <CalendarDays className="h-3.5 w-3.5 text-orange-500" />
             Día del evento *
           </Label>
-          <Input
-            id="evt-date"
-            type="date"
-            value={value.date}
-            onChange={(e) => onChange({ ...value, date: e.target.value })}
-            disabled={disabled}
-            className="mt-1.5"
-          />
+          <div className="mt-1.5">
+            <PasifyDateInput
+              id="evt-date"
+              value={value.date}
+              onChange={(d) => onChange({ ...value, date: d })}
+              disabled={disabled}
+            />
+          </div>
         </div>
         <div>
           <Label htmlFor="evt-start" className="flex items-center gap-2 text-xs">
             <Clock className="h-3.5 w-3.5 text-orange-500" />
             Hora de inicio *
           </Label>
-          <Input
-            id="evt-start"
-            type="time"
-            value={value.startTime}
-            onChange={(e) => onChange({ ...value, startTime: e.target.value })}
-            disabled={disabled}
-            className="mt-1.5"
-            placeholder="23:30"
-          />
+          <div className="mt-1.5">
+            <PasifyTimeInput
+              id="evt-start"
+              value={value.startTime}
+              onChange={(t) => onChange({ ...value, startTime: t })}
+              disabled={disabled}
+              placeholder="23:30"
+            />
+          </div>
         </div>
         <div>
           <Label htmlFor="evt-end" className="flex items-center gap-2 text-xs">
             <Clock className="h-3.5 w-3.5 text-orange-500" />
             Hora de finalización
           </Label>
-          <Input
-            id="evt-end"
-            type="time"
-            value={value.endTime}
-            onChange={(e) => onChange({ ...value, endTime: e.target.value })}
-            disabled={disabled}
-            className="mt-1.5"
-            placeholder="06:00"
-          />
+          <div className="mt-1.5">
+            <PasifyTimeInput
+              id="evt-end"
+              value={value.endTime}
+              onChange={(t) => onChange({ ...value, endTime: t })}
+              disabled={disabled}
+              placeholder="06:00"
+            />
+          </div>
         </div>
         <div className="hidden sm:block">
           <Label className="text-xs invisible">spacer</Label>

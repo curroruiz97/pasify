@@ -690,10 +690,10 @@ export const EventEditorWizard = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="overflow-hidden p-0 sm:max-w-4xl lg:max-w-6xl"
+        className="!flex !flex-col !gap-0 overflow-hidden p-0 sm:max-w-4xl lg:max-w-6xl"
         style={{
-          maxHeight: "calc(100dvh - 32px)",
-          height: "min(880px, calc(100dvh - 32px))",
+          height: "min(920px, calc(100dvh - 24px))",
+          maxHeight: "calc(100dvh - 24px)",
         }}
       >
         {/* Wizard usa su propia chrome (no DialogHeader / Footer) para
@@ -706,9 +706,9 @@ export const EventEditorWizard = ({
             : "Nuevo evento"}
         </DialogTitle>
 
-        <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* Header */}
-          <header className="border-b border-border bg-card/60 px-5 py-4 md:px-7 md:py-5">
+          <header className="shrink-0 border-b border-border bg-card/60 px-5 py-4 md:px-7 md:py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div
@@ -898,7 +898,7 @@ export const EventEditorWizard = ({
           </div>
 
           {/* Footer: prev / next + acciones finales */}
-          <footer className="flex items-center justify-between gap-2 border-t border-border bg-card/60 px-5 py-3 md:px-7">
+          <footer className="shrink-0 flex items-center justify-between gap-2 border-t border-border bg-card/60 px-5 py-3 md:px-7">
             <Button
               variant="ghost"
               type="button"

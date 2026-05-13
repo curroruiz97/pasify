@@ -44,6 +44,8 @@ import {
   composeIsoStartEnd,
   type DateTimeValue,
 } from "@/components/partner/EventDateTimeSection";
+import { PasifyDateInput } from "@/components/ui/pasify-date-input";
+import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
 
 /**
  * FestivalBuilder — wizard por fases para festival multi-día.
@@ -455,17 +457,17 @@ export const FestivalBuilder = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="overflow-hidden p-0 sm:max-w-4xl lg:max-w-6xl"
+        className="!flex !flex-col !gap-0 overflow-hidden p-0 sm:max-w-4xl lg:max-w-6xl"
         style={{
-          maxHeight: "calc(100dvh - 32px)",
-          height: "min(880px, calc(100dvh - 32px))",
+          height: "min(920px, calc(100dvh - 24px))",
+          maxHeight: "calc(100dvh - 24px)",
         }}
       >
         <DialogTitle className="sr-only">Festival multi-día</DialogTitle>
 
-        <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* Header */}
-          <header className="border-b border-border bg-card/60 px-5 py-4 md:px-7 md:py-5">
+          <header className="shrink-0 border-b border-border bg-card/60 px-5 py-4 md:px-7 md:py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div
@@ -683,33 +685,33 @@ export const FestivalBuilder = ({
                             <CalendarDays className="h-3 w-3 text-orange-500" />
                             Fecha *
                           </Label>
-                          <Input
-                            type="date"
-                            value={day.date}
-                            onChange={(e) => updateDay(day._key, { date: e.target.value })}
-                            disabled={submitting}
-                            className="mt-1.5"
-                          />
+                          <div className="mt-1.5">
+                            <PasifyDateInput
+                              value={day.date}
+                              onChange={(d) => updateDay(day._key, { date: d })}
+                              disabled={submitting}
+                            />
+                          </div>
                         </div>
                         <div>
                           <Label className="text-xs">Inicio *</Label>
-                          <Input
-                            type="time"
-                            value={day.startTime}
-                            onChange={(e) => updateDay(day._key, { startTime: e.target.value })}
-                            disabled={submitting}
-                            className="mt-1.5"
-                          />
+                          <div className="mt-1.5">
+                            <PasifyTimeInput
+                              value={day.startTime}
+                              onChange={(t) => updateDay(day._key, { startTime: t })}
+                              disabled={submitting}
+                            />
+                          </div>
                         </div>
                         <div>
                           <Label className="text-xs">Fin</Label>
-                          <Input
-                            type="time"
-                            value={day.endTime}
-                            onChange={(e) => updateDay(day._key, { endTime: e.target.value })}
-                            disabled={submitting}
-                            className="mt-1.5"
-                          />
+                          <div className="mt-1.5">
+                            <PasifyTimeInput
+                              value={day.endTime}
+                              onChange={(t) => updateDay(day._key, { endTime: t })}
+                              disabled={submitting}
+                            />
+                          </div>
                         </div>
                         <div className="sm:col-span-3">
                           <Label className="flex items-center gap-1.5 text-xs">
@@ -900,7 +902,7 @@ export const FestivalBuilder = ({
           </div>
 
           {/* Footer */}
-          <footer className="flex items-center justify-between gap-2 border-t border-border bg-card/60 px-5 py-3 md:px-7">
+          <footer className="shrink-0 flex items-center justify-between gap-2 border-t border-border bg-card/60 px-5 py-3 md:px-7">
             <Button
               variant="ghost"
               type="button"
