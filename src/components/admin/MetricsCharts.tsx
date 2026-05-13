@@ -133,15 +133,40 @@ export const MetricsCharts = () => {
   // Revenue chart: aggregate paying subscriptions per month (last 12).
   // - Bar: new paying subs that started in that month.
   // - Line: cumulative MRR snapshot at end-of-month (€).
-  // Source of truth = partner_subscriptions; admin RLS allows full read.
+  // Source of truth = partner_subscriptions JOIN subscription_plans;
+  // admin RLS allows full read. Post Fase 3: ya no leemos `granted_by_admin`
+  // ni `monthly_amount_cents` (no existen). Derivamos:
+  //   - !!admin_granted_until && futuro → admin grant (excluido del MRR)
+  //   - amount cents → subscription_plans.monthly_price_cents por plan_code
   const { data: revenueRows, isLoading: revenueLoading } = useQuery({
     queryKey: ["admin-revenue-monthly"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partner_subscriptions")
-        .select("created_at, status, granted_by_admin, monthly_amount_cents, stripe_subscription_id, cancel_at_period_end");
+        .select("created_at, status, plan_code, admin_granted_until, stripe_subscription_id, cancel_at_period_end");
       if (error) throw error;
-      return data ?? [];
+      const rows = data ?? [];
+      // Resolve plan price via subscription_plans
+      const codes = [...new Set(rows.map((r) => r.plan_code).filter(Boolean) as string[])];
+      const priceByCode = new Map<string, number>();
+      if (codes.length > 0) {
+        const { data: plans } = await supabase
+          .from("subscription_plans")
+          .select("code, monthly_price_cents")
+          .in("code", codes);
+        for (const p of plans ?? []) {
+          if (p.code && typeof p.monthly_price_cents === "number") {
+            priceByCode.set(p.code, p.monthly_price_cents);
+          }
+        }
+      }
+      const now = Date.now();
+      return rows.map((r) => ({
+        ...r,
+        granted_by_admin:
+          !!r.admin_granted_until && new Date(r.admin_granted_until).getTime() > now,
+        monthly_amount_cents: r.plan_code ? (priceByCode.get(r.plan_code) ?? null) : null,
+      }));
     },
     staleTime: 5 * 60_000,
   });
@@ -150,7 +175,7 @@ export const MetricsCharts = () => {
   const revenue: RevenuePoint[] = (() => {
     if (!revenueRows) return [];
     const PAYING = new Set(["active", "past_due", "trialing"]);
-    const isPaying = (s: { status: string; granted_by_admin: boolean | null; stripe_subscription_id: string | null }) =>
+    const isPaying = (s: { status: string; granted_by_admin: boolean; stripe_subscription_id: string | null }) =>
       !!s.stripe_subscription_id && !s.granted_by_admin && PAYING.has(s.status);
 
     // Build last 12 month buckets.

@@ -1,31 +1,52 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/hooks/useOrganization";
+
+/**
+ * Pasify · usePartnerSubscription (post Fase 3 hardening).
+ *
+ * La tabla `partner_subscriptions` está vinculada a `org_id` (UNIQUE),
+ * no a `profiles.id`. Migración 0034 añade `admin_granted_until` y
+ * `admin_granted_by` para que admin pueda conceder acceso temporal
+ * fuera del flujo Stripe (trial extendido, gestión enterprise).
+ *
+ * El hook resuelve el `org_id` desde `useOrganization()` si no se
+ * pasa explícitamente. Esto permite usarlo dentro del partner panel
+ * sin tener que enchufar manualmente la org en cada consumer.
+ *
+ * `hasAccess` = active OR (trialing & trial vigente) OR (admin grant vigente).
+ */
 
 export type PartnerSubscriptionStatus =
   | "trialing"
   | "active"
   | "past_due"
-  | "canceled"
+  | "unpaid"
+  | "cancel_at_period_end"
+  | "cancelled"
+  | "paused"
   | "incomplete"
-  | "incomplete_expired"
-  | "unpaid";
+  | "incomplete_expired";
 
 export interface PartnerSubscriptionState {
   loading: boolean;
   hasRecord: boolean;
+  orgId: string | null;
+  subscriptionId: string | null;
+  planCode: string | null;
   status: PartnerSubscriptionStatus | null;
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
-  grantedByAdmin: boolean;
+  cancelAtPeriodEnd: boolean;
   adminGrantedUntil: Date | null;
   /**
-   * true se il partner può accedere alla dashboard:
-   *   - override admin attivo (illimitato o non scaduto)
+   * true si el partner puede acceder a la dashboard:
    *   - status 'active'
-   *   - status 'trialing' e trial_ends_at futuro
+   *   - status 'trialing' y trial_ends_at futuro
+   *   - admin grant vigente (admin_granted_until > now() o null = ilimitado)
    */
   hasAccess: boolean;
-  /** Giorni residui (arrotondati per eccesso). null se non rilevante. */
+  /** Días residuales (techo). null si no aplica. */
   daysLeft: number | null;
   isTrial: boolean;
   isAdminGranted: boolean;
@@ -35,10 +56,13 @@ export interface PartnerSubscriptionState {
 const defaultState: Omit<PartnerSubscriptionState, "refetch"> = {
   loading: true,
   hasRecord: false,
+  orgId: null,
+  subscriptionId: null,
+  planCode: null,
   status: null,
   trialEndsAt: null,
   currentPeriodEnd: null,
-  grantedByAdmin: false,
+  cancelAtPeriodEnd: false,
   adminGrantedUntil: null,
   hasAccess: false,
   daysLeft: null,
@@ -46,46 +70,58 @@ const defaultState: Omit<PartnerSubscriptionState, "refetch"> = {
   isAdminGranted: false,
 };
 
-export const usePartnerSubscription = (userId?: string): PartnerSubscriptionState => {
+interface UseOpts {
+  /** Forzar org concreta (admin viewing partner ajeno). Default: tenant del caller. */
+  orgId?: string;
+}
+
+export const usePartnerSubscription = (
+  userIdOrOpts?: string | UseOpts,
+): PartnerSubscriptionState => {
+  // Compat: aceptamos string (legacy: userId) o UseOpts. El userId legacy
+  // se ignora porque la tabla está por org_id; en su lugar resolvemos
+  // desde useOrganization. Si se pasa explícitamente `orgId`, lo usamos.
+  const explicitOrgId =
+    typeof userIdOrOpts === "object" && userIdOrOpts !== null
+      ? userIdOrOpts.orgId
+      : undefined;
+
+  const { tenant, loading: tenantLoading } = useOrganization();
+  const resolvedOrgId = explicitOrgId ?? tenant?.org_id ?? null;
+
   const [state, setState] = useState<Omit<PartnerSubscriptionState, "refetch">>(defaultState);
-  // Ultimo userId per cui abbiamo completato il fetch. Finché non coincide
-  // con l'userId corrente, consideriamo loading=true per evitare che il gate
-  // legga dati "vecchi" durante i cambi utente.
-  const [fetchedFor, setFetchedFor] = useState<string | null>(null);
 
   const load = async () => {
-    if (!userId) {
-      setState({ ...defaultState, loading: false });
-      setFetchedFor(null);
+    if (!resolvedOrgId) {
+      setState({ ...defaultState, loading: tenantLoading });
       return;
     }
     setState((s) => ({ ...s, loading: true }));
+
     const { data, error } = await supabase
       .from("partner_subscriptions")
-      .select("status, trial_ends_at, current_period_end, granted_by_admin, admin_granted_until")
-      .eq("partner_id", userId)
+      .select(
+        "id, plan_code, status, trial_ends_at, current_period_end, cancel_at_period_end, admin_granted_until",
+      )
+      .eq("org_id", resolvedOrgId)
       .maybeSingle();
 
     if (error) {
       console.error("usePartnerSubscription error:", error);
-      setState({ ...defaultState, loading: false });
-      setFetchedFor(userId);
+      setState({ ...defaultState, loading: false, orgId: resolvedOrgId });
       return;
     }
 
     if (!data) {
-      setState({ ...defaultState, loading: false });
-      setFetchedFor(userId);
+      setState({ ...defaultState, loading: false, orgId: resolvedOrgId });
       return;
     }
 
     const status = data.status as PartnerSubscriptionStatus;
     const trialEndsAt = data.trial_ends_at ? new Date(data.trial_ends_at) : null;
     const currentPeriodEnd = data.current_period_end ? new Date(data.current_period_end) : null;
-    const grantedByAdmin = Boolean((data as any).granted_by_admin);
-    const adminGrantedUntil = (data as any).admin_granted_until
-      ? new Date((data as any).admin_granted_until)
-      : null;
+    const adminGrantedUntil = data.admin_granted_until ? new Date(data.admin_granted_until) : null;
+    const cancelAtPeriodEnd = Boolean(data.cancel_at_period_end);
     const now = Date.now();
 
     let hasAccess = false;
@@ -93,15 +129,11 @@ export const usePartnerSubscription = (userId?: string): PartnerSubscriptionStat
     let isTrial = false;
     let isAdminGranted = false;
 
-    // Override admin: priorità massima
-    if (grantedByAdmin) {
-      if (!adminGrantedUntil || adminGrantedUntil.getTime() > now) {
-        hasAccess = true;
-        isAdminGranted = true;
-        if (adminGrantedUntil) {
-          daysLeft = Math.ceil((adminGrantedUntil.getTime() - now) / (1000 * 60 * 60 * 24));
-        }
-      }
+    // Override admin: prioridad máxima.
+    if (adminGrantedUntil && adminGrantedUntil.getTime() > now) {
+      hasAccess = true;
+      isAdminGranted = true;
+      daysLeft = Math.ceil((adminGrantedUntil.getTime() - now) / (1000 * 60 * 60 * 24));
     } else if (status === "active") {
       hasAccess = true;
       if (currentPeriodEnd) {
@@ -114,36 +146,40 @@ export const usePartnerSubscription = (userId?: string): PartnerSubscriptionStat
         isTrial = true;
         daysLeft = Math.ceil((endMs - now) / (1000 * 60 * 60 * 24));
       }
+    } else if (status === "cancel_at_period_end") {
+      // Sigue activo hasta `current_period_end`.
+      if (currentPeriodEnd && currentPeriodEnd.getTime() > now) {
+        hasAccess = true;
+        daysLeft = Math.ceil((currentPeriodEnd.getTime() - now) / (1000 * 60 * 60 * 24));
+      }
     }
 
     setState({
       loading: false,
       hasRecord: true,
+      orgId: resolvedOrgId,
+      subscriptionId: data.id,
+      planCode: data.plan_code ?? null,
       status,
       trialEndsAt,
       currentPeriodEnd,
-      grantedByAdmin,
+      cancelAtPeriodEnd,
       adminGrantedUntil,
       hasAccess,
       daysLeft,
       isTrial,
       isAdminGranted,
     });
-    setFetchedFor(userId);
   };
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  // Se l'userId corrente non coincide con quello per cui abbiamo fetchato,
-  // lo stato è "stale" — forziamo loading=true per evitare redirect errati.
-  const isStale = Boolean(userId) && fetchedFor !== userId;
+  }, [resolvedOrgId, tenantLoading]);
 
   return {
     ...state,
-    loading: state.loading || isStale,
+    loading: state.loading || (tenantLoading && !explicitOrgId),
     refetch: load,
   };
 };
