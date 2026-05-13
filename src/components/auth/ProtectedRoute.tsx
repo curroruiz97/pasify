@@ -13,8 +13,31 @@ interface ProtectedRouteProps {
 // vacíos porque las queries fallarán, pero el layout es visible.
 const DEV_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW === 'true';
 
+/**
+ * Pasify ProtectedRoute · post Fase 1 hardening.
+ *
+ *  - Para usuarios normales: tienen UN SOLO rol enforced por RLS. Si intentan
+ *    una ruta que no corresponde a su rol, redirigimos a su dashboard.
+ *    Nunca cambiamos su rol activo automáticamente.
+ *
+ *  - Para super-admin/dev (Francisco con env flag): el auto-switch SÍ está
+ *    habilitado. Si llega a un dashboard que tiene en su set pero no estaba
+ *    como activo, lo activamos para que la UI lo refleje.
+ *
+ *  - Si el usuario no tiene el rol requerido bajo NINGUNA circunstancia,
+ *    redirige al dashboard del rol efectivo (el más privilegiado).
+ */
 const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
-  const { user, loading, userRole, userRoles, setActiveRole, roleLoading } = useAuth();
+  const {
+    user,
+    loading,
+    userRole,
+    userRoles,
+    effectiveRole,
+    canSwitchPanels,
+    setActiveRole,
+    roleLoading,
+  } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,30 +49,47 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     }
     if (roleLoading) return;
 
-    if (requireRole) {
-      // Multi-role: si el usuario TIENE el role requerido (aunque no sea el activo),
-      // permitimos el acceso y lo ponemos como activo. Solo redirigimos si NO lo
-      // tiene en su set de roles.
+    if (!requireRole) return; // ruta protegida sin rol específico
+
+    // 1) Super-admin: comportamiento legacy (auto-switch al rol pedido si está
+    //    en su set; redirige si no lo tiene).
+    if (canSwitchPanels) {
       if (userRoles.includes(requireRole)) {
         if (userRole !== requireRole) {
-          // Auto-switch: el usuario llegó a un dashboard que sí puede usar pero
-          // que no estaba como activo. Lo activamos para que la UI lo refleje
-          // (badge en PanelSwitcher, etc.).
           setActiveRole(requireRole);
         }
         return;
       }
-
-      // No tiene el role → redirige al dashboard de su role activo (o primario)
-      const target = dashboardPathForRole(userRole);
-      if (target) {
-        navigate(target, { replace: true });
-      } else {
-        // Sin roles → al login para re-hidratar (useAuth se encarga del fallback)
-        navigate('/login', { replace: true });
-      }
+      const target = dashboardPathForRole(effectiveRole);
+      navigate(target ?? '/login', { replace: true });
+      return;
     }
-  }, [user, loading, userRole, userRoles, roleLoading, requireRole, navigate, setActiveRole]);
+
+    // 2) Usuario normal: el rol efectivo (= único rol) DEBE coincidir con
+    //    requireRole para entrar. Cualquier desajuste → redirect a su
+    //    dashboard. No auto-switcheamos, no leemos localStorage.
+    if (effectiveRole === requireRole) {
+      return;
+    }
+
+    const target = dashboardPathForRole(effectiveRole);
+    if (target) {
+      navigate(target, { replace: true });
+    } else {
+      navigate('/login', { replace: true });
+    }
+  }, [
+    user,
+    loading,
+    userRole,
+    userRoles,
+    effectiveRole,
+    canSwitchPanels,
+    roleLoading,
+    requireRole,
+    navigate,
+    setActiveRole,
+  ]);
 
   if (DEV_PREVIEW) {
     return <>{children}</>;
@@ -60,7 +100,16 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   }
 
   if (!user) return null;
-  if (requireRole && !userRoles.includes(requireRole)) return null;
+
+  // Render guard final: si el usuario es super-admin y tiene el rol, se renderiza.
+  // Si es usuario normal, sólo se renderiza si effectiveRole === requireRole.
+  if (requireRole) {
+    if (canSwitchPanels) {
+      if (!userRoles.includes(requireRole)) return null;
+    } else {
+      if (effectiveRole !== requireRole) return null;
+    }
+  }
 
   return <>{children}</>;
 };
