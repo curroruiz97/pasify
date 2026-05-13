@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ai_anomalies: {
@@ -5272,6 +5297,7 @@ export type Database = {
         Returns: boolean
       }
       get_user_role: { Args: { _user_id: string }; Returns: string }
+      get_user_roles: { Args: { _user_id: string }; Returns: string[] }
       global_search: {
         Args: { _limit?: number; _q: string }
         Returns: {
@@ -5715,6 +5741,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       account_status_t: ["pending", "approved", "rejected"],
