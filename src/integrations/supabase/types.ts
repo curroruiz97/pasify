@@ -2883,6 +2883,9 @@ export type Database = {
       }
       partner_subscriptions: {
         Row: {
+          admin_grant_note: string | null
+          admin_granted_by: string | null
+          admin_granted_until: string | null
           billing_interval: string
           cancel_at_period_end: boolean
           cancelled_at: string | null
@@ -2907,6 +2910,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_grant_note?: string | null
+          admin_granted_by?: string | null
+          admin_granted_until?: string | null
           billing_interval?: string
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -2931,6 +2937,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_grant_note?: string | null
+          admin_granted_by?: string | null
+          admin_granted_until?: string | null
           billing_interval?: string
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -2955,6 +2964,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "partner_subscriptions_admin_granted_by_fkey"
+            columns: ["admin_granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "partner_subscriptions_org_id_fkey"
             columns: ["org_id"]
@@ -5161,6 +5177,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
+      admin_grant_partner_access_until: {
+        Args: { _note?: string; _org_id: string; _until: string }
+        Returns: string
+      }
       admin_list_users: {
         Args: {
           _limit?: number
@@ -5194,6 +5214,10 @@ export type Database = {
       }
       admin_revoke_partner_access: {
         Args: { _user_id: string }
+        Returns: undefined
+      }
+      admin_revoke_partner_grant: {
+        Args: { _org_id: string }
         Returns: undefined
       }
       admin_subscription_funnel: {
@@ -5243,6 +5267,10 @@ export type Database = {
       check_rate_limit: {
         Args: { _key: string; _max: number; _window_sec: number }
         Returns: boolean
+      }
+      claim_initial_role: {
+        Args: { _role: string }
+        Returns: Database["public"]["Enums"]["app_role"]
       }
       create_organization: {
         Args: { _country?: string; _name: string; _slug?: string }
@@ -5334,6 +5362,8 @@ export type Database = {
       }
       is_member_of_org: { Args: { _org_id: string }; Returns: boolean }
       is_member_of_venue: { Args: { _venue_id: string }; Returns: boolean }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin_self: { Args: never; Returns: boolean }
       loyalty_balance: { Args: { _user_id: string }; Returns: number }
       loyalty_grant_points: {
         Args: {
@@ -5416,7 +5446,20 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
-      start_partner_trial: { Args: { _org_id?: string }; Returns: string }
+      start_partner_trial: {
+        Args: { _org_id?: string }
+        Returns: {
+          current_period_end: string
+          current_period_start: string
+          org_id: string
+          plan_code: string
+          plan_id: string
+          status: string
+          subscription_id: string
+          trial_ends_at: string
+          trial_starts_at: string
+        }[]
+      }
       switch_active_venue: { Args: { _venue_id: string }; Returns: undefined }
       tenant_for_user: {
         Args: never
