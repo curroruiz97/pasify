@@ -88,9 +88,14 @@ const PartnerChoosePlan = () => {
   const handleStartTrial = async () => {
     setStartingTrial(true);
     try {
+      // start_partner_trial v2 (mig 20260513130000) devuelve TABLE con
+      // `trial_ends_at` ya como TIMESTAMPTZ. Postgres → supabase-js mapea
+      // a array de rows; tomamos la primera.
       const { data, error } = await supabase.rpc("start_partner_trial");
       if (error) throw error;
-      const ends = data ? new Date(data as string) : null;
+      const row = Array.isArray(data) ? data[0] : data;
+      const trialEndsAt = row?.trial_ends_at ?? null;
+      const ends = trialEndsAt ? new Date(trialEndsAt) : null;
       toast({
         title: `¡Tu prueba de ${trialDays} días ha comenzado!`,
         description: ends
