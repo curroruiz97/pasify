@@ -10,7 +10,6 @@ import {
   Ticket as TicketIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/Wordmark";
 
 /**
@@ -157,13 +156,51 @@ const TicketSuccess = () => {
       setState(next);
     };
 
-    // Carga inicial — quizás el webhook ya pasó
+    // Pide al backend que consulte Stripe directamente. Es la red de
+    // seguridad para casos donde el webhook nunca llega (cuentas Stripe
+    // desalineadas, signing secret roto, routing fail, etc.). El edge
+    // function `confirm-checkout-session` retrieve la session via API y
+    // llama a `mark_order_paid` si Stripe confirma que está paid.
+    const confirmViaStripeAPI = async () => {
+      if (!sessionId) return false;
+      try {
+        const {
+          data: { session: authSession },
+        } = await supabase.auth.getSession();
+        if (!authSession) return false;
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-checkout-session`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authSession.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        return data?.status === "paid";
+      } catch {
+        return false;
+      }
+    };
+
+    // Carga inicial — quizás el webhook ya pasó (DB cache) o pedimos a
+    // Stripe directamente si no ha pasado.
     (async () => {
       const snap = await fetchSnapshot();
       if (cancelled) return;
       if (snap?.status === "paid") {
         finish("paid");
         return;
+      }
+      // Si la DB sigue 'pending', preguntamos a Stripe directamente.
+      const stripeConfirmed = await confirmViaStripeAPI();
+      if (cancelled) return;
+      if (stripeConfirmed) {
+        await fetchSnapshot();
+        finish("paid");
       }
     })();
 
@@ -194,7 +231,8 @@ const TicketSuccess = () => {
       )
       .subscribe();
 
-    // Poll de respaldo
+    // Poll de respaldo (DB) + confirmación directa a Stripe cada 5 intentos
+    // (10s). Si Stripe dice paid pero el webhook no llegó, marcamos manual.
     let attemptCount = 0;
     const interval = setInterval(async () => {
       if (finished || cancelled) return;
@@ -203,7 +241,18 @@ const TicketSuccess = () => {
       const snap = await fetchSnapshot();
       if (snap?.status === "paid") {
         finish("paid");
-      } else if (attemptCount >= POLL_MAX_ATTEMPTS) {
+        return;
+      }
+      // Cada 5 intentos (10s) preguntamos a Stripe directamente
+      if (attemptCount % 5 === 0) {
+        const stripeConfirmed = await confirmViaStripeAPI();
+        if (!cancelled && stripeConfirmed) {
+          await fetchSnapshot();
+          finish("paid");
+          return;
+        }
+      }
+      if (attemptCount >= POLL_MAX_ATTEMPTS) {
         finish("timeout");
       }
     }, POLL_INTERVAL_MS);
@@ -510,16 +559,16 @@ const TicketSuccess = () => {
           </article>
         )}
 
-        {/* CTAs */}
-        <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
+        {/* CTAs — botones nativos con estilo Pasify premium (gradient
+            terracota primary + outline secondary, tap target >=52px para
+            móvil). Jerarquía: primary primero, secondary debajo. */}
+        <div className="flex w-full max-w-md flex-col gap-3">
+          {/* Primary CTA — varía por estado */}
           {(state === "paid" || state === "timeout") && (
-            <Button
-              size="lg"
-              className="flex-1"
+            <button
+              type="button"
               onClick={() =>
                 navigate(
-                  // Pasa los params para que ClientDashboard reactive el poll
-                  // por si el ticket todavía está actualizándose.
                   `/client-dashboard${
                     orderId || sessionId
                       ? `?${orderId ? `order_id=${orderId}` : ""}${
@@ -529,55 +578,66 @@ const TicketSuccess = () => {
                   }`
                 )
               }
+              className="group/btn relative inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition hover:-translate-y-0.5 md:text-base"
+              style={{
+                background:
+                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 12px 30px -10px rgba(232,84,42,0.55), 0 24px 48px -16px rgba(184,56,26,0.45)",
+                letterSpacing: "-0.005em",
+              }}
+            >
+              <TicketIcon className="h-5 w-5" />
+              Ver mis tickets
+              <span
+                aria-hidden="true"
+                className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
+              >
+                →
+              </span>
+            </button>
+          )}
+
+          {state === "loading" && (
+            <button
+              type="button"
+              onClick={() => navigate("/client-dashboard")}
+              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-sm font-semibold text-foreground transition hover:border-orange-500/60 hover:bg-card/80 md:text-base"
+              style={{ letterSpacing: "-0.005em" }}
+            >
+              <TicketIcon className="h-5 w-5" />
+              Ir al Wallet
+            </button>
+          )}
+
+          {state === "error" && (
+            <button
+              type="button"
+              onClick={() => navigate("/calendar")}
+              className="group/btn relative inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition hover:-translate-y-0.5 md:text-base"
               style={{
                 background:
                   "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
                 boxShadow:
                   "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-                color: "#fff",
+                letterSpacing: "-0.005em",
               }}
             >
-              <TicketIcon className="mr-2 h-4 w-4" />
-              Ver mis tickets
-            </Button>
-          )}
-
-          {state === "loading" && (
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex-1"
-              onClick={() => navigate("/client-dashboard")}
-            >
-              <TicketIcon className="mr-2 h-4 w-4" />
-              Ir al Wallet
-            </Button>
-          )}
-
-          {state === "error" && (
-            <Button
-              size="lg"
-              className="flex-1"
-              onClick={() => navigate("/calendar")}
-              style={{
-                background:
-                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                color: "#fff",
-              }}
-            >
+              <TicketIcon className="h-5 w-5" />
               Volver al calendario
-            </Button>
+              <span aria-hidden="true">→</span>
+            </button>
           )}
 
-          <Button
-            size="lg"
-            variant="outline"
-            className="flex-1"
+          {/* Secondary CTA — siempre "Volver al inicio" como ghost */}
+          <button
+            type="button"
             onClick={() => navigate("/")}
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-transparent text-sm font-medium text-muted-foreground transition hover:border-border/80 hover:text-foreground"
           >
-            <Home className="mr-2 h-4 w-4" />
+            <Home className="h-4 w-4" />
             Volver al inicio
-          </Button>
+          </button>
         </div>
 
         {/* Helper micro-copy bajo CTAs */}
