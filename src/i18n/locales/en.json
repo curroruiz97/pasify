@@ -1,4 +1,4 @@
-{
+﻿{
   "navigation": {
     "social": "Social",
     "events": "Events",
@@ -70,7 +70,7 @@
     "registrationComplete": "Registration complete!",
     "verifyEmail": "Verify your email to confirm your account",
     "loginSuccess": "Login successful!",
-    "welcome": "Welcome to Students Life",
+    "welcome": "Welcome to Pasify",
     "pendingApproval": "Request Under Review",
     "pendingApprovalMessage": "Your registration request has been received. Our team is verifying the authenticity of the information provided. Try again later, the team is working hard for your satisfaction!",
     "accountNotApproved": "Account not yet approved",
@@ -230,7 +230,7 @@
     "titleRequired": "Title *",
     "description": "Description",
     "eventImage": "Image",
-    "imageUploaded": "✓ Image uploaded",
+    "imageUploaded": "âœ“ Image uploaded",
     "externalLink": "External Link (e.g. ticket purchase)",
     "discountRequired": "Discount % *",
     "startDateRequired": "Start Date *",
@@ -395,7 +395,7 @@
   "qrScanner": {
     "title": "QR Code Scanner",
     "description": "Scan or enter the customer's QR code",
-    "frameQR": "📷 Frame the QR Code",
+    "frameQR": "ðŸ“· Frame the QR Code",
     "rearCamera": "Rear camera active",
     "keepStable": "Keep the QR code well lit and stable",
     "closeCamera": "Close Camera",
@@ -611,7 +611,7 @@
     "login": "Login",
     "register": "Sign Up",
     "esnCollaboration": "In collaboration with ESN Spain",
-    "esnDescription": "StudentsLife partners with Erasmus Student Network Spain to offer the best experience for international students.",
+    "esnDescription": "Pasify partners with Erasmus Student Network Spain to offer the best experience for international students.",
     "comingSoon": "Coming Soon",
     "launchOffer": "Launch Offer!",
     "forStudentsFree": "For Students: FREE!",
@@ -628,10 +628,10 @@
     "forPartners": "For Partners",
     "first50Partners": "First 50 Partners",
     "perMonth": "/month",
-    "afterPrice": "After: €29.99/month",
+    "afterPrice": "After: â‚¬29.99/month",
     "specialOffer": "Special Offer!",
     "registerNowGet": "Register now and get:",
-    "firstMonthFreeDiscount": "First month FREE + €10 discount/month",
+    "firstMonthFreeDiscount": "First month FREE + â‚¬10 discount/month",
     "fullDashboard": "Complete dashboard",
     "discountManagement": "Discount management",
     "directChatStudents": "Direct chat with students",
@@ -644,7 +644,7 @@
     "earlyAccessStudents": "Free early access + exclusive benefits",
     "forPartnersLaunch": "For Partners",
     "freeTrialPartners": "Free trial period + permanent discount",
-    "downloadApp": "Download the StudentsLife App",
+    "downloadApp": "Download the Pasify App",
     "availableIosAndroid": "Available on iOS and Android - Quick access from your home screen",
     "instantAccess": "Instant Access",
     "instantAccessDesc": "One tap and you're in the app",
@@ -653,11 +653,11 @@
     "pushNotifications": "Push Notifications",
     "pushNotificationsDesc": "Receive real-time updates",
     "downloadNowSave": "Download Now and Start Saving!",
-    "joinThousands": "Join thousands of students already saving with StudentsLife",
+    "joinThousands": "Join thousands of students already saving with Pasify",
     "availableAllDevices": "Available on all devices",
     "freeDownload": "Free download",
     "appPreview": "App Preview",
-    "discoverModernInterface": "Discover the modern and intuitive StudentsLife interface",
+    "discoverModernInterface": "Discover the modern and intuitive Pasify interface",
     "discoverPartners": "Discover Partners",
     "exploreCategories": "Explore categories and find the best discounts",
     "connectAndChat": "Connect and Chat",
@@ -698,7 +698,7 @@
     "needHelp": "Need Help?",
     "hereToHelp": "We're here to help. Contact us with any questions",
     "getInTouch": "Get in Touch",
-    "teamAvailable": "Our team is available to answer all your questions about StudentsLife",
+    "teamAvailable": "Our team is available to answer all your questions about Pasify",
     "phone": "Phone",
     "email": "Email",
     "schedule": "Schedule",
@@ -710,18 +710,18 @@
     "message": "Message",
     "howCanWeHelp": "How can we help you?",
     "sendMessageBtn": "Send Message",
-    "joinStudentsLife": "Join StudentsLife!",
+    "joinPasify": "Join Pasify!",
     "discoverSaveConnect": "Discover your city, save money and connect with other students",
     "registerAsStudent": "Register as Student",
     "registerAsPartnerCta": "Register as Partner",
     "alreadyHaveAccount": "Already have an account?",
     "loginLink": "Login",
     "footerTagline": "Connecting students with the best discounts and experiences",
-    "copyright": "© 2026 StudentsLife. All rights reserved.",
-    "chatbotGreeting": "Hello! I'm the StudentsLife assistant. How can I help you?",
+    "copyright": "Â© 2026 Pasify. All rights reserved.",
+    "chatbotGreeting": "Hello! I'm the Pasify assistant. How can I help you?",
     "chatbotOnline": "Online",
     "faq": "Frequently asked questions:",
-    "chatQ1": "What is StudentsLife?",
+    "chatQ1": "What is Pasify?",
     "chatQ2": "How do the discounts work?",
     "chatQ3": "Is it free for students?",
     "chatQ4": "What services are included?",
@@ -729,14 +729,14 @@
     "chatQ6": "How much does it cost for partners?",
     "chatQ7": "Is there a mobile app?",
     "chatQ8": "Where does it work?",
-    "chatA1": "StudentsLife is the leading platform connecting Erasmus students with exclusive discounts, social network and integrated chat. All in one app! 🎓",
-    "chatA2": "Super easy: 1️⃣ Find the partner in the app 2️⃣ Generate your personalized QR code 3️⃣ Show it at the store and save up to 30% 💰",
-    "chatA3": "Completely FREE for students! Only the partner who wants to offer discounts pays. You just enjoy and save 🎉",
-    "chatA4": "Includes: 🍕 Restaurants and bars 💄 Beauty and wellness 🎮 Entertainment 📱 Electronics 💪 Sport & fitness 🛍️ Shopping ✈️ Travel",
-    "chatA5": "Super easy! Just click 'Register as Student', fill in your details and you can start saving. Takes less than 2 minutes! ⚡",
-    "chatA6": "For partners: €19.99/month for the first 50, then €29.99/month. But right now we have a launch offer with first month FREE! 🎁",
-    "chatA7": "Yes! It's a PWA (Progressive Web App) that works like a native app. You can add it to your home screen from the browser 📱",
-    "chatA8": "We're active in several European cities for Erasmus students. Download the app and discover your city! 🏛️"
+    "chatA1": "Pasify is the leading platform connecting Erasmus students with exclusive discounts, social network and integrated chat. All in one app! ðŸŽ“",
+    "chatA2": "Super easy: 1ï¸âƒ£ Find the partner in the app 2ï¸âƒ£ Generate your personalized QR code 3ï¸âƒ£ Show it at the store and save up to 30% ðŸ’°",
+    "chatA3": "Completely FREE for students! Only the partner who wants to offer discounts pays. You just enjoy and save ðŸŽ‰",
+    "chatA4": "Includes: ðŸ• Restaurants and bars ðŸ’„ Beauty and wellness ðŸŽ® Entertainment ðŸ“± Electronics ðŸ’ª Sport & fitness ðŸ›ï¸ Shopping âœˆï¸ Travel",
+    "chatA5": "Super easy! Just click 'Register as Student', fill in your details and you can start saving. Takes less than 2 minutes! âš¡",
+    "chatA6": "For partners: â‚¬19.99/month for the first 50, then â‚¬29.99/month. But right now we have a launch offer with first month FREE! ðŸŽ",
+    "chatA7": "Yes! It's a PWA (Progressive Web App) that works like a native app. You can add it to your home screen from the browser ðŸ“±",
+    "chatA8": "We're active in several European cities for Erasmus students. Download the app and discover your city! ðŸ›ï¸"
   },
   "quiz": {
     "new": "New",
@@ -798,40 +798,40 @@
   },
   "partnerOnboarding": {
     "welcome": {
-      "title": "Welcome to StudentsLife Partner! 🎉",
+      "title": "Welcome to Pasify Partner! ðŸŽ‰",
       "description": "Quick tour to discover all the tools for your business."
     },
     "profilePhoto": {
-      "title": "📷 Upload your business logo",
+      "title": "ðŸ“· Upload your business logo",
       "description": "Tap your avatar to upload your logo. It will appear next to your events and discounts."
     },
     "fab": {
-      "title": "✨ The magic button",
+      "title": "âœ¨ The magic button",
       "description": "Tap the central + button below: that's where you'll find Publish, Events and Stats."
     },
     "events": {
-      "title": "📅 Create your events",
-      "description": "Dinners, parties, time-based discounts… Toggle 'Show in Home Social' to push a notification across your city."
+      "title": "ðŸ“… Create your events",
+      "description": "Dinners, parties, time-based discountsâ€¦ Toggle 'Show in Home Social' to push a notification across your city."
     },
     "scanner": {
-      "title": "🎟️ Scan the QR codes",
+      "title": "ðŸŽŸï¸ Scan the QR codes",
       "description": "When a student arrives, open the QR scanner, scan their code and apply the discount."
     },
     "stats": {
-      "title": "📊 Measure your impact",
+      "title": "ðŸ“Š Measure your impact",
       "description": "See how many QR codes you've issued, how many were used, and which events work best."
     },
     "publish": {
-      "title": "📱 Publish in the feed",
+      "title": "ðŸ“± Publish in the feed",
       "description": "Share photos, videos, and news. Your city's university community will see them on their Home."
     },
     "complete": {
-      "title": "🎊 All set!",
+      "title": "ðŸŽŠ All set!",
       "description": "Create your first event, share your first post, and start welcoming students."
     },
     "celebration": {
       "title": "Congrats!",
-      "subtitle": "You now know every StudentsLife Partner tool"
+      "subtitle": "You now know every Pasify Partner tool"
     },
     "cta": {
       "start": "Start",

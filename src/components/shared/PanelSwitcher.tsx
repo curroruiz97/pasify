@@ -41,17 +41,33 @@ export const PanelSwitcher = () => {
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  // Ocultar en rutas no-dashboard
-  const isDashboardRoute = /^\/(admin|partner-dashboard|client-dashboard)/.test(
-    location.pathname
-  );
+  // Ocultar en rutas no-dashboard. Derivamos el role activo DEL PATHNAME en
+  // vez de del state `userRole` para evitar lags de sincronización (cuando
+  // ProtectedRoute hace auto-switch via setActiveRole, el state de useAuth
+  // tarda un render en propagarse; mientras tanto el label parpadeaba al
+  // role anterior). El pathname es la fuente canónica del role activo.
+  const pathToRole: Record<string, "admin" | "partner" | "client"> = {
+    "/admin": "admin",
+    "/partner-dashboard": "partner",
+    "/client-dashboard": "client",
+  };
+  let routeRole: "admin" | "partner" | "client" | null = null;
+  for (const [prefix, role] of Object.entries(pathToRole)) {
+    if (location.pathname.startsWith(prefix) || location.hash.startsWith("#" + prefix)) {
+      routeRole = role;
+      break;
+    }
+  }
 
   if (!isAuthenticated) return null;
   if (!userRole) return null;
   if (userRoles.length < 2) return null;
-  if (!isDashboardRoute) return null;
+  if (!routeRole) return null; // No dashboard route
 
-  const active = ROLE_META[userRole];
+  // Visual: usa routeRole (canonical de la URL). Estado: userRole sirve
+  // como fallback para el check del dropdown.
+  const displayRole = routeRole;
+  const active = ROLE_META[displayRole];
   if (!active) return null;
 
   const handleSelect = (role: string) => {
@@ -157,7 +173,9 @@ export const PanelSwitcher = () => {
             {userRoles.map((role) => {
               const meta = ROLE_META[role];
               if (!meta) return null;
-              const isActive = role === userRole;
+              // isActive: usa routeRole (canonical de la URL) para mantener consistencia
+              // visual con el label de la cápsula.
+              const isActive = role === displayRole;
               return (
                 <button
                   key={role}

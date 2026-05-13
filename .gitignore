@@ -52,3 +52,6 @@ supabase/.branches/
 # Vercel local build artifacts
 .vercel/
 .next/
+
+.vercel
+.env*.local
