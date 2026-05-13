@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,6 +57,23 @@ import { LiveWarRoom } from "@/components/partner/LiveWarRoom";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
 import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
+import {
+  TicketTiersBuilder,
+  createEmptyTier,
+  type TierDraft,
+} from "@/components/partner/TicketTiersBuilder";
+import {
+  EventDateTimeSection,
+  composeIsoStartEnd,
+  validateDateTime,
+  type DateTimeValue,
+} from "@/components/partner/EventDateTimeSection";
+import {
+  EventLocationSection,
+  validateLocation,
+  type LocationValue,
+} from "@/components/partner/EventLocationSection";
+import { EventSummaryCard, type EventSummary } from "@/components/partner/EventSummaryCard";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
 import { downloadEventReportPdf, buildDemoEventReport } from "@/lib/eventReportPdf";
 import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
@@ -96,6 +113,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
@@ -569,6 +587,7 @@ const PartnerDashboard = () => {
                   <CreateEventDialog
                     partnerId={userId}
                     defaultCity={profile?.city ?? profile?.business_city ?? ""}
+                    defaultVenueName={profile?.business_name ?? ""}
                     cities={cities}
                     onCreated={async () => {
                       setCreateOpen(false);
@@ -582,11 +601,13 @@ const PartnerDashboard = () => {
               <FestivalBuilder
                 open={festivalOpen}
                 onOpenChange={setFestivalOpen}
-                onCreate={(draft) => {
-                  toast({
-                    title: "Festival guardado",
-                    description: `${draft.name} con ${draft.days.length} días listo en borrador.`,
-                  });
+                partnerId={userId}
+                defaultCity={profile?.city ?? profile?.business_city ?? ""}
+                defaultVenueName={profile?.business_name ?? ""}
+                cities={cities}
+                onCreated={async () => {
+                  setFestivalOpen(false);
+                  if (userId) await loadEvents(userId);
                 }}
               />
 
@@ -1162,14 +1183,43 @@ const StatCard = ({
 // CreateEventDialog
 // ============================================================================
 
+/**
+ * CreateEventDialog — wizard profesional con 6 secciones + resumen sticky.
+ *
+ * Reemplaza el dialog antiguo de 1 columna con `datetime-local`. Ahora:
+ *   1) Información básica (título, descripción)
+ *   2) Fecha y horario (día + hora inicio + hora fin con cross-midnight)
+ *   3) Ubicación (ciudad + venue + dirección exacta)
+ *   4) Tickets (multi-tier con presets Early Bird / VIP / etc.)
+ *   5) Póster e imagen
+ *   6) Publicación (draft / publicado)
+ *
+ * Persiste:
+ *   - INSERT events con date_start, date_end, venue_name, address,
+ *     price_cents (mínimo activo), capacity (suma de tiers con cupo),
+ *     image_url, status
+ *   - INSERT múltiple en ticket_tiers (uno por TierDraft)
+ *   - Rollback manual: si tiers INSERT falla, DELETE el event creado
+ *     para no dejar eventos "huérfanos" sin tickets vendibles. TODO:
+ *     mover a una RPC `create_event_with_tiers` atómica.
+ */
+const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+const serif = {
+  fontFamily: "'Instrument Serif', Georgia, serif",
+  fontStyle: "italic" as const,
+  fontWeight: 400,
+};
+
 const CreateEventDialog = ({
   partnerId,
   defaultCity,
+  defaultVenueName,
   cities,
   onCreated,
 }: {
   partnerId: string;
   defaultCity: string;
+  defaultVenueName?: string;
   cities: City[];
   onCreated: () => void;
 }) => {
@@ -1177,17 +1227,63 @@ const CreateEventDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    city: defaultCity,
-    date_start: "",
-    price_eur: "",
-    capacity: "",
-    image_url: "",
-  });
 
-  useEffect(() => setForm((f) => ({ ...f, city: defaultCity })), [defaultCity]);
+  // Estado del formulario, organizado por secciones.
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dateTime, setDateTime] = useState<DateTimeValue>({
+    date: "",
+    startTime: "23:30",
+    endTime: "06:00",
+  });
+  const [location, setLocation] = useState<LocationValue>({
+    city: defaultCity,
+    venueName: defaultVenueName ?? "",
+    address: "",
+  });
+  const [tiers, setTiers] = useState<TierDraft[]>([createEmptyTier("Entrada General", "15.00")]);
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [willPublish, setWillPublish] = useState(true);
+
+  useEffect(
+    () => setLocation((l) => ({ ...l, city: l.city || defaultCity })),
+    [defaultCity]
+  );
+
+  // Stats agregados para el summary + para persistir en columnas legacy
+  const summary: EventSummary = useMemo(() => {
+    const activeTiers = tiers.filter((t) => t.active);
+    const prices = activeTiers
+      .map((t) => parseFloat(t.priceEur))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+    const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+
+    const caps = activeTiers
+      .map((t) => parseInt(t.capacity, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const totalCap =
+      caps.length === activeTiers.length && caps.length > 0
+        ? caps.reduce((a, b) => a + b, 0)
+        : null;
+
+    const { crossesMidnight } = composeIsoStartEnd(dateTime);
+
+    return {
+      title,
+      city: location.city,
+      venueName: location.venueName,
+      address: location.address,
+      date: dateTime.date,
+      startTime: dateTime.startTime,
+      endTime: dateTime.endTime,
+      crossesMidnight,
+      ticketCount: activeTiers.length,
+      minPriceEur: minPrice,
+      totalCapacity: totalCap,
+      imageUrl: imageUrl || null,
+      willPublish,
+    };
+  }, [title, location, dateTime, tiers, imageUrl, willPublish]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1200,13 +1296,12 @@ const CreateEventDialog = ({
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${partnerId}/event-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("event-images").upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+      const { error: upErr } = await supabase.storage
+        .from("event-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("event-images").getPublicUrl(path);
-      setForm((f) => ({ ...f, image_url: pub.publicUrl }));
+      setImageUrl(pub.publicUrl);
     } catch (err: any) {
       toast({ title: "Error", description: err?.message ?? "No se pudo subir la imagen.", variant: "destructive" });
     } finally {
@@ -1215,42 +1310,70 @@ const CreateEventDialog = ({
     }
   };
 
-  const removeImage = () => setForm((f) => ({ ...f, image_url: "" }));
+  const validateAll = (status: "draft" | "published"): string | null => {
+    if (!title.trim()) return "El evento necesita un título";
+    const dtErr = validateDateTime(dateTime);
+    if (dtErr) return dtErr;
+    const locErr = validateLocation(location);
+    if (locErr) return locErr;
+    const activeTiers = tiers.filter((t) => t.active);
+    if (status === "published" && activeTiers.length === 0) {
+      return "Para publicar añade al menos un tipo de ticket activo";
+    }
+    for (const t of tiers) {
+      if (!t.name.trim()) return "Todos los tickets necesitan un nombre";
+      const p = parseFloat(t.priceEur);
+      if (!Number.isFinite(p) || p < 0) {
+        return `El precio del ticket "${t.name}" no es válido`;
+      }
+    }
+    return null;
+  };
 
   const submit = async (status: "draft" | "published") => {
-    const title = form.title.trim();
-    const city = form.city.trim();
-    if (!title || !form.date_start || !city) {
-      const missing: string[] = [];
-      if (!title) missing.push("título");
-      if (!form.date_start) missing.push("fecha y hora");
-      if (!city) missing.push("ciudad");
-      toast({
-        title: "Faltan datos",
-        description: `Completa: ${missing.join(", ")}.`,
-        variant: "destructive",
-      });
+    const err = validateAll(status);
+    if (err) {
+      toast({ title: "Faltan datos", description: err, variant: "destructive" });
       return;
     }
-    const priceCents = Math.round(parseFloat(form.price_eur || "0") * 100);
-    if (!Number.isFinite(priceCents) || priceCents < 0) {
-      toast({ title: "Precio no válido", variant: "destructive" });
+
+    const { startIso, endIso } = composeIsoStartEnd(dateTime);
+    if (!startIso) {
+      toast({ title: "Fecha/hora inválida", variant: "destructive" });
       return;
     }
-    const capacity = form.capacity ? parseInt(form.capacity, 10) : null;
+
+    // Compute legacy fallbacks: precio = mínimo de tiers activos en cents,
+    // capacity = suma de cupos si todos los tiers activos tienen cupo, null si alguno no.
+    const activeTiers = tiers.filter((t) => t.active);
+    const tierPriceCents = activeTiers.map((t) =>
+      Math.round(parseFloat(t.priceEur || "0") * 100)
+    );
+    const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
+
+    const caps = activeTiers
+      .map((t) => parseInt(t.capacity, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const totalCap =
+      caps.length === activeTiers.length && caps.length > 0
+        ? caps.reduce((a, b) => a + b, 0)
+        : null;
 
     setSubmitting(true);
     const { data: createdEvent, error } = await supabase
       .from("events")
       .insert({
         partner_id: partnerId,
-        title,
-        description: form.description.trim() || null,
-        city,
-        date_start: new Date(form.date_start).toISOString(),
-        price_cents: priceCents,
-        capacity,
-        image_url: form.image_url || null,
+        title: title.trim(),
+        description: description.trim() || null,
+        city: location.city.trim(),
+        venue_name: location.venueName.trim() || null,
+        address: location.address.trim() || null,
+        date_start: startIso,
+        date_end: endIso,
+        price_cents: minPriceCents,
+        capacity: totalCap,
+        image_url: imageUrl || null,
         status,
       })
       .select("id")
@@ -1258,163 +1381,323 @@ const CreateEventDialog = ({
 
     if (error || !createdEvent) {
       setSubmitting(false);
-      toast({ title: "Error al crear evento", description: error?.message ?? "No se pudo crear", variant: "destructive" });
+      toast({
+        title: "Error al crear evento",
+        description: error?.message ?? "No se pudo crear",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Crear tier por defecto "Entrada General" para que stripe-create-checkout
-    // pueda venderlo. Sin tier el evento no es comprable. El partner puede
-    // editarlo / añadir más tiers (early bird, VIP, etc.) en una fase posterior.
-    const { error: tierErr } = await supabase.from("ticket_tiers").insert({
+    // Insertar todos los tiers en batch
+    const tiersToInsert = tiers.map((t, idx) => ({
       event_id: createdEvent.id,
-      name: "Entrada General",
-      description: "Acceso general al evento",
-      price_cents: priceCents,
+      name: t.name.trim(),
+      description: t.description.trim() || null,
+      price_cents: Math.round(parseFloat(t.priceEur || "0") * 100),
       currency: "EUR",
-      capacity,
-      per_user_max: 4,
-      status: "active",
-      sort_order: 0,
-    });
-    setSubmitting(false);
+      capacity: t.capacity ? parseInt(t.capacity, 10) : null,
+      per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+      status: t.active ? "active" : "hidden",
+      sort_order: idx,
+    }));
+
+    const { error: tierErr } = await supabase.from("ticket_tiers").insert(tiersToInsert);
 
     if (tierErr) {
-      // El evento se creó pero el tier no. No es crítico — el evento aparece
-      // como draft y el partner puede añadir tiers manualmente más tarde.
-      console.warn("[CreateEventDialog] tier default no creado:", tierErr.message);
+      // ROLLBACK manual: borramos el evento creado para no dejar entry
+      // huérfana sin tickets vendibles.
+      // TODO: migrar a una RPC `create_event_with_tiers` atómica con BEGIN/COMMIT.
+      await supabase.from("events").delete().eq("id", createdEvent.id);
+      setSubmitting(false);
       toast({
-        title: status === "published" ? "Evento publicado" : "Borrador guardado",
-        description: "Aviso: no se pudo crear el tier por defecto. Revisa la pantalla de tickets.",
+        title: "Error al crear tickets",
+        description: `${tierErr.message}. El evento se ha descartado, vuelve a intentarlo.`,
+        variant: "destructive",
       });
-    } else {
-      toast({ title: status === "published" ? "Evento publicado" : "Borrador guardado" });
+      return;
     }
+
+    setSubmitting(false);
+    toast({
+      title: status === "published" ? "Evento publicado" : "Borrador guardado",
+      description:
+        status === "published"
+          ? "Ya aparece en el calendario público y se puede comprar."
+          : "Lo encontrarás en Mis eventos. Publícalo cuando esté listo.",
+    });
     onCreated();
   };
 
   return (
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-4xl lg:max-w-5xl">
       <DialogHeader>
-        <DialogTitle>Nuevo evento</DialogTitle>
+        <div
+          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+          style={{ ...mono, letterSpacing: "0.22em" }}
+        >
+          <span className="inline-block h-px w-5 bg-orange-500/70" />
+          Nuevo evento
+        </div>
+        <DialogTitle className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
+          Crea tu próximo{" "}
+          <span style={serif} className="text-orange-500">
+            evento
+          </span>
+        </DialogTitle>
       </DialogHeader>
 
-      <div className="space-y-3 py-2">
-        <div>
-          <Label>Título *</Label>
-          <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Saturday Night · Halloween Edition" />
-        </div>
-        <div>
-          <Label>Descripción</Label>
-          <Textarea
-            rows={3}
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Detalles, line-up, código de vestimenta..."
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Fecha y hora *</Label>
-            <Input
-              type="datetime-local"
-              value={form.date_start}
-              onChange={(e) => setForm({ ...form, date_start: e.target.value })}
+      <div className="grid grid-cols-1 gap-6 py-4 lg:grid-cols-[1fr_320px]">
+        {/* Columna principal: 6 secciones */}
+        <div className="space-y-6">
+          {/* SECCIÓN 1 — Info básica */}
+          <Section
+            number="01"
+            title="Información básica"
+            subtitle="El nombre que verán los clientes en el calendario y en su ticket."
+          >
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="evt-title" className="text-xs">
+                  Título del evento *
+                </Label>
+                <Input
+                  id="evt-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Saturday Night · Halloween Edition"
+                  disabled={submitting}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="evt-desc" className="text-xs">
+                  Descripción
+                </Label>
+                <Textarea
+                  id="evt-desc"
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Line-up, código de vestimenta, edad mínima, otra info útil…"
+                  disabled={submitting}
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* SECCIÓN 2 — Fecha y horario */}
+          <Section
+            number="02"
+            title="Fecha y horario"
+            subtitle="Si el evento cruza medianoche detectamos automáticamente que finaliza al día siguiente."
+          >
+            <EventDateTimeSection
+              value={dateTime}
+              onChange={setDateTime}
+              disabled={submitting}
             />
-          </div>
-          <div>
-            <Label>Ciudad *</Label>
-            <Select value={form.city} onValueChange={(v) => setForm({ ...form, city: v })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona ciudad" />
-              </SelectTrigger>
-              <SelectContent>
-                {cities.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Precio ticket (€) *</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.price_eur}
-              onChange={(e) => setForm({ ...form, price_eur: e.target.value })}
-              placeholder="15.00"
+          </Section>
+
+          {/* SECCIÓN 3 — Ubicación */}
+          <Section
+            number="03"
+            title="Ubicación"
+            subtitle="La dirección exacta aparece en el ticket del cliente para llegar a la puerta."
+          >
+            <EventLocationSection
+              value={location}
+              onChange={setLocation}
+              cities={cities}
+              disabled={submitting}
             />
-          </div>
-          <div>
-            <Label>Aforo</Label>
-            <Input
-              type="number"
-              min="1"
-              value={form.capacity}
-              onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-              placeholder="Opcional"
+          </Section>
+
+          {/* SECCIÓN 4 — Tickets */}
+          <Section
+            number="04"
+            title="Tickets y aforo"
+            subtitle="Crea varios tipos: Early Bird, General, VIP, Backstage… Cada uno con su precio y cupo."
+          >
+            <TicketTiersBuilder
+              tiers={tiers}
+              onChange={setTiers}
+              disabled={submitting}
             />
-          </div>
-        </div>
-        <div>
-          <Label>Póster del evento</Label>
-          {form.image_url ? (
-            <div className="relative mt-2 overflow-hidden rounded-xl border border-border">
-              <img src={form.image_url} alt="Póster" className="aspect-[16/9] w-full object-cover" />
+          </Section>
+
+          {/* SECCIÓN 5 — Imagen */}
+          <Section
+            number="05"
+            title="Póster del evento"
+            subtitle="Una imagen 16:9 funciona mejor en el calendario público y en el ticket digital."
+          >
+            {imageUrl ? (
+              <div className="relative overflow-hidden rounded-2xl border border-border">
+                <img
+                  src={imageUrl}
+                  alt="Póster"
+                  className="aspect-[16/9] w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setImageUrl("")}
+                  className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
+                  aria-label="Quitar imagen"
+                  disabled={submitting}
+                >
+                  <XIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={removeImage}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur hover:bg-black/80"
-                aria-label="Quitar imagen"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || submitting}
+                className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
               >
-                <XIcon className="h-4 w-4" />
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+                    Subiendo imagen…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-orange-500" />
+                    <span className="font-medium text-foreground">Subir póster</span>
+                    <span className="text-[11px]" style={mono}>
+                      JPG · PNG · WEBP · máx. 8 MB
+                    </span>
+                  </>
+                )}
               </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={handleFileSelect}
+            />
+          </Section>
+
+          {/* SECCIÓN 6 — Publicación */}
+          <Section
+            number="06"
+            title="Publicación"
+            subtitle="Guárdalo como borrador para seguir ajustándolo o publícalo ya en el calendario."
+          >
+            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={willPublish}
+                  onCheckedChange={setWillPublish}
+                  disabled={submitting}
+                />
+                <div>
+                  <div className="text-sm font-medium text-foreground">
+                    {willPublish ? "Publicar al guardar" : "Guardar como borrador"}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {willPublish
+                      ? "El evento será visible en el calendario público y comprable inmediatamente."
+                      : "El evento queda privado en Mis eventos. Puedes publicarlo más tarde."}
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="mt-2 flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-muted/50"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  Subiendo...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-6 w-6" />
-                  <span>Subir imagen</span>
-                  <span className="text-[11px]">JPG / PNG / WEBP · máx. 8 MB</span>
-                </>
-              )}
-            </button>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={handleFileSelect}
-          />
+          </Section>
+        </div>
+
+        {/* Columna lateral: resumen sticky */}
+        <div className="order-first lg:order-last">
+          <EventSummaryCard summary={summary} />
         </div>
       </div>
 
-      <DialogFooter className="gap-2">
-        <Button variant="outline" disabled={submitting} onClick={() => submit("draft")}>
+      <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button
+          variant="outline"
+          disabled={submitting}
+          onClick={() => submit("draft")}
+          className="h-12 sm:w-auto"
+        >
+          {submitting && !willPublish ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
           Guardar borrador
         </Button>
-        <Button disabled={submitting} onClick={() => submit("published")}>
-          Publicar
+        <Button
+          disabled={submitting}
+          onClick={() => submit(willPublish ? "published" : "draft")}
+          className="h-12 sm:w-auto"
+          style={{
+            background: submitting
+              ? undefined
+              : "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+            boxShadow: submitting
+              ? undefined
+              : "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+            color: "#fff",
+          }}
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Guardando…
+            </>
+          ) : willPublish ? (
+            "Publicar evento"
+          ) : (
+            "Guardar borrador"
+          )}
         </Button>
       </DialogFooter>
     </DialogContent>
   );
 };
+
+/** Section helper — numbered card layout reusable dentro del dialog. */
+const Section = ({
+  number,
+  title,
+  subtitle,
+  children,
+}: {
+  number: string;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) => (
+  <section className="rounded-2xl border border-border bg-card/30 p-4 md:p-5">
+    <div className="mb-4 flex items-start gap-3">
+      <div
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
+        style={{
+          ...mono,
+          background:
+            "linear-gradient(180deg, rgba(232,84,42,0.22) 0%, rgba(184,56,26,0.18) 100%)",
+          color: "#FFC9B0",
+          letterSpacing: "0.05em",
+        }}
+        aria-hidden="true"
+      >
+        {number}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-base font-semibold leading-tight tracking-tight text-foreground md:text-lg">
+          {title}
+        </h3>
+        {subtitle && (
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+    {children}
+  </section>
+);
 
 export default PartnerDashboard;
