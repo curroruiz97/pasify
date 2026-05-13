@@ -121,7 +121,10 @@ const PartnerChoosePlan = () => {
         navigate("/login");
         return;
       }
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
+      // Llama a la edge function dedicada `partner-subscribe-checkout`
+      // (NO `stripe-create-checkout`, que es para comprar tickets y exige
+      // event_id+tier_id+qty, devolviendo 400 si se la llama sin ello).
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/partner-subscribe-checkout`;
       const resp = await fetch(url, {
         method: "POST",
         headers: {
@@ -130,10 +133,8 @@ const PartnerChoosePlan = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          locale: "es",
-          mode: "subscription",
-          successUrl: `${window.location.origin}/#/partner/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/#/partner/choose-plan`,
+          interval: "monthly",
+          return_origin: window.location.origin,
         }),
       });
       const raw = await resp.text();

@@ -42,10 +42,13 @@ const PartnerSuccess = () => {
     frame();
   }, []);
 
-  // Polling de hasAccess vía refetch del hook. El webhook stripe-webhook
-  // (edge function en producción) actualiza partner_subscriptions cuando
-  // recibe `checkout.session.completed`. No llamamos sync-session-test
-  // (función legacy/test) — el webhook canónico es suficiente.
+  // Confirmación de subscription + polling de hasAccess.
+  //
+  // Para sessions creadas por `partner-subscribe-checkout` (mode=subscription),
+  // intentamos confirmar SI el webhook tarda llamando a la edge function
+  // `partner-confirm-subscription` que consulta Stripe directamente y hace
+  // UPSERT en partner_subscriptions. Esto evita quedarse colgado si el
+  // webhook canónico no llega (problema histórico documentado).
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -55,6 +58,40 @@ const PartnerSuccess = () => {
         return;
       }
 
+      // Lee session_id + purpose del hash query string (HashRouter).
+      const hash = window.location.hash || "";
+      const queryStart = hash.indexOf("?");
+      const params = new URLSearchParams(queryStart >= 0 ? hash.slice(queryStart + 1) : "");
+      const sessionId = params.get("session_id");
+      const purpose = params.get("purpose");
+      const isSubscriptionFlow = purpose === "subscription" && !!sessionId;
+
+      // Fallback: si venimos de partner-subscribe-checkout, intentar
+      // confirmar via edge function (webhook-independent). Es idempotente
+      // y rápido (1 sola llamada a Stripe API + 1 UPSERT).
+      if (isSubscriptionFlow) {
+        try {
+          const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/partner-confirm-subscription`;
+          const resp = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+          if (!resp.ok) {
+            console.warn("partner-confirm-subscription returned non-OK:", resp.status, await resp.text());
+          }
+        } catch (err) {
+          console.warn("partner-confirm-subscription threw:", err);
+        }
+      }
+
+      // Polling normal: cada 800 ms refresca el hook hasta hasAccess=true
+      // o agotar 10 intentos (~8 s en total). En la práctica con la
+      // confirmación directa de arriba, suele acertar en la primera iter.
       for (let i = 0; i < 10 && !cancelled; i++) {
         await partnerSub.refetch();
         if (partnerSub.hasAccess) {
@@ -64,8 +101,8 @@ const PartnerSuccess = () => {
         await new Promise((r) => setTimeout(r, 800));
       }
 
-      // Fallback: manda a la dashboard — PartnerGate gestionará el redirect
-      // si todavía no hay acceso (a /partner/choose-plan).
+      // Fallback final: manda a dashboard. PartnerGate redirige a
+      // choose-plan si todavía no hay acceso (ej. pago rechazado).
       if (!cancelled) navigate("/partner-dashboard", { replace: true });
     };
 

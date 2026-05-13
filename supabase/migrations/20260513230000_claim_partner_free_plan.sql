@@ -2,13 +2,24 @@
 -- Permite al partner activar el plan gratuito sin pasar por Stripe.
 -- Crea org minima si no existe + UPSERT partner_subscriptions
 -- con plan_code='free', status='active'. Idempotente.
+--
+-- Notas:
+-- * Output columns con prefijo `out_` para evitar ambigüedad con las
+--   columnas de partner_subscriptions (org_id/plan_code/status). Sin
+--   este prefijo, el ON CONFLICT/DO UPDATE confunde la columna del
+--   RETURNS TABLE con la columna real de la tabla.
+-- * INSERT con alias `AS ps` para poder referenciar partner_subscriptions
+--   en el UPDATE de forma inequívoca.
+-- * Idempotente: re-aplicar la migración no rompe nada.
+
+DROP FUNCTION IF EXISTS public.claim_partner_free_plan();
 
 CREATE OR REPLACE FUNCTION public.claim_partner_free_plan()
 RETURNS TABLE (
-  subscription_id  UUID,
-  org_id           UUID,
-  plan_code        TEXT,
-  status           TEXT
+  out_subscription_id  UUID,
+  out_org_id           UUID,
+  out_plan_code        TEXT,
+  out_status           TEXT
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -38,7 +49,7 @@ BEGIN
   END IF;
 
   IF v_org_id IS NULL THEN
-    SELECT email INTO v_email FROM auth.users WHERE id = v_uid;
+    SELECT u.email INTO v_email FROM auth.users u WHERE u.id = v_uid;
     v_org_id := public.create_organization(
       COALESCE(split_part(v_email, '@', 1), 'Mi local'),
       'ES',
@@ -47,7 +58,7 @@ BEGIN
   END IF;
 
   -- 2) UPSERT partner_subscriptions a plan free + active.
-  INSERT INTO public.partner_subscriptions (
+  INSERT INTO public.partner_subscriptions AS ps (
     org_id, plan_code, status,
     current_period_start, current_period_end,
     trial_starts_at, trial_ends_at,
@@ -62,9 +73,9 @@ BEGIN
   ON CONFLICT (org_id) DO UPDATE SET
     plan_code = 'free',
     status    = 'active'::public.partner_subscription_status_t,
-    current_period_start = COALESCE(partner_subscriptions.current_period_start, now()),
-    metadata  = partner_subscriptions.metadata || jsonb_build_object('reclaimed_at', now())
-  RETURNING id INTO v_sub_id;
+    current_period_start = COALESCE(ps.current_period_start, now()),
+    metadata  = ps.metadata || jsonb_build_object('reclaimed_at', now())
+  RETURNING ps.id INTO v_sub_id;
 
   RETURN QUERY SELECT v_sub_id, v_org_id, 'free'::TEXT, 'active'::TEXT;
 END;
