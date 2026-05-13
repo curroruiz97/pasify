@@ -33,9 +33,27 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  // Para activar upload de source maps a Sentry por release:
+  //   1. `npm install -D @sentry/vite-plugin`
+  //   2. Descomenta el import y el plugin de abajo.
+  //   3. Configura SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT en Vercel.
+  // El plugin sólo se activa si las 3 env vars están presentes; si no, no-op.
+  //
+  // import { sentryVitePlugin } from "@sentry/vite-plugin";
+  // const sentryPlugin = (process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
+  //   ? sentryVitePlugin({
+  //       org: process.env.SENTRY_ORG,
+  //       project: process.env.SENTRY_PROJECT,
+  //       authToken: process.env.SENTRY_AUTH_TOKEN,
+  //       release: { name: `pasify@${GIT_SHA}` },
+  //       sourcemaps: { assets: "./dist/**" },
+  //     })
+  //   : null;
+
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    // sentryPlugin,
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
