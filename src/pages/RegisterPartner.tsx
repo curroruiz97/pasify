@@ -96,6 +96,7 @@ const RegisterPartner = () => {
       }
 
       if (authData.user) {
+        // 1) Profile básico (datos de contacto / persona).
         const { error: profileError } = await supabase
           .from("profiles")
           .update({
@@ -105,18 +106,78 @@ const RegisterPartner = () => {
             business_city: formData.businessCity,
             business_phone: formData.businessPhone,
             business_category: formData.businessCategory,
-            // Auto-approvazione: per ora il locale entra subito; l'admin
-            // potrà ancora "Rechazar" dalla sua dashboard se serve.
+            // Auto-approvazione: por ahora el locale entra inmediatamente;
+            // admin puede "Rechazar" después si hace falta.
             account_status: "approved",
           })
           .eq("id", authData.user.id);
         if (profileError) throw profileError;
 
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({ user_id: authData.user.id, role: "partner" })
-          .select();
-        if (roleError) throw roleError;
+        // 2) Reclamar rol partner vía RPC canónica (claim_initial_role).
+        //    Esta RPC (mig 20260513120000) es atómica y bloquea acumulación
+        //    de roles. Si falla por "role ya asignado" (23505) lo tratamos
+        //    como no-fatal (el usuario ya era partner).
+        const { error: roleError } = await supabase.rpc("claim_initial_role", {
+          _role: "partner",
+        });
+        if (roleError && !String(roleError.message).includes("already has a role")) {
+          throw roleError;
+        }
+
+        // 3) Crear organization + brand + venue default (RPC en mig 0011).
+        const { data: orgIdRaw, error: orgErr } = await supabase.rpc(
+          "create_organization",
+          {
+            _name: formData.businessName,
+            _country: formData.businessCountry,
+            _slug: null,
+          },
+        );
+        if (orgErr) throw orgErr;
+        const orgId = orgIdRaw as string;
+
+        // 4) Enriquecer organization con datos extra del form.
+        await supabase
+          .from("organizations")
+          .update({
+            billing_email: formData.email,
+            contact_email: formData.email,
+            contact_phone: formData.businessPhone,
+            city: formData.businessCity,
+            address: formData.businessAddress,
+          })
+          .eq("id", orgId);
+
+        // 5) Actualizar brand+venue default con la categoría/ciudad/contacto.
+        //    create_organization deja un brand y un venue 'principal' creados.
+        const { data: brandRow } = await supabase
+          .from("brands")
+          .select("id")
+          .eq("org_id", orgId)
+          .limit(1)
+          .maybeSingle();
+        if (brandRow?.id) {
+          await supabase
+            .from("venues")
+            .update({
+              business_category: formData.businessCategory,
+              city: formData.businessCity,
+              address: formData.businessAddress,
+              phone: formData.businessPhone,
+              email: formData.email,
+            })
+            .eq("brand_id", brandRow.id);
+        }
+
+        // 6) Iniciar trial (RPC v2 en mig 20260513130000 — devuelve TABLE).
+        //    No-fatal si falla (p.ej. trial deshabilitado en app_settings):
+        //    el partner puede empezar trial manualmente desde PartnerChoosePlan.
+        const { error: trialErr } = await supabase.rpc("start_partner_trial", {
+          _org_id: orgId,
+        });
+        if (trialErr) {
+          console.warn("[RegisterPartner] start_partner_trial falló:", trialErr.message);
+        }
 
         toast({ title: "¡Cuenta creada!", description: "Bienvenido a Pasify." });
         window.location.assign(`${window.location.origin}/#/partner-dashboard`);
