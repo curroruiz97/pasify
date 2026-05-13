@@ -137,6 +137,16 @@
       --safe-area-inset-right: env(safe-area-inset-right);
     }
   }
+
+  /* Guard global contra overflow horizontal en móvil. Cualquier elemento
+     fixed/absolute o card mal dimensionada ya no fuerza scroll lateral del
+     viewport. No afecta desktop (≥ md). */
+  @media (max-width: 768px) {
+    html,
+    body {
+      overflow-x: hidden;
+    }
+  }
 }
 
 @layer utilities {

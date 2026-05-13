@@ -84,7 +84,10 @@ export const PanelSwitcher = () => {
   return (
     <div
       data-pasify-switcher
-      className="fixed z-[9998] flex flex-col items-end"
+      // hidden en mobile: el MobileTopBar ya incluye un dropdown inline que
+      // permite cambiar de panel desde la cabecera. Mantenemos la cápsula
+      // flotante sólo en desktop (md+) donde no compite con el header.
+      className="fixed z-[9998] hidden md:flex flex-col items-end"
       style={{
         top: "calc(env(safe-area-inset-top, 0px) + 14px)",
         right: 16,

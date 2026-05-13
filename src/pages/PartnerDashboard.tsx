@@ -95,6 +95,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { MobileTopBar } from "@/components/shared/MobileTopBar";
+import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
+import { EventRowCard } from "@/components/partner/EventRowCard";
+import { StatusBadge } from "@/components/partner/StatusBadge";
 
 type Section =
   | "metricas"
@@ -130,6 +134,7 @@ type EventRow = {
   price_cents: number;
   capacity: number | null;
   tickets_sold: number;
+  image_url: string | null;
 };
 
 type City = { id: string; name: string; slug: string };
@@ -186,7 +191,7 @@ const PartnerDashboard = () => {
   const loadEvents = async (uid: string) => {
     const { data } = await supabase
       .from("events")
-      .select("id, title, description, city, date_start, status, price_cents, capacity, tickets_sold")
+      .select("id, title, description, city, date_start, status, price_cents, capacity, tickets_sold, image_url")
       .eq("partner_id", uid)
       .order("date_start", { ascending: false });
     setEvents((data ?? []) as EventRow[]);
@@ -360,26 +365,22 @@ const PartnerDashboard = () => {
           </div>
         </aside>
 
-        {/* Mobile top app bar — patrón unificado con Client/Admin */}
-        <header
-          className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:hidden"
-          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
-        >
-          <PasifyBrand size={32} />
-          <Badge variant="outline" className="border-primary/40 text-primary">
-            Local
-          </Badge>
-          <span className="flex-1" />
-          <PartnerDrawer
-            navTree={navTree}
-            section={section}
-            onSelect={setSection}
-            onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenHelp={() => setHelpOpen(true)}
-            businessName={profile?.business_name ?? null}
-          />
-        </header>
+        {/* Mobile top app bar — primitiva compartida (MobileTopBar). Reserva
+            el espacio del PanelSwitcher flotante cuando canSwitchPanels=true. */}
+        <MobileTopBar
+          role="partner"
+          endSlot={
+            <PartnerDrawer
+              navTree={navTree}
+              section={section}
+              onSelect={setSection}
+              onLogout={handleLogout}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenHelp={() => setHelpOpen(true)}
+              businessName={profile?.business_name ?? null}
+            />
+          }
+        />
 
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
           {/* MÉTRICAS — Reports & BI online */}
@@ -495,19 +496,26 @@ const PartnerDashboard = () => {
           {/* EVENTOS */}
           {section === "eventos" && (
             <div>
-              <div className="mb-6 flex items-center justify-between gap-3">
+              {/* Mobile-first: stack del título + acciones a flex-col, recupera
+                  fila lateral en md+. Botones flex-1 en móvil para repartir
+                  el ancho disponible sin overflow. */}
+              <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-3">
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight">Mis eventos</h1>
+                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Mis eventos</h1>
                   <p className="text-sm text-muted-foreground">Crea y gestiona los eventos de tu local.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={() => setFestivalOpen(true)}>
+                  <Button
+                    variant="outline"
+                    className="flex-1 md:flex-initial"
+                    onClick={() => setFestivalOpen(true)}
+                  >
                     <Music className="mr-2 h-4 w-4" />
                     Festival multi-día
                   </Button>
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="flex-1 md:flex-initial">
                       <Plus className="mr-2 h-4 w-4" />
                       Nuevo evento
                     </Button>
@@ -553,89 +561,121 @@ const PartnerDashboard = () => {
                   action={{ label: "Nuevo evento", onClick: () => setCreateOpen(true) }}
                 />
               ) : (
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Evento</TableHead>
-                          <TableHead>Ciudad</TableHead>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Precio</TableHead>
-                          <TableHead>Aforo</TableHead>
-                          <TableHead>Vendidos</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="w-12"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {events.map((e) => (
-                          <TableRow key={e.id}>
-                            <TableCell className="font-medium">{e.title}</TableCell>
-                            <TableCell>{e.city}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {new Date(e.date_start).toLocaleString("es-ES", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </TableCell>
-                            <TableCell>{(e.price_cents / 100).toFixed(2)} €</TableCell>
-                            <TableCell>{e.capacity ?? "—"}</TableCell>
-                            <TableCell>{e.tickets_sold}</TableCell>
-                            <TableCell>
-                              <StatusBadge status={e.status} />
-                            </TableCell>
-                            <TableCell className="p-1 text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" aria-label="Acciones del evento">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleDuplicateEvent(e)}>
-                                    <Copy className="mr-2 h-4 w-4" />
-                                    Duplicar evento
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadEventReportPdf(
-                                        buildDemoEventReport({
-                                          eventTitle: e.title,
-                                          eventDate: e.date_start,
-                                          venueName: profile?.business_name ?? "Local",
-                                          city: e.city,
-                                          capacity: e.capacity ?? 800,
-                                          ticketsSold: e.tickets_sold ?? 0,
-                                          revenueCents:
-                                            (e.tickets_sold ?? 0) * (e.price_cents ?? 1500),
-                                        })
-                                      )
-                                    }
-                                  >
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    Report PDF post-evento
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => setDeleteTarget(e)}
-                                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Eliminar evento
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
+                <>
+                  {/* Desktop: tabla densa (≥ md). En móvil queda oculta para
+                      evitar el truncado de las 8 columnas. */}
+                  <Card className="hidden md:block">
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Evento</TableHead>
+                            <TableHead>Ciudad</TableHead>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Precio</TableHead>
+                            <TableHead>Aforo</TableHead>
+                            <TableHead>Vendidos</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="w-12"></TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {events.map((e) => (
+                            <TableRow key={e.id}>
+                              <TableCell className="font-medium">{e.title}</TableCell>
+                              <TableCell>{e.city}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {new Date(e.date_start).toLocaleString("es-ES", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </TableCell>
+                              <TableCell>{(e.price_cents / 100).toFixed(2)} €</TableCell>
+                              <TableCell>{e.capacity ?? "—"}</TableCell>
+                              <TableCell>{e.tickets_sold}</TableCell>
+                              <TableCell>
+                                <StatusBadge status={e.status} />
+                              </TableCell>
+                              <TableCell className="p-1 text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" aria-label="Acciones del evento">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleDuplicateEvent(e)}>
+                                      <Copy className="mr-2 h-4 w-4" />
+                                      Duplicar evento
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        downloadEventReportPdf(
+                                          buildDemoEventReport({
+                                            eventTitle: e.title,
+                                            eventDate: e.date_start,
+                                            venueName: profile?.business_name ?? "Local",
+                                            city: e.city,
+                                            capacity: e.capacity ?? 800,
+                                            ticketsSold: e.tickets_sold ?? 0,
+                                            revenueCents:
+                                              (e.tickets_sold ?? 0) * (e.price_cents ?? 1500),
+                                          })
+                                        )
+                                      }
+                                    >
+                                      <FileText className="mr-2 h-4 w-4" />
+                                      Report PDF post-evento
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => setDeleteTarget(e)}
+                                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar evento
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+
+                  {/* Móvil: grid de EventRowCards. Stack vertical, sin scroll
+                      horizontal, con la info esencial + DropdownMenu de
+                      acciones por card. */}
+                  <div className="grid gap-3 md:hidden">
+                    {events.map((e) => (
+                      <EventRowCard
+                        key={e.id}
+                        event={e}
+                        onDuplicate={() => handleDuplicateEvent(e)}
+                        onReportPdf={() =>
+                          downloadEventReportPdf(
+                            buildDemoEventReport({
+                              eventTitle: e.title,
+                              eventDate: e.date_start,
+                              venueName: profile?.business_name ?? "Local",
+                              city: e.city,
+                              capacity: e.capacity ?? 800,
+                              ticketsSold: e.tickets_sold ?? 0,
+                              revenueCents:
+                                (e.tickets_sold ?? 0) * (e.price_cents ?? 1500),
+                            })
+                          )
+                        }
+                        onDelete={() => setDeleteTarget(e)}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -817,43 +857,25 @@ const PartnerDashboard = () => {
           )}
         </main>
 
-        {/* Bottom tab bar mobile — solo 4 primarios + drawer "Más" */}
-        <nav
-          className="fixed bottom-0 left-0 right-0 z-20 flex items-stretch border-t border-border bg-card md:hidden"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
-          {tabBarItems.map((item) => {
-            const active = section === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setSection(item.id)}
-                className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
-                  active ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                {item.icon}
-                <span className="leading-none">{item.label}</span>
-                {active && (
-                  <span
-                    className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full"
-                    style={{ background: "#E8542A" }}
-                  />
-                )}
-              </button>
-            );
-          })}
-          <PartnerDrawer
-            navTree={navTree}
-            section={section}
-            onSelect={setSection}
-            onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenHelp={() => setHelpOpen(true)}
-            businessName={profile?.business_name ?? null}
-            variant="tab"
-          />
-        </nav>
+        {/* Bottom tab bar mobile — primitiva compartida (MobileBottomNav).
+            Labels truncadas y safe-area-inset-bottom respetado. */}
+        <MobileBottomNav<Section>
+          items={tabBarItems}
+          activeId={section}
+          onSelect={setSection}
+          drawerSlot={
+            <PartnerDrawer
+              navTree={navTree}
+              section={section}
+              onSelect={setSection}
+              onLogout={handleLogout}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenHelp={() => setHelpOpen(true)}
+              businessName={profile?.business_name ?? null}
+              variant="tab"
+            />
+          }
+        />
       </div>
 
       {/* Sheets globales — abiertos desde el drawer */}
@@ -1070,23 +1092,7 @@ const StatCard = ({
   </Card>
 );
 
-const StatusBadge = ({ status }: { status: string }) => {
-  const variant: Record<string, { label: string; cls: string }> = {
-    approved: { label: "Aprobado", cls: "bg-success/15 text-success border-success/30" },
-    pending: { label: "Pendiente", cls: "bg-warning/15 text-warning border-warning/30" },
-    rejected: { label: "Rechazado", cls: "bg-destructive/15 text-destructive border-destructive/30" },
-    published: { label: "Publicado", cls: "bg-success/15 text-success border-success/30" },
-    draft: { label: "Borrador", cls: "bg-muted text-muted-foreground border-border" },
-    cancelled: { label: "Cancelado", cls: "bg-destructive/15 text-destructive border-destructive/30" },
-    past: { label: "Pasado", cls: "bg-muted text-muted-foreground border-border" },
-  };
-  const v = variant[status] ?? { label: status, cls: "bg-muted text-muted-foreground border-border" };
-  return (
-    <Badge variant="outline" className={v.cls}>
-      {v.label}
-    </Badge>
-  );
-};
+// StatusBadge moved to @/components/partner/StatusBadge (reused by EventRowCard).
 
 // ============================================================================
 // CreateEventDialog

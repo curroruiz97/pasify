@@ -497,7 +497,10 @@ export const SupportChat = ({ mode, selectedClientId, selectedClient }: Props) =
 
   return (
     <article
-      className="relative flex h-[75vh] flex-col overflow-hidden rounded-2xl border border-border bg-card"
+      // Altura responsive. En móvil restamos top header (~64) + section heading
+      // (~80) + bottom nav (~64) ≈ 208 px del viewport dinámico (100dvh respeta
+      // la URL bar de Safari iOS). En sm+ volvemos al 70/75vh original.
+      className="relative flex h-[calc(100dvh-208px)] flex-col overflow-hidden rounded-2xl border border-border bg-card sm:h-[70vh] md:h-[75vh]"
       style={{
         boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -10px rgba(0,0,0,0.5)",
       }}
@@ -651,6 +654,7 @@ export const SupportChat = ({ mode, selectedClientId, selectedClient }: Props) =
               if (mode === "client") sendMessage(p);
               else setInput((prev) => (prev ? `${prev} ${p}` : p));
             }}
+            onStartChat={() => textareaRef.current?.focus()}
           />
         ) : (
           <div className="flex flex-col gap-1">
@@ -1121,14 +1125,16 @@ const EmptyState = ({
   mode,
   quickPrompts,
   onPick,
+  onStartChat,
 }: {
   mode: "client" | "admin";
   quickPrompts: string[];
   onPick: (p: string) => void;
+  onStartChat?: () => void;
 }) => {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-      <div className="relative mb-6 flex h-16 w-16 items-center justify-center">
+    <div className="flex h-full flex-col items-center justify-center px-4 py-4 text-center sm:px-2 sm:py-0">
+      <div className="relative mb-4 flex h-16 w-16 items-center justify-center sm:mb-6">
         <span
           className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-50"
           style={{ background: "rgba(232,84,42,0.3)" }}
@@ -1190,6 +1196,26 @@ const EmptyState = ({
               </button>
             ))}
           </div>
+
+          {/* Primary CTA — enfoca el composer existente. Resuelve el problema
+              de que la entrada de chat quedaba escondida bajo la bottom nav
+              en móvil; al pulsar el botón el textarea recibe foco y el
+              teclado virtual sube. */}
+          {onStartChat && (
+            <button
+              type="button"
+              onClick={onStartChat}
+              className="mt-7 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+              style={{
+                background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+              }}
+            >
+              <MessageCircle className="h-4 w-4" />
+              Iniciar chat
+            </button>
+          )}
         </>
       )}
     </div>

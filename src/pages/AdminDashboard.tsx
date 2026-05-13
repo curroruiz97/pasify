@@ -46,6 +46,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { useRefundRequests, type RefundStatus } from "@/hooks/useRefundRequests";
+import { MobileTopBar } from "@/components/shared/MobileTopBar";
+import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { format } from "date-fns";
 import { es as esDate } from "date-fns/locale";
 
@@ -277,29 +279,24 @@ const AdminDashboard = () => {
           </div>
         </aside>
 
-        {/* Mobile top app bar — patrón unificado con Client/Partner */}
-        <header
-          className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:hidden"
-          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
-        >
-          <Wordmark height={32} />
-          <Badge variant="outline" className="border-primary/40 text-primary">
-            Admin
-          </Badge>
-          <span className="flex-1" />
-          <AdminDrawer
-            navTree={navTree}
-            section={section}
-            onSelect={(id) => {
-              setSection(id);
-              setSelectedClient(null);
-            }}
-            onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenHelp={() => setHelpOpen(true)}
-            totalUnread={totalUnread}
-          />
-        </header>
+        {/* Mobile top app bar — primitiva compartida (MobileTopBar). */}
+        <MobileTopBar
+          role="admin"
+          endSlot={
+            <AdminDrawer
+              navTree={navTree}
+              section={section}
+              onSelect={(id) => {
+                setSection(id);
+                setSelectedClient(null);
+              }}
+              onLogout={handleLogout}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenHelp={() => setHelpOpen(true)}
+              totalUnread={totalUnread}
+            />
+          }
+        />
 
         {/* Main content */}
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
@@ -621,60 +618,34 @@ const AdminDashboard = () => {
           )}
         </main>
 
-        {/* Mobile bottom tab bar — 4 primarios + drawer "Más" */}
-        <nav
-          className="fixed bottom-0 left-0 right-0 z-20 flex items-stretch border-t border-border bg-card md:hidden"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
-          {tabBarItems.map((item) => {
-            const active = section === item.id;
-            const badgeCount = item.id === "soporte" ? totalUnread : 0;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setSection(item.id);
-                  setSelectedClient(null);
-                }}
-                className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
-                  active ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                <div className="relative">
-                  {item.icon}
-                  {badgeCount > 0 && (
-                    <span
-                      className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-primary-foreground"
-                      style={{ background: "#E8542A" }}
-                    >
-                      {badgeCount}
-                    </span>
-                  )}
-                </div>
-                <span className="leading-none">{item.label}</span>
-                {active && (
-                  <span
-                    className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full"
-                    style={{ background: "#E8542A" }}
-                  />
-                )}
-              </button>
-            );
-          })}
-          <AdminDrawer
-            navTree={navTree}
-            section={section}
-            onSelect={(id) => {
-              setSection(id);
-              setSelectedClient(null);
-            }}
-            onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenHelp={() => setHelpOpen(true)}
-            totalUnread={totalUnread}
-            variant="tab"
-          />
-        </nav>
+        {/* Mobile bottom tab bar — primitiva compartida (MobileBottomNav).
+            El badge de unread sigue mostrándose sobre el icono de Soporte. */}
+        <MobileBottomNav<Section>
+          items={tabBarItems.map((item) => ({
+            ...item,
+            badge: item.id === "soporte" ? totalUnread : undefined,
+          }))}
+          activeId={section}
+          onSelect={(id) => {
+            setSection(id);
+            setSelectedClient(null);
+          }}
+          drawerSlot={
+            <AdminDrawer
+              navTree={navTree}
+              section={section}
+              onSelect={(id) => {
+                setSection(id);
+                setSelectedClient(null);
+              }}
+              onLogout={handleLogout}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenHelp={() => setHelpOpen(true)}
+              totalUnread={totalUnread}
+              variant="tab"
+            />
+          }
+        />
       </div>
 
       {/* Sheets globales — abiertos desde el drawer */}

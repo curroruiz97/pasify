@@ -47,6 +47,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { useRefundRequests } from "@/hooks/useRefundRequests";
+import { MobileTopBar } from "@/components/shared/MobileTopBar";
+import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import {
   Dialog,
   DialogContent,
@@ -314,32 +316,26 @@ const ClientDashboard = () => {
           </div>
         </aside>
 
-        {/* Mobile top app bar — patrón unificado con Partner/Admin */}
-        <header
-          className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:hidden"
-          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
-        >
-          {view !== "home" && (
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setView("home")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          )}
-          <PasifyBrand size={32} />
-          <Badge variant="outline" className="border-primary/40 text-primary">
-            Cliente
-          </Badge>
-          <span className="flex-1" />
-          {userId && <ProfileSheet userId={userId} />}
-          <ClientDrawer
-            navTree={navTree}
-            view={view}
-            onSelect={setView}
-            onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenHelp={() => setHelpOpen(true)}
-            city={userCity}
-          />
-        </header>
+        {/* Mobile top app bar — primitiva compartida (MobileTopBar). */}
+        <MobileTopBar
+          role="client"
+          showBack={view !== "home"}
+          onBack={() => setView("home")}
+          endSlot={
+            <>
+              {userId && <ProfileSheet userId={userId} />}
+              <ClientDrawer
+                navTree={navTree}
+                view={view}
+                onSelect={setView}
+                onLogout={handleLogout}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenHelp={() => setHelpOpen(true)}
+                city={userCity}
+              />
+            </>
+          }
+        />
 
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
         {view === "home" && (
@@ -608,43 +604,24 @@ const ClientDashboard = () => {
         )}
       </main>
 
-      {/* Bottom tab bar mobile — 4 primarios + drawer "Más" */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-20 flex items-stretch border-t border-border bg-card md:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        {tabBarItems.map((tab) => {
-          const active = view === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setView(tab.id)}
-              className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {tab.icon}
-              <span className="leading-none">{tab.label}</span>
-              {active && (
-                <span
-                  className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full"
-                  style={{ background: "#E8542A" }}
-                />
-              )}
-            </button>
-          );
-        })}
-        <ClientDrawer
-          navTree={navTree}
-          view={view}
-          onSelect={setView}
-          onLogout={handleLogout}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenHelp={() => setHelpOpen(true)}
-          city={userCity}
-          variant="tab"
-        />
-      </nav>
+      {/* Bottom tab bar mobile — primitiva compartida (MobileBottomNav). */}
+      <MobileBottomNav<View>
+        items={tabBarItems}
+        activeId={view}
+        onSelect={setView}
+        drawerSlot={
+          <ClientDrawer
+            navTree={navTree}
+            view={view}
+            onSelect={setView}
+            onLogout={handleLogout}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenHelp={() => setHelpOpen(true)}
+            city={userCity}
+            variant="tab"
+          />
+        }
+      />
       </div>
 
       {/* Sheets globales — abiertos desde el drawer */}
