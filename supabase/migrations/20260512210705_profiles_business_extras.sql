@@ -1,4 +1,4 @@
--- Pasify · 0005 colonne business extra su profiles (separate da quelle personali)
+-- Pasify · 0005 colonne business extra su profiles
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS business_address TEXT,
   ADD COLUMN IF NOT EXISTS business_country TEXT,

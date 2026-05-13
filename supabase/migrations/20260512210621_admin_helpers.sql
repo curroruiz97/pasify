@@ -1,10 +1,5 @@
--- ============================================================================
--- Pasify · 0003 admin helpers: viste/RPC per dashboard admin
--- ============================================================================
+-- Pasify · 0003 admin helpers
 
--- ============================================================================
--- has_role(uuid, app_role) — helper per policy admin
--- ============================================================================
 CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
 RETURNS BOOLEAN
 LANGUAGE SQL
@@ -17,9 +12,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.has_role(UUID, public.app_role) TO authenticated;
 
--- ============================================================================
--- Admin RLS: gli admin leggono e modificano TUTTO su profiles, events, tickets
--- ============================================================================
 CREATE POLICY "profiles_admin_all"
   ON public.profiles FOR ALL
   TO authenticated
