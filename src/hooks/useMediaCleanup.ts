@@ -1,7 +1,7 @@
 /**
  * useMediaCleanup · LEGACY NEUTRALIZED stub.
  *
- * En Students Life borraba archivos huérfanos de los buckets `posts`, `stories`,
+ * En Pasify borraba archivos huérfanos de los buckets `posts`, `stories`,
  * `qr_codes`, `discounts` cuando se eliminaba la fila relacionada. Esas tablas
  * y buckets no existen ya en Pasify. Mantenemos la firma para los consumers
  * (PartnerEventsManager, PartnerGalleryManager, PostCard orphan) y todas las

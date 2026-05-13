@@ -1,7 +1,7 @@
 /**
  * useBadges · LEGACY NEUTRALIZED stub.
  *
- * El sistema de badges/stamps de Students Life se eliminó al migrar a Pasify
+ * El sistema de badges/stamps de Pasify se eliminó al migrar a Pasify
  * (tablas `badges`, `user_badges`, `user_stats` ya no existen). Este módulo
  * mantiene la firma para que los consumers actuales (BadgesGallery,
  * BadgeAnimation y la página `/badges` orphaned) no rompan los imports.

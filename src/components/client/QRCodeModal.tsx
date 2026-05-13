@@ -182,7 +182,7 @@ const QRCodeModal = (props: QRCodeModalProps) => {
               style={{ userSelect: 'none' }}
             >
               <span className="text-4xl font-bold text-gray-500 rotate-[-30deg]">
-                STUDENTS LIFE
+                PASIFY
               </span>
             </div>
           </div>

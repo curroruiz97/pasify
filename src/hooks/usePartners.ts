@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Pasify · hooks de partners.
  *
- * Antes (Students Life) consultaba `reviews`, `gallery`, `partner_views`,
+ * Antes (Pasify) consultaba `reviews`, `gallery`, `partner_views`,
  * `categories`, `profile_image_url`, `latitude/longitude` (en profiles).
  * En Pasify esas tablas/columnas no existen — devolvemos defaults seguros
  * para no romper los consumers (PartnerDetails, PartnersList, RecentPartners,

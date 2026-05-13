@@ -436,7 +436,7 @@ const App = () => {
                   </ProtectedRoute>
                 }
               />
-              {/* Legacy Students Life routes (social/chats/profile/badges) removed
+              {/* Legacy Pasify routes (social/chats/profile/badges) removed
                   in favor of Pasify support flow (support_conversations table)
                   and clean event-only client surface. */}
               <Route

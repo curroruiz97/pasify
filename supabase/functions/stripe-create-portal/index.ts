@@ -20,7 +20,7 @@ const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-const SITE_URL = Deno.env.get("SITE_URL") || "https://studentslife.app";
+const SITE_URL = Deno.env.get("SITE_URL") || "https://pasify.app";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

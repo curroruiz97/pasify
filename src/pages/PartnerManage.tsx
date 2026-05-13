@@ -237,7 +237,7 @@ const PartnerManage = () => {
         <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
           <img
             src={logo}
-            alt="StudentsLife"
+            alt="Pasify"
             className="h-9 w-9 rounded-xl"
             style={{ filter: "drop-shadow(0 4px 10px rgba(14,165,233,0.25))" }}
           />
@@ -388,7 +388,7 @@ const PartnerManage = () => {
                     Acceso gratuito activo
                   </div>
                   <p className="text-xs leading-relaxed">
-                    Tu cuenta tiene acceso gratuito concedido por el equipo de StudentsLife.
+                    Tu cuenta tiene acceso gratuito concedido por el equipo de Pasify.
                   </p>
                 </div>
               )}

@@ -266,7 +266,7 @@ const PartnerOnboarding = ({
             >
               {t(
                 "partnerOnboarding.celebration.subtitle",
-                "Ya conoces todas las herramientas de StudentsLife Partner"
+                "Ya conoces todas las herramientas de Pasify Partner"
               )}
             </motion.p>
             <motion.div

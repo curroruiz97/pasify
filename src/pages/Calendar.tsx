@@ -231,7 +231,7 @@ const Calendar = () => {
       // 3) Llamar al edge function con el payload correcto
       // Pasify usa siempre `stripe-create-checkout`. La detección de test vs live
       // se hace en el server por la STRIPE_SECRET_KEY (sk_test_* vs sk_live_*).
-      // El antiguo `stripe-create-checkout-test` es legacy Students Life con
+      // El antiguo `stripe-create-checkout-test` es legacy Pasify con
       // payload incompatible (espera price_id en lugar de tier_id).
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
       const resp = await fetch(url, {

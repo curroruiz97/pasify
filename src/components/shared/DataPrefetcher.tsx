@@ -1,6 +1,6 @@
 /**
  * Pasify: DataPrefetcher disabilitato.
- * Lo studentslife prefettava categories/posts/discounts/reviews/gallery/partners
+ * Lo pasify prefettava categories/posts/discounts/reviews/gallery/partners
  * che in Pasify non esistono. Manteniamo il componente come no-op per non
  * rompere l'import in App.tsx; ripristinare con query Pasify-specific se serve.
  */

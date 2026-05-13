@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Pasify · hooks de eventos.
  *
- * Antes (Students Life) la tabla `events` tenía: `start_date`, `end_date`,
+ * Antes (Pasify) la tabla `events` tenía: `start_date`, `end_date`,
  * `type`, `is_active`, `show_in_calendar`, `show_in_social_feed`, `country`.
  * En Pasify el schema es:
  *   id, partner_id, title, description, date_start, date_end, city,
@@ -60,7 +60,7 @@ const decorate = (e: EventRow, p: Profile | null) => {
 
   return {
     ...e,
-    // ====== Aliases legacy (Students Life) para back-compat ======
+    // ====== Aliases legacy (Pasify) para back-compat ======
     start_date: e.date_start,
     end_date: effectiveEnd,
     discount_percentage: null as number | null,

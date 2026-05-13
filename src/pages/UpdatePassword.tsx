@@ -164,7 +164,7 @@ const UpdatePassword = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary flex items-center justify-center p-4">
       <div className="w-full max-w-md ios-card p-6 space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary">Students Life</h1>
+          <h1 className="text-3xl font-bold text-primary">Pasify</h1>
           <p className="text-muted-foreground mt-2">Establece tu nueva contraseña</p>
         </div>
 

@@ -172,7 +172,7 @@ const AdminProfile = () => {
           <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-xl p-4">
             <p className="text-sm text-muted-foreground mb-1">Email</p>
             <p className="text-lg font-semibold text-foreground">
-              {profile?.email || "admin@studentslife.com"}
+              {profile?.email || "admin@pasify.com"}
             </p>
           </div>
 

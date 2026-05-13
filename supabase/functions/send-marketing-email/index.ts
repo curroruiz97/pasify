@@ -12,7 +12,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Anti-spam email headers
 const getEmailHeaders = (userEmail: string) => ({
-  "List-Unsubscribe": `<mailto:unsubscribe@studentslife.es?subject=Unsubscribe%20${encodeURIComponent(userEmail)}>`,
+  "List-Unsubscribe": `<mailto:unsubscribe@pasify.es?subject=Unsubscribe%20${encodeURIComponent(userEmail)}>`,
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
   "X-Entity-Ref-ID": crypto.randomUUID(),
   "Precedence": "bulk",
@@ -23,14 +23,14 @@ const MAX_EMAILS_PER_DAY = 20;
 
 // Subject variati per ogni invio
 const SUBJECT_POOL = [
-  "Nuevas ofertas disponibles en StudentsLife",
+  "Nuevas ofertas disponibles en Pasify",
   "Descubre las promociones de hoy",
   "Ofertas exclusivas para ti",
   "No te pierdas estos descuentos",
-  "Novedades y ofertas en StudentsLife",
-  "Ahorra hoy con StudentsLife",
+  "Novedades y ofertas en Pasify",
+  "Ahorra hoy con Pasify",
   "Eventos y descuentos que te esperan",
-  "Mira lo que hay de nuevo en StudentsLife",
+  "Mira lo que hay de nuevo en Pasify",
 ];
 
 function pickRandomSubject(): string {
@@ -128,7 +128,7 @@ serve(async (req: Request) => {
         const subject = pickRandomSubject();
         await sendEmail({
           to: [testEmail],
-          replyTo: "info@studentslife.es",
+          replyTo: "info@pasify.es",
           subject,
           headers: getEmailHeaders(testEmail),
           text: buildEmailText("Usuario Test", itemsTitles),
@@ -242,7 +242,7 @@ serve(async (req: Request) => {
         const subject = pickRandomSubject();
         await sendEmail({
           to: [user.email],
-          replyTo: "info@studentslife.es",
+          replyTo: "info@pasify.es",
           subject,
           headers: getEmailHeaders(user.email),
           text: buildEmailText(userName, itemsTitles),
@@ -289,18 +289,18 @@ function buildEmailText(userName: string, itemsTitles: string): string {
   return `
 Hola ${userName},
 
-Hace tiempo que no te vemos por StudentsLife. Tenemos nuevas ofertas increíbles esperándote.
+Hace tiempo que no te vemos por Pasify. Tenemos nuevas ofertas increíbles esperándote.
 
 Ofertas y eventos destacados:
 ${itemsTitles}
 
-Visita https://studentslife.es para ver todas las ofertas.
+Visita https://pasify.es para ver todas las ofertas.
 
 ---
-StudentsLife - Tu app de descuentos universitarios
+Pasify - Tu app de descuentos universitarios
 Calle Universidad 1, Valladolid, España
 
-Este email fue enviado porque tienes una cuenta en StudentsLife.
+Este email fue enviado porque tienes una cuenta en Pasify.
 Para dejar de recibir estos emails, responde con "Cancelar suscripción" en el asunto.
   `.trim();
 }
@@ -314,14 +314,14 @@ function buildEmailHtml(userName: string, eventCardsHtml: string): string {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="x-apple-disable-message-reformatting">
       <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
-      <title>Ofertas en StudentsLife</title>
+      <title>Ofertas en Pasify</title>
     </head>
     <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; -webkit-font-smoothing: antialiased;">
       <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
         <!-- Header with Logo -->
         <div style="text-align: center; margin-bottom: 30px;">
-          <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 120px; height: auto; margin-bottom: 15px;" />
-          <h1 style="color: #ec4899; font-size: 28px; margin: 0;">StudentsLife</h1>
+          <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 120px; height: auto; margin-bottom: 15px;" />
+          <h1 style="color: #ec4899; font-size: 28px; margin: 0;">Pasify</h1>
           <p style="color: #6b7280; margin-top: 10px; font-size: 14px;">Tu app de descuentos universitarios</p>
         </div>
 
@@ -342,22 +342,22 @@ function buildEmailHtml(userName: string, eventCardsHtml: string): string {
 
         <!-- CTA Button -->
         <div style="text-align: center; margin-bottom: 30px;">
-          <a href="https://studentslife.es" style="display: inline-block; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-weight: 600; font-size: 16px;">
+          <a href="https://pasify.es" style="display: inline-block; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-weight: 600; font-size: 16px;">
             Ver todas las ofertas
           </a>
         </div>
 
         <!-- Footer with physical address (anti-spam requirement) -->
         <div style="text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px;">
-          <p style="margin: 0 0 10px 0;"><strong>StudentsLife</strong></p>
+          <p style="margin: 0 0 10px 0;"><strong>Pasify</strong></p>
           <p style="margin: 0 0 10px 0;">Calle Universidad 1, 47002 Valladolid, España</p>
-          <p style="margin: 0 0 10px 0;">Recibiste este email porque tienes una cuenta en StudentsLife.</p>
+          <p style="margin: 0 0 10px 0;">Recibiste este email porque tienes una cuenta en Pasify.</p>
           <p style="margin: 0;">
-            <a href="mailto:unsubscribe@studentslife.es?subject=Cancelar%20suscripcion" style="color: #6b7280; text-decoration: underline;">Cancelar suscripción</a>
+            <a href="mailto:unsubscribe@pasify.es?subject=Cancelar%20suscripcion" style="color: #6b7280; text-decoration: underline;">Cancelar suscripción</a>
             &nbsp;|&nbsp;
-            <a href="https://studentslife.es" style="color: #6b7280; text-decoration: underline;">Visitar web</a>
+            <a href="https://pasify.es" style="color: #6b7280; text-decoration: underline;">Visitar web</a>
           </p>
-          <p style="margin: 10px 0 0 0;">© ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.</p>
+          <p style="margin: 10px 0 0 0;">© ${new Date().getFullYear()} Pasify. Todos los derechos reservados.</p>
         </div>
       </div>
     </body>

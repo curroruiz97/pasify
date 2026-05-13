@@ -37,8 +37,8 @@ serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 40px auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
               <tr>
                 <td style="background: linear-gradient(135deg, #4F9CF9 0%, #3B82F6 100%); padding: 40px 30px; text-align: center;">
-                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
-                  <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">StudentsLife</h1>
+                  <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+                  <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Pasify</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 16px;">Notificación de nuevo mensaje</p>
                 </td>
               </tr>
@@ -62,7 +62,7 @@ serve(async (req) => {
                   </div>
 
                   <div style="margin-top: 32px; text-align: center;">
-                    <a href="https://studentslife.es/#/admin" style="display: inline-block; background: linear-gradient(135deg, #4F9CF9 0%, #3B82F6 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); transition: transform 0.2s;">
+                    <a href="https://pasify.es/#/admin" style="display: inline-block; background: linear-gradient(135deg, #4F9CF9 0%, #3B82F6 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); transition: transform 0.2s;">
                       Ver en el panel de administración
                     </a>
                   </div>
@@ -72,10 +72,10 @@ serve(async (req) => {
               <tr>
                 <td style="background: #F8FAFC; padding: 24px 30px; text-align: center; border-top: 1px solid #E2E8F0;">
                   <p style="margin: 0; color: #64748B; font-size: 13px;">
-                    Este es un mensaje automático de <strong style="color: #3B82F6;">StudentsLife</strong>
+                    Este es un mensaje automático de <strong style="color: #3B82F6;">Pasify</strong>
                   </p>
                   <p style="margin: 8px 0 0 0; color: #94A3B8; font-size: 12px;">
-                    © ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.
+                    © ${new Date().getFullYear()} Pasify. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>

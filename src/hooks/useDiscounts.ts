@@ -1,7 +1,7 @@
 /**
  * useDiscounts · LEGACY NEUTRALIZED stub.
  *
- * En Students Life los partners tenían "discounts" (cupones canjeables vía QR).
+ * En Pasify los partners tenían "discounts" (cupones canjeables vía QR).
  * En Pasify el modelo cambió a venta directa de tickets (tabla `tickets` +
  * `ticket_tiers` + Stripe Connect), así que `discounts` y `discount_scans` ya
  * no existen. Mantenemos el export para que `PartnerDiscounts.tsx` (cliente)

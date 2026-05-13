@@ -21,7 +21,7 @@ export interface ClientProfileCompletion {
 const ONBOARDING_STEPS: ClientOnboardingStep[] = [
   {
     id: "welcome",
-    title: "¡Bienvenido a StudentsLife! 🎉",
+    title: "¡Bienvenido a Pasify! 🎉",
     description: "Te guiaremos para conocer todas las funciones. ¡Vamos!",
     targetTab: "social",
     position: "center",
@@ -94,7 +94,7 @@ const ONBOARDING_STEPS: ClientOnboardingStep[] = [
   {
     id: "complete",
     title: "🎊 ¡Listo!",
-    description: "Ya conoces StudentsLife. ¡Disfruta de tus descuentos exclusivos!",
+    description: "Ya conoces Pasify. ¡Disfruta de tus descuentos exclusivos!",
     targetTab: "social",
     position: "center",
   },

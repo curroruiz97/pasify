@@ -168,40 +168,47 @@ const ClientOnboarding = ({
     };
   }, [updateSpotlightPosition, step?.id]);
 
-  if (!step) return null;
-
-  const isLastStep = step.id === "complete";
-  const isFirstStep = currentStep === 0;
-  const isRequired = step.required;
-  const isGoToProfileStep = step.id === "go-to-profile";
-
-  // Navigate to the correct tab
+  // Hooks deben llamarse INCONDICIONALMENTE en cada render (regla de
+  // React Hooks). El early return `if (!step) return null;` se mueve
+  // DESPUÉS de los useEffect. Dentro de cada effect, hacemos no-op si
+  // step es undefined.
   useEffect(() => {
+    if (!step) return;
     if (step.targetTab) {
       onNavigateTab(step.targetTab);
     }
-  }, [step.id, step.targetTab, onNavigateTab]);
+  }, [step, onNavigateTab]);
 
   useEffect(() => {
+    if (!step) return;
     if (step.id === "wallet" && walletOpened && walletOpen === false) {
       setTimeout(() => onNext(), 300);
     }
-  }, [step.id, walletOpened, walletOpen, onNext]);
+  }, [step, walletOpened, walletOpen, onNext]);
 
   useEffect(() => {
+    if (!step) return;
     if (step.id === "loyalty-cards" && loyaltyOpened && loyaltyCardsOpen === false) {
       setTimeout(() => onNext(), 300);
     }
-  }, [step.id, loyaltyOpened, loyaltyCardsOpen, onNext]);
+  }, [step, loyaltyOpened, loyaltyCardsOpen, onNext]);
 
   useEffect(() => {
+    if (!step) return;
     if (step.id === "wallet" && walletOpen === true) {
       setWalletOpened(true);
     }
     if (step.id === "loyalty-cards" && loyaltyCardsOpen === true) {
       setLoyaltyOpened(true);
     }
-  }, [step.id, walletOpen, loyaltyCardsOpen]);
+  }, [step, walletOpen, loyaltyCardsOpen]);
+
+  if (!step) return null;
+
+  const isLastStep = step.id === "complete";
+  const isFirstStep = currentStep === 0;
+  const isRequired = step.required;
+  const isGoToProfileStep = step.id === "go-to-profile";
 
   const triggerConfetti = () => {
     const duration = 4000;
@@ -304,7 +311,7 @@ const ClientOnboarding = ({
                 transition={{ delay: 0.5 }}
                 className="text-base sm:text-xl text-white/90 text-center px-4 sm:px-8"
               >
-                Ya conoces todo sobre StudentsLife
+                Ya conoces todo sobre Pasify
               </motion.p>
               <motion.div
                 initial={{ opacity: 0, scale: 0 }}

@@ -12,7 +12,9 @@
     "prepare": "husky",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "i18n:check": "node scripts/fix-i18n-mojibake.mjs --check",
+    "i18n:fix": "node scripts/fix-i18n-mojibake.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": "eslint --fix"

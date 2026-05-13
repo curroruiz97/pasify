@@ -12,7 +12,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Anti-spam email headers
 const getEmailHeaders = (userEmail: string) => ({
-  "List-Unsubscribe": `<mailto:unsubscribe@studentslife.es?subject=Unsubscribe%20${encodeURIComponent(userEmail)}>`,
+  "List-Unsubscribe": `<mailto:unsubscribe@pasify.es?subject=Unsubscribe%20${encodeURIComponent(userEmail)}>`,
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
   "X-Entity-Ref-ID": crypto.randomUUID(),
   "Precedence": "bulk",
@@ -132,8 +132,8 @@ serve(async (req: Request) => {
       try {
         await sendEmail({
           to: [testEmail],
-          replyTo: "info@studentslife.es",
-          subject: "Completa tu perfil de partner en StudentsLife",
+          replyTo: "info@pasify.es",
+          subject: "Completa tu perfil de partner en Pasify",
           headers: getEmailHeaders(testEmail),
           text: buildReminderText("Partner Test", testPartner.hasNoEvents, testPartner.hasNoImages),
           html: buildReminderEmail("Partner Test", testPartner.hasNoEvents, testPartner.hasNoImages),
@@ -162,8 +162,8 @@ serve(async (req: Request) => {
       try {
         await sendEmail({
           to: [partner.email],
-          replyTo: "info@studentslife.es",
-          subject: "Completa tu perfil de partner en StudentsLife",
+          replyTo: "info@pasify.es",
+          subject: "Completa tu perfil de partner en Pasify",
           headers: getEmailHeaders(partner.email),
           text: buildReminderText(partnerName, partner.hasNoEvents, partner.hasNoImages),
           html: buildReminderEmail(partnerName, partner.hasNoEvents, partner.hasNoImages),
@@ -213,20 +213,20 @@ function buildReminderText(partnerName: string, hasNoEvents: boolean, hasNoImage
   return `
 Hola ${partnerName},
 
-Hemos notado que tu perfil de partner en StudentsLife aún no está completo.
+Hemos notado que tu perfil de partner en Pasify aún no está completo.
 
 Pasos pendientes:
 ${steps.join('\n')}
 
 Los partners con perfil completo reciben un 80% más de visitas de estudiantes.
 
-Accede a tu panel: https://studentslife.es/#/partner
+Accede a tu panel: https://pasify.es/#/partner
 
 ---
-StudentsLife - Panel de Partners
+Pasify - Panel de Partners
 Calle Universidad 1, Valladolid, España
 
-Este email fue enviado porque eres partner en StudentsLife.
+Este email fue enviado porque eres partner en Pasify.
 Para dejar de recibir estos emails, responde con "Cancelar suscripción" en el asunto.
   `.trim();
 }
@@ -264,14 +264,14 @@ function buildReminderEmail(partnerName: string, hasNoEvents: boolean, hasNoImag
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="x-apple-disable-message-reformatting">
       <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
-      <title>Completa tu perfil en StudentsLife</title>
+      <title>Completa tu perfil en Pasify</title>
     </head>
     <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; -webkit-font-smoothing: antialiased;">
       <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
         <!-- Header with Logo -->
         <div style="text-align: center; margin-bottom: 30px;">
-          <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="StudentsLife" style="width: 120px; height: auto; margin-bottom: 15px;" />
-          <h1 style="color: #ec4899; font-size: 28px; margin: 0;">StudentsLife</h1>
+          <img src="https://lwtmddtwuiheluccykvs.supabase.co/storage/v1/object/public/avatars/logo.png" alt="Pasify" style="width: 120px; height: auto; margin-bottom: 15px;" />
+          <h1 style="color: #ec4899; font-size: 28px; margin: 0;">Pasify</h1>
           <p style="color: #6b7280; margin-top: 10px; font-size: 14px;">Panel de Partners</p>
         </div>
 
@@ -298,15 +298,15 @@ function buildReminderEmail(partnerName: string, hasNoEvents: boolean, hasNoImag
 
         <!-- Footer with physical address (anti-spam requirement) -->
         <div style="text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px;">
-          <p style="margin: 0 0 10px 0;"><strong>StudentsLife</strong></p>
+          <p style="margin: 0 0 10px 0;"><strong>Pasify</strong></p>
           <p style="margin: 0 0 10px 0;">Calle Universidad 1, 47002 Valladolid, España</p>
-          <p style="margin: 0 0 10px 0;">Recibiste este email porque eres partner en StudentsLife.</p>
+          <p style="margin: 0 0 10px 0;">Recibiste este email porque eres partner en Pasify.</p>
           <p style="margin: 0;">
-            <a href="mailto:unsubscribe@studentslife.es?subject=Cancelar%20suscripcion" style="color: #6b7280; text-decoration: underline;">Cancelar suscripción</a>
+            <a href="mailto:unsubscribe@pasify.es?subject=Cancelar%20suscripcion" style="color: #6b7280; text-decoration: underline;">Cancelar suscripción</a>
             &nbsp;|&nbsp;
-            <a href="https://studentslife.es/#/partner" style="color: #6b7280; text-decoration: underline;">Ir al panel</a>
+            <a href="https://pasify.es/#/partner" style="color: #6b7280; text-decoration: underline;">Ir al panel</a>
           </p>
-          <p style="margin: 10px 0 0 0;">© ${new Date().getFullYear()} StudentsLife. Todos los derechos reservados.</p>
+          <p style="margin: 10px 0 0 0;">© ${new Date().getFullYear()} Pasify. Todos los derechos reservados.</p>
         </div>
       </div>
     </body>
