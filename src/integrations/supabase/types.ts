@@ -1635,8 +1635,11 @@ export type Database = {
           date_end: string | null
           date_start: string
           description: string | null
+          festival_parent_id: string | null
           id: string
           image_url: string | null
+          is_festival: boolean
+          metadata: Json
           org_id: string | null
           partner_id: string
           price_cents: number
@@ -1659,8 +1662,11 @@ export type Database = {
           date_end?: string | null
           date_start: string
           description?: string | null
+          festival_parent_id?: string | null
           id?: string
           image_url?: string | null
+          is_festival?: boolean
+          metadata?: Json
           org_id?: string | null
           partner_id: string
           price_cents?: number
@@ -1683,8 +1689,11 @@ export type Database = {
           date_end?: string | null
           date_start?: string
           description?: string | null
+          festival_parent_id?: string | null
           id?: string
           image_url?: string | null
+          is_festival?: boolean
+          metadata?: Json
           org_id?: string | null
           partner_id?: string
           price_cents?: number
@@ -1703,6 +1712,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_festival_parent_id_fkey"
+            columns: ["festival_parent_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_festival_parent_id_fkey"
+            columns: ["festival_parent_id"]
+            isOneToOne: false
+            referencedRelation: "v_event_revenue_summary"
+            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "events_org_id_fkey"
