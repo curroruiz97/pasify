@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -76,6 +76,13 @@ export const useRefundRequests = (_mode: "mine" | "org" | "admin" = "mine") => {
   const [requests, setRequests] = useState<RefundRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Unique id por instancia del hook. Necesario porque Supabase Realtime
+  // no admite dos channels con el mismo nombre activos a la vez: si dos
+  // componentes (p.ej. dos TicketCard en wallet) llamaban al hook con un
+  // nombre literal "refund_requests_changes" la segunda subscription
+  // fallaba silenciosamente y a veces tiraba un throw en render que
+  // disparaba el ErrorBoundary global y dejaba el dashboard en negro.
+  const instanceId = useId();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -99,7 +106,7 @@ export const useRefundRequests = (_mode: "mine" | "org" | "admin" = "mine") => {
   useEffect(() => {
     fetchAll();
     const channel = supabase
-      .channel("refund_requests_changes")
+      .channel(`refund_requests_changes_${instanceId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "refund_requests" }, () => {
         fetchAll();
       })
@@ -107,7 +114,7 @@ export const useRefundRequests = (_mode: "mine" | "org" | "admin" = "mine") => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchAll]);
+  }, [fetchAll, instanceId]);
 
   const requestRefund = useCallback(async (ticketId: string, reason: string, reasonCode?: string) => {
     const { data, error } = await supabase.rpc("request_refund", {

@@ -194,6 +194,10 @@ import { Sentry } from "./lib/sentry";
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary
     fallback={
+      // Fallback con bg + colores Pasify explícitos para que NO se vea
+      // un pantallazo negro indistinguible de "la app no carga". Antes el
+      // h1 heredaba el foreground del body en dark mode y el botón cyan
+      // era inconsistente con el branding terracota.
       <div style={{
         minHeight: "100vh",
         display: "flex",
@@ -202,29 +206,68 @@ createRoot(document.getElementById("root")!).render(
         justifyContent: "center",
         padding: "1.5rem",
         textAlign: "center",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: "'Inter', system-ui, sans-serif",
+        background: "#0a0a0a",
+        color: "#F4EEE2",
       }}>
-        <h1 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+        <div style={{
+          fontSize: "10px",
+          fontFamily: "'Geist Mono', ui-monospace, monospace",
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: "#FF7A4D",
+          marginBottom: "0.75rem",
+        }}>
+          — Pasify · Error temporal —
+        </div>
+        <h1 style={{
+          fontSize: "1.5rem",
+          fontWeight: 700,
+          marginBottom: "0.75rem",
+          color: "#F4EEE2",
+          letterSpacing: "-0.01em",
+        }}>
           Algo no ha ido bien
         </h1>
-        <p style={{ color: "#666", fontSize: "0.875rem" }}>
-          Hemos enviado el error a nuestro equipo. Por favor, vuelve a intentarlo.
+        <p style={{
+          color: "rgba(244,238,226,0.65)",
+          fontSize: "0.9rem",
+          maxWidth: "28rem",
+          lineHeight: 1.5,
+        }}>
+          Hemos enviado el error a nuestro equipo. Recarga la página para
+          continuar — tu sesión y tus tickets están a salvo.
         </p>
         <button
           onClick={() => window.location.reload()}
           style={{
-            marginTop: "1.25rem",
-            padding: "0.625rem 1.25rem",
-            background: "#0ea5e9",
+            marginTop: "1.5rem",
+            padding: "0.875rem 1.75rem",
+            background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
             color: "white",
             border: "none",
-            borderRadius: "10px",
+            borderRadius: "999px",
             fontWeight: 600,
             cursor: "pointer",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+            fontSize: "0.95rem",
+            letterSpacing: "-0.005em",
           }}
         >
           Recargar
         </button>
+        <a
+          href="/#/"
+          style={{
+            marginTop: "0.75rem",
+            fontSize: "0.8rem",
+            color: "rgba(244,238,226,0.55)",
+            textDecoration: "none",
+          }}
+        >
+          o volver al inicio →
+        </a>
       </div>
     }
   >

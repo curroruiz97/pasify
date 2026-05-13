@@ -46,7 +46,8 @@ import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
-import { useRefundRequests } from "@/hooks/useRefundRequests";
+import { useRefundRequests, type RefundRequest } from "@/hooks/useRefundRequests";
+import { Sentry } from "@/lib/sentry";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import {
@@ -176,6 +177,14 @@ const ClientDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState<string>("all");
+
+  // Hook compartido entre TODOS los TicketCard del wallet. Antes cada card
+  // invocaba useRefundRequests por su cuenta y se duplicaban los realtime
+  // channels (mismo nombre), lo que crashaba el ErrorBoundary global y
+  // dejaba el dashboard en negro tras login. Subiéndolo aquí queda una
+  // única subscription y una única lista de refunds compartida.
+  const { statusForTicket: refundStatusForTicket, requestRefund: refundRequestRefund } =
+    useRefundRequests();
 
   useEffect(() => {
     (async () => {
@@ -715,6 +724,30 @@ const ClientDashboard = () => {
         )}
 
         {view === "wallet" && (
+          <Sentry.ErrorBoundary
+            fallback={({ resetError }) => (
+              <div className="mx-auto max-w-md py-12 text-center">
+                <h1 className="mb-2 text-2xl font-bold">Wallet temporalmente no disponible</h1>
+                <p className="mb-6 text-sm text-muted-foreground">
+                  Hubo un problema cargando tus tickets. Tu compra está a salvo
+                  — vuelve a intentarlo o recibirás un email con el QR.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => resetError()}
+                  className="inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-semibold text-white"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+                  }}
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+          >
           <div>
             <h1 className="mb-1 text-3xl font-bold tracking-tight">Mis tickets</h1>
             <p className="mb-6 text-sm text-muted-foreground">
@@ -744,6 +777,8 @@ const ClientDashboard = () => {
                     key={t.id}
                     ticket={t}
                     onOpenQR={() => setOpenTicket({ ticket: t, event: t.event })}
+                    refundStatus={refundStatusForTicket(t.id)}
+                    onRequestRefund={refundRequestRefund}
                   />
                 ))}
               </div>
@@ -756,6 +791,7 @@ const ClientDashboard = () => {
               event={openTicket?.event ?? null}
             />
           </div>
+          </Sentry.ErrorBoundary>
         )}
       </main>
 
@@ -1191,16 +1227,18 @@ const useCountdown = (target: Date | string | null | undefined) => {
 const TicketCard = ({
   ticket,
   onOpenQR,
+  refundStatus,
+  onRequestRefund,
 }: {
   ticket: Ticket & { event: TicketEventInfo | null };
   onOpenQR: () => void;
+  refundStatus: RefundRequest | null;
+  onRequestRefund: (ticketId: string, reason: string) => Promise<unknown> | unknown;
 }) => {
   const event = ticket.event;
   const date = event ? new Date(event.date_start) : null;
   const countdown = useCountdown(date);
-  const { createRequest, statusForTicket } = useRefundRequests();
   const { toast } = useToast();
-  const refundStatus = statusForTicket(ticket.id);
   const canRefund =
     !refundStatus &&
     ticket.status !== "used" &&
@@ -1483,18 +1521,10 @@ const TicketCard = ({
                         });
                         return;
                       }
-                      createRequest({
-                        ticketId: ticket.id,
-                        eventTitle: event?.title ?? "Evento",
-                        eventDate: event?.date_start ?? null,
-                        partnerName: event?.partner_name ?? null,
-                        amount_cents: event?.price_cents ?? 0,
-                        reason: refundReason.trim(),
-                        requestedBy: ticket.user_id ?? null,
-                      });
-                      toast({
-                        title: "Solicitud enviada",
-                        description: "Te avisamos por email cuando el equipo de Pasify la revise.",
+                      void Promise.resolve(
+                        onRequestRefund(ticket.id, refundReason.trim())
+                      ).catch(() => {
+                        /* el hook ya muestra toast en caso de error */
                       });
                       setRefundOpen(false);
                       setRefundReason("");
