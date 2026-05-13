@@ -379,6 +379,7 @@ const PartnerDashboard = () => {
         status={partnerCtx.status}
         org={partnerCtx.org}
         venue={partnerCtx.venue}
+        venues={partnerCtx.venues}
         brand={partnerCtx.brand}
         email={userEmail}
         forceOpen={reopenOnboarding}
@@ -410,7 +411,16 @@ const PartnerDashboard = () => {
           <nav className="flex-1 overflow-y-auto p-3">
             <NavTree tree={navTree} section={section} onSelect={setSection} />
           </nav>
-          <div className="border-t border-border p-3">
+          <div className="space-y-1 border-t border-border p-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Configuración
+            </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
@@ -999,7 +1009,9 @@ const PartnerDashboard = () => {
             <PartnerSettingsBlock
               userId={userId}
               org={partnerCtx.org}
+              brand={partnerCtx.brand}
               venue={partnerCtx.venue}
+              venues={partnerCtx.venues}
               status={partnerCtx.status}
               onRefresh={refreshAllPartnerData}
               onReopenOnboarding={() => {

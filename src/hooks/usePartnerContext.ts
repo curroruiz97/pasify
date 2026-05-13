@@ -91,7 +91,10 @@ interface UsePartnerContextResult {
   status: OnboardingStatus | null;
   org: PartnerOrg | null;
   brand: PartnerBrand | null;
+  /** Venue principal (primer venue activo creado, normalmente el "Principal"). */
   venue: PartnerVenue | null;
+  /** Todos los venues activos de la organización (multi-local). */
+  venues: PartnerVenue[];
   refresh: () => Promise<void>;
 }
 
@@ -114,6 +117,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
   const [org, setOrg] = useState<PartnerOrg | null>(null);
   const [brand, setBrand] = useState<PartnerBrand | null>(null);
   const [venue, setVenue] = useState<PartnerVenue | null>(null);
+  const [venues, setVenues] = useState<PartnerVenue[]>([]);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -153,6 +157,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
         });
         setOrg(null);
         setVenue(null);
+        setVenues([]);
         setBrand(null);
         return;
       }
@@ -165,6 +170,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
         setStatus(null);
         setOrg(null);
         setVenue(null);
+        setVenues([]);
         setBrand(null);
         return;
       }
@@ -209,18 +215,29 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
         setBrand(null);
       }
 
-      // 4) Si hay venue, cargar la fila completa
-      if (mapped.primaryVenueId) {
-        const { data: venueRow } = await supabase
+      // 4) Si hay org, cargar TODOS los venues activos (multi-local)
+      //    y elegir el "principal" (primer activo creado). Pasify
+      //    soporta hasta N locales por organización (ver migración 0011).
+      if (mapped.primaryOrgId) {
+        const { data: venueRows } = await supabase
           .from("venues")
           .select(
             "id, brand_id, org_id, slug, name, business_category, address, city, postal_code, country, timezone, capacity, cover_image_url, description, phone, email, opening_hours, status"
           )
-          .eq("id", mapped.primaryVenueId)
-          .maybeSingle();
-        setVenue((venueRow as PartnerVenue | null) ?? null);
+          .eq("org_id", mapped.primaryOrgId)
+          .eq("status", "active")
+          .order("created_at", { ascending: true });
+        const list = (venueRows as PartnerVenue[] | null) ?? [];
+        setVenues(list);
+        // Venue "primario" = el que la RPC nos dijo, o el primero activo
+        const primary =
+          (mapped.primaryVenueId
+            ? list.find((v) => v.id === mapped.primaryVenueId)
+            : null) ?? list[0] ?? null;
+        setVenue(primary);
       } else {
         setVenue(null);
+        setVenues([]);
       }
     } finally {
       setRefreshing(false);
@@ -232,7 +249,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
     void load();
   }, [load]);
 
-  return { loading, refreshing, status, org, brand, venue, refresh: load };
+  return { loading, refreshing, status, org, brand, venue, venues, refresh: load };
 };
 
 export default usePartnerContext;
