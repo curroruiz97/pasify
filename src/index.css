@@ -181,6 +181,46 @@
     display: none;
   }
 
+  /* .scrollbar-pasify — barra de scroll thin terracota, on-brand para
+     overlays internos (time picker, listas densas, etc.). Firefox usa
+     scrollbar-width/scrollbar-color; Chrome/Safari estilan ::-webkit-*. */
+  .scrollbar-pasify {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(232, 84, 42, 0.35) transparent;
+  }
+  .scrollbar-pasify::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-pasify::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-pasify::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255, 122, 77, 0.45) 0%, rgba(184, 56, 26, 0.55) 100%);
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+  .scrollbar-pasify::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(255, 122, 77, 0.70) 0%, rgba(184, 56, 26, 0.80) 100%);
+    background-clip: padding-box;
+  }
+  .scrollbar-pasify::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* .no-spinner — esconde los stepper nativos de <input type=number>
+     en webkit/firefox para que podamos pintar nuestros propios
+     controles (+/-) con estilo Pasify. */
+  .no-spinner::-webkit-outer-spin-button,
+  .no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .no-spinner {
+    -moz-appearance: textfield;
+  }
+
   .overflow-wrap-anywhere {
     overflow-wrap: anywhere;
   }

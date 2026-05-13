@@ -827,7 +827,7 @@ export const EventEditorWizard = ({
 
           {/* Body: layout 2-col en lg+, 1-col en mobile */}
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7 md:py-8">
+            <main className="scrollbar-pasify min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7 md:py-8">
               {loadingInitial ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -891,7 +891,7 @@ export const EventEditorWizard = ({
             {/* Sidebar sticky — sólo desktop (lg+) y nunca en step "review"
                 (allá la summary card ya está en el cuerpo). */}
             {step !== 5 && (
-              <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-border bg-card/30 px-5 py-6 lg:block">
+              <aside className="scrollbar-pasify hidden w-[320px] shrink-0 overflow-y-auto border-l border-border bg-card/30 px-5 py-6 lg:block">
                 <EventSummaryCard summary={summary} defaultCollapsed={false} />
               </aside>
             )}

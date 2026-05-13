@@ -119,7 +119,7 @@ export const PasifyTimeInput = ({
             </div>
             <div
               ref={hoursListRef}
-              className="h-56 overflow-y-auto py-1"
+              className="scrollbar-pasify h-56 overflow-y-auto py-1"
             >
               {HOURS.map((h) => {
                 const current = h === hh;
@@ -153,7 +153,7 @@ export const PasifyTimeInput = ({
             </div>
             <div
               ref={minutesListRef}
-              className="h-56 overflow-y-auto py-1"
+              className="scrollbar-pasify h-56 overflow-y-auto py-1"
             >
               {MINUTES.map((m) => {
                 // Marcamos como current si coincide exactamente con mm, o si

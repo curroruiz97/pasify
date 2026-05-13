@@ -1,6 +1,7 @@
 import { AlertTriangle, Copy, Lock, Plus, Sparkles, Ticket, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasifyPriceInput } from "@/components/ui/pasify-price-input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -255,20 +256,14 @@ export const TicketTiersBuilder = ({
                     />
                   )}
                 </Label>
-                <Input
+                <PasifyPriceInput
                   id={`tier-price-${tier._key}`}
-                  type="number"
-                  step="0.01"
-                  min="0"
                   value={tier.priceEur}
-                  onChange={(e) => updateTier(tier._key, { priceEur: e.target.value })}
+                  onChange={(v) => updateTier(tier._key, { priceEur: v })}
                   placeholder="15.00"
+                  step={0.1}
+                  min={0}
                   disabled={disabled || isLocked}
-                  title={
-                    isLocked
-                      ? "No se puede cambiar el precio: este tier ya vendió entradas"
-                      : undefined
-                  }
                 />
               </div>
               <div className="sm:col-span-2">
