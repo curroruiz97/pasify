@@ -39,7 +39,9 @@ jobs:
           set -e
           for fn in supabase/functions/*/; do
             name=$(basename "$fn")
-            if [[ "$name" == "_shared" || "$name" == "_tests" ]]; then continue; fi
+            # Skip carpetas con prefijo `_` (compartidas, tests, legacy).
+            # Supabase Preview Branching también honra esta convención.
+            if [[ "$name" == _* ]]; then continue; fi
             echo "🚀 Deploying $name"
             supabase functions deploy "$name" --no-verify-jwt
           done
