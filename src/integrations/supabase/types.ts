@@ -5428,6 +5428,7 @@ export type Database = {
         }
         Returns: string
       }
+      event_has_sales: { Args: { _event_id: string }; Returns: boolean }
       get_app_setting_bool: { Args: { _key: string }; Returns: boolean }
       get_app_setting_int: { Args: { _key: string }; Returns: number }
       get_app_setting_text: { Args: { _key: string }; Returns: string }
@@ -5565,6 +5566,23 @@ export type Database = {
           tickets_used: number
         }[]
       }
+      partner_event_tier_live_stats: {
+        Args: { _event_id: string }
+        Returns: {
+          capacity: number
+          checkin_pct: number
+          has_sales: boolean
+          pending_count: number
+          refunded_count: number
+          revenue_cents: number
+          sold_count: number
+          sort_order: number
+          tier_id: string
+          tier_name: string
+          tier_status: string
+          used_count: number
+        }[]
+      }
       request_refund: {
         Args: { _reason: string; _reason_code?: string; _ticket_id: string }
         Returns: string
@@ -5632,6 +5650,7 @@ export type Database = {
           venue_name: string
         }[]
       }
+      tier_has_sales: { Args: { _tier_id: string }; Returns: boolean }
       toggle_ai_kill_switch: {
         Args: { _capability: string; _reason?: string }
         Returns: boolean
