@@ -33,6 +33,7 @@ import Wordmark from "@/components/Wordmark";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { LivePulse } from "@/components/admin/LivePulse";
 import { TrustSafetyCenter } from "@/components/admin/TrustSafetyCenter";
+import { AuditTrailViewer } from "@/components/admin/AuditTrailViewer";
 import { NetworkFinance } from "@/components/admin/NetworkFinance";
 import { AiInsightsHub } from "@/components/admin/AiInsightsHub";
 import { OrganizationsHub } from "@/components/admin/OrganizationsHub";
@@ -529,7 +530,12 @@ const AdminDashboard = () => {
 
           {section === "compliance" && <ComplianceHub />}
 
-          {section === "trust" && <TrustSafetyCenter />}
+          {section === "trust" && (
+            <div className="space-y-8">
+              <TrustSafetyCenter />
+              <AuditTrailViewer />
+            </div>
+          )}
 
           {section === "refunds" && <RefundsQueue />}
 
