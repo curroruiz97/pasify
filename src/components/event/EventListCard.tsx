@@ -1,4 +1,4 @@
-import { Heart, Ticket } from "lucide-react";
+import { Heart, Loader2, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -21,11 +21,22 @@ interface Props {
   partnerName?: string;
   /** Mostra il sottotitolo "@ partnerName" sotto il titolo (utile in favorites). */
   showPartner?: boolean;
+  /** Handler de "Comprar entrada". Recibe el id del evento. */
+  onBuyTicket?: (eventId: string) => void;
+  /** Si true, muestra spinner en el botón y lo deshabilita (compra en curso). */
+  pending?: boolean;
 }
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-export const EventListCard = ({ event, partnerId, partnerName, showPartner }: Props) => {
+export const EventListCard = ({
+  event,
+  partnerId,
+  partnerName,
+  showPartner,
+  onBuyTicket,
+  pending = false,
+}: Props) => {
   const date = new Date(event.date_start);
   const initial = (event.title?.[0] ?? "?").toUpperCase();
   const { isFavorite, toggle } = useFavorites();
@@ -293,8 +304,24 @@ export const EventListCard = ({ event, partnerId, partnerName, showPartner }: Pr
 
               <button
                 type="button"
-                disabled={soldOut}
-                className="group/btn inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                disabled={soldOut || pending}
+                onClick={(e) => {
+                  // Detén la propagación: la card está dentro de un <article>
+                  // que en el futuro puede ser clicable para abrir detalle.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (soldOut || pending) return;
+                  if (onBuyTicket) {
+                    onBuyTicket(event.id);
+                  } else if (import.meta.env.DEV) {
+                     
+                    console.warn(
+                      "[EventListCard] onBuyTicket prop not provided. Button click is a no-op.",
+                      { eventId: event.id }
+                    );
+                  }
+                }}
+                className="group/btn inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 md:text-sm"
                 style={{
                   background: soldOut
                     ? "#3a3a3a"
@@ -304,10 +331,21 @@ export const EventListCard = ({ event, partnerId, partnerName, showPartner }: Pr
                     : "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 6px 16px -4px rgba(232,84,42,0.5), 0 14px 32px -10px rgba(184,56,26,0.5)",
                   letterSpacing: "-0.005em",
                 }}
+                aria-label={
+                  soldOut
+                    ? "Entradas agotadas"
+                    : pending
+                    ? "Procesando compra"
+                    : "Comprar entrada"
+                }
               >
-                <Ticket className="h-4 w-4" />
-                {soldOut ? "Agotado" : "Comprar entrada"}
-                {!soldOut && (
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Ticket className="h-4 w-4" />
+                )}
+                {soldOut ? "Agotado" : pending ? "Procesando…" : "Comprar entrada"}
+                {!soldOut && !pending && (
                   <span
                     aria-hidden="true"
                     className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"

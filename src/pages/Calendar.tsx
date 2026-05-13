@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedMarqueeHero } from "@/components/ui/hero-3";
 import { useToast } from "@/hooks/use-toast";
+import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { DEFAULT_CITY } from "@/constants/spanishCities";
 import { DEFAULT_COUNTRY, getCountryByCode } from "@/constants/countries";
 
@@ -163,10 +164,15 @@ const Calendar = () => {
     localStorage.setItem("selectedCountry", country);
   };
 
-  // Inline participation — replaces the old detail-page navigation.
-  // Anonymous users → bounce to /register-client?next=/calendar so they
-  // come back to the same view after sign-up. Authed users get an
-  // optimistic toggle + insert.
+  // Hook compartido de compra. Encapsula tier lookup, auth gate, payload a
+  // `stripe-create-checkout` y redirect a hosted checkout. La lógica vive
+  // en `src/hooks/useTicketCheckout.ts` y la usa también `PublicPartnerPage`.
+  const { checkout: buyTicket, pendingId: buyingId } = useTicketCheckout();
+
+  // handleParticipate — wrapper específico del Calendar que añade dos atajos
+  // antes de delegar al hook:
+  //   (a) auth gate con returnTo=/calendar
+  //   (b) si ya tienes ticket del evento → ir directo al wallet (no compra)
   const handleParticipate = async (event: CalendarEvent) => {
     if (!authedUserId) {
       navigate(`/register-client?next=${encodeURIComponent("/calendar")}`);
@@ -179,117 +185,11 @@ const Calendar = () => {
       navigate(`/client-dashboard?wallet=${encodeURIComponent(event.id)}`);
       return;
     }
+    // Mantén el optimistic Set local para que la card muestre estado
+    // "loading" instantáneo (además del pendingId del hook).
     setParticipatingIds((prev) => new Set(prev).add(event.id));
     try {
-      // Pasify: la compra real de tickets se hace vía Stripe Checkout.
-      // El edge function `stripe-create-checkout` crea el ticket_order +
-      // tickets pending y redirige al hosted checkout. Requiere:
-      //   - event_id + tier_id + qty
-      //   - buyer { email, first_name?, last_name?, phone? }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
-
-      // 1) Buscar el tier activo del evento. Pasify exige ticket_tiers explícitos
-      // por evento — `price_cents` del event es solo fallback display. Si no
-      // hay tiers activos, el partner aún no ha terminado de configurar la venta.
-      const { data: tiers, error: tiersErr } = await supabase
-        .from("ticket_tiers")
-        .select("id, name, price_cents, status, sort_order")
-        .eq("event_id", event.id)
-        .eq("status", "active")
-        .order("sort_order", { ascending: true })
-        .limit(1);
-      if (tiersErr) throw new Error(tiersErr.message);
-      const tier = tiers?.[0];
-      if (!tier) {
-        toast({
-          title: "Venta no disponible",
-          description:
-            "Este evento aún no tiene entradas a la venta. Vuelve a probar más tarde.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // 2) Buyer info — del session + profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("first_name, last_name, phone")
-        .eq("id", authedUserId)
-        .maybeSingle();
-
-      const buyer = {
-        email: session.user.email || "",
-        first_name: profile?.first_name ?? undefined,
-        last_name: profile?.last_name ?? undefined,
-        phone: profile?.phone ?? undefined,
-      };
-      if (!buyer.email) {
-        throw new Error("No se encontró tu email. Revisa tu perfil.");
-      }
-
-      // 3) Llamar al edge function con el payload correcto
-      // Pasify usa siempre `stripe-create-checkout`. La detección de test vs live
-      // se hace en el server por la STRIPE_SECRET_KEY (sk_test_* vs sk_live_*).
-      // El antiguo `stripe-create-checkout-test` es legacy Pasify con
-      // payload incompatible (espera price_id en lugar de tier_id).
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          event_id: event.id,
-          tier_id: tier.id,
-          qty: 1,
-          buyer,
-          locale: "es",
-          // success_url y cancel_url LIMPIOS — sin query previa. El edge
-          // function `stripe-create-checkout` se encarga de anexar
-          // `?order_id=<uuid>&session_id={CHECKOUT_SESSION_ID}`. Si añadimos
-          // ?wallet=... aquí, acabamos con doble `?` (URL malformada que
-          // hace que la ClientDashboard no pueda parsear los params).
-          success_url: `${window.location.origin}/#/client-dashboard`,
-          cancel_url: `${window.location.origin}/#/calendar`,
-        }),
-      });
-
-      if (resp.status === 404) {
-        // Edge function aún no desplegada en producción.
-        toast({
-          title: "Checkout próximamente",
-          description:
-            "El sistema de pago está siendo desplegado. Vuelve a intentarlo en unos minutos.",
-        });
-        return;
-      }
-
-      const raw = await resp.text();
-      if (!resp.ok) {
-        let detail = raw;
-        try {
-          const parsed = JSON.parse(raw);
-          detail = parsed?.error || parsed?.message || parsed?.code || raw;
-        } catch { /* noop */ }
-        throw new Error(`${resp.status}: ${detail}`);
-      }
-      const data = JSON.parse(raw);
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-      throw new Error("Respuesta inesperada del servidor de pagos.");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error inesperado";
-      console.error("[Calendar] participate error:", e);
-      toast({
-        title: t("common.error", "Error"),
-        description: msg,
-        variant: "destructive",
-      });
+      await buyTicket({ id: event.id, title: event.title });
     } finally {
       setParticipatingIds((prev) => {
         const next = new Set(prev);
@@ -298,6 +198,10 @@ const Calendar = () => {
       });
     }
   };
+  // Marker para evitar unused-var warning en eslint sobre `buyingId`. Se
+  // expone aquí por si en el futuro el Calendar necesita reflejar el
+  // estado de carga del hook directamente en la UI.
+  void buyingId;
 
   const handleBack = () => {
     if (isAuthed) {

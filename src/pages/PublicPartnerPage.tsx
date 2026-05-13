@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { EventListCard } from "@/components/event/EventListCard";
+import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import {
   addMonths,
   endOfMonth,
@@ -145,6 +146,9 @@ const PublicPartnerPage = () => {
   const [tab, setTab] = useState<"list" | "calendar">("list");
   const [monthCursor, setMonthCursor] = useState<Date>(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  // Hook único de compra. `pendingId` se compara con event.id en cada
+  // card para mostrar el spinner solo en la que el usuario pulsó.
+  const { checkout: buyTicket, pendingId } = useTicketCheckout();
 
   useEffect(() => {
     (async () => {
@@ -380,7 +384,14 @@ const PublicPartnerPage = () => {
               </Card>
             ) : (
               upcomingEvents.map((e) => (
-                <EventListCard key={e.id} event={e} partnerId={partner.id} partnerName={partner.business_name ?? undefined} />
+                <EventListCard
+                  key={e.id}
+                  event={e}
+                  partnerId={partner.id}
+                  partnerName={partner.business_name ?? undefined}
+                  onBuyTicket={(id) => buyTicket({ id, title: e.title })}
+                  pending={pendingId === e.id}
+                />
               ))
             )}
           </div>
@@ -416,7 +427,14 @@ const PublicPartnerPage = () => {
                   </p>
                 ) : (
                   (eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? []).map((e) => (
-                    <EventListCard key={e.id} event={e} partnerId={partner.id} partnerName={partner.business_name ?? undefined} />
+                    <EventListCard
+                      key={e.id}
+                      event={e}
+                      partnerId={partner.id}
+                      partnerName={partner.business_name ?? undefined}
+                      onBuyTicket={(id) => buyTicket({ id, title: e.title })}
+                      pending={pendingId === e.id}
+                    />
                   ))
                 )}
               </div>
