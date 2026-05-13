@@ -55,3 +55,4 @@ supabase/.branches/
 
 .vercel
 .env*.local
+supabase/migrations.legacy-backup/

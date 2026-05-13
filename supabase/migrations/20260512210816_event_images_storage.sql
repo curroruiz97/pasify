@@ -1,5 +1,4 @@
 -- Pasify · 0009 storage event-images bucket
--- Convenzione path: <partner_id>/<filename>
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('event-images', 'event-images', true)
 ON CONFLICT (id) DO NOTHING;

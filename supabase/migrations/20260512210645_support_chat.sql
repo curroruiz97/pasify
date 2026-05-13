@@ -1,8 +1,4 @@
--- ============================================================================
 -- Pasify · 0004 support chat
--- Solo support: ogni cliente apre UNA conversazione con admin. Niente
--- chat user-to-user generale.
--- ============================================================================
 
 CREATE TABLE public.support_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,9 +31,6 @@ CREATE POLICY "support_conv_admin_all"
   USING (public.has_role(auth.uid(), 'admin'))
   WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
--- ============================================================================
--- support_messages
--- ============================================================================
 CREATE TYPE public.support_sender_t AS ENUM ('client', 'admin');
 
 CREATE TABLE public.support_messages (
@@ -54,7 +47,6 @@ CREATE INDEX idx_support_msg_conv ON public.support_messages(conversation_id, cr
 
 ALTER TABLE public.support_messages ENABLE ROW LEVEL SECURITY;
 
--- Client legge/scrive solo la propria conversazione
 CREATE POLICY "support_msg_client_read_own"
   ON public.support_messages FOR SELECT
   TO authenticated
@@ -77,16 +69,12 @@ CREATE POLICY "support_msg_client_insert_own"
     )
   );
 
--- Admin legge/scrive tutto
 CREATE POLICY "support_msg_admin_all"
   ON public.support_messages FOR ALL
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'))
   WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
--- ============================================================================
--- Trigger: aggiorna last_message_* su nuovo message
--- ============================================================================
 CREATE OR REPLACE FUNCTION public.update_support_conv_on_message()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -104,9 +92,6 @@ CREATE TRIGGER trg_support_msg_update_conv
   AFTER INSERT ON public.support_messages
   FOR EACH ROW EXECUTE FUNCTION public.update_support_conv_on_message();
 
--- ============================================================================
--- Realtime
--- ============================================================================
 DO $$
 BEGIN
   IF NOT EXISTS (
