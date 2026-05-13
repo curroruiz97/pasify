@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -130,11 +130,24 @@ const CATEGORIES = [
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
   };
-  const [view, setView] = useState<View>("home");
+  // HashRouter: ?session_id=... aparece como query del hash. `useSearchParams`
+  // lo parsea correctamente porque react-router resuelve `location.search`
+  // dentro del fragmento.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const postCheckoutSessionId = searchParams.get("session_id");
+  const postCheckoutOrderId = searchParams.get("order_id");
+
+  // Vista inicial: si venimos de Stripe Checkout con ?session_id=..., abrimos
+  // directamente el Wallet (en vez de "home") para que el cliente vea su
+  // ticket recién comprado sin tener que navegar.
+  const [view, setView] = useState<View>(
+    postCheckoutSessionId || postCheckoutOrderId ? "wallet" : "home"
+  );
   const [userCity, setUserCity] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
   const { events: favEvents, ids: favIds, toggle: toggleFav } = useFavorites();
@@ -190,59 +203,150 @@ const ClientDashboard = () => {
     })();
   }, []);
 
+  // Loader extraído a useCallback para poder re-invocarlo desde el effect
+  // del post-checkout (poll/realtime) sin duplicar lógica.
+  const loadTickets = useCallback(async () => {
+    if (!userId) return;
+    setTicketsLoading(true);
+    const { data: ticks } = await supabase
+      .from("tickets")
+      .select(
+        "id, event_id, qr_token, status, buyer_first_name, buyer_last_name, buyer_email, amount_paid_cents, used_at, paid_at"
+      )
+      .eq("buyer_user_id", userId)
+      .in("status", ["paid", "used"])
+      .order("paid_at", { ascending: false });
+
+    if (!ticks || ticks.length === 0) {
+      setTickets([]);
+      setTicketsLoading(false);
+      return;
+    }
+
+    const eventIds = Array.from(new Set(ticks.map((t) => t.event_id)));
+    const { data: evs } = await supabase
+      .from("events")
+      .select("id, title, date_start, city, venue_name, image_url, partner_id")
+      .in("id", eventIds);
+
+    const partnerIds = Array.from(new Set((evs ?? []).map((e: any) => e.partner_id)));
+    const { data: prs } = partnerIds.length
+      ? await supabase.from("profiles").select("id, business_name").in("id", partnerIds)
+      : { data: [] as any[] };
+
+    const eventMap = new Map<string, TicketEventInfo>();
+    (evs ?? []).forEach((e: any) => {
+      const partner = (prs ?? []).find((p: any) => p.id === e.partner_id);
+      eventMap.set(e.id, {
+        title: e.title,
+        date_start: e.date_start,
+        city: e.city,
+        venue_name: e.venue_name,
+        image_url: e.image_url,
+        partner_name: partner?.business_name ?? undefined,
+      });
+    });
+
+    setTickets(
+      ticks.map((t: any) => ({
+        ...t,
+        event: eventMap.get(t.event_id) ?? null,
+      }))
+    );
+    setTicketsLoading(false);
+  }, [userId]);
+
   // Carica i tickets dell'utente quando entra in wallet
   useEffect(() => {
     if (view !== "wallet" || !userId) return;
-    (async () => {
-      setTicketsLoading(true);
-      const { data: ticks } = await supabase
-        .from("tickets")
-        .select(
-          "id, event_id, qr_token, status, buyer_first_name, buyer_last_name, buyer_email, amount_paid_cents, used_at, paid_at"
-        )
-        .eq("buyer_user_id", userId)
-        .in("status", ["paid", "used"])
-        .order("paid_at", { ascending: false });
+    loadTickets();
+  }, [view, userId, loadTickets]);
 
-      if (!ticks || ticks.length === 0) {
-        setTickets([]);
-        setTicketsLoading(false);
-        return;
-      }
+  // Post-checkout: cuando el cliente vuelve de Stripe con ?session_id=... /
+  // ?order_id=..., el webhook `stripe-webhook` puede tardar 1-5s en procesar
+  // el evento checkout.session.completed (que es lo que dispara
+  // `mark_order_paid` → tickets.status = 'paid'). Hacemos:
+  //   1) Poll: cada 2s comprobamos `ticket_orders.status` del order. Cuando
+  //      pase a 'paid', recargamos tickets + toast.
+  //   2) Realtime: nos suscribimos a UPDATEs sobre ticket_orders del usuario
+  //      para enterarnos al instante si el webhook entra antes del poll.
+  //   3) Max 30s — si no llega, mostramos un toast informativo (puede que el
+  //      webhook tarde más o haya fallado; el email/notif llegará igual).
+  //   4) Limpiamos la URL para evitar re-disparar el flujo en refresh.
+  useEffect(() => {
+    if (!userId) return;
+    if (!postCheckoutSessionId && !postCheckoutOrderId) return;
 
-      const eventIds = Array.from(new Set(ticks.map((t) => t.event_id)));
-      const { data: evs } = await supabase
-        .from("events")
-        .select("id, title, date_start, city, venue_name, image_url, partner_id")
-        .in("id", eventIds);
+    // Mientras polleamos, mostramos el spinner del wallet en vez del empty
+    // state. El usuario debe sentir que la app está confirmando su compra.
+    setTicketsLoading(true);
 
-      const partnerIds = Array.from(new Set((evs ?? []).map((e: any) => e.partner_id)));
-      const { data: prs } = partnerIds.length
-        ? await supabase.from("profiles").select("id, business_name").in("id", partnerIds)
-        : { data: [] as any[] };
-
-      const eventMap = new Map<string, TicketEventInfo>();
-      (evs ?? []).forEach((e: any) => {
-        const partner = (prs ?? []).find((p: any) => p.id === e.partner_id);
-        eventMap.set(e.id, {
-          title: e.title,
-          date_start: e.date_start,
-          city: e.city,
-          venue_name: e.venue_name,
-          image_url: e.image_url,
-          partner_name: partner?.business_name ?? undefined,
+    let finished = false;
+    const finish = (kind: "ok" | "timeout") => {
+      if (finished) return;
+      finished = true;
+      if (kind === "ok") {
+        toast({
+          title: "Compra confirmada",
+          description: "Tu ticket ya está disponible en tu Wallet.",
         });
-      });
+      } else {
+        toast({
+          title: "Procesando compra",
+          description:
+            "El pago está siendo confirmado. Recibirás un email con tu ticket en breve.",
+        });
+      }
+      void loadTickets();
+      // Quita los params de la URL para que F5 no re-dispare el flujo
+      setSearchParams({}, { replace: true });
+    };
 
-      setTickets(
-        ticks.map((t: any) => ({
-          ...t,
-          event: eventMap.get(t.event_id) ?? null,
-        }))
-      );
-      setTicketsLoading(false);
-    })();
-  }, [view, userId]);
+    // Realtime subscription a UPDATEs en ticket_orders del comprador
+    const channel = supabase
+      .channel(`post-checkout-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ticket_orders",
+          filter: `buyer_user_id=eq.${userId}`,
+        },
+        (payload: any) => {
+          const next = payload.new;
+          if (!next) return;
+          // Solo nos interesa el order que acabamos de pagar (si tenemos id)
+          if (postCheckoutOrderId && next.id !== postCheckoutOrderId) return;
+          if (postCheckoutSessionId && next.stripe_session_id !== postCheckoutSessionId) return;
+          if (next.status === "paid") finish("ok");
+        }
+      )
+      .subscribe();
+
+    // Poll de respaldo cada 2s (max 15 intentos = 30s)
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      if (finished) return;
+      attempts++;
+      let query = supabase.from("ticket_orders").select("id, status, stripe_session_id");
+      query = postCheckoutOrderId
+        ? query.eq("id", postCheckoutOrderId)
+        : query.eq("stripe_session_id", postCheckoutSessionId!);
+      const { data: order } = await query.maybeSingle();
+      if (order?.status === "paid") {
+        finish("ok");
+      } else if (attempts >= 15) {
+        finish("timeout");
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, postCheckoutSessionId, postCheckoutOrderId]);
 
   const filtered = useMemo(() => {
     return partners.filter((p) => {

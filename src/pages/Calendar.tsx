@@ -247,7 +247,12 @@ const Calendar = () => {
           qty: 1,
           buyer,
           locale: "es",
-          success_url: `${window.location.origin}/#/client-dashboard?wallet={CHECKOUT_SESSION_ID}`,
+          // success_url y cancel_url LIMPIOS — sin query previa. El edge
+          // function `stripe-create-checkout` se encarga de anexar
+          // `?order_id=<uuid>&session_id={CHECKOUT_SESSION_ID}`. Si añadimos
+          // ?wallet=... aquí, acabamos con doble `?` (URL malformada que
+          // hace que la ClientDashboard no pueda parsear los params).
+          success_url: `${window.location.origin}/#/client-dashboard`,
           cancel_url: `${window.location.origin}/#/calendar`,
         }),
       });
