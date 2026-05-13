@@ -4,6 +4,12 @@ name: Smoke · post-deploy
 # Tres niveles de verificación: HTTP routes (web SPA), Supabase health-check
 # edge function, y validación de seguridad básica (un endpoint admin requiere
 # auth).
+#
+# Los checks contra Supabase son condicionales: si las repo vars/secrets
+# requeridas no están configuradas, los steps se SALTAN con un mensaje
+# explícito en vez de fallar. Esto evita falsos positivos por configuración
+# de repo incompleta cuando aún no se ha cableado SUPABASE_ANON_KEY o
+# SUPABASE_PROJECT_REF_PRODUCTION.
 
 on:
   deployment_status:
@@ -30,53 +36,65 @@ jobs:
     name: Smoke production
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Mapeo job-level: GitHub Actions no permite `secrets.*` dentro de `if:`
-    # expressions (parse-time), pero `env.*` sí. Si el secret no está definido,
-    # el valor es '' y el step Slack se salta limpiamente.
+    # Mapeo job-level: GitHub Actions no permite `secrets.*` ni `vars.*` dentro
+    # de `if:` expressions de step (parse-time), pero `env.*` sí. Si el secret
+    # no está definido el valor es '' y los steps condicionales se saltan.
     env:
       SLACK_WEBHOOK_OPS: ${{ secrets.SLACK_WEBHOOK_OPS }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}
     steps:
       - name: Resolve target URL
         id: target
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "url=${{ inputs.base_url }}" >> $GITHUB_OUTPUT
+            URL="${{ inputs.base_url }}"
           else
-            echo "url=${{ github.event.deployment_status.target_url || github.event.deployment.payload.web_url }}" >> $GITHUB_OUTPUT
+            URL="${{ github.event.deployment_status.target_url }}"
+            if [[ -z "$URL" ]]; then
+              URL="${{ github.event.deployment.payload.web_url }}"
+            fi
           fi
-          echo "supabase=https://${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}.supabase.co" >> $GITHUB_OUTPUT
+          # Fallback al dominio canónico si el evento no aportó URL útil.
+          # Algunos eventos deployment_status llegan sin target_url y rompían
+          # el step 1 al hacer curl "".
+          if [[ -z "$URL" || "$URL" == "https://" ]]; then
+            URL="https://pasifyy.vercel.app"
+            echo "ℹ Event-provided URL empty; falling back to $URL"
+          fi
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Target URL: $URL"
 
-      - name: HTTP routes return 200 + Pasify in <title>
+      - name: HTTP — homepage returns 200 + Pasify in HTML
         env:
           URL: ${{ steps.target.outputs.url }}
         run: |
           set -e
-          ROUTES=("/" "/#/login" "/#/calendar" "/#/client-dashboard" "/#/partner-dashboard" "/#/admin")
-          for route in "${ROUTES[@]}"; do
-            full="$URL$route"
-            echo "→ $full"
-            # HashRouter: el contenido real está en $URL siempre; el hash es client-side.
-            # Por eso comprobamos $URL una sola vez y luego que el HTML mencione Pasify.
-            status=$(curl -fsSL -o /tmp/page.html -w "%{http_code}" "$URL" || echo "FAIL")
-            if [[ "$status" != "200" ]]; then
-              echo "✗ Got status $status from $full"
-              exit 1
-            fi
-          done
-          # Verify Pasify branding presente
-          if ! grep -qi "pasify" /tmp/page.html; then
-            echo "✗ HTML doesn't contain 'pasify' — likely served wrong app/branding regression"
+          echo "→ GET $URL"
+          # Sin -f: examinamos status reales (incluso 4xx/5xx) en vez de
+          # abortar curl. --max-time evita que un deploy en frío cuelgue 5 min.
+          status=$(curl -sSL -o /tmp/page.html -w "%{http_code}" --max-time 30 "$URL")
+          echo "  Status: $status"
+          if [[ "$status" != "200" ]]; then
+            echo "✗ Got status $status (expected 200)"
+            echo "--- Body (first 500 bytes) ---"
+            head -c 500 /tmp/page.html || true
             exit 1
           fi
-          echo "✓ All routes return 200 and HTML contains 'pasify'"
+          if ! grep -qi "pasify" /tmp/page.html; then
+            echo "✗ HTML doesn't contain 'pasify' — branding/app regression"
+            head -c 500 /tmp/page.html
+            exit 1
+          fi
+          echo "✓ Homepage 200 + 'pasify' present in HTML"
 
       - name: Supabase health-check edge function
-        env:
-          SUPABASE: ${{ steps.target.outputs.supabase }}
-          ANON: ${{ secrets.SUPABASE_ANON_KEY }}
+        if: env.SUPABASE_PROJECT_REF != '' && env.SUPABASE_ANON_KEY != ''
         run: |
           set -e
-          resp=$(curl -fsSL -w "\n%{http_code}" -H "apikey: $ANON" "$SUPABASE/functions/v1/health-check" || true)
+          URL="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/health-check"
+          echo "→ GET $URL"
+          resp=$(curl -sSL -w "\n%{http_code}" -H "apikey: $SUPABASE_ANON_KEY" --max-time 15 "$URL")
           status=$(echo "$resp" | tail -1)
           body=$(echo "$resp" | head -n -1)
           if [[ "$status" != "200" ]]; then
@@ -85,20 +103,29 @@ jobs:
           fi
           echo "✓ health-check OK: $body"
 
-      - name: Anonymous request to admin-cancel-partner-subscription is rejected (security)
-        env:
-          SUPABASE: ${{ steps.target.outputs.supabase }}
-          ANON: ${{ secrets.SUPABASE_ANON_KEY }}
+      - name: Skip Supabase checks (config missing)
+        if: env.SUPABASE_PROJECT_REF == '' || env.SUPABASE_ANON_KEY == ''
+        run: |
+          echo "⊘ Supabase smoke checks skipped — falta configurar:"
+          [[ -z "$SUPABASE_PROJECT_REF" ]] && echo "   · repo variable SUPABASE_PROJECT_REF_PRODUCTION (ej: ixkyfwzkknehvsqpopof)"
+          [[ -z "$SUPABASE_ANON_KEY" ]] && echo "   · repo secret SUPABASE_ANON_KEY (anon key del proyecto producción)"
+          echo "   Settings → Secrets and variables → Actions"
+
+      - name: Security — admin endpoint rejects anonymous
+        if: env.SUPABASE_PROJECT_REF != '' && env.SUPABASE_ANON_KEY != ''
         run: |
           set -e
+          URL="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/admin-cancel-partner-subscription"
+          echo "→ POST $URL (esperamos rechazo)"
           # Esta edge function debe rechazar requests sin JWT válido (verify_jwt=true default).
-          # Esperamos 401 ó 403 ó 400 (rechazado), NO 200.
+          # Esperamos 401 / 403 / 400 (cualquier rechazo), NO 200.
           status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            -H "apikey: $ANON" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Content-Type: application/json" \
-            "$SUPABASE/functions/v1/admin-cancel-partner-subscription")
+            --max-time 15 \
+            "$URL")
           if [[ "$status" == "200" ]]; then
-            echo "✗ admin-cancel-partner-subscription returned 200 to anonymous request — security regression"
+            echo "✗ admin-cancel-partner-subscription returned 200 to anonymous — security regression"
             exit 1
           fi
           echo "✓ admin endpoint correctly rejects anonymous (status $status)"
