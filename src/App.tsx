@@ -33,6 +33,7 @@ const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
 const PartnerManage = lazy(() => import("./pages/PartnerManage"));
 const PartnerSuccess = lazy(() => import("./pages/PartnerSuccess"));
+const TicketSuccess = lazy(() => import("./pages/TicketSuccess"));
 const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
@@ -470,6 +471,13 @@ const App = () => {
               <Route path="/partner/manage" element={<PartnerManage />} />
               <Route path="/partner/success" element={<PartnerSuccess />} />
               <Route path="/partner/cancel" element={<PartnerCancel />} />
+
+              {/* Ticket purchase success — destino de Stripe Checkout para
+                  compra de entradas (no suscripciones de partner). Stripe
+                  redirige con ?order_id=...&session_id=... y la página hace
+                  poll/realtime contra ticket_orders hasta confirmar el pago
+                  vía webhook. */}
+              <Route path="/ticket/success" element={<TicketSuccess />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

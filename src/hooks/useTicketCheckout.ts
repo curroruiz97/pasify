@@ -127,7 +127,11 @@ export const useTicketCheckout = () => {
             qty: 1,
             buyer,
             locale: "es",
-            success_url: `${window.location.origin}/#/client-dashboard`,
+            // Landing dedicada con animación de check + resumen del evento
+            // + poll/realtime hasta que webhook confirme. El edge function
+            // añade `?order_id=<uuid>&session_id={CHECKOUT_SESSION_ID}` que
+            // TicketSuccess parsea para sus consultas.
+            success_url: `${window.location.origin}/#/ticket/success`,
             cancel_url: `${window.location.origin}/#/calendar`,
           }),
         });
