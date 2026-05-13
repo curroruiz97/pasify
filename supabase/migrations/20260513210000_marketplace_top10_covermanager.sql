@@ -119,15 +119,29 @@ UPDATE public.marketplace_apps SET
   status = 'available', sort_order = 7
 WHERE code = 'ga4';
 
--- Holded — finanzas
-UPDATE public.marketplace_apps SET
-  category = 'finance',
-  short_description = 'Exporta ventas, comisiones, IVA, reembolsos y facturación para contabilidad.',
-  icon_slug = 'holded',
-  icon_color = '#0066FF',
-  featured = TRUE, popular = TRUE,
-  status = 'coming_soon', sort_order = 8
-WHERE code = 'holded';
+-- Holded — finanzas (no existía en el seed 0029, lo UPSERTeamos)
+INSERT INTO public.marketplace_apps (
+  code, name, category, short_description, description,
+  icon_slug, icon_color, oauth_provider, official, monthly_price_cents,
+  popular, featured, status, sort_order
+) VALUES (
+  'holded', 'Holded', 'finance',
+  'Exporta ventas, comisiones, IVA, reembolsos y facturación para contabilidad.',
+  'Holded es el ERP/contabilidad líder para PYMEs en España. Conecta tu cuenta para exportar facturas, comisiones, IVA y reembolsos automáticamente desde Pasify.',
+  'holded', '#0066FF', NULL, TRUE, NULL,
+  TRUE, TRUE, 'coming_soon', 8
+)
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name,
+  category = EXCLUDED.category,
+  short_description = EXCLUDED.short_description,
+  description = EXCLUDED.description,
+  icon_slug = EXCLUDED.icon_slug,
+  icon_color = EXCLUDED.icon_color,
+  popular = EXCLUDED.popular,
+  featured = EXCLUDED.featured,
+  status = EXCLUDED.status,
+  sort_order = EXCLUDED.sort_order;
 
 -- Zapier — automatizacion
 UPDATE public.marketplace_apps SET
