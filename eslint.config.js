@@ -5,7 +5,13 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  // Carpetas que no se lintan:
+  // - `dist` (build output)
+  // - `supabase/functions/_legacy` (edge functions arqueológicas, congeladas
+  //   con su lint legacy; conservadas en disco via `_` prefix que el bundler
+  //   y los workflows de deploy ignoran)
+  // - `supabase/migrations.legacy-backup` (backup gitignored — defensa extra)
+  { ignores: ["dist", "supabase/functions/_legacy/**", "supabase/migrations.legacy-backup/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
