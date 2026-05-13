@@ -1,19 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { ArrowRight, Mail, FileText, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { usePartnerSubscription } from "@/hooks/usePartnerSubscription";
 import logo from "@/assets/logo.webp";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
 const PartnerSuccess = () => {
   const navigate = useNavigate();
+  // Hook centralizado: lee partner_subscriptions por org_id (post Fase 3).
+  // Le pedimos refetch repetidamente hasta que el webhook stripe-webhook
+  // marque la subscription como active/trialing. Si en 8s no llega, fallback
+  // a dashboard — PartnerGate hará el redirect correcto si todavía no.
+  const partnerSub = usePartnerSubscription();
 
   useEffect(() => {
-    // Piccolo tocco: confetti sky al mount
+    // Confetti de bienvenida (Pasify terracota).
     const duration = 900;
     const end = Date.now() + duration;
     const frame = () => {
@@ -22,25 +28,24 @@ const PartnerSuccess = () => {
         angle: 60,
         spread: 55,
         origin: { x: 0, y: 0.7 },
-        colors: ["#0ea5e9", "#38bdf8", "#0284c7", "#e0f2fe"],
+        colors: ["#E8542A", "#FF7A4D", "#B8381A", "#FBE4D3"],
       });
       confetti({
         particleCount: 3,
         angle: 120,
         spread: 55,
         origin: { x: 1, y: 0.7 },
-        colors: ["#0ea5e9", "#38bdf8", "#0284c7", "#e0f2fe"],
+        colors: ["#E8542A", "#FF7A4D", "#B8381A", "#FBE4D3"],
       });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
   }, []);
 
-  // Flusso success:
-  // 1. Leggi session_id dall'URL
-  // 2. Chiama stripe-sync-session-test → sincronizza subito il record DB
-  //    (non dipende dal webhook async)
-  // 3. Polling breve per verificare hasAccess → redirect dashboard
+  // Polling de hasAccess vía refetch del hook. El webhook stripe-webhook
+  // (edge function en producción) actualiza partner_subscriptions cuando
+  // recibe `checkout.session.completed`. No llamamos sync-session-test
+  // (función legacy/test) — el webhook canónico es suficiente.
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -50,59 +55,17 @@ const PartnerSuccess = () => {
         return;
       }
 
-      // Estraggo session_id dall'URL (HashRouter: query sta nell'hash dopo ?)
-      const hash = window.location.hash;
-      const qIndex = hash.indexOf("?");
-      const params = qIndex !== -1 ? new URLSearchParams(hash.substring(qIndex + 1)) : null;
-      const sessionId = params?.get("session_id");
-
-      // 1) Sync immediato via edge function (se abbiamo session_id)
-      if (sessionId) {
-        try {
-          const syncFn = import.meta.env.VITE_STRIPE_TEST_MODE === "true"
-            ? "stripe-sync-session-test"
-            : "stripe-sync-session";
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${syncFn}`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${session.access_token}`,
-              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ session_id: sessionId }),
-          });
-        } catch (err) {
-          console.error("sync-session error:", err);
-        }
-      }
-
-      // 2) Polling rapido per confermare hasAccess
       for (let i = 0; i < 10 && !cancelled; i++) {
-        const { data } = await supabase
-          .from("partner_subscriptions")
-          .select("status, trial_ends_at, granted_by_admin, admin_granted_until")
-          .eq("partner_id", session.user.id)
-          .maybeSingle();
-
-        const now = Date.now();
-        const hasAccess =
-          data?.status === "active" ||
-          (data?.status === "trialing" &&
-            data?.trial_ends_at &&
-            new Date(data.trial_ends_at).getTime() > now) ||
-          (data?.granted_by_admin &&
-            (!data?.admin_granted_until ||
-              new Date(data.admin_granted_until).getTime() > now));
-
-        if (hasAccess) {
+        await partnerSub.refetch();
+        if (partnerSub.hasAccess) {
           if (!cancelled) navigate("/partner-dashboard", { replace: true });
           return;
         }
-
         await new Promise((r) => setTimeout(r, 800));
       }
 
-      // Fallback: manda alla dashboard, il gate gestirà il redirect
+      // Fallback: manda a la dashboard — PartnerGate gestionará el redirect
+      // si todavía no hay acceso (a /partner/choose-plan).
       if (!cancelled) navigate("/partner-dashboard", { replace: true });
     };
 
@@ -111,6 +74,7 @@ const PartnerSuccess = () => {
       cancelled = true;
       clearTimeout(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   return (
@@ -127,12 +91,12 @@ const PartnerSuccess = () => {
         <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
           <img
             src={logo}
-            alt="StudentsLife"
+            alt="Pasify"
             className="h-9 w-9 rounded-xl"
-            style={{ filter: "drop-shadow(0 4px 10px rgba(14,165,233,0.25))" }}
+            style={{ filter: "drop-shadow(0 4px 10px rgba(232,84,42,0.25))" }}
           />
           <span className="text-[15px] font-bold tracking-tight">
-            Student<span style={{ ...serif, color: "#0ea5e9", fontSize: 18, margin: "0 1px" }}>&apos;s</span>Life
+            Pa<span style={{ ...serif, color: "#E8542A", fontSize: 18, margin: "0 1px" }}>si</span>fy
           </span>
         </button>
       </div>
@@ -184,7 +148,7 @@ const PartnerSuccess = () => {
         </h1>
 
         <p className="mx-auto mb-8 max-w-sm text-[14px] leading-relaxed text-slate-600">
-          Bienvenido a StudentsLife Partner. Te hemos enviado un email con la
+          Bienvenido a Pasify Partner. Te hemos enviado un email con la
           confirmación y tu primera factura. Ya puedes empezar a gestionar tu
           negocio.
         </p>

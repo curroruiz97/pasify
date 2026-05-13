@@ -44,20 +44,35 @@ import { Label } from "@/components/ui/label";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 
+// Post Fase 3: partner_subscriptions está vinculada por org_id (no partner_id).
+// El "owner" del partner se resuelve via organizations.owner_id → profiles.
+// `granted_by_admin` (boolean) deja de existir como columna — se deriva de
+// `admin_granted_until > now()` (col añadida en mig 0034).
+// `admin_note` se renombra a `admin_grant_note` (mig 0034).
+// `monthly_amount_cents` desaparece — el MRR se computa via subscription_plans.
 interface SubRow {
   id: string;
-  partner_id: string;
+  org_id: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   status: string;
+  plan_code: string | null;
   current_period_end: string | null;
   trial_ends_at: string | null;
   cancel_at_period_end: boolean;
-  granted_by_admin: boolean;
   admin_granted_until: string | null;
-  admin_note: string | null;
-  monthly_amount_cents: number | null;
+  admin_grant_note: string | null;
   created_at: string;
+  /** Computed: !!admin_granted_until && fecha futura */
+  granted_by_admin: boolean;
+  /** Monthly amount derivado del plan (fallback 2999 cents). */
+  monthly_amount_cents: number | null;
+  organizations: {
+    id: string;
+    name: string | null;
+    city: string | null;
+    owner_id: string;
+  } | null;
   profiles: {
     id: string;
     first_name: string | null;
@@ -83,11 +98,9 @@ type LogicalStatus = "admin_free" | "trial" | "active" | "past_due" | "canceled"
 
 const getLogicalStatus = (sub: SubRow): LogicalStatus => {
   const now = Date.now();
-  if (sub.granted_by_admin) {
-    if (!sub.admin_granted_until || new Date(sub.admin_granted_until).getTime() > now) {
-      return "admin_free";
-    }
-    return "expired";
+  // Admin grant tiene prioridad (es el override explícito de plataforma).
+  if (sub.admin_granted_until) {
+    return new Date(sub.admin_granted_until).getTime() > now ? "admin_free" : "expired";
   }
   if (sub.status === "active") return "active";
   if (sub.status === "trialing") {
@@ -95,7 +108,7 @@ const getLogicalStatus = (sub: SubRow): LogicalStatus => {
     return "expired";
   }
   if (sub.status === "past_due") return "past_due";
-  if (sub.status === "canceled") return "canceled";
+  if (sub.status === "cancelled" || sub.status === "canceled") return "canceled";
   return "other";
 };
 
@@ -159,36 +172,80 @@ const SubscriptionsManagement = () => {
   const fetchSubs = async () => {
     setLoading(true);
     try {
-      // Two-step: avoid relying on PostgREST FK embedding for
-      // partner_subscriptions → profiles (the FK targets auth.users, so the
-      // embedded join `profiles!partner_subscriptions_partner_id_profiles_fkey`
-      // doesn't exist and silently returned []).
+      // Three-step fetch (Fase 3): partner_subscriptions → organizations →
+      // profiles. La cadena de FK es: partner_subscriptions.org_id →
+      // organizations.id; organizations.owner_id → profiles.id. Hacemos el
+      // JOIN en cliente para evitar pegamento PostgREST.
       const { data: subRows, error: subErr } = await supabase
         .from("partner_subscriptions")
         .select(
-          `id, partner_id, stripe_customer_id, stripe_subscription_id, status,
+          `id, org_id, stripe_customer_id, stripe_subscription_id, status, plan_code,
            current_period_end, trial_ends_at, cancel_at_period_end,
-           granted_by_admin, admin_granted_until, admin_note, monthly_amount_cents, created_at`
+           admin_granted_until, admin_grant_note, created_at`
         )
         .order("created_at", { ascending: false });
       if (subErr) throw subErr;
-
       const rows = subRows ?? [];
-      const partnerIds = [...new Set(rows.map((r) => r.partner_id))];
-      let profilesMap = new Map<string, SubRow["profiles"]>();
-      if (partnerIds.length > 0) {
-        const { data: profs, error: profErr } = await supabase
-          .from("profiles")
-          .select(
-            "id, first_name, last_name, email, business_name, profile_image_url, business_city"
-          )
-          .in("id", partnerIds);
-        if (profErr) throw profErr;
-        profilesMap = new Map((profs ?? []).map((p) => [p.id, p as SubRow["profiles"]]));
+
+      const orgIds = [...new Set(rows.map((r) => r.org_id).filter(Boolean))];
+      const orgMap = new Map<string, SubRow["organizations"]>();
+      const ownerIdByOrg = new Map<string, string>();
+      if (orgIds.length > 0) {
+        const { data: orgs, error: orgErr } = await supabase
+          .from("organizations")
+          .select("id, name, city, owner_id")
+          .in("id", orgIds);
+        if (orgErr) throw orgErr;
+        for (const o of orgs ?? []) {
+          orgMap.set(o.id, o as SubRow["organizations"]);
+          ownerIdByOrg.set(o.id, o.owner_id);
+        }
       }
 
+      const ownerIds = [...new Set([...ownerIdByOrg.values()])];
+      const profilesMap = new Map<string, SubRow["profiles"]>();
+      if (ownerIds.length > 0) {
+        const { data: profs, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, email, business_name, business_city")
+          .in("id", ownerIds);
+        if (profErr) throw profErr;
+        for (const p of profs ?? []) {
+          profilesMap.set(p.id, { ...p, profile_image_url: null } as SubRow["profiles"]);
+        }
+      }
+
+      // Plan codes → monthly amount (subscription_plans).
+      const planCodes = [...new Set(rows.map((r) => r.plan_code).filter(Boolean) as string[])];
+      const planAmounts = new Map<string, number>();
+      if (planCodes.length > 0) {
+        const { data: plans } = await supabase
+          .from("subscription_plans")
+          .select("code, monthly_price_cents")
+          .in("code", planCodes);
+        for (const p of plans ?? []) {
+          if (p.code && typeof p.monthly_price_cents === "number") {
+            planAmounts.set(p.code, p.monthly_price_cents);
+          }
+        }
+      }
+
+      const now = Date.now();
       setSubs(
-        rows.map((r) => ({ ...r, profiles: profilesMap.get(r.partner_id) ?? null })) as SubRow[]
+        rows.map((r) => {
+          const owner = ownerIdByOrg.get(r.org_id);
+          const profile = owner ? (profilesMap.get(owner) ?? null) : null;
+          const grantedUntilMs = r.admin_granted_until
+            ? new Date(r.admin_granted_until).getTime()
+            : null;
+          return {
+            ...r,
+            organizations: orgMap.get(r.org_id) ?? null,
+            profiles: profile,
+            granted_by_admin: !!grantedUntilMs && grantedUntilMs > now,
+            monthly_amount_cents: r.plan_code ? (planAmounts.get(r.plan_code) ?? null) : null,
+          } as SubRow;
+        })
       );
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -252,11 +309,15 @@ const SubscriptionsManagement = () => {
     if (!revokeTarget) return;
     setRevoking(true);
     try {
-      const { error } = await supabase.rpc("admin_revoke_partner_access", {
-        _partner_id: revokeTarget.partner_id,
+      // RPC de mig 0034: revoca admin_granted_until en partner_subscriptions
+      // por org_id. La RPC legacy `admin_revoke_partner_access(_partner_id)`
+      // (mig 0025) hace otra cosa: borra el rol partner del user. No es lo
+      // que el botón "Revocar acceso gratuito" debería hacer.
+      const { error } = await supabase.rpc("admin_revoke_partner_grant", {
+        _org_id: revokeTarget.org_id,
       });
       if (error) throw error;
-      toast({ title: "Acceso revocado", description: "El partner ya no podrá acceder a la dashboard." });
+      toast({ title: "Acceso revocado", description: "El partner ya no tiene acceso gratuito." });
       await fetchSubs();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -318,9 +379,24 @@ const SubscriptionsManagement = () => {
         const n = parseInt(grantDays, 10);
         if (!Number.isFinite(n) || n <= 0) throw new Error("Días inválidos");
         until = new Date(Date.now() + n * 86400000).toISOString();
+      } else {
+        // RPC requiere _until; "ilimitado" lo modelamos como +10 años.
+        until = new Date(Date.now() + 10 * 365 * 86400000).toISOString();
       }
-      const { error } = await supabase.rpc("admin_grant_partner_access", {
-        _partner_id: grantSelected.id,
+      // Resolver org_id del partner seleccionado (selectionado es profile.id =
+      // organizations.owner_id por el flujo de RegisterPartner Fase 2).
+      const { data: orgRow, error: orgErr } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("owner_id", grantSelected.id)
+        .limit(1)
+        .maybeSingle();
+      if (orgErr) throw orgErr;
+      if (!orgRow?.id) throw new Error("Este partner no tiene organization. Pídele que complete el registro.");
+
+      // RPC de mig 0034: admin_grant_partner_access_until(_org_id, _until, _note).
+      const { error } = await supabase.rpc("admin_grant_partner_access_until", {
+        _org_id: orgRow.id,
         _until: until,
         _note: grantNote || null,
       });
@@ -354,17 +430,16 @@ const SubscriptionsManagement = () => {
     );
   });
 
-  // MRR: sum of monthly_amount_cents over every paying sub.
-  // We include "active" and "past_due" (still on the plan, billing retrying)
-  // and "trialing" subs that have a Stripe sub attached (will charge at trial end).
-  // Excluded: granted_by_admin (free), canceled/expired/incomplete.
-  // cancel_at_period_end is INCLUDED — they're still paying *this* month.
+  // MRR: sum of monthly_amount_cents (derivado del plan en fetchSubs) sobre
+  // toda paying sub. Incluye active, past_due y trialing con stripe_sub_id.
+  // Excluye admin grants (gratis), canceled/expired/incomplete.
+  // cancel_at_period_end SI cuenta — todavía pagan este mes.
   const PAYING_STATUSES = new Set(["active", "past_due", "trialing"]);
   const monthlyRevenueEur = subs.reduce((sum, s) => {
-    if (s.granted_by_admin) return sum;
+    if (s.granted_by_admin) return sum; // computed: admin grant vigente
     if (!PAYING_STATUSES.has(s.status)) return sum;
     if (!s.stripe_subscription_id) return sum;
-    // Fallback: 29.99 € for legacy rows the webhook hasn't backfilled yet.
+    // Fallback: 29.99 € para filas sin plan resuelto.
     const cents = s.monthly_amount_cents ?? 2999;
     return sum + cents / 100;
   }, 0);
@@ -609,7 +684,7 @@ const SubscriptionsManagement = () => {
               sub.stripe_subscription_id &&
               ["active", "trialing", "past_due"].includes(sub.status) &&
               !sub.cancel_at_period_end &&
-              !sub.granted_by_admin;
+              !sub.admin_granted_until;
 
             return (
               <div
@@ -684,9 +759,9 @@ const SubscriptionsManagement = () => {
                       )}
                     </div>
 
-                    {sub.admin_note && (
+                    {sub.admin_grant_note && (
                       <div className="mt-2 rounded-md bg-slate-50 px-2 py-1 text-[11px] italic text-slate-600">
-                        Nota: {sub.admin_note}
+                        Nota: {sub.admin_grant_note}
                       </div>
                     )}
 
@@ -698,7 +773,7 @@ const SubscriptionsManagement = () => {
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {sub.granted_by_admin && (
+                      {sub.admin_granted_until && (
                         <Button
                           variant="outline"
                           size="sm"

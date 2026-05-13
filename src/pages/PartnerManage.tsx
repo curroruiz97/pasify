@@ -56,7 +56,6 @@ const PartnerManage = () => {
   const pageRef = useRef<HTMLDivElement>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
   const [openingCheckout, setOpeningCheckout] = useState(false);
-  const [userId, setUserId] = useState<string | undefined>();
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -64,13 +63,12 @@ const PartnerManage = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate("/login", { state: { redirectAfter: "/partner/manage" } });
-        return;
       }
-      setUserId(session.user.id);
     })();
   }, [navigate]);
 
-  const sub = usePartnerSubscription(userId);
+  // El hook resuelve internamente la org del caller vía useOrganization.
+  const sub = usePartnerSubscription();
 
   const openPortal = async () => {
     setOpeningPortal(true);

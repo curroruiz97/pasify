@@ -66,19 +66,13 @@ const PartnerSubscribe = () => {
   const { toast } = useToast();
   const { i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState<string | undefined>();
   const isNative = Capacitor.isNativePlatform();
 
+  // El hook resuelve internamente la org del caller vía useOrganization.
+  // No necesitamos pasar userId — la firma legacy se mantiene compatible.
+  const partnerSub = usePartnerSubscription();
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id);
-    })();
-  }, []);
-
-  const partnerSub = usePartnerSubscription(userId);
-  useEffect(() => {
-    if (!userId || partnerSub.loading) return;
+    if (partnerSub.loading) return;
     if (partnerSub.hasAccess) {
       navigate("/partner-dashboard", { replace: true });
       return;
@@ -86,7 +80,7 @@ const PartnerSubscribe = () => {
     if (!partnerSub.hasRecord) {
       navigate("/partner/choose-plan", { replace: true });
     }
-  }, [userId, partnerSub.loading, partnerSub.hasAccess, partnerSub.hasRecord, navigate]);
+  }, [partnerSub.loading, partnerSub.hasAccess, partnerSub.hasRecord, navigate]);
 
   const handleSubscribe = async () => {
     setLoading(true);
