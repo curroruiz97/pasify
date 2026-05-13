@@ -33,6 +33,9 @@ export interface TicketCheckoutInput {
   id: string;
   /** Opcional. Usado solo para logging/contexto. */
   title?: string;
+  /** Cantidad de tickets a comprar (1-10). Default 1. El edge function valida
+   *  contra tier.per_user_max y tier.capacity. */
+  qty?: number;
 }
 
 export const useTicketCheckout = () => {
@@ -124,7 +127,7 @@ export const useTicketCheckout = () => {
           body: JSON.stringify({
             event_id: input.id,
             tier_id: tier.id,
-            qty: 1,
+            qty: Math.max(1, Math.min(10, input.qty ?? 1)),
             buyer,
             locale: "es",
             // Landing dedicada con animación de check + resumen del evento

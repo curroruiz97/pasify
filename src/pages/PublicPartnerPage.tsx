@@ -389,7 +389,7 @@ const PublicPartnerPage = () => {
                   event={e}
                   partnerId={partner.id}
                   partnerName={partner.business_name ?? undefined}
-                  onBuyTicket={(id) => buyTicket({ id, title: e.title })}
+                  onBuyTicket={(id, qty) => buyTicket({ id, title: e.title, qty })}
                   pending={pendingId === e.id}
                 />
               ))
@@ -432,7 +432,7 @@ const PublicPartnerPage = () => {
                       event={e}
                       partnerId={partner.id}
                       partnerName={partner.business_name ?? undefined}
-                      onBuyTicket={(id) => buyTicket({ id, title: e.title })}
+                      onBuyTicket={(id, qty) => buyTicket({ id, title: e.title, qty })}
                       pending={pendingId === e.id}
                     />
                   ))

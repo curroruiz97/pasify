@@ -205,55 +205,106 @@ const ClientDashboard = () => {
 
   // Loader extraído a useCallback para poder re-invocarlo desde el effect
   // del post-checkout (poll/realtime) sin duplicar lógica.
+  //
+  // BLINDADO con try/catch: cualquier fallo de red, RLS, o data malformada
+  // se loguea y cae en empty state en vez de tumbar el ErrorBoundary global.
+  // El bug previo fue partner_id=null en eventos multi-tenant (creados con
+  // org_id en lugar de partner_id legacy), que rompía el `.in("id", [null])`
+  // del SELECT profiles.
   const loadTickets = useCallback(async () => {
     if (!userId) return;
     setTicketsLoading(true);
-    const { data: ticks } = await supabase
-      .from("tickets")
-      .select(
-        "id, event_id, qr_token, status, buyer_first_name, buyer_last_name, buyer_email, amount_paid_cents, used_at, paid_at"
-      )
-      .eq("buyer_user_id", userId)
-      .in("status", ["paid", "used"])
-      .order("paid_at", { ascending: false });
+    try {
+      const { data: ticks, error: tixErr } = await supabase
+        .from("tickets")
+        .select(
+          "id, event_id, qr_token, status, buyer_first_name, buyer_last_name, buyer_email, amount_paid_cents, used_at, paid_at"
+        )
+        .eq("buyer_user_id", userId)
+        .in("status", ["paid", "used"])
+        .order("paid_at", { ascending: false });
 
-    if (!ticks || ticks.length === 0) {
-      setTickets([]);
-      setTicketsLoading(false);
-      return;
-    }
+      if (tixErr) {
+         
+        console.error("[ClientDashboard] tickets query failed", tixErr);
+        setTickets([]);
+        setTicketsLoading(false);
+        return;
+      }
 
-    const eventIds = Array.from(new Set(ticks.map((t) => t.event_id)));
-    const { data: evs } = await supabase
-      .from("events")
-      .select("id, title, date_start, city, venue_name, image_url, partner_id")
-      .in("id", eventIds);
+      if (!ticks || ticks.length === 0) {
+        setTickets([]);
+        setTicketsLoading(false);
+        return;
+      }
 
-    const partnerIds = Array.from(new Set((evs ?? []).map((e: any) => e.partner_id)));
-    const { data: prs } = partnerIds.length
-      ? await supabase.from("profiles").select("id, business_name").in("id", partnerIds)
-      : { data: [] as any[] };
+      const eventIds = Array.from(
+        new Set(ticks.map((t) => t.event_id).filter((id): id is string => !!id))
+      );
 
-    const eventMap = new Map<string, TicketEventInfo>();
-    (evs ?? []).forEach((e: any) => {
-      const partner = (prs ?? []).find((p: any) => p.id === e.partner_id);
-      eventMap.set(e.id, {
-        title: e.title,
-        date_start: e.date_start,
-        city: e.city,
-        venue_name: e.venue_name,
-        image_url: e.image_url,
-        partner_name: partner?.business_name ?? undefined,
+      let evs: any[] = [];
+      if (eventIds.length > 0) {
+        const { data: evData, error: evErr } = await supabase
+          .from("events")
+          .select("id, title, date_start, city, venue_name, image_url, partner_id")
+          .in("id", eventIds);
+        if (evErr) {
+           
+          console.warn("[ClientDashboard] events query failed", evErr);
+        } else {
+          evs = evData ?? [];
+        }
+      }
+
+      // Filtrar partner_ids null. Sin esto el .in() rompía la query.
+      const partnerIds = Array.from(
+        new Set(
+          evs
+            .map((e: any) => e.partner_id)
+            .filter((pid: unknown): pid is string => typeof pid === "string" && pid.length > 0)
+        )
+      );
+
+      let prs: any[] = [];
+      if (partnerIds.length > 0) {
+        const { data: prData, error: prErr } = await supabase
+          .from("profiles")
+          .select("id, business_name")
+          .in("id", partnerIds);
+        if (prErr) {
+           
+          console.warn("[ClientDashboard] profiles query failed", prErr);
+        } else {
+          prs = prData ?? [];
+        }
+      }
+
+      const eventMap = new Map<string, TicketEventInfo>();
+      evs.forEach((e: any) => {
+        const partner = prs.find((p: any) => p.id === e.partner_id);
+        eventMap.set(e.id, {
+          title: e.title ?? "Evento",
+          date_start: e.date_start ?? new Date().toISOString(),
+          city: e.city ?? "",
+          venue_name: e.venue_name ?? null,
+          image_url: e.image_url ?? null,
+          partner_name: partner?.business_name ?? undefined,
+        });
       });
-    });
 
-    setTickets(
-      ticks.map((t: any) => ({
-        ...t,
-        event: eventMap.get(t.event_id) ?? null,
-      }))
-    );
-    setTicketsLoading(false);
+      setTickets(
+        ticks.map((t: any) => ({
+          ...t,
+          event: eventMap.get(t.event_id) ?? null,
+        }))
+      );
+    } catch (err: unknown) {
+       
+      console.error("[ClientDashboard] loadTickets crashed", err);
+      setTickets([]);
+    } finally {
+      setTicketsLoading(false);
+    }
   }, [userId]);
 
   // Carica i tickets dell'utente quando entra in wallet

@@ -1,4 +1,5 @@
-import { Heart, Loader2, Ticket } from "lucide-react";
+import { useState } from "react";
+import { Heart, Loader2, Minus, Plus, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -21,10 +22,15 @@ interface Props {
   partnerName?: string;
   /** Mostra il sottotitolo "@ partnerName" sotto il titolo (utile in favorites). */
   showPartner?: boolean;
-  /** Handler de "Comprar entrada". Recibe el id del evento. */
-  onBuyTicket?: (eventId: string) => void;
+  /**
+   * Handler de "Comprar entrada". Recibe (eventId, qty). Soporta multi-ticket
+   * vía el stepper integrado.
+   */
+  onBuyTicket?: (eventId: string, qty: number) => void;
   /** Si true, muestra spinner en el botón y lo deshabilita (compra en curso). */
   pending?: boolean;
+  /** Tope superior del stepper de cantidad. Default 10 (cap del edge function). */
+  maxQty?: number;
 }
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -36,7 +42,19 @@ export const EventListCard = ({
   showPartner,
   onBuyTicket,
   pending = false,
+  maxQty = 10,
 }: Props) => {
+  const [qty, setQty] = useState(1);
+  const incQty = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setQty((q) => Math.min(maxQty, q + 1));
+  };
+  const decQty = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setQty((q) => Math.max(1, q - 1));
+  };
   const date = new Date(event.date_start);
   const initial = (event.title?.[0] ?? "?").toUpperCase();
   const { isFavorite, toggle } = useFavorites();
@@ -284,23 +302,96 @@ export const EventListCard = ({
               </div>
             )}
 
-            {/* Price + CTA row */}
-            <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3">
-              <div>
-                <div
-                  className="text-[10px] uppercase text-muted-foreground"
-                  style={{ ...mono, letterSpacing: "0.18em" }}
-                >
-                  Desde
+            {/* Price + CTA row.
+                Layout en mobile:
+                  fila 1: Desde · precio
+                  fila 2: stepper qty + CTA "Comprar X · YY€"
+                En sm+ todo en una sola fila. */}
+            <div className="flex flex-col gap-3 border-t border-border/60 pt-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex items-end justify-between gap-3 sm:block">
+                <div>
+                  <div
+                    className="text-[10px] uppercase text-muted-foreground"
+                    style={{ ...mono, letterSpacing: "0.18em" }}
+                  >
+                    Desde
+                  </div>
+                  <div
+                    className="mt-0.5 text-xl font-bold leading-none tracking-tight text-foreground md:text-2xl"
+                    style={mono}
+                  >
+                    {(event.price_cents / 100).toFixed(2)}
+                    <span className="ml-1 text-sm font-medium text-muted-foreground">€</span>
+                  </div>
                 </div>
-                <div
-                  className="mt-0.5 text-xl font-bold leading-none tracking-tight text-foreground md:text-2xl"
-                  style={mono}
-                >
-                  {(event.price_cents / 100).toFixed(2)}
-                  <span className="ml-1 text-sm font-medium text-muted-foreground">€</span>
-                </div>
+
+                {/* Qty stepper — visible junto al precio en mobile, junto al botón en desktop */}
+                {!soldOut && (
+                  <div
+                    className="inline-flex items-center gap-0 rounded-full border border-border bg-card/60 sm:hidden"
+                    aria-label="Cantidad de entradas"
+                  >
+                    <button
+                      type="button"
+                      onClick={decQty}
+                      disabled={qty <= 1 || pending}
+                      className="inline-flex h-9 w-9 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                      aria-label="Quitar entrada"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span
+                      className="min-w-[24px] text-center text-sm font-semibold text-foreground"
+                      style={mono}
+                    >
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={incQty}
+                      disabled={qty >= maxQty || pending}
+                      className="inline-flex h-9 w-9 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                      aria-label="Añadir entrada"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
+
+              <div className="flex items-center gap-2">
+                {/* Qty stepper desktop — entre price y CTA */}
+                {!soldOut && (
+                  <div
+                    className="hidden items-center gap-0 rounded-full border border-border bg-card/60 sm:inline-flex"
+                    aria-label="Cantidad de entradas"
+                  >
+                    <button
+                      type="button"
+                      onClick={decQty}
+                      disabled={qty <= 1 || pending}
+                      className="inline-flex h-10 w-10 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                      aria-label="Quitar entrada"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span
+                      className="min-w-[28px] text-center text-sm font-semibold text-foreground"
+                      style={mono}
+                    >
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={incQty}
+                      disabled={qty >= maxQty || pending}
+                      className="inline-flex h-10 w-10 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                      aria-label="Añadir entrada"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
 
               <button
                 type="button"
@@ -312,16 +403,16 @@ export const EventListCard = ({
                   e.stopPropagation();
                   if (soldOut || pending) return;
                   if (onBuyTicket) {
-                    onBuyTicket(event.id);
+                    onBuyTicket(event.id, qty);
                   } else if (import.meta.env.DEV) {
                      
                     console.warn(
                       "[EventListCard] onBuyTicket prop not provided. Button click is a no-op.",
-                      { eventId: event.id }
+                      { eventId: event.id, qty }
                     );
                   }
                 }}
-                className="group/btn inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 md:text-sm"
+                className="group/btn inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 sm:flex-initial md:text-sm"
                 style={{
                   background: soldOut
                     ? "#3a3a3a"
@@ -336,7 +427,7 @@ export const EventListCard = ({
                     ? "Entradas agotadas"
                     : pending
                     ? "Procesando compra"
-                    : "Comprar entrada"
+                    : `Comprar ${qty} ${qty === 1 ? "entrada" : "entradas"}`
                 }
               >
                 {pending ? (
@@ -344,7 +435,13 @@ export const EventListCard = ({
                 ) : (
                   <Ticket className="h-4 w-4" />
                 )}
-                {soldOut ? "Agotado" : pending ? "Procesando…" : "Comprar entrada"}
+                {soldOut
+                  ? "Agotado"
+                  : pending
+                  ? "Procesando…"
+                  : qty === 1
+                  ? "Comprar entrada"
+                  : `Comprar ${qty} · ${((event.price_cents * qty) / 100).toFixed(2)}€`}
                 {!soldOut && !pending && (
                   <span
                     aria-hidden="true"
@@ -354,6 +451,7 @@ export const EventListCard = ({
                   </span>
                 )}
               </button>
+              </div>
             </div>
           </div>
         </div>
