@@ -48,7 +48,7 @@ import PanelSwitcher from "./components/shared/PanelSwitcher";
 import LoaderOne from "@/components/ui/loader-one";
 
 // Usa il sistema di auth centralizzato
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, resolveInitialDashboard } from "@/hooks/useAuth";
 import { useFCMToken } from "@/hooks/useFCMToken";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 
@@ -87,22 +87,47 @@ const persistOptions = {
 };
 
 
-// Wrapper per la pagina Login che permette l'accesso quando si aggiunge un account
+// Wrapper per la pagina Login. Resuelve el dashboard inicial según el rol
+// efectivo del usuario (post-Fase 1 hardening) en lugar de empujar a todos
+// a /client-dashboard. Si todavía no se han cargado los roles, muestra Login
+// mientras tanto — comportamiento defensivo: nunca redirige a un panel
+// que el usuario no tiene.
 const LoginRoute = ({ session }: { session: any }) => {
   const location = useLocation();
+  const { userRoles, roleLoading } = useAuth();
   const isAddingAccount = (location.state as any)?.addingAccount === true;
 
-  // Se sta aggiungendo un account, mostra sempre il Login
   if (isAddingAccount) {
     return <Login />;
   }
 
-  // Altrimenti, se c'è sessione redirect alla dashboard
   if (session) {
-    return <Navigate to="/client-dashboard" replace />;
+    if (roleLoading || userRoles.length === 0) {
+      return <Login />;
+    }
+    const target = resolveInitialDashboard(userRoles);
+    return <Navigate to={target} replace />;
   }
 
   return <Login />;
+};
+
+// Wrapper para la ruta `/` (root). Igual que LoginRoute pero el fallback no
+// autenticado es Index (landing pública) en web, o /login en nativa.
+const RootRoute = ({ session }: { session: any }) => {
+  const { userRoles, roleLoading } = useAuth();
+
+  if (session) {
+    if (roleLoading || userRoles.length === 0) {
+      return null; // splash visible mientras useAuth carga
+    }
+    const target = resolveInitialDashboard(userRoles);
+    return <Navigate to={target} replace />;
+  }
+  if (Capacitor.isNativePlatform()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Index />;
 };
 
 const queryClient = new QueryClient({
@@ -359,20 +384,10 @@ const App = () => {
           <Suspense fallback={<PageLoader />}>
             <PageTransitions>
             <Routes>
-              {/* Loggato → dashboard appropriata. Non loggato (web) → landing Pasify.
+              {/* Loggato → dashboard appropriata según rol efectivo
+                  (resolveInitialDashboard). Non loggato (web) → landing Pasify.
                   Su app nativa → login. */}
-              <Route
-                path="/"
-                element={
-                  session ? (
-                    <Navigate to="/client-dashboard" replace />
-                  ) : Capacitor.isNativePlatform() ? (
-                    <Navigate to="/login" replace />
-                  ) : (
-                    <Index />
-                  )
-                }
-              />
+              <Route path="/" element={<RootRoute session={session} />} />
 
               {/* Rotte pubbliche */}
               <Route path="/register-client" element={<RegisterClient />} />

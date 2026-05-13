@@ -25,7 +25,7 @@ const FONT_MONO: React.CSSProperties = {
 };
 
 export const PanelSwitcher = () => {
-  const { userRoles, userRole, setActiveRole, isAuthenticated } = useAuth();
+  const { userRoles, userRole, setActiveRole, isAuthenticated, canSwitchPanels } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -61,7 +61,11 @@ export const PanelSwitcher = () => {
 
   if (!isAuthenticated) return null;
   if (!userRole) return null;
-  if (userRoles.length < 2) return null;
+  // Fase 1 hardening: el switcher es exclusivo del super-admin/dev mode.
+  // `canSwitchPanels` exige email allowlist + rol admin + env flag
+  // VITE_ENABLE_SUPER_ADMIN_SWITCHER=true. Cualquier otro usuario nunca lo ve,
+  // ni siquiera si manipula localStorage o tiene roles acumulados antiguos.
+  if (!canSwitchPanels) return null;
   if (!routeRole) return null; // No dashboard route
 
   // Visual: usa routeRole (canonical de la URL). Estado: userRole sirve
@@ -255,7 +259,7 @@ export const PanelSwitcher = () => {
                 color: "#8A8275",
               }}
             >
-              Multi-rol · pasify dev
+              Super Admin · Dev mode
             </span>
           </div>
         </div>
