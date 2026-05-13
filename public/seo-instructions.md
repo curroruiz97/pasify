@@ -1,162 +1,142 @@
-# Instrucciones de Configuración SEO Externa - StudentsLife
+# Pasify · Configuración SEO externa
 
-## ✅ Ya Implementado en el Código
-- Sitemap.xml completo con todas las URLs
-- Meta tags optimizados en español
-- Schema.org JSON-LD (Organization y WebApplication)
-- Open Graph y Twitter Cards
-- Hreflang tags para SEO internacional
-- Robots.txt configurado
-- Meta keywords estratégicos
-- Canonical URLs
+Documento operativo para SEO técnico y on-page de **Pasify** (`pasify.es`).
+Sustituye la guía heredada de Students Life — el público objetivo, los
+keywords y la estrategia son completamente distintos en Pasify.
 
-## 🔧 Configuración Externa Necesaria
-
-### 1. Google Search Console (CRÍTICO)
-**URL:** https://search.google.com/search-console
-
-**Pasos:**
-1. Añade la propiedad: `studentslife.es`
-2. Verifica la propiedad (método HTML tag ya está en el código)
-3. **Envía el sitemap:** 
-   - Ve a "Sitemaps"
-   - Añade: `https://studentslife.es/sitemap.xml`
-4. Solicita indexación de la página principal
-5. Monitorea el rendimiento en "Rendimiento"
-
-### 2. Google Business Profile (Muy Importante)
-**URL:** https://business.google.com
-
-**Información a usar:**
-- Nombre: StudentsLife España
-- Categoría: Servicio de descuentos / Plataforma digital
-- Descripción: "Plataforma líder que conecta estudiantes universitarios con comercios locales. Descuentos exclusivos y eventos especiales."
-- Email: stud3nts1ife.info@gmail.com
-- Añadir logo y fotos
-
-### 3. Bing Webmaster Tools
-**URL:** https://www.bing.com/webmasters
-
-**Pasos:**
-1. Añade el sitio
-2. Importa datos desde Google Search Console
-3. Envía sitemap: `https://studentslife.es/sitemap.xml`
-
-### 4. Schema Markup Validator
-**URL:** https://validator.schema.org/
-
-**Acción:** Valida que el JSON-LD funcione correctamente pegando la URL
-
-### 5. Rich Results Test (Google)
-**URL:** https://search.google.com/test/rich-results
-
-**Acción:** Verifica que los rich snippets se muestren correctamente
-
-### 6. PageSpeed Insights
-**URL:** https://pagespeed.web.dev/
-
-**Acción:** Analiza y optimiza el rendimiento (afecta el SEO)
-
-### 7. Redes Sociales con Enlaces al Sitio
-
-**Instagram:**
-- Usuario sugerido: @studentslife_es
-- Bio: "🎓 Descuentos exclusivos para estudiantes | 🎉 Eventos especiales | 🔗 Únete aquí 👇"
-- Link en bio: studentslife.es
-
-**Facebook:**
-- Página: StudentsLife España
-- Descripción completa con keywords
-- Link al sitio web
-
-**TikTok:**
-- Perfil con link al sitio
-- Contenido sobre descuentos y eventos
-
-### 8. Estrategia de Backlinks (ESENCIAL para #1)
-
-**Acciones prioritarias:**
-- Contactar blogs universitarios españoles
-- Publicar en foros de estudiantes (Reddit, ForoCoches, etc.)
-- Colaborar con asociaciones de estudiantes
-- Guest posting en blogs de descuentos/cupones
-- Menciones en páginas de universidades
-- Directorios de startups españolas
-
-### 9. Local SEO
-
-**Google Maps:**
-- Si tienen oficina física, añádela en Google Maps
-- Optimizar para búsquedas locales: "descuentos estudiantes [ciudad]"
-
-### 10. Monitorización Continua
-
-**Herramientas gratuitas:**
-- Google Analytics 4 (instalar)
-- Google Search Console (semanal)
-- Ubersuggest (keywords)
-- AnswerThePublic (ideas de contenido)
-
-## 🎯 Keywords Principales a Monitorear
-
-1. **studentslife** ⭐ (principal)
-2. **studentslife españa**
-3. **descuentos estudiantes**
-4. **descuentos universitarios españa**
-5. **tarjeta estudiante descuentos**
-6. **ofertas estudiantes**
-7. **comunidad estudiantil**
-8. **eventos para estudiantes**
-
-## 📊 KPIs a Seguir
-
-- Posición en Google para "studentslife"
-- CTR (Click Through Rate)
-- Tiempo de permanencia
-- Bounce rate
-- Conversiones (registros)
-- Backlinks adquiridos
-
-## ⚡ Acciones Rápidas para Subir Posiciones
-
-1. **Contenido de Blog** (crear sección blog):
-   - "10 descuentos imprescindibles para estudiantes en España"
-   - "Cómo ahorrar siendo estudiante universitario"
-   - Guías por ciudad
-   - Reviews de partners
-
-2. **Actualizaciones constantes**:
-   - Añadir nuevos eventos semanalmente
-   - Actualizar descuentos
-   - Google premia el contenido fresco
-
-3. **Link Building activo**:
-   - Mínimo 5 backlinks de calidad al mes
-   - Guest posts en blogs relevantes
-   - Colaboraciones con influencers universitarios
-
-4. **Social Signals**:
-   - Compartir contenido regularmente
-   - Engagement en redes sociales
-   - UGC (User Generated Content)
-
-## 🚀 Timeline Esperado
-
-- **Semana 1-2:** Indexación completa
-- **Mes 1:** Aparición en primeras páginas para "studentslife"
-- **Mes 2-3:** Top 10 con estrategia de contenido
-- **Mes 3-6:** Top 3 con backlinks de calidad
-- **Mes 6+:** Posición #1 para marca + long-tail keywords
-
-## ✅ Dominio Personalizado
-
-**Dominio principal:** studentslife.es
-- Ya configurado en el código
-- Asegúrate de que el dominio esté correctamente apuntado en Lovable (Settings > Domains)
-- Verifica que los registros DNS estén configurados correctamente
+> **Última actualización**: 2026-05-13 · Post Fase 4 cleanup (branding purge).
 
 ---
 
-**Email de contacto para soporte:** stud3nts1ife.info@gmail.com
+## 1. Public assets ya configurados en el repo
 
-¡Todo está optimizado en el código! Ahora es momento de trabajar en la visibilidad externa siguiendo estas instrucciones.
+- `public/sitemap.xml` — 5 URLs canónicas con alternates `hreflang` ES/EN/FR/IT/PT/DE
+- `public/CNAME` — `pasify.es` (Vercel custom domain target)
+- `public/site.webmanifest` — name `Pasify`, theme `#0B0908`, bg `#F7F3EC`
+- `public/.well-known/assetlinks.json` — pendiente de actualizar a
+  `package_name: es.pasify.app` cuando se rebuildee el wrap móvil
+
+---
+
+## 2. Google Search Console
+
+Pasos para registrar el dominio en GSC:
+
+1. Vincula la propiedad **dominio** `pasify.es` (no URL prefix; permite
+   cubrir todos los subdomains automáticamente).
+2. Verifica via DNS TXT record (Vercel ya gestiona el A/AAAA).
+3. Envía sitemap: `https://pasify.es/sitemap.xml`.
+4. Configura usuario adicional para el equipo ops.
+5. Revisa Coverage report semanalmente durante los primeros 2 meses tras
+   cutover.
+
+---
+
+## 3. Bing Webmaster Tools
+
+1. Importa la propiedad desde Google Search Console (un click).
+2. Envía sitemap: `https://pasify.es/sitemap.xml`.
+
+---
+
+## 4. Open Graph & meta tags
+
+`index.html` debe servir meta tags base para social cards:
+
+```html
+<meta property="og:site_name" content="Pasify" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://pasify.es/" />
+<meta property="og:image" content="https://pasify.es/og/og-default.jpg" />
+<meta property="og:locale" content="es_ES" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@pasify_es" />
+```
+
+Las páginas dinámicas (eventos) deben sobreescribir `og:title`, `og:image`
+y `og:url` con datos del evento. Pendiente: SSR/SSG para que crawlers no
+JS-capable indexen contenido dinámico.
+
+---
+
+## 5. Estructura de URLs (post-HashRouter)
+
+Pasify usa HashRouter (`/#/calendar`) que **no se indexa bien**. Para SEO:
+
+- Las rutas críticas (landing, eventos populares) deberían exponerse
+  como rutas sin hash mediante rewrite en `vercel.json` cuando el flujo
+  móvil/PWA esté estable.
+- Mientras tanto, el sitemap apunta a `https://pasify.es/calendar` y
+  `vercel.json` ya tiene rewrites que sirven `index.html` para que el
+  HashRouter tome control en el cliente.
+
+---
+
+## 6. Keywords objetivo
+
+**Tier 1 (alta intent)**:
+- `tickets discoteca <ciudad>`
+- `entradas <local> ibiza|barcelona|madrid|valencia`
+- `comprar entrada festival <nombre>`
+- `lista vip <local>`
+- `reservar mesa <local>`
+
+**Tier 2 (descubrimiento)**:
+- `app eventos noche españa`
+- `tickets sin papel`
+- `discoteca tonight`
+- `donde salir esta noche <ciudad>`
+
+**Tier 3 (B2B partner acquisition)**:
+- `software ticketing discoteca`
+- `tpv cashless evento`
+- `stripe connect tickets`
+
+---
+
+## 7. Redes sociales y consistencia de handle
+
+Reservar y poblar:
+
+- Instagram: `@pasify_es`
+- TikTok: `@pasify`
+- X / Twitter: `@pasify_es`
+- LinkedIn: company page `Pasify`
+
+Link en bio: `pasify.es`.
+
+---
+
+## 8. KPIs SEO mensuales
+
+Reportar a admin dashboard una vez al mes:
+
+- **Search impressions** total (GSC)
+- **CTR** medio
+- **Posición media** para keywords Tier 1
+- **Páginas con mejor performance** (top 10)
+- **Errores de crawl** detectados
+- **Nuevos enlaces entrantes**
+
+---
+
+## 9. Pendientes inmediatos (cutover Pasify)
+
+- [ ] Crear cuenta GSC y verificar dominio `pasify.es`
+- [ ] Crear cuenta Bing Webmaster
+- [ ] Reservar handles en Instagram/TikTok/X/LinkedIn
+- [ ] Crear imágenes OG default y por ciudad (`public/og/`)
+- [ ] Implementar SSR/SSG selectivo para rutas críticas (Vercel Edge)
+- [ ] Migrar 301 redirects desde `studentslife.es` → `pasify.es` (cuando
+  el dominio legacy expire o quieras transferir tráfico)
+
+---
+
+## 10. Notas internas
+
+- El old SEO playbook (Students Life, descuentos universitarios) está
+  obsoleto. No reusar sus keywords ni audiences.
+- El target de Pasify es **B2C tickets + B2B partners** — dos funnels
+  separados, dos sitemaps en futuro si el contenido lo justifica.
+- Cuando cambies un keyword o ranking, anota el delta + commit hash en
+  este doc.
