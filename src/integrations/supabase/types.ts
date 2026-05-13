@@ -4265,6 +4265,94 @@ export type Database = {
           },
         ]
       }
+      ticket_scan_logs: {
+        Row: {
+          device_info: string | null
+          event_id: string | null
+          id: string
+          metadata: Json
+          notes: string | null
+          org_id: string | null
+          qr_token_hash: string | null
+          result: Database["public"]["Enums"]["scan_result_t"]
+          scanned_at: string
+          scanned_by_user_id: string | null
+          ticket_id: string | null
+          venue_id: string | null
+        }
+        Insert: {
+          device_info?: string | null
+          event_id?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          org_id?: string | null
+          qr_token_hash?: string | null
+          result: Database["public"]["Enums"]["scan_result_t"]
+          scanned_at?: string
+          scanned_by_user_id?: string | null
+          ticket_id?: string | null
+          venue_id?: string | null
+        }
+        Update: {
+          device_info?: string | null
+          event_id?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          org_id?: string | null
+          qr_token_hash?: string | null
+          result?: Database["public"]["Enums"]["scan_result_t"]
+          scanned_at?: string
+          scanned_by_user_id?: string | null
+          ticket_id?: string | null
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_scan_logs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_scan_logs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "v_event_revenue_summary"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "ticket_scan_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_scan_logs_scanned_by_user_id_fkey"
+            columns: ["scanned_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_scan_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_scan_logs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_tiers: {
         Row: {
           capacity: number | null
@@ -5422,6 +5510,38 @@ export type Database = {
         }
         Returns: string
       }
+      partner_event_attendees: {
+        Args: { _event_id: string }
+        Returns: {
+          amount_paid_cents: number
+          buyer_email: string
+          buyer_first_name: string
+          buyer_last_name: string
+          buyer_phone: string
+          currency: string
+          order_id: string
+          paid_at: string
+          qr_token: string
+          scanned_by_name: string
+          status: string
+          ticket_id: string
+          tier_name: string
+          used_at: string
+          used_by_partner_id: string
+        }[]
+      }
+      partner_event_checkin_stats: {
+        Args: { _event_id: string }
+        Returns: {
+          capacity: number
+          checkin_pct: number
+          revenue_cents: number
+          tickets_pending: number
+          tickets_refunded: number
+          tickets_sold: number
+          tickets_used: number
+        }[]
+      }
       request_refund: {
         Args: { _reason: string; _reason_code?: string; _ticket_id: string }
         Returns: string
@@ -5437,6 +5557,22 @@ export type Database = {
           primary_color: string
           subdomain: string
           support_email: string
+        }[]
+      }
+      scan_ticket: {
+        Args: { _device_info?: string; _qr_token: string }
+        Returns: {
+          already_used_at: string
+          buyer_email: string
+          buyer_first_name: string
+          buyer_last_name: string
+          event_id: string
+          event_title: string
+          result: Database["public"]["Enums"]["scan_result_t"]
+          scanned_at: string
+          success: boolean
+          ticket_id: string
+          tier_name: string
         }[]
       }
       set_admin_by_email: { Args: { _email: string }; Returns: string }
@@ -5613,6 +5749,13 @@ export type Database = {
         | "processing"
         | "refunded"
         | "failed"
+      scan_result_t:
+        | "success"
+        | "already_used"
+        | "invalid_ticket"
+        | "wrong_event"
+        | "not_paid"
+        | "forbidden"
       stripe_payout_status_t:
         | "pending"
         | "in_transit"
@@ -5934,6 +6077,14 @@ export const Constants = {
         "processing",
         "refunded",
         "failed",
+      ],
+      scan_result_t: [
+        "success",
+        "already_used",
+        "invalid_ticket",
+        "wrong_event",
+        "not_paid",
+        "forbidden",
       ],
       stripe_payout_status_t: [
         "pending",
