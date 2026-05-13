@@ -30,6 +30,11 @@ jobs:
     name: Smoke production
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Mapeo job-level: GitHub Actions no permite `secrets.*` dentro de `if:`
+    # expressions (parse-time), pero `env.*` sí. Si el secret no está definido,
+    # el valor es '' y el step Slack se salta limpiamente.
+    env:
+      SLACK_WEBHOOK_OPS: ${{ secrets.SLACK_WEBHOOK_OPS }}
     steps:
       - name: Resolve target URL
         id: target
@@ -99,10 +104,10 @@ jobs:
           echo "✓ admin endpoint correctly rejects anonymous (status $status)"
 
       - name: Notify Slack on failure
-        if: failure() && secrets.SLACK_WEBHOOK_OPS != ''
+        if: failure() && env.SLACK_WEBHOOK_OPS != ''
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
             { "text": "🚨 Pasify smoke FAILED on ${{ steps.target.outputs.url }} · commit ${{ github.sha }}" }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_OPS }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_OPS }}
