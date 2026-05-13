@@ -128,10 +128,8 @@ const PartnerManage = () => {
         toast({ title: "Error", description: "Sesión expirada.", variant: "destructive" });
         return;
       }
-      const checkoutFn = import.meta.env.VITE_STRIPE_TEST_MODE === "true"
-        ? "stripe-create-checkout-test"
-        : "stripe-create-checkout";
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${checkoutFn}`;
+      // Siempre stripe-create-checkout. Test vs live discrimina el server.
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
       const resp = await fetch(url, {
         method: "POST",
         headers: {

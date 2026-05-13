@@ -183,17 +183,57 @@ const Calendar = () => {
     try {
       // Pasify: la compra real de tickets se hace vía Stripe Checkout.
       // El edge function `stripe-create-checkout` crea el ticket_order +
-      // tickets pending y redirige al hosted checkout. Si el function aún
-      // no está desplegado (caso del entorno actual), degradamos con un
-      // toast informativo en lugar de crashear.
+      // tickets pending y redirige al hosted checkout. Requiere:
+      //   - event_id + tier_id + qty
+      //   - buyer { email, first_name?, last_name?, phone? }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
 
-      const checkoutFnName =
-        import.meta.env.VITE_STRIPE_TEST_MODE === "true"
-          ? "stripe-create-checkout-test"
-          : "stripe-create-checkout";
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${checkoutFnName}`;
+      // 1) Buscar el tier activo del evento. Pasify exige ticket_tiers explícitos
+      // por evento — `price_cents` del event es solo fallback display. Si no
+      // hay tiers activos, el partner aún no ha terminado de configurar la venta.
+      const { data: tiers, error: tiersErr } = await supabase
+        .from("ticket_tiers")
+        .select("id, name, price_cents, status, sort_order")
+        .eq("event_id", event.id)
+        .eq("status", "active")
+        .order("sort_order", { ascending: true })
+        .limit(1);
+      if (tiersErr) throw new Error(tiersErr.message);
+      const tier = tiers?.[0];
+      if (!tier) {
+        toast({
+          title: "Venta no disponible",
+          description:
+            "Este evento aún no tiene entradas a la venta. Vuelve a probar más tarde.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2) Buyer info — del session + profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, phone")
+        .eq("id", authedUserId)
+        .maybeSingle();
+
+      const buyer = {
+        email: session.user.email || "",
+        first_name: profile?.first_name ?? undefined,
+        last_name: profile?.last_name ?? undefined,
+        phone: profile?.phone ?? undefined,
+      };
+      if (!buyer.email) {
+        throw new Error("No se encontró tu email. Revisa tu perfil.");
+      }
+
+      // 3) Llamar al edge function con el payload correcto
+      // Pasify usa siempre `stripe-create-checkout`. La detección de test vs live
+      // se hace en el server por la STRIPE_SECRET_KEY (sk_test_* vs sk_live_*).
+      // El antiguo `stripe-create-checkout-test` es legacy Students Life con
+      // payload incompatible (espera price_id en lugar de tier_id).
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
       const resp = await fetch(url, {
         method: "POST",
         headers: {
@@ -202,12 +242,13 @@ const Calendar = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          mode: "payment",
           event_id: event.id,
+          tier_id: tier.id,
           qty: 1,
+          buyer,
           locale: "es",
-          successUrl: `${window.location.origin}/#/client-dashboard?wallet={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/#/calendar`,
+          success_url: `${window.location.origin}/#/client-dashboard?wallet={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${window.location.origin}/#/calendar`,
         }),
       });
 

@@ -1170,24 +1170,55 @@ const CreateEventDialog = ({
     const capacity = form.capacity ? parseInt(form.capacity, 10) : null;
 
     setSubmitting(true);
-    const { error } = await supabase.from("events").insert({
-      partner_id: partnerId,
-      title,
-      description: form.description.trim() || null,
-      city,
-      date_start: new Date(form.date_start).toISOString(),
+    const { data: createdEvent, error } = await supabase
+      .from("events")
+      .insert({
+        partner_id: partnerId,
+        title,
+        description: form.description.trim() || null,
+        city,
+        date_start: new Date(form.date_start).toISOString(),
+        price_cents: priceCents,
+        capacity,
+        image_url: form.image_url || null,
+        status,
+      })
+      .select("id")
+      .single();
+
+    if (error || !createdEvent) {
+      setSubmitting(false);
+      toast({ title: "Error al crear evento", description: error?.message ?? "No se pudo crear", variant: "destructive" });
+      return;
+    }
+
+    // Crear tier por defecto "Entrada General" para que stripe-create-checkout
+    // pueda venderlo. Sin tier el evento no es comprable. El partner puede
+    // editarlo / añadir más tiers (early bird, VIP, etc.) en una fase posterior.
+    const { error: tierErr } = await supabase.from("ticket_tiers").insert({
+      event_id: createdEvent.id,
+      name: "Entrada General",
+      description: "Acceso general al evento",
       price_cents: priceCents,
+      currency: "EUR",
       capacity,
-      image_url: form.image_url || null,
-      status,
+      per_user_max: 4,
+      status: "active",
+      sort_order: 0,
     });
     setSubmitting(false);
 
-    if (error) {
-      toast({ title: "Error al crear evento", description: error.message, variant: "destructive" });
-      return;
+    if (tierErr) {
+      // El evento se creó pero el tier no. No es crítico — el evento aparece
+      // como draft y el partner puede añadir tiers manualmente más tarde.
+      console.warn("[CreateEventDialog] tier default no creado:", tierErr.message);
+      toast({
+        title: status === "published" ? "Evento publicado" : "Borrador guardado",
+        description: "Aviso: no se pudo crear el tier por defecto. Revisa la pantalla de tickets.",
+      });
+    } else {
+      toast({ title: status === "published" ? "Evento publicado" : "Borrador guardado" });
     }
-    toast({ title: status === "published" ? "Evento publicado" : "Borrador guardado" });
     onCreated();
   };
 

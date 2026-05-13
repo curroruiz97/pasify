@@ -123,10 +123,9 @@ const PartnerChoosePlan = () => {
         navigate("/login");
         return;
       }
-      const checkoutFn = import.meta.env.VITE_STRIPE_TEST_MODE === "true"
-        ? "stripe-create-checkout-test"
-        : "stripe-create-checkout";
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${checkoutFn}`;
+      // Siempre `stripe-create-checkout` — test vs live se distingue en el
+      // server por STRIPE_SECRET_KEY.
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`;
       const resp = await fetch(url, {
         method: "POST",
         headers: {
