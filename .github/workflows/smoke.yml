@@ -1,0 +1,108 @@
+name: Smoke · post-deploy
+
+# Ejecuta smoke tests contra producción cuando Vercel confirma deployment.
+# Tres niveles de verificación: HTTP routes (web SPA), Supabase health-check
+# edge function, y validación de seguridad básica (un endpoint admin requiere
+# auth).
+
+on:
+  deployment_status:
+  # Permite disparo manual desde la UI de Actions
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL a probar (default: producción)"
+        type: string
+        required: false
+        default: "https://pasifyy.vercel.app"
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    # Sólo cuando Vercel reporta success y es production (no preview)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Production')
+    name: Smoke production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "url=${{ inputs.base_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ github.event.deployment_status.target_url || github.event.deployment.payload.web_url }}" >> $GITHUB_OUTPUT
+          fi
+          echo "supabase=https://${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}.supabase.co" >> $GITHUB_OUTPUT
+
+      - name: HTTP routes return 200 + Pasify in <title>
+        env:
+          URL: ${{ steps.target.outputs.url }}
+        run: |
+          set -e
+          ROUTES=("/" "/#/login" "/#/calendar" "/#/client-dashboard" "/#/partner-dashboard" "/#/admin")
+          for route in "${ROUTES[@]}"; do
+            full="$URL$route"
+            echo "→ $full"
+            # HashRouter: el contenido real está en $URL siempre; el hash es client-side.
+            # Por eso comprobamos $URL una sola vez y luego que el HTML mencione Pasify.
+            status=$(curl -fsSL -o /tmp/page.html -w "%{http_code}" "$URL" || echo "FAIL")
+            if [[ "$status" != "200" ]]; then
+              echo "✗ Got status $status from $full"
+              exit 1
+            fi
+          done
+          # Verify Pasify branding presente
+          if ! grep -qi "pasify" /tmp/page.html; then
+            echo "✗ HTML doesn't contain 'pasify' — likely served wrong app/branding regression"
+            exit 1
+          fi
+          echo "✓ All routes return 200 and HTML contains 'pasify'"
+
+      - name: Supabase health-check edge function
+        env:
+          SUPABASE: ${{ steps.target.outputs.supabase }}
+          ANON: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -e
+          resp=$(curl -fsSL -w "\n%{http_code}" -H "apikey: $ANON" "$SUPABASE/functions/v1/health-check" || true)
+          status=$(echo "$resp" | tail -1)
+          body=$(echo "$resp" | head -n -1)
+          if [[ "$status" != "200" ]]; then
+            echo "✗ health-check returned $status: $body"
+            exit 1
+          fi
+          echo "✓ health-check OK: $body"
+
+      - name: Anonymous request to admin-cancel-partner-subscription is rejected (security)
+        env:
+          SUPABASE: ${{ steps.target.outputs.supabase }}
+          ANON: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -e
+          # Esta edge function debe rechazar requests sin JWT válido (verify_jwt=true default).
+          # Esperamos 401 ó 403 ó 400 (rechazado), NO 200.
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "apikey: $ANON" \
+            -H "Content-Type: application/json" \
+            "$SUPABASE/functions/v1/admin-cancel-partner-subscription")
+          if [[ "$status" == "200" ]]; then
+            echo "✗ admin-cancel-partner-subscription returned 200 to anonymous request — security regression"
+            exit 1
+          fi
+          echo "✓ admin endpoint correctly rejects anonymous (status $status)"
+
+      - name: Notify Slack on failure
+        if: failure() && secrets.SLACK_WEBHOOK_OPS != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            { "text": "🚨 Pasify smoke FAILED on ${{ steps.target.outputs.url }} · commit ${{ github.sha }}" }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_OPS }}

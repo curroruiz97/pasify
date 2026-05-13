@@ -1,11 +1,34 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { execSync } from "node:child_process";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Sentry release tag: el git SHA del commit que se está construyendo.
+// Resuelto en build time. Vercel inyecta `VERCEL_GIT_COMMIT_SHA`; en local
+// caemos en `git rev-parse HEAD`. Si nada de eso resuelve (dev fresh clone
+// sin .git), usamos "dev" como sentinel.
+const resolveGitSha = (): string => {
+  const fromVercel = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (fromVercel) return fromVercel.slice(0, 12);
+  const fromCI = process.env.GITHUB_SHA;
+  if (fromCI) return fromCI.slice(0, 12);
+  try {
+    return execSync("git rev-parse --short=12 HEAD").toString().trim();
+  } catch {
+    return "dev";
+  }
+};
+
+const GIT_SHA = resolveGitSha();
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    // Inyectado en build time; sentry.ts lo lee como `__PASIFY_RELEASE__`.
+    __PASIFY_RELEASE__: JSON.stringify(`pasify@${GIT_SHA}`),
+  },
   server: {
     host: "::",
     port: 8080,
