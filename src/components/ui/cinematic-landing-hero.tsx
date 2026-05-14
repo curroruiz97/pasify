@@ -482,6 +482,7 @@ export function CinematicHero({
 }: CinematicHeroProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mainCardRef = useRef<HTMLDivElement>(null);
+  const sheenRef = useRef<HTMLDivElement>(null);
   const mockupRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
 
@@ -494,8 +495,16 @@ export function CinematicHero({
           const rect = mainCardRef.current.getBoundingClientRect();
           const mouseX = e.clientX - rect.left;
           const mouseY = e.clientY - rect.top;
-          mainCardRef.current.style.setProperty('--mouse-x', `${mouseX}px`);
-          mainCardRef.current.style.setProperty('--mouse-y', `${mouseY}px`);
+          // Antes seteábamos --mouse-x/--mouse-y en mainCardRef, lo cual
+          // forzaba recálculo de estilos en TODOS los descendientes via
+          // cascada CSS. Ahora seteamos directamente en sheenRef, el
+          // único elemento que consume la variable (el radial-gradient
+          // del .card-sheen). Esto elimina el cost cross-render que
+          // react-doctor flageaba como "Global CSS variable animation".
+          if (sheenRef.current) {
+            sheenRef.current.style.setProperty('--mouse-x', `${mouseX}px`);
+            sheenRef.current.style.setProperty('--mouse-y', `${mouseY}px`);
+          }
 
           const xVal = (e.clientX / window.innerWidth - 0.5) * 2;
           const yVal = (e.clientY / window.innerHeight - 0.5) * 2;
@@ -671,7 +680,7 @@ export function CinematicHero({
           ref={mainCardRef}
           className="main-card premium-depth-card relative overflow-hidden gsap-reveal flex items-center justify-center pointer-events-auto w-[92vw] md:w-[85vw] h-[92vh] md:h-[85vh] rounded-[32px] md:rounded-[40px]"
         >
-          <div className="card-sheen" aria-hidden="true" />
+          <div ref={sheenRef} className="card-sheen" aria-hidden="true" />
 
 
           <div className="relative w-full h-full max-w-7xl mx-auto px-4 lg:px-10 flex flex-col justify-evenly lg:grid lg:grid-cols-[1.1fr_1fr_1fr] items-center lg:gap-10 z-10 pt-14 pb-5 lg:py-0">

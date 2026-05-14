@@ -22,6 +22,27 @@ interface ChartData {
   events?: number;
 }
 
+// Tooltip extraído del componente padre (antes era nested → cada render
+// destruía la instancia, anti-pattern flageado por react-doctor).
+// Recharts acepta function components vía la prop `content`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <p className="text-xs font-medium text-foreground mb-1">{label}</p>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {payload.map((entry: any) => (
+          <p key={entry.dataKey ?? entry.name} className="text-xs" style={{ color: entry.color }}>
+            {entry.name}: <span className="font-semibold">{entry.value}</span>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const UserDetailChart = ({ userId, userName, userRole, open, onOpenChange }: UserDetailChartProps) => {
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
   const [chartData, setChartData] = useState<ChartData[]>([]);
@@ -175,22 +196,6 @@ const UserDetailChart = ({ userId, userName, userRole, open, onOpenChange }: Use
     } finally {
       setLoading(false);
     }
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
-          <p className="text-xs font-medium text-foreground mb-1">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-xs" style={{ color: entry.color }}>
-              {entry.name}: <span className="font-semibold">{entry.value}</span>
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
   };
 
   return (

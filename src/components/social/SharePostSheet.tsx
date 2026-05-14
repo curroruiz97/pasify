@@ -25,6 +25,45 @@ interface User {
   isFavorite?: boolean;
 }
 
+// Helper movido a módulo (no usa state).
+const getDisplayName = (user: User) => {
+  if (user.business_name) return user.business_name;
+  return `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Usuario";
+};
+
+// UserItem extraído del componente padre (antes era nested → cada render
+// re-creaba la instancia y destruía estado interno). Recibe el callback
+// de selección como prop en vez de capturarlo del closure.
+interface UserItemProps {
+  user: User;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+}
+
+const UserItem = ({ user, isSelected, onToggle }: UserItemProps) => (
+  <div
+    className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-xl cursor-pointer transition-colors"
+    onClick={() => onToggle(user.id)}
+  >
+    <div className="flex items-center gap-3">
+      <Avatar className="h-12 w-12">
+        <AvatarImage src={user.profile_image_url} />
+        <AvatarFallback className="bg-primary/10 text-primary">
+          {getDisplayName(user)[0]}
+        </AvatarFallback>
+      </Avatar>
+      <span className="font-medium">{getDisplayName(user)}</span>
+    </div>
+    <div
+      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+        isSelected ? "bg-primary border-primary" : "border-muted-foreground/30"
+      }`}
+    >
+      {isSelected && <Check className="w-4 h-4 text-primary-foreground" />}
+    </div>
+  </div>
+);
+
 const SharePostSheet = ({ open, onOpenChange, postId, currentUserId, onShareComplete }: SharePostSheetProps) => {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -125,12 +164,7 @@ const SharePostSheet = ({ open, onOpenChange, postId, currentUserId, onShareComp
     setSearching(false);
   };
 
-  const getDisplayName = (user: User) => {
-    if (user.first_name) {
-      return `${user.first_name} ${user.last_name || ""}`.trim();
-    }
-    return user.business_name || t('common.user');
-  };
+  // getDisplayName movido a nivel módulo (arriba del archivo).
 
   const toggleUserSelection = (userId: string) => {
     setSelectedUsers(prev => 
@@ -223,31 +257,7 @@ const SharePostSheet = ({ open, onOpenChange, postId, currentUserId, onShareComp
     ? searchResults.filter(user => !favorites.some(f => f.id === user.id))
     : allUsers.filter(user => !favorites.some(f => f.id === user.id));
 
-  const UserItem = ({ user }: { user: User }) => {
-    const isSelected = selectedUsers.includes(user.id);
-    
-    return (
-      <div 
-        className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-xl cursor-pointer transition-colors"
-        onClick={() => toggleUserSelection(user.id)}
-      >
-        <div className="flex items-center gap-3">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={user.profile_image_url} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {getDisplayName(user)[0]}
-            </AvatarFallback>
-          </Avatar>
-          <span className="font-medium">{getDisplayName(user)}</span>
-        </div>
-        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-          isSelected ? 'bg-primary border-primary' : 'border-muted-foreground/30'
-        }`}>
-          {isSelected && <Check className="w-4 h-4 text-primary-foreground" />}
-        </div>
-      </div>
-    );
-  };
+  // UserItem movido a nivel módulo (arriba del archivo).
 
   // Calculate dynamic height based on keyboard state
   const sheetHeight = keyboardOpen ? '50vh' : '85vh';
@@ -328,7 +338,12 @@ const SharePostSheet = ({ open, onOpenChange, postId, currentUserId, onShareComp
                 <p className="text-center text-muted-foreground py-4">{t('common.loading')}</p>
               ) : usersToShow.length > 0 ? (
                 usersToShow.map(user => (
-                  <UserItem key={user.id} user={user} />
+                  <UserItem
+                    key={user.id}
+                    user={user}
+                    isSelected={selectedUsers.includes(user.id)}
+                    onToggle={toggleUserSelection}
+                  />
                 ))
               ) : searchQuery.trim() ? (
                 <p className="text-center text-muted-foreground py-4">{t('search.noUsersFound')}</p>

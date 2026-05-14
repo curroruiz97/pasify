@@ -22,6 +22,227 @@ interface ContentFlag {
   reporter?: any;
 }
 
+// ---------- Helpers + sub-componentes a nivel de módulo ----------
+// (movidos fuera del componente padre para evitar re-creación por render,
+//  lo que destruía estado local del child y disparaba el lint
+//  "nested component definition" de react-doctor).
+
+const REASON_LABELS: Record<string, string> = {
+  spam: "Spam",
+  hate_speech: "Discurso de odio / Discriminación",
+  harassment: "Acoso",
+  violence: "Violencia / Tortura / Abuso",
+  weapons: "Armas / Contenido peligroso",
+  sexual_content: "Contenido sexual / Pornografía",
+  misinformation: "Desinformación / Engaño",
+  harmful_exploitation: "Explotación de eventos",
+  inappropriate: "Inapropiado",
+  auto_moderation: "Moderación automática AI",
+  safe: "Contenido seguro",
+  other: "Otro",
+};
+const getReasonLabel = (reason: string) => REASON_LABELS[reason] ?? reason;
+
+const STATUS_VARIANTS: Record<string, { variant: any; icon: any }> = {
+  pending: { variant: "default", icon: Clock },
+  reviewed: { variant: "secondary", icon: Flag },
+  resolved: { variant: "default", icon: CheckCircle },
+  dismissed: { variant: "outline", icon: XCircle },
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const config = STATUS_VARIANTS[status] ?? STATUS_VARIANTS.pending;
+  const Icon = config.icon;
+  return (
+    <Badge variant={config.variant}>
+      <Icon className="w-3 h-3 mr-1" />
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>
+  );
+};
+
+interface FlagCardProps {
+  flag: ContentFlag;
+  selectedFlag: string | null;
+  notes: string;
+  setSelectedFlag: (id: string | null) => void;
+  setNotes: (s: string) => void;
+  updateFlagStatus: (id: string, status: string) => void;
+  deleteContent: (contentId: string, contentType: string) => void;
+}
+
+const FlagCard = ({
+  flag,
+  selectedFlag,
+  notes,
+  setSelectedFlag,
+  setNotes,
+  updateFlagStatus,
+  deleteContent,
+}: FlagCardProps) => {
+  const isAutoModerated = flag.id.startsWith("auto-");
+  const reporterName = isAutoModerated
+    ? "🤖 Sistema de Moderación AI"
+    : flag.reporter?.first_name
+    ? `${flag.reporter.first_name} ${flag.reporter.last_name || ""}`.trim()
+    : flag.reporter?.business_name || "Usuario desconocido";
+
+  const contentAuthor = flag.content?.public_profiles?.first_name
+    ? `${flag.content.public_profiles.first_name} ${flag.content.public_profiles.last_name || ""}`.trim()
+    : flag.content?.public_profiles?.business_name ||
+      (flag.content?.user_id ? `Usuario ${flag.content.user_id.slice(0, 8)}` : "Usuario desconocido");
+
+  return (
+    <Card className={`mb-4 ${isAutoModerated ? "border-l-4 border-l-orange-500" : ""}`}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            {isAutoModerated && <span className="text-orange-500">🤖</span>}
+            {flag.content_type.toUpperCase()} - {getReasonLabel(flag.reason)}
+          </CardTitle>
+          <StatusBadge status={flag.status} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          <div
+            className={`p-3 rounded-lg ${
+              isAutoModerated ? "bg-orange-50 border border-orange-200" : "bg-muted"
+            }`}
+          >
+            <p className="text-sm font-medium mb-1">
+              {isAutoModerated ? "Detectado por:" : "Reportado por:"}
+            </p>
+            <p className="text-sm">{reporterName}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {new Date(flag.created_at).toLocaleString("es-ES")}
+            </p>
+          </div>
+
+          {flag.description && (
+            <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+              <p className="text-sm font-medium mb-1">
+                {isAutoModerated ? "Razón AI:" : "Motivo:"}
+              </p>
+              <p className="text-sm">{flag.description}</p>
+            </div>
+          )}
+
+          {flag.content && (
+            <div className="bg-accent/10 p-3 rounded-lg border">
+              <p className="text-sm font-medium mb-2">Contenido detectado:</p>
+              <p className="text-xs text-muted-foreground mb-2">Autor: {contentAuthor}</p>
+              {flag.content_type === "post" || flag.content_type === "video" ? (
+                <>
+                  {flag.content.content && <p className="text-sm mb-2">{flag.content.content}</p>}
+                  {flag.content.image_url && (
+                    <img
+                      src={flag.content.image_url}
+                      alt="Content"
+                      className="w-full max-h-48 object-cover rounded mt-2"
+                    />
+                  )}
+                  {flag.content.video_url && (
+                    <video
+                      src={flag.content.video_url}
+                      controls
+                      className="w-full max-h-48 rounded mt-2"
+                    />
+                  )}
+                </>
+              ) : flag.content_type === "message" ? (
+                <p className="text-sm">{flag.content.content}</p>
+              ) : flag.content_type === "comment" ? (
+                <p className="text-sm">{flag.content.content}</p>
+              ) : null}
+            </div>
+          )}
+
+          {!flag.content && (
+            <div className="bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+              <p className="text-sm text-destructive">
+                El contenido ha sido eliminado o ya no está disponible
+              </p>
+            </div>
+          )}
+
+          {flag.moderation_notes && (
+            <div>
+              <p className="text-sm font-medium mb-1">Notas de moderación:</p>
+              <p className="text-sm text-muted-foreground">{flag.moderation_notes}</p>
+            </div>
+          )}
+
+          {selectedFlag === flag.id ? (
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Notas de moderación..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" onClick={() => updateFlagStatus(flag.id, "resolved")}>
+                  Resolver
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => updateFlagStatus(flag.id, "reviewed")}
+                >
+                  Revisar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateFlagStatus(flag.id, "dismissed")}
+                >
+                  Descartar
+                </Button>
+                {flag.content && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "¿Estás seguro de que quieres eliminar este contenido? Esta acción no se puede deshacer."
+                        )
+                      ) {
+                        deleteContent(flag.content_id, flag.content_type);
+                      }
+                    }}
+                  >
+                    Eliminar Contenido
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectedFlag(null);
+                    setNotes("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            flag.status === "pending" && (
+              <Button size="sm" variant="outline" onClick={() => setSelectedFlag(flag.id)}>
+                Moderar
+              </Button>
+            )
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// ---------- Componente principal ----------
+
 const ModerationPanel = () => {
   const [flags, setFlags] = useState<ContentFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -310,198 +531,8 @@ const ModerationPanel = () => {
     }
   };
 
-  const getReasonLabel = (reason: string) => {
-    const labels: Record<string, string> = {
-      spam: "Spam",
-      hate_speech: "Discurso de odio / Discriminación",
-      harassment: "Acoso",
-      violence: "Violencia / Tortura / Abuso",
-      weapons: "Armas / Contenido peligroso",
-      sexual_content: "Contenido sexual / Pornografía",
-      misinformation: "Desinformación / Engaño",
-      harmful_exploitation: "Explotación de eventos",
-      inappropriate: "Inapropiado",
-      auto_moderation: "Moderación automática AI",
-      safe: "Contenido seguro",
-      other: "Otro",
-    };
-    return labels[reason] || reason;
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; icon: any }> = {
-      pending: { variant: "default", icon: Clock },
-      reviewed: { variant: "secondary", icon: Flag },
-      resolved: { variant: "default", icon: CheckCircle },
-      dismissed: { variant: "outline", icon: XCircle },
-    };
-
-    const config = variants[status] || variants.pending;
-    const Icon = config.icon;
-
-    return (
-      <Badge variant={config.variant}>
-        <Icon className="w-3 h-3 mr-1" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
-
   const filterByStatus = (status: string) => {
     return flags.filter((flag) => flag.status === status);
-  };
-
-  const FlagCard = ({ flag }: { flag: ContentFlag }) => {
-    const isAutoModerated = flag.id.startsWith("auto-");
-    const reporterName = isAutoModerated 
-      ? "🤖 Sistema de Moderación AI"
-      : flag.reporter?.first_name 
-        ? `${flag.reporter.first_name} ${flag.reporter.last_name || ""}`.trim()
-        : flag.reporter?.business_name || "Usuario desconocido";
-
-    const contentAuthor = flag.content?.public_profiles?.first_name
-      ? `${flag.content.public_profiles.first_name} ${flag.content.public_profiles.last_name || ""}`.trim()
-      : flag.content?.public_profiles?.business_name || 
-        (flag.content?.user_id ? `Usuario ${flag.content.user_id.slice(0, 8)}` : "Usuario desconocido");
-
-    return (
-      <Card key={flag.id} className={`mb-4 ${isAutoModerated ? 'border-l-4 border-l-orange-500' : ''}`}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              {isAutoModerated && <span className="text-orange-500">🤖</span>}
-              {flag.content_type.toUpperCase()} - {getReasonLabel(flag.reason)}
-            </CardTitle>
-            {getStatusBadge(flag.status)}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className={`p-3 rounded-lg ${isAutoModerated ? 'bg-orange-50 border border-orange-200' : 'bg-muted'}`}>
-              <p className="text-sm font-medium mb-1">
-                {isAutoModerated ? "Detectado por:" : "Reportado por:"}
-              </p>
-              <p className="text-sm">{reporterName}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {new Date(flag.created_at).toLocaleString("es-ES")}
-              </p>
-            </div>
-
-            {flag.description && (
-              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
-                <p className="text-sm font-medium mb-1">
-                  {isAutoModerated ? "Razón AI:" : "Motivo:"}
-                </p>
-                <p className="text-sm">{flag.description}</p>
-              </div>
-            )}
-
-            {flag.content && (
-              <div className="bg-accent/10 p-3 rounded-lg border">
-                <p className="text-sm font-medium mb-2">Contenido detectado:</p>
-                <p className="text-xs text-muted-foreground mb-2">Autor: {contentAuthor}</p>
-                {flag.content_type === "post" || flag.content_type === "video" ? (
-                  <>
-                    {flag.content.content && (
-                      <p className="text-sm mb-2">{flag.content.content}</p>
-                    )}
-                    {flag.content.image_url && (
-                      <img src={flag.content.image_url} alt="Content" className="w-full max-h-48 object-cover rounded mt-2" />
-                    )}
-                    {flag.content.video_url && (
-                      <video src={flag.content.video_url} controls className="w-full max-h-48 rounded mt-2" />
-                    )}
-                  </>
-                ) : flag.content_type === "message" ? (
-                  <p className="text-sm">{flag.content.content}</p>
-                ) : flag.content_type === "comment" ? (
-                  <p className="text-sm">{flag.content.content}</p>
-                ) : null}
-              </div>
-            )}
-
-            {!flag.content && (
-              <div className="bg-destructive/10 p-3 rounded-lg border border-destructive/20">
-                <p className="text-sm text-destructive">El contenido ha sido eliminado o ya no está disponible</p>
-              </div>
-            )}
-
-            {flag.moderation_notes && (
-              <div>
-                <p className="text-sm font-medium mb-1">Notas de moderación:</p>
-                <p className="text-sm text-muted-foreground">{flag.moderation_notes}</p>
-              </div>
-            )}
-
-          {selectedFlag === flag.id ? (
-            <div className="space-y-2">
-              <Textarea
-                placeholder="Notas de moderación..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-              />
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  onClick={() => updateFlagStatus(flag.id, "resolved")}
-                >
-                  Resolver
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => updateFlagStatus(flag.id, "reviewed")}
-                >
-                  Revisar
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => updateFlagStatus(flag.id, "dismissed")}
-                >
-                  Descartar
-                </Button>
-                {flag.content && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => {
-                      if (confirm("¿Estás seguro de que quieres eliminar este contenido? Esta acción no se puede deshacer.")) {
-                        deleteContent(flag.content_id, flag.content_type);
-                      }
-                    }}
-                  >
-                    Eliminar Contenido
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSelectedFlag(null);
-                    setNotes("");
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            flag.status === "pending" && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setSelectedFlag(flag.id)}
-              >
-                Moderar
-              </Button>
-            )
-          )}
-        </div>
-      </CardContent>
-    </Card>
-    );
   };
 
   if (loading) {
@@ -548,7 +579,16 @@ const ModerationPanel = () => {
               </CardContent>
             </Card>
           ) : (
-            filterByStatus("pending").map((flag) => <FlagCard key={flag.id} flag={flag} />)
+            filterByStatus("pending").map((flag) => <FlagCard
+              key={flag.id}
+              flag={flag}
+              selectedFlag={selectedFlag}
+              notes={notes}
+              setSelectedFlag={setSelectedFlag}
+              setNotes={setNotes}
+              updateFlagStatus={updateFlagStatus}
+              deleteContent={deleteContent}
+            />)
           )}
         </TabsContent>
 
@@ -560,7 +600,16 @@ const ModerationPanel = () => {
               </CardContent>
             </Card>
           ) : (
-            filterByStatus("reviewed").map((flag) => <FlagCard key={flag.id} flag={flag} />)
+            filterByStatus("reviewed").map((flag) => <FlagCard
+              key={flag.id}
+              flag={flag}
+              selectedFlag={selectedFlag}
+              notes={notes}
+              setSelectedFlag={setSelectedFlag}
+              setNotes={setNotes}
+              updateFlagStatus={updateFlagStatus}
+              deleteContent={deleteContent}
+            />)
           )}
         </TabsContent>
 
@@ -572,7 +621,16 @@ const ModerationPanel = () => {
               </CardContent>
             </Card>
           ) : (
-            filterByStatus("resolved").map((flag) => <FlagCard key={flag.id} flag={flag} />)
+            filterByStatus("resolved").map((flag) => <FlagCard
+              key={flag.id}
+              flag={flag}
+              selectedFlag={selectedFlag}
+              notes={notes}
+              setSelectedFlag={setSelectedFlag}
+              setNotes={setNotes}
+              updateFlagStatus={updateFlagStatus}
+              deleteContent={deleteContent}
+            />)
           )}
         </TabsContent>
 
@@ -584,7 +642,16 @@ const ModerationPanel = () => {
               </CardContent>
             </Card>
           ) : (
-            filterByStatus("dismissed").map((flag) => <FlagCard key={flag.id} flag={flag} />)
+            filterByStatus("dismissed").map((flag) => <FlagCard
+              key={flag.id}
+              flag={flag}
+              selectedFlag={selectedFlag}
+              notes={notes}
+              setSelectedFlag={setSelectedFlag}
+              setNotes={setNotes}
+              updateFlagStatus={updateFlagStatus}
+              deleteContent={deleteContent}
+            />)
           )}
         </TabsContent>
       </Tabs>

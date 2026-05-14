@@ -47,6 +47,46 @@ interface EventDetail {
   } | null;
 }
 
+// PosterBlock movido fuera del componente padre (antes era nested,
+// flageado por react-doctor). Pasamos event + rounded como props.
+const PosterBlock = ({
+  event,
+  rounded = false,
+}: {
+  event: EventDetail;
+  rounded?: boolean;
+}) => (
+  <div
+    className={`relative aspect-[4/5] w-full overflow-hidden bg-black ${
+      rounded ? "rounded-3xl border border-border/40 shadow-lg" : ""
+    }`}
+  >
+    {event.media_type === "video" && event.video_url ? (
+      <video
+        src={event.video_url}
+        className="h-full w-full object-contain"
+        autoPlay
+        muted
+        playsInline
+        loop
+      />
+    ) : event.image_url ? (
+      <img
+        src={optimizedImage(event.image_url, "feed")}
+        alt={event.title}
+        className="h-full w-full object-contain"
+      />
+    ) : (
+      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/30 to-primary/5">
+        <CalendarIcon className="h-20 w-20 text-primary/40" />
+      </div>
+    )}
+    {!rounded && (
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent" />
+    )}
+  </div>
+);
+
 const CalendarEventDetail = () => {
   const { id } = useParams<{ city: string; id: string }>();
   const navigate = useNavigate();
@@ -239,39 +279,9 @@ const CalendarEventDetail = () => {
     </>
   );
 
-  // Reusable poster block — black canvas + object-contain so the entire
-  // flyer is always visible, no matter the source aspect ratio.
-  const Poster = ({ rounded = false }: { rounded?: boolean }) => (
-    <div
-      className={`relative aspect-[4/5] w-full overflow-hidden bg-black ${
-        rounded ? "rounded-3xl border border-border/40 shadow-lg" : ""
-      }`}
-    >
-      {event.media_type === "video" && event.video_url ? (
-        <video
-          src={event.video_url}
-          className="h-full w-full object-contain"
-          autoPlay
-          muted
-          playsInline
-          loop
-        />
-      ) : event.image_url ? (
-        <img
-          src={optimizedImage(event.image_url, "feed")}
-          alt={event.title}
-          className="h-full w-full object-contain"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/30 to-primary/5">
-          <CalendarIcon className="h-20 w-20 text-primary/40" />
-        </div>
-      )}
-      {!rounded && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent" />
-      )}
-    </div>
-  );
+  // Poster ahora vive a nivel módulo (PosterBlock) para evitar la
+  // re-creación del componente por cada render del padre. Aquí lo usamos
+  // pasándole event + rounded explícitos.
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -305,7 +315,7 @@ const CalendarEventDetail = () => {
 
       {/* Mobile hero — full bleed */}
       <div className="lg:hidden">
-        <Poster />
+        <PosterBlock event={event} />
       </div>
 
       {/* Content — single column on mobile, 2-up on desktop */}
@@ -314,7 +324,7 @@ const CalendarEventDetail = () => {
           {/* Desktop poster column (sticky so it stays in view while scrolling info) */}
           <div className="hidden lg:block">
             <div className="sticky top-24">
-              <Poster rounded />
+              <PosterBlock event={event} rounded />
             </div>
           </div>
 
