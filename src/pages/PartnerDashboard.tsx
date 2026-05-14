@@ -446,6 +446,45 @@ const PartnerDashboard = () => {
         />
 
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
+          {/* Banner de error de contexto: si la RPC partner_onboarding_status
+              falla (mig no aplicada, RPC revocada, etc.) NO fingimos un
+              dashboard funcional — pedimos al usuario que reintente. */}
+          {partnerCtx.error && (
+            <div
+              className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
+              style={{
+                background: "rgba(232,84,42,0.08)",
+                borderColor: "rgba(232,84,42,0.32)",
+              }}
+            >
+              <div
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+                style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+              >
+                <Radio className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground">
+                  No pudimos cargar tu configuración
+                </div>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                  Detalles técnicos: <code className="font-mono text-[11px] text-orange-400">{partnerCtx.error}</code>
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => void partnerCtx.refresh()}
+                disabled={partnerCtx.refreshing}
+                className="shrink-0"
+              >
+                {partnerCtx.refreshing ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                Reintentar
+              </Button>
+            </div>
+          )}
+
           {/* MÉTRICAS — Reports & BI online */}
           {section === "metricas" && (
             <div>

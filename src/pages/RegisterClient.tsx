@@ -83,11 +83,17 @@ const RegisterClient = () => {
           .eq("id", authData.user.id);
         if (profileError) throw profileError;
 
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({ user_id: authData.user.id, role: "client" })
-          .select();
-        if (roleError) throw roleError;
+        // Reclamar rol client vía RPC canónica `claim_initial_role`
+        // (mig 20260513120000). La RPC es atómica y bloquea acumulación
+        // de roles; reemplaza el INSERT directo en user_roles que
+        // dependía de RLS amplia. Errores "already has a role" se tratan
+        // como no-fatales (igual que en RegisterPartner.tsx).
+        const { error: roleError } = await supabase.rpc("claim_initial_role", {
+          _role: "client",
+        });
+        if (roleError && !String(roleError.message).includes("already has a role")) {
+          throw roleError;
+        }
 
         let autoApproved = false;
         try {

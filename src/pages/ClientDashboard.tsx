@@ -88,34 +88,11 @@ type Partner = {
   cover_image_url: string | null;
 };
 
-// Locali demo (mostrati finché nel DB non ci sono locali approvati reali).
-// Foto Unsplash con ID verificati funzionanti.
-const demoEntry = (
-  id: string,
-  business_name: string,
-  business_category: string,
-  city: string,
-  unsplashId: string
-): Partner => ({
-  id,
-  business_name,
-  business_category,
-  city,
-  cover_image_url: `https://images.unsplash.com/${unsplashId}?w=800&h=500&fit=crop&auto=format`,
-  avatar_url: `https://images.unsplash.com/${unsplashId}?w=200&h=200&fit=crop&auto=format`,
-});
-
-const DEMO_PARTNERS: Partner[] = [
-  demoEntry("demo-1", "Pacha Ibiza", "discoteca", "Ibiza", "photo-1492684223066-81342ee5ff30"),
-  demoEntry("demo-2", "Razzmatazz", "club", "Barcelona", "photo-1429962714451-bb934ecdc4ec"),
-  demoEntry("demo-3", "Teatro Kapital", "discoteca", "Madrid", "photo-1470229722913-7c0e2dbbafd3"),
-  demoEntry("demo-4", "Sala Apolo", "sala", "Barcelona", "photo-1540039155733-5bb30b53aa14"),
-  demoEntry("demo-5", "Beach Club Estrella", "beachclub", "Málaga", "photo-1507525428034-b723cf961d3e"),
-  demoEntry("demo-6", "Opium Mar", "rooftop", "Barcelona", "photo-1517457373958-b7bdd4587205"),
-  demoEntry("demo-7", "Café Berlín", "bar", "Madrid", "photo-1514933651103-005eec06c04b"),
-  demoEntry("demo-8", "La Riviera", "sala", "Madrid", "photo-1572276596237-5db2c3e16c5d"),
-  demoEntry("demo-9", "Medusa Festival", "festival", "Valencia", "photo-1459749411175-04bf5292ceea"),
-];
+// Nota: DEMO_PARTNERS eliminados (mayo 2026). Antes mostrábamos Pacha,
+// Razzmatazz y otros locales famosos cuando el DB estaba vacío, pero eso
+// engañaba al usuario en producción real (no podía comprar tickets de
+// esos locales). Ahora si no hay partners aprobados se muestra un empty
+// state explícito vía <PasifyEmptyState>.
 
 const CATEGORIES = [
   { id: "all", label: "Todos", Icon: PartyPopper },
@@ -206,8 +183,9 @@ const ClientDashboard = () => {
         .not("business_name", "is", null)
         .order("business_name");
       const real = (data ?? []) as Partner[];
-      // Mostro i demo solo se il DB è vuoto (così appena pubblichi locali reali sostituiscono i fake)
-      setPartners(real.length > 0 ? real : DEMO_PARTNERS);
+      // Sin fallback a demo: si no hay partners aprobados, mostramos
+      // empty state explícito (PasifyEmptyState) en la UI más abajo.
+      setPartners(real);
       setLoading(false);
     })();
   }, []);

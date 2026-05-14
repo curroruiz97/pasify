@@ -63,79 +63,11 @@ const CATEGORY_LABEL: Record<string, string> = {
   otro: "Otro",
 };
 
-// === DEMO data per partner di esempio (id "demo-*") ===
-const DEMO_PARTNERS: Record<string, Partner> = {
-  "demo-1": { id: "demo-1", business_name: "Pacha Ibiza", business_category: "discoteca", business_description: "El club más icónico de Ibiza. House, techno y la mejor música electrónica desde 1973.", city: "Ibiza", avatar_url: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200&h=600&fit=crop&auto=format" },
-  "demo-2": { id: "demo-2", business_name: "Razzmatazz", business_category: "club", business_description: "5 salas, 1 noche. La sala de conciertos más versátil de Barcelona.", city: "Barcelona", avatar_url: "https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=1200&h=600&fit=crop&auto=format" },
-  "demo-3": { id: "demo-3", business_name: "Teatro Kapital", business_category: "discoteca", business_description: "7 plantas, 7 ambientes. La macrodiscoteca de referencia de Madrid.", city: "Madrid", avatar_url: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&h=600&fit=crop&auto=format" },
-  "demo-4": { id: "demo-4", business_name: "Sala Apolo", business_category: "sala", business_description: "Templo de la música indie y electrónica desde 1943.", city: "Barcelona", avatar_url: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=1200&h=600&fit=crop&auto=format" },
-  "demo-5": { id: "demo-5", business_name: "Beach Club Estrella", business_category: "beachclub", business_description: "Pool, beats y atardeceres frente al Mediterráneo.", city: "Málaga", avatar_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&h=600&fit=crop&auto=format" },
-  "demo-6": { id: "demo-6", business_name: "Opium Mar", business_category: "rooftop", business_description: "El rooftop más glam de Barceloneta. Música, cocktails y vistas al mar.", city: "Barcelona", avatar_url: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1200&h=600&fit=crop&auto=format" },
-  "demo-7": { id: "demo-7", business_name: "Café Berlín", business_category: "bar", business_description: "Jazz, soul y funk en directo en pleno corazón de Madrid.", city: "Madrid", avatar_url: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1200&h=600&fit=crop&auto=format" },
-  "demo-8": { id: "demo-8", business_name: "La Riviera", business_category: "sala", business_description: "Conciertos en directo de los artistas más grandes a orillas del Manzanares.", city: "Madrid", avatar_url: "https://images.unsplash.com/photo-1572276596237-5db2c3e16c5d?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1572276596237-5db2c3e16c5d?w=1200&h=600&fit=crop&auto=format" },
-  "demo-9": { id: "demo-9", business_name: "Medusa Festival", business_category: "festival", business_description: "El festival electrónico más grande del sur de Europa.", city: "Valencia", avatar_url: "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=200&h=200&fit=crop&auto=format", cover_image_url: "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1200&h=600&fit=crop&auto=format" },
-};
-
-const demoEventsFor = (partner: Partner): EventRow[] => {
-  const now = new Date();
-  const base = (offsetDays: number, hour = 23) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() + offsetDays);
-    d.setHours(hour, 0, 0, 0);
-    return d.toISOString();
-  };
-  const city = partner.city ?? "España";
-  return [
-    {
-      id: `${partner.id}-e1`,
-      title: "Saturday Night · Resident DJs",
-      description: "Sesión con los residentes del club. Doors 23:30.",
-      date_start: base(3, 23),
-      city,
-      price_cents: 1500,
-      capacity: 800,
-      tickets_sold: 234,
-      image_url: partner.cover_image_url,
-      status: "published",
-    },
-    {
-      id: `${partner.id}-e2`,
-      title: "Friday Vibes · Special Guest",
-      description: "Guest internacional. Lista hasta las 01:30.",
-      date_start: base(9, 23),
-      city,
-      price_cents: 2000,
-      capacity: 1200,
-      tickets_sold: 521,
-      image_url: partner.cover_image_url,
-      status: "published",
-    },
-    {
-      id: `${partner.id}-e3`,
-      title: "Halloween Edition",
-      description: "Disfrázate y entra gratis antes de medianoche.",
-      date_start: base(17, 22),
-      city,
-      price_cents: 1200,
-      capacity: 1500,
-      tickets_sold: 122,
-      image_url: partner.cover_image_url,
-      status: "published",
-    },
-    {
-      id: `${partner.id}-e4`,
-      title: "Closing Party",
-      description: "Cierre de temporada con line-up sorpresa.",
-      date_start: base(28, 23),
-      city,
-      price_cents: 2500,
-      capacity: 1000,
-      tickets_sold: 800,
-      image_url: partner.cover_image_url,
-      status: "published",
-    },
-  ];
-};
+// Nota: DEMO_PARTNERS y demoEventsFor eliminados (mayo 2026, hardening).
+// Antes se hardcoded Pacha/Razzmatazz/etc. con id "demo-*". En producción
+// real eso engañaba al usuario (mostraba locales que no existen). Si el
+// id no se encuentra en `profiles`, ahora la ruta /p/:id muestra empty
+// state explícito o redirige a /client-dashboard.
 
 const PublicPartnerPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -155,17 +87,8 @@ const PublicPartnerPage = () => {
       if (!id) return;
       setLoading(true);
 
-      // Demo partner: usa dati hardcoded
-      if (id.startsWith("demo-")) {
-        const demo = DEMO_PARTNERS[id];
-        if (demo) {
-          setPartner(demo);
-          setEvents(demoEventsFor(demo));
-        }
-        setLoading(false);
-        return;
-      }
-
+      // Demo partners eliminados — si el id es legacy "demo-*" caemos al
+      // empty state (partner=null tras el query).
       const { data: p } = await supabase
         .from("profiles")
         .select("id, business_name, business_category, business_description, city, avatar_url, cover_image_url")

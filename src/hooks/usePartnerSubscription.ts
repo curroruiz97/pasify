@@ -43,7 +43,10 @@ export interface PartnerSubscriptionState {
    * true si el partner puede acceder a la dashboard:
    *   - status 'active'
    *   - status 'trialing' y trial_ends_at futuro
-   *   - admin grant vigente (admin_granted_until > now() o null = ilimitado)
+   *   - admin grant vigente (admin_granted_until > now()).
+   *     `admin_granted_until = null` significa "sin grant" (NO ilimitado).
+   *     Si en el futuro queremos grants permanentes, añadir una columna
+   *     explícita `admin_granted_indefinite BOOLEAN` y combinarla aquí.
    */
   hasAccess: boolean;
   /** Días residuales (techo). null si no aplica. */

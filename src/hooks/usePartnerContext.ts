@@ -95,6 +95,13 @@ interface UsePartnerContextResult {
   venue: PartnerVenue | null;
   /** Todos los venues activos de la organización (multi-local). */
   venues: PartnerVenue[];
+  /**
+   * Mensaje de error si la RPC `partner_onboarding_status` falló. Cuando
+   * NO es null, los consumidores DEBEN mostrar un banner de error en vez
+   * de fingir éxito (status="completed" en silencio). Esto evita que un
+   * fallo de RPC en producción se enmascare como dashboard funcional.
+   */
+  error: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -118,6 +125,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
   const [brand, setBrand] = useState<PartnerBrand | null>(null);
   const [venue, setVenue] = useState<PartnerVenue | null>(null);
   const [venues, setVenues] = useState<PartnerVenue[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -138,29 +146,23 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
           error: { message: string } | null;
         }>;
       };
-      const { data, error } = await rpcAny.rpc("partner_onboarding_status");
-      if (error) {
-        // Si la RPC falla (migracion no aplicada), preferimos NO abrir
-        // el wizard agresivamente. Marcamos como completed para no
-        // molestar y dejamos el resto vacio.
-        console.warn("[usePartnerContext] RPC error:", error.message);
-        setStatus({
-          userId,
-          hasOrg: false,
-          hasVenue: false,
-          hasEvent: false,
-          status: "completed",
-          completedAt: null,
-          primaryOrgId: null,
-          primaryVenueId: null,
-          shouldShowWizard: false,
-        });
+      const { data, error: rpcError } = await rpcAny.rpc("partner_onboarding_status");
+      if (rpcError) {
+        // No camuflamos el fallo como "completed silencioso" — eso
+        // ocultaba problemas reales en producción (mig no aplicada,
+        // RPC revocada, etc.). Devolvemos `error` explícito y el
+        // consumidor (PartnerDashboard) muestra un banner de retry.
+        console.error("[usePartnerContext] RPC error:", rpcError.message);
+        setError(rpcError.message);
+        setStatus(null);
         setOrg(null);
         setVenue(null);
         setVenues([]);
         setBrand(null);
         return;
       }
+      // Limpiamos error si la RPC respondió OK tras un retry.
+      setError(null);
 
       const row: RpcRow | null = Array.isArray(data)
         ? data[0] ?? null
@@ -249,7 +251,7 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
     void load();
   }, [load]);
 
-  return { loading, refreshing, status, org, brand, venue, venues, refresh: load };
+  return { loading, refreshing, status, org, brand, venue, venues, error, refresh: load };
 };
 
 export default usePartnerContext;

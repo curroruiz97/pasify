@@ -134,8 +134,11 @@ const initPushNotifications = async () => {
     // Listener: foreground notification (la app está abierta)
     await PushNotifications.addListener("pushNotificationReceived", (notif) => {
       console.info("[FCM] foreground notification", notif);
-      // Mostrar como toast in-app vía CustomEvent que App.tsx escucha
-      window.dispatchEvent(new CustomEvent("pasify:push-received", { detail: notif }));
+      // Mostrar como toast in-app vía CustomEvent que App.tsx escucha.
+      // Nombre canónico: `foreground-push` (App.tsx:303 listener). Mantener
+      // el nombre coherente — antes despachábamos `pasify:push-received`
+      // y NO había listener para él (bug confirmado en plan de hardening).
+      window.dispatchEvent(new CustomEvent("foreground-push", { detail: notif }));
     });
     // Listener: notification tapped (open app desde notification)
     await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
