@@ -12,8 +12,13 @@ export interface TenantContext {
 }
 
 /**
- * useOrganization · resuelve el tenant activo del partner (org + brand + venue + rol).
- * Usa la RPC `tenant_for_user`. Realtime: si cambia last_active_venue_id, refresca.
+ * useOrganization · resuelve el tenant activo del partner
+ * (org + brand + venue + rol).
+ *
+ * Usa la RPC `tenant_for_user`. Se refresca en cambios de auth state
+ * (login/logout) — NO escucha realtime sobre `last_active_venue_id`.
+ * Para forzar refresh tras `switchVenue` u otra acción que mueva el
+ * last_active_venue_id, usa el `refetch` que devuelve este hook.
  */
 export const useOrganization = () => {
   const [tenant, setTenant] = useState<TenantContext | null>(null);

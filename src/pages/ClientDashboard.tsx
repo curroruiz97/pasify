@@ -132,6 +132,14 @@ const ClientDashboard = () => {
   const [favTab, setFavTab] = useState<"list" | "calendar">("list");
   const [tickets, setTickets] = useState<Array<Ticket & { event: TicketEventInfo | null }>>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  /**
+   * Error explícito del loader de tickets. NO usamos catch silencioso a
+   * empty array porque eso enmascara fallos de RLS / network / queries
+   * malformadas como "el usuario no tiene tickets" — exactamente el
+   * antipatrón que P1.2 del plan de hardening corrige en usePartnerContext.
+   * Si esto es NOT null, el wallet renderiza banner con Reintentar.
+   */
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
   const [openTicket, setOpenTicket] = useState<{ ticket: Ticket; event: TicketEventInfo | null } | null>(null);
   const [favMonthCursor, setFavMonthCursor] = useState<Date>(new Date());
   const [favSelectedDay, setFavSelectedDay] = useState<Date | null>(null);
@@ -180,10 +188,17 @@ const ClientDashboard = () => {
       // el filtro account_status='approved' AND business_name NOT NULL.
       // Cuando migremos `profiles.business_*` → `organizations` solo
       // cambia la definición de la view.
-      const { data } = await supabase
+      const { data, error: partnersErr } = await supabase
         .from("public_partners")
         .select("id, business_name, business_category, city, avatar_url, cover_image_url")
         .order("business_name");
+      if (partnersErr) {
+        // Surface el error en consola (Sentry-friendly). El empty state
+        // del listado abajo se sigue mostrando, pero ahora QA puede ver
+        // por qué — antes el catch silencioso lo enmascaraba como
+        // "no hay locales aprobados" sin distinguir de "RLS rompió".
+        console.error("[ClientDashboard] public_partners query failed", partnersErr);
+      }
       const real = (data ?? []) as Partner[];
       // Sin fallback a demo: si no hay partners aprobados, mostramos
       // empty state explícito (PasifyEmptyState) en la UI más abajo.
@@ -203,6 +218,7 @@ const ClientDashboard = () => {
   const loadTickets = useCallback(async () => {
     if (!userId) return;
     setTicketsLoading(true);
+    setTicketsError(null);
     try {
       const { data: ticks, error: tixErr } = await supabase
         .from("tickets")
@@ -214,8 +230,9 @@ const ClientDashboard = () => {
         .order("paid_at", { ascending: false });
 
       if (tixErr) {
-         
         console.error("[ClientDashboard] tickets query failed", tixErr);
+        // Surface el error: banner Reintentar en lugar de empty silencioso.
+        setTicketsError(tixErr.message);
         setTickets([]);
         setTicketsLoading(false);
         return;
@@ -288,8 +305,10 @@ const ClientDashboard = () => {
         }))
       );
     } catch (err: unknown) {
-       
+      const msg = err instanceof Error ? err.message : "Error inesperado";
       console.error("[ClientDashboard] loadTickets crashed", err);
+      // No fingimos éxito: banner explícito en el wallet con Reintentar.
+      setTicketsError(msg);
       setTickets([]);
     } finally {
       setTicketsLoading(false);
@@ -733,6 +752,41 @@ const ClientDashboard = () => {
             <p className="mb-6 text-sm text-muted-foreground">
               Tus tickets QR aparecerán aquí después de la compra. Pulsa cualquiera para mostrar el código en la puerta.
             </p>
+
+            {/* Banner error explícito si falló el loader (RLS, network, etc.).
+                No camufla a "wallet vacío" — el usuario sabe que hubo un fallo
+                y puede reintentar. Patrón paralelo al de PartnerDashboard. */}
+            {ticketsError && !ticketsLoading && (
+              <div
+                className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
+                style={{
+                  background: "rgba(232,84,42,0.08)",
+                  borderColor: "rgba(232,84,42,0.32)",
+                }}
+              >
+                <div
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+                  style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+                >
+                  <Ticket className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-foreground">
+                    No pudimos cargar tu wallet
+                  </div>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                    Detalles: <code className="font-mono text-[11px] text-orange-400">{ticketsError}</code>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadTickets()}
+                  className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-primary/40"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
 
             {ticketsLoading ? (
               <PasifyEmptyState
