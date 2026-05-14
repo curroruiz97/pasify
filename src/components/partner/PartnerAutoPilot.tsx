@@ -30,6 +30,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -303,18 +304,24 @@ export const PartnerAutoPilot = () => {
               )}
             </div>
             <div>
-              <div
-                className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-                style={{ ...mono, letterSpacing: "0.22em" }}
-              >
-                <Sparkles className="h-3 w-3" />
-                AutoPilot · Fase 6
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+                  style={{ ...mono, letterSpacing: "0.22em" }}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  AutoPilot · Vista previa
+                </span>
+                <BetaBadge
+                  label="Beta · Agente en desarrollo"
+                  reason="El agente autónomo Pasify está en construcción. Las acciones y políticas mostradas aquí son ejemplos del flujo objetivo. Las decisiones reales (pricing, marketing, refunds) se ejecutan hoy solo desde las pantallas dedicadas de cada feature."
+                />
               </div>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
                 Tu local funciona <span style={serif} className="text-orange-500">solo</span>.
               </h2>
               <p className="mt-1 max-w-[60ch] text-sm text-muted-foreground">
-                Pasify pilota pricing, marketing, soporte y reembolsos dentro de las políticas que tú defines. Tú firmas las decisiones grandes; el agente ejecuta las pequeñas.
+                Pasify pilotará pricing, marketing, soporte y reembolsos dentro de las políticas que tú defines. Tú firmas las decisiones grandes; el agente ejecuta las pequeñas. <span className="text-orange-400">Esta vista es un preview del producto final.</span>
               </p>
               <div
                 className="mt-3 inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground"

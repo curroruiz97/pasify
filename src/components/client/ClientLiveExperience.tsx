@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -159,21 +160,27 @@ const ActivateBanner = ({ event, onActivate }: { event: LiveEvent; onActivate: (
 
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div
-            className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-            style={{ ...mono, letterSpacing: "0.22em" }}
-          >
-            <span className="relative inline-flex h-2 w-2">
-              <span
-                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-                style={{ background: "#FF7A4D" }}
-              />
-              <span
-                className="relative inline-flex h-2 w-2 rounded-full"
-                style={{ background: "#FF7A4D" }}
-              />
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+              style={{ ...mono, letterSpacing: "0.22em" }}
+            >
+              <span className="relative inline-flex h-2 w-2">
+                <span
+                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                  style={{ background: "#FF7A4D" }}
+                />
+                <span
+                  className="relative inline-flex h-2 w-2 rounded-full"
+                  style={{ background: "#FF7A4D" }}
+                />
+              </span>
+              Esta noche · Tienes entrada
             </span>
-            Esta noche · Tienes entrada
+            <BetaBadge
+              label="Vista previa"
+              reason="Modo evento (line-up vivo, mapa interior, cashless NFC, muro de fotos, NPS) se activa cuando integremos geolocalización del local + push notifications de check-in. Los datos mostrados son ejemplos del producto final."
+            />
           </div>
           <h2 className="text-3xl font-semibold leading-tight tracking-tight text-foreground md:text-4xl">
             Vive <span style={serif} className="text-orange-500">{event.venue}</span> esta noche

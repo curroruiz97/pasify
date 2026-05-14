@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -147,21 +148,16 @@ export const PartnerDoorVision = () => {
               <ScanFace className="h-6 w-6" />
             </div>
             <div>
-              <div
-                className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase"
-                style={{ ...mono, letterSpacing: "0.22em", color: "#4DB87A" }}
-              >
-                <span className="relative inline-flex h-1.5 w-1.5">
-                  <span
-                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-                    style={{ background: "#4DB87A" }}
-                  />
-                  <span
-                    className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                    style={{ background: "#4DB87A" }}
-                  />
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-400"
+                  style={{ ...mono, letterSpacing: "0.22em" }}
+                >
+                  Computer Vision · Vista previa
                 </span>
-                Computer Vision · Activo
+                <BetaBadge
+                  reason="Door Vision requiere cámaras IP + integración OCR + modelo de edad. Los eventos mostrados aquí son ejemplos de cómo se verá una vez integrado el hardware."
+                />
               </div>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
                 Anti-reventa con <span style={serif} className="text-orange-500">cara ↔ DNI</span>
@@ -170,7 +166,7 @@ export const PartnerDoorVision = () => {
                 className="mt-1 text-[12px] text-muted-foreground"
                 style={mono}
               >
-                3 cámaras conectadas · Latencia 280ms · GDPR compliant
+                Demo · Sin cámaras conectadas todavía · GDPR-ready en deploy real
               </div>
             </div>
           </div>

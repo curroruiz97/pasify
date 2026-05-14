@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLoyalty, type LoyaltyLevel, type LoyaltyMovement } from "@/hooks/useLoyalty";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -390,18 +391,25 @@ export const ClientLoyalty = () => {
               <UserPlus className="h-5 w-5" />
             </div>
             <div>
-              <div
-                className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-                style={{ ...mono, letterSpacing: "0.22em" }}
-              >
-                <Zap className="h-3 w-3" />
-                Refer a friend
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+                  style={{ ...mono, letterSpacing: "0.22em" }}
+                >
+                  <Zap className="h-3 w-3" />
+                  Refer a friend
+                </span>
+                <BetaBadge
+                  label="Próximamente"
+                  reason="Refer-a-friend requiere flujo de invitación con código único, tracking de attribution y recompensa atómica para ambos lados. Llegará en próximas versiones de Pasify."
+                  variant="compact"
+                />
               </div>
               <h3 className="text-xl font-semibold tracking-tight text-foreground">
                 Trae un amigo, <span style={serif} className="text-orange-500">5€</span> para los dos
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Sistema de invitaciones próximamente. Mientras tanto, comparte Pasify en tus redes.
+                Disponible en próximas versiones de Pasify. Mientras tanto, comparte Pasify en tus redes.
               </p>
             </div>
           </div>

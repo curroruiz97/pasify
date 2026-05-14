@@ -1,12 +1,10 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowUpRight,
   Brain,
   Calendar,
   CheckCircle2,
-  CloudRain,
-  Music,
+  Loader2,
   Sparkles,
   Target,
   TrendingUp,
@@ -15,6 +13,24 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+/**
+ * PartnerForecast — predicción real de venta para próximos eventos.
+ *
+ * Backend: edge function `ai-forecast-event` que persiste en la tabla
+ * `forecast_predictions(event_id, predicted_attendance, ci_low, ci_high,
+ * confidence, factors, model_version, generated_at)` (mig 0021).
+ *
+ * Antes este componente era mock puro (`forecastFor()` local, "142
+ * eventos MAPE 11.4%" hardcoded). Ahora:
+ *   1. Para cada evento próximo, hace SELECT a `forecast_predictions`
+ *      pidiendo la última fila (DESC LIMIT 1).
+ *   2. Si no hay predicción, botón "Generar" que invoca la edge function.
+ *   3. MAPE se calcula sobre eventos pasados comparando
+ *      `predicted_attendance` con `tickets_sold` real del evento.
+ */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -32,31 +48,26 @@ export interface ForecastEvent {
   price_cents: number;
 }
 
-interface ForecastResult {
-  eventId: string;
-  predictedSold: number;
-  ciLow: number;
-  ciHigh: number;
-  occupancyPct: number;
-  predictedRevenueCents: number;
-  confidence: "low" | "medium" | "high";
-  factors: Array<{
-    label: string;
-    impact: number; // -1 to +1
-    note: string;
-  }>;
+interface PredictionRow {
+  id: string;
+  event_id: string;
+  predicted_attendance: number;
+  predicted_revenue_cents: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  confidence: number | null;
+  factors: Record<string, unknown>;
+  model_version: string | null;
+  generated_at: string;
 }
 
 interface Props {
   events: ForecastEvent[];
 }
 
-/**
- * PartnerForecast — predicción de venta para próximos eventos.
- * Modelo mock: combina histórico, día de la semana, headliner mock,
- * y "tendencia red". Devuelve intervalos de confianza + factores explicables.
- */
 export const PartnerForecast = ({ events }: Props) => {
+  const { toast } = useToast();
+
   const upcoming = useMemo(() => {
     const now = Date.now();
     return events
@@ -65,25 +76,153 @@ export const PartnerForecast = ({ events }: Props) => {
       .slice(0, 6);
   }, [events]);
 
-  const forecasts = useMemo(() => upcoming.map(forecastFor), [upcoming]);
+  const pastEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter((e) => new Date(e.date_start).getTime() <= now);
+  }, [events]);
+
+  const [predictions, setPredictions] = useState<Record<string, PredictionRow | null>>({});
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState<Set<string>>(new Set());
+  const [mape, setMape] = useState<number | null>(null);
+  const [historyCount, setHistoryCount] = useState(0);
+
+  // Carga: para cada evento próximo, última predicción
+  const loadPredictions = useCallback(async () => {
+    if (upcoming.length === 0) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const ids = upcoming.map((e) => e.id);
+      const { data, error } = await supabase
+        .from("forecast_predictions")
+        .select(
+          "id, event_id, predicted_attendance, predicted_revenue_cents, ci_low, ci_high, confidence, factors, model_version, generated_at"
+        )
+        .in("event_id", ids)
+        .order("generated_at", { ascending: false });
+      if (error) throw error;
+
+      // Quedarnos con la última por event_id
+      const latest: Record<string, PredictionRow | null> = {};
+      for (const id of ids) latest[id] = null;
+      for (const row of (data ?? []) as PredictionRow[]) {
+        if (latest[row.event_id] === null) latest[row.event_id] = row;
+      }
+      setPredictions(latest);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al cargar predicciones";
+      console.error("[PartnerForecast] loadPredictions:", err);
+      toast({ title: "No se pudieron cargar predicciones", description: msg, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [upcoming, toast]);
+
+  // MAPE real sobre eventos pasados con predicción
+  const loadMape = useCallback(async () => {
+    if (pastEvents.length === 0) {
+      setMape(null);
+      setHistoryCount(0);
+      return;
+    }
+    try {
+      const pastIds = pastEvents.map((e) => e.id);
+      const { data } = await supabase
+        .from("forecast_predictions")
+        .select("event_id, predicted_attendance, generated_at")
+        .in("event_id", pastIds)
+        .order("generated_at", { ascending: false });
+      const rows = (data ?? []) as Array<{ event_id: string; predicted_attendance: number }>;
+      // Última predicción por evento pasado
+      const seen = new Set<string>();
+      const lastPred: Array<{ event_id: string; predicted: number }> = [];
+      for (const r of rows) {
+        if (seen.has(r.event_id)) continue;
+        seen.add(r.event_id);
+        lastPred.push({ event_id: r.event_id, predicted: r.predicted_attendance });
+      }
+      if (lastPred.length === 0) {
+        setMape(null);
+        setHistoryCount(0);
+        return;
+      }
+      // Cálculo MAPE
+      let total = 0;
+      let count = 0;
+      for (const p of lastPred) {
+        const real = pastEvents.find((e) => e.id === p.event_id)?.tickets_sold ?? 0;
+        if (real === 0) continue;
+        total += Math.abs(p.predicted - real) / real;
+        count++;
+      }
+      setMape(count > 0 ? (total / count) * 100 : null);
+      setHistoryCount(count);
+    } catch (err) {
+      console.warn("[PartnerForecast] mape calc failed", err);
+    }
+  }, [pastEvents]);
+
+  useEffect(() => {
+    void loadPredictions();
+  }, [loadPredictions]);
+  useEffect(() => {
+    void loadMape();
+  }, [loadMape]);
+
+  const generate = async (eventId: string) => {
+    setGenerating((s) => new Set(s).add(eventId));
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-forecast-event", {
+        body: { event_id: eventId },
+      });
+      if (error) throw error;
+      toast({
+        title: "Predicción generada",
+        description: "El forecast IA ha persistido en tu organización.",
+      });
+      // Re-cargar para que muestre la nueva
+      await loadPredictions();
+      // Si la edge function devuelve la predicción directamente, mergemos
+      if (data && (data as PredictionRow).id) {
+        setPredictions((prev) => ({ ...prev, [eventId]: data as PredictionRow }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error generando predicción";
+      console.error("[PartnerForecast] generate:", err);
+      toast({ title: "Error al generar predicción", description: msg, variant: "destructive" });
+    } finally {
+      setGenerating((s) => {
+        const next = new Set(s);
+        next.delete(eventId);
+        return next;
+      });
+    }
+  };
 
   if (upcoming.length === 0) {
     return (
-      <div
-        className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center text-sm text-muted-foreground"
-      >
+      <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center text-sm text-muted-foreground">
         Publica un evento futuro para activar el forecast con IA.
       </div>
     );
   }
 
-  const totalPredicted = forecasts.reduce((s, f) => s + f.predictedSold, 0);
-  const totalRevenue = forecasts.reduce((s, f) => s + f.predictedRevenueCents, 0);
-  const avgConfidence = forecasts.filter((f) => f.confidence === "high").length / forecasts.length;
+  // Stats del hero: solo sobre eventos con predicción
+  const predicted = Object.values(predictions).filter((p): p is PredictionRow => p !== null);
+  const totalPredicted = predicted.reduce((s, p) => s + p.predicted_attendance, 0);
+  const totalRevenue = predicted.reduce(
+    (s, p) => s + (p.predicted_revenue_cents ?? 0),
+    0
+  );
+  const highConf = predicted.filter((p) => (p.confidence ?? 0) >= 0.7).length;
+  const avgConfPct = predicted.length > 0 ? Math.round((highConf / predicted.length) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      {/* Hero — model summary */}
+      {/* Hero */}
       <section
         className="relative overflow-hidden rounded-2xl border p-5 md:p-7"
         style={{
@@ -121,31 +260,44 @@ export const PartnerForecast = ({ events }: Props) => {
                 Forecast · IA
               </div>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
-                Vas a vender <span style={serif} className="text-orange-500">{totalPredicted.toLocaleString("es-ES")}</span> entradas
+                {predicted.length > 0 ? (
+                  <>
+                    Predicción: <span style={serif} className="text-orange-500">{totalPredicted.toLocaleString("es-ES")}</span> entradas
+                  </>
+                ) : (
+                  <>Genera tu primera <span style={serif} className="text-orange-500">predicción</span></>
+                )}
               </h2>
-              <div
-                className="mt-1 text-[12px] text-muted-foreground"
-                style={mono}
-              >
-                Próximos {upcoming.length} eventos · {(totalRevenue / 100).toFixed(0)}€ proyectados ·{" "}
-                {Math.round(avgConfidence * 100)}% alta confianza
+              <div className="mt-1 text-[12px] text-muted-foreground" style={mono}>
+                {predicted.length} / {upcoming.length} eventos predichos · {(totalRevenue / 100).toFixed(0)}€ proyectados · {avgConfPct}% alta confianza
               </div>
             </div>
           </div>
         </div>
 
-        {/* Model meta */}
         <div className="relative mt-5 grid grid-cols-3 gap-3">
-          <ModelStat label="Histórico" value="142 eventos" />
-          <ModelStat label="MAPE" value="11.4%" />
-          <ModelStat label="Última recalibración" value="Hoy 06:00" />
+          <ModelStat label="Histórico medido" value={`${historyCount} ${historyCount === 1 ? "evento" : "eventos"}`} />
+          <ModelStat label="MAPE" value={mape === null ? "—" : `${mape.toFixed(1)}%`} />
+          <ModelStat label="Modelo" value={predicted[0]?.model_version ?? "v1"} />
         </div>
       </section>
 
-      {/* Forecast cards */}
+      {loading && (
+        <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
+          <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+          Cargando predicciones…
+        </div>
+      )}
+
       <section className="space-y-4">
-        {forecasts.map((f, i) => (
-          <ForecastCard key={f.eventId} forecast={f} event={upcoming[i]} />
+        {upcoming.map((event) => (
+          <ForecastCard
+            key={event.id}
+            event={event}
+            prediction={predictions[event.id] ?? null}
+            generating={generating.has(event.id)}
+            onGenerate={() => void generate(event.id)}
+          />
         ))}
       </section>
     </div>
@@ -153,10 +305,7 @@ export const PartnerForecast = ({ events }: Props) => {
 };
 
 const ModelStat = ({ label, value }: { label: string; value: string }) => (
-  <div
-    className="rounded-xl border border-border p-2.5"
-    style={{ background: "rgba(255,255,255,0.04)" }}
-  >
+  <div className="rounded-xl border border-border p-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
     <div
       className="text-[9px] uppercase text-muted-foreground"
       style={{ ...mono, letterSpacing: "0.18em" }}
@@ -170,28 +319,74 @@ const ModelStat = ({ label, value }: { label: string; value: string }) => (
 );
 
 const ForecastCard = ({
-  forecast,
   event,
+  prediction,
+  generating,
+  onGenerate,
 }: {
-  forecast: ForecastResult;
   event: ForecastEvent;
+  prediction: PredictionRow | null;
+  generating: boolean;
+  onGenerate: () => void;
 }) => {
   const date = new Date(event.date_start);
-  const capacity = event.capacity ?? 800;
-  const ciRangePct = ((forecast.ciHigh - forecast.ciLow) / capacity) * 100;
-  const confidenceCfg =
-    forecast.confidence === "high"
-      ? { color: "#4DB87A", label: "Alta confianza" }
-      : forecast.confidence === "medium"
-      ? { color: "#E8B04C", label: "Confianza media" }
-      : { color: "#B8381A", label: "Baja confianza" };
+  const capacity = event.capacity ?? 0;
+
+  if (!prediction) {
+    return (
+      <article className="rounded-2xl border border-border bg-card p-5">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div
+              className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
+              style={{ ...mono, letterSpacing: "0.22em" }}
+            >
+              <Calendar className="h-3 w-3" />
+              {format(date, "EEEE d MMM · HH:mm", { locale: es })}h
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">{event.title}</h3>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Aforo {capacity > 0 ? capacity.toLocaleString("es-ES") : "—"} · Vendidos {event.tickets_sold}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+            style={{
+              background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 16px -6px rgba(232,84,42,0.5)",
+            }}
+          >
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+            {generating ? "Generando…" : "Generar predicción"}
+          </button>
+        </header>
+      </article>
+    );
+  }
+
+  const conf = prediction.confidence ?? 0;
+  const confCfg =
+    conf >= 0.7
+      ? { color: "#4DB87A", label: "Alta", Icon: CheckCircle2 }
+      : conf >= 0.4
+      ? { color: "#E8B04C", label: "Media", Icon: TrendingUp }
+      : { color: "#B8381A", label: "Baja", Icon: AlertTriangle };
+
+  const occupancyPct = capacity > 0 ? (prediction.predicted_attendance / capacity) * 100 : 0;
+
+  // Factors: forecasted como JSON ({ method, sample_size, dow_match, etc. })
+  const factors = Object.entries(prediction.factors ?? {})
+    .filter(([k]) => k !== "method") // method ya se muestra como version
+    .map(([k, v]) => ({ key: k, value: String(v) }))
+    .slice(0, 6);
 
   return (
     <article
       className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{
-        boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
-      }}
+      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
     >
       <div
         aria-hidden="true"
@@ -208,306 +403,112 @@ const ForecastCard = ({
             <Calendar className="h-3 w-3" />
             {format(date, "EEEE d MMM · HH:mm", { locale: es })}h
           </div>
-          <h3 className="truncate text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-            {event.title}
-          </h3>
-          <div
-            className="mt-1 text-[11px] uppercase text-muted-foreground"
-            style={{ ...mono, letterSpacing: "0.16em" }}
-          >
-            Aforo {capacity} · Precio {(event.price_cents / 100).toFixed(0)}€
-          </div>
+          <h3 className="text-xl font-semibold text-foreground">{event.title}</h3>
         </div>
-        <span
-          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] uppercase"
-          style={{
-            ...mono,
-            letterSpacing: "0.18em",
-            background: `${confidenceCfg.color}22`,
-            color: confidenceCfg.color,
-            border: `1px solid ${confidenceCfg.color}55`,
-          }}
-        >
-          <Target className="h-3 w-3" />
-          {confidenceCfg.label}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase"
+            style={{
+              ...mono,
+              letterSpacing: "0.18em",
+              background: `${confCfg.color}1A`,
+              color: confCfg.color,
+              border: `1px solid ${confCfg.color}40`,
+            }}
+          >
+            <confCfg.Icon className="h-3 w-3" />
+            {confCfg.label}
+          </span>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-[11px] text-foreground transition hover:border-orange-500/50"
+          >
+            {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+            Recalcular
+          </button>
+        </div>
       </header>
 
-      {/* Prediction */}
-      <div className="relative mt-5 grid grid-cols-3 gap-3">
-        <Prediction
-          eyebrow="Predicción"
-          value={forecast.predictedSold.toString()}
-          sub={`${forecast.occupancyPct}% aforo`}
-          color="#FF7A4D"
-          highlight
+      <div className="relative mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Stat
+          icon={<Users className="h-4 w-4" />}
+          label="Predicción"
+          value={prediction.predicted_attendance.toLocaleString("es-ES")}
+          sub={
+            prediction.ci_low !== null && prediction.ci_high !== null
+              ? `IC ${prediction.ci_low}–${prediction.ci_high}`
+              : ""
+          }
         />
-        <Prediction
-          eyebrow="Rango (90% CI)"
-          value={`${forecast.ciLow}–${forecast.ciHigh}`}
-          sub={`±${Math.round(ciRangePct)}% aforo`}
-          color="#E8B04C"
+        <Stat
+          icon={<Target className="h-4 w-4" />}
+          label="Ocupación"
+          value={`${occupancyPct.toFixed(0)}%`}
+          sub={capacity > 0 ? `Aforo ${capacity.toLocaleString("es-ES")}` : ""}
         />
-        <Prediction
-          eyebrow="Revenue est."
-          value={`${(forecast.predictedRevenueCents / 100).toFixed(0)}€`}
-          sub="Ticket × predicción"
-          color="#4DB87A"
+        <Stat
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Ingresos proyectados"
+          value={`${((prediction.predicted_revenue_cents ?? 0) / 100).toFixed(0)}€`}
+          sub={`Generado ${format(new Date(prediction.generated_at), "d MMM HH:mm", { locale: es })}`}
         />
       </div>
 
-      {/* Confidence bar (sold + predicted) */}
-      <div className="relative mt-5">
-        <div
-          className="mb-1.5 flex items-center justify-between text-[10px] uppercase"
-          style={{ ...mono, letterSpacing: "0.16em", color: "#8A8275" }}
-        >
-          <span>
-            Vendido <span className="text-foreground">{event.tickets_sold}</span> ·{" "}
-            Predicho <span className="text-foreground">{forecast.predictedSold}</span>
-          </span>
-          <span>{capacity} aforo</span>
-        </div>
-        <div className="relative h-3 w-full overflow-hidden rounded-full bg-white/[0.06]">
-          {/* Sold (real) */}
+      {factors.length > 0 && (
+        <div className="relative mt-5 border-t border-border pt-4">
           <div
-            className="absolute inset-y-0 left-0 rounded-full"
-            style={{
-              width: `${(event.tickets_sold / capacity) * 100}%`,
-              background:
-                "linear-gradient(90deg, #FF7A4D 0%, #E8542A 60%, #B8381A 100%)",
-              boxShadow: "0 0 12px rgba(232,84,42,0.5)",
-            }}
-          />
-          {/* CI range */}
-          <div
-            className="absolute inset-y-0"
-            style={{
-              left: `${(forecast.ciLow / capacity) * 100}%`,
-              width: `${((forecast.ciHigh - forecast.ciLow) / capacity) * 100}%`,
-              background: "rgba(232,176,76,0.28)",
-              border: "1px dashed rgba(232,176,76,0.6)",
-            }}
-          />
-          {/* Prediction tick */}
-          <div
-            className="absolute top-0 h-full w-0.5"
-            style={{
-              left: `${(forecast.predictedSold / capacity) * 100}%`,
-              background: "#FF7A4D",
-              boxShadow: "0 0 10px rgba(255,122,77,0.9)",
-            }}
-          />
+            className="mb-2 text-[10px] uppercase text-muted-foreground"
+            style={{ ...mono, letterSpacing: "0.18em" }}
+          >
+            Factores explicables
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {factors.map((f) => (
+              <span
+                key={f.key}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px]"
+                style={mono}
+              >
+                <span className="text-muted-foreground">{f.key}</span>
+                <span className="text-foreground">· {f.value}</span>
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Factors */}
-      <div className="relative mt-5">
-        <div
-          className="mb-3 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.2em" }}
-        >
-          <Zap className="h-3 w-3" />
-          Factores que influyen
-        </div>
-        <ul className="space-y-2">
-          {forecast.factors.map((f) => (
-            <FactorRow key={f.label} factor={f} />
-          ))}
-        </ul>
-      </div>
+      )}
     </article>
   );
 };
 
-const Prediction = ({
-  eyebrow,
+const Stat = ({
+  icon,
+  label,
   value,
   sub,
-  color,
-  highlight,
 }: {
-  eyebrow: string;
+  icon: React.ReactNode;
+  label: string;
   value: string;
   sub: string;
-  color: string;
-  highlight?: boolean;
 }) => (
-  <div
-    className="rounded-2xl border p-3 md:p-4"
-    style={{
-      background: highlight ? `${color}12` : "rgba(255,255,255,0.02)",
-      borderColor: highlight ? `${color}55` : "rgba(244,238,226,0.08)",
-    }}
-  >
-    <div
-      className="text-[9px] uppercase"
-      style={{ ...mono, letterSpacing: "0.18em", color: highlight ? color : "#8A8275" }}
-    >
-      {eyebrow}
+  <div className="rounded-xl border border-border bg-background/40 p-3">
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="text-orange-500">{icon}</span>
+      <span className="uppercase" style={{ ...mono, letterSpacing: "0.18em" }}>
+        {label}
+      </span>
     </div>
-    <div
-      className="mt-1 text-xl font-bold tracking-tight md:text-2xl"
-      style={{ ...mono, color: highlight ? "#F4EEE2" : "#F4EEE2" }}
-    >
+    <div className="mt-1 text-xl font-bold text-foreground" style={mono}>
       {value}
     </div>
-    <div
-      className="mt-0.5 text-[10px] uppercase"
-      style={{ ...mono, letterSpacing: "0.16em", color: "#8A8275" }}
-    >
-      {sub}
-    </div>
+    {sub && (
+      <div className="mt-0.5 text-[10px] text-muted-foreground" style={mono}>
+        {sub}
+      </div>
+    )}
   </div>
 );
-
-const FactorRow = ({
-  factor,
-}: {
-  factor: { label: string; impact: number; note: string };
-}) => {
-  const positive = factor.impact >= 0;
-  const color = positive ? "#4DB87A" : "#B8381A";
-  const pctWidth = Math.min(100, Math.abs(factor.impact) * 100);
-  return (
-    <li className="flex items-center gap-3">
-      <div
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
-        style={{ background: `${color}22`, color }}
-      >
-        {positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <CloudRain className="h-3.5 w-3.5" />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="font-medium text-foreground">{factor.label}</span>
-          <span className="font-bold" style={{ ...mono, color }}>
-            {positive ? "+" : ""}
-            {Math.round(factor.impact * 100)}%
-          </span>
-        </div>
-        <div
-          className="mt-0.5 text-[11px] text-muted-foreground"
-          style={{ ...mono, letterSpacing: "0.04em" }}
-        >
-          {factor.note}
-        </div>
-        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${pctWidth}%`,
-              background: `linear-gradient(90deg, ${color}66 0%, ${color} 100%)`,
-            }}
-          />
-        </div>
-      </div>
-    </li>
-  );
-};
-
-// =============================================================
-// Mock forecast model
-// =============================================================
-
-const forecastFor = (event: ForecastEvent): ForecastResult => {
-  const date = new Date(event.date_start);
-  const day = date.getDay();
-  const isWeekend = day === 5 || day === 6;
-  const isThursday = day === 4;
-  const isSunday = day === 0;
-  const capacity = event.capacity ?? 800;
-  const sold = event.tickets_sold ?? 0;
-  const daysToEvent = Math.max(1, (date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-
-  // Base prediction = current trajectory + day-of-week multiplier
-  let dayMultiplier = 1;
-  if (isWeekend) dayMultiplier = 1.55;
-  else if (isThursday) dayMultiplier = 1.2;
-  else if (isSunday) dayMultiplier = 0.55;
-
-  // Estimate based on days remaining
-  const tracjectoryRate = daysToEvent > 0.5 ? Math.min(1, 0.92) : 1;
-  const baselineProj = Math.min(
-    capacity,
-    Math.round(sold + (capacity - sold) * tracjectoryRate * dayMultiplier * 0.78)
-  );
-
-  const noise = Math.round(capacity * 0.08);
-  const ciLow = Math.max(sold, baselineProj - noise);
-  const ciHigh = Math.min(capacity, baselineProj + noise);
-  const occupancy = (baselineProj / capacity) * 100;
-
-  // Confidence based on history depth (mock — random but deterministic)
-  const seed = event.id.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  const confidence: ForecastResult["confidence"] =
-    seed % 3 === 0 ? "high" : seed % 3 === 1 ? "medium" : "high";
-
-  // Factors
-  const factors: ForecastResult["factors"] = [];
-  if (isWeekend) {
-    factors.push({
-      label: "Sábado / Fin de semana",
-      impact: 0.45,
-      note: "Tu histórico vende un +45% los sábados frente a la media.",
-    });
-  } else if (isThursday) {
-    factors.push({
-      label: "Jueves universitario",
-      impact: 0.18,
-      note: "Buen rendimiento en tu zona pero por debajo del sábado.",
-    });
-  } else if (isSunday) {
-    factors.push({
-      label: "Domingo",
-      impact: -0.32,
-      note: "Día de baja demanda — considera promo o cambio de fecha.",
-    });
-  }
-
-  factors.push({
-    label: "Tendencia red (últimas 4 sem.)",
-    impact: 0.12,
-    note: "La red sube un 12% vs trimestre anterior en eventos similares.",
-  });
-
-  if (daysToEvent > 10) {
-    factors.push({
-      label: "Demasiada antelación",
-      impact: -0.08,
-      note: "85% de tus ventas pasan en los últimos 10 días.",
-    });
-  } else if (daysToEvent < 3) {
-    factors.push({
-      label: "Última semana",
-      impact: 0.22,
-      note: "Tu pico de ventas suele ocurrir 48h antes del evento.",
-    });
-  }
-
-  if (seed % 5 === 0) {
-    factors.push({
-      label: "Headliner sin tracción confirmada",
-      impact: -0.14,
-      note: "No detectamos picos en redes para el artista anunciado.",
-    });
-  } else {
-    factors.push({
-      label: "Engagement social en alza",
-      impact: 0.21,
-      note: "+34% menciones del local en Instagram los últimos 7 días.",
-    });
-  }
-
-  return {
-    eventId: event.id,
-    predictedSold: baselineProj,
-    ciLow,
-    ciHigh,
-    occupancyPct: Math.round(occupancy),
-    predictedRevenueCents: baselineProj * event.price_cents,
-    confidence,
-    factors,
-  };
-};
 
 export default PartnerForecast;

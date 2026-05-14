@@ -582,16 +582,10 @@ const PartnerDashboard = () => {
                 Motor de pricing dinámico que sube y baja el precio según demanda, hora y aforo —
                 con reglas tuyas y curva de elasticidad.
               </p>
-              <PartnerDynamicPricing
-                events={events.map((e) => ({
-                  id: e.id,
-                  title: e.title,
-                  date_start: e.date_start,
-                  capacity: e.capacity ?? 800,
-                  tickets_sold: e.tickets_sold ?? 0,
-                  price_cents: e.price_cents ?? 1500,
-                }))}
-              />
+              {/* Cableado real con pricing_proposals · ya no necesita
+                  prop `events` (lo cargaba para mock); la UI ahora
+                  resuelve eventos via JOIN en cada proposal. */}
+              <PartnerDynamicPricing />
             </div>
           )}
 

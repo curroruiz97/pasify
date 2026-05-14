@@ -481,6 +481,36 @@ export const SupportChat = ({ mode, selectedClientId, selectedClient }: Props) =
     );
   }
 
+  // Cliente sin sesión: en lugar de fingir un chat local con `generateDemoReply`
+  // (que enmascaraba "no estás logueado" como "soporte está disponible offline"),
+  // mostramos empty state honesto. Si quieres FAQ pública en el futuro, va aquí.
+  if (mode === "client" && !userId) {
+    return (
+      <div
+        className="flex h-[60vh] flex-col items-center justify-center rounded-2xl border border-border bg-card px-6 text-center"
+        style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -10px rgba(0,0,0,0.5)" }}
+      >
+        <MessageCircle className="mb-3 h-10 w-10 text-orange-500/70" />
+        <h3 className="text-lg font-semibold text-foreground">
+          Soporte Pasify
+        </h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Inicia sesión para chatear con nuestro equipo. Te responderemos en cuanto un agente esté disponible.
+        </p>
+        <a
+          href="/#/login"
+          className="mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+          style={{
+            background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+          }}
+        >
+          Iniciar sesión
+        </a>
+      </div>
+    );
+  }
+
   if (mode === "admin" && !conv && !isLocalMode) {
     return (
       <div className="flex h-[60vh] flex-col items-center justify-center rounded-2xl border border-border bg-card text-center">
@@ -581,13 +611,13 @@ export const SupportChat = ({ mode, selectedClientId, selectedClient }: Props) =
               style={{
                 ...monoStyle,
                 letterSpacing: "0.18em",
-                background: "rgba(232,176,76,0.12)",
+                background: "rgba(232,176,76,0.16)",
                 color: "#E8B04C",
-                border: "1px solid rgba(232,176,76,0.3)",
+                border: "1px solid rgba(232,176,76,0.4)",
               }}
-              title="Sin conexión a Supabase: los mensajes se guardan en este dispositivo"
+              title="No estamos conectados al backend: los mensajes son ejemplos y no llegan al equipo Pasify"
             >
-              Modo demo
+              Sin conexión real
             </div>
           )}
         </div>
@@ -916,7 +946,7 @@ export const SupportChat = ({ mode, selectedClientId, selectedClient }: Props) =
             <kbd className="rounded bg-white/[0.06] px-1 py-0.5">↵</kbd> enviar ·{" "}
             <kbd className="rounded bg-white/[0.06] px-1 py-0.5">⇧↵</kbd> nueva línea
           </span>
-          <span>{isLocalMode ? "Demo · Local" : "End-to-end · Pasify"}</span>
+          <span>{isLocalMode ? "Vista previa · No enviado" : "End-to-end · Pasify"}</span>
         </div>
       </footer>
 

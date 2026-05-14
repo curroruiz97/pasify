@@ -1,14 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
-  Calendar,
-  Crown,
   Download,
   Euro,
-  Flag,
+  Loader2,
   ScanLine,
   Star,
   Ticket,
@@ -24,15 +21,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 import { es } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+
+/**
+ * PartnerReports — métricas y BI del partner con datos reales.
+ *
+ * Antes este componente era 100% mock (`buildSeries()` local). Ahora
+ * todas las cifras provienen de queries SQL contra `tickets` filtradas
+ * por `partner_id = auth.uid()` y por rango de fechas.
+ *
+ * Si el partner no tiene ventas todavía, mostramos empty state honesto
+ * con CTA "Crea tu primer evento" en lugar de cifras mock que engañan.
+ *
+ * Métricas mostradas (todas reales):
+ *   - KPIs: entradas vendidas, recaudado, clientes únicos, tasa entrada
+ *   - Serie diaria de ventas + ingresos
+ *   - Top eventos por recaudación
+ *   - Heatmap día/hora de compras
+ *
+ * Top RRPP, channels y retention quedan documentados como roadmap en
+ * `docs/HARDENING-PENDING.md` porque requieren columnas extra en
+ * `tickets` (rrpp_id, source) y/o joins con buyer_user_id.
+ */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-const serif = {
-  fontFamily: "'Instrument Serif', Georgia, serif",
-  fontStyle: "italic" as const,
-  fontWeight: 400,
-};
 
 type Range = "7d" | "30d" | "90d" | "ytd";
 
@@ -43,54 +59,213 @@ const RANGE_LABEL: Record<Range, string> = {
   ytd: "Este año",
 };
 
-// =============================================================
-// Mock data series
-// =============================================================
+interface TicketRow {
+  id: string;
+  event_id: string;
+  status: string;
+  amount_paid_cents: number;
+  paid_at: string | null;
+  used_at: string | null;
+  buyer_user_id: string | null;
+  buyer_email: string | null;
+}
 
-const buildSeries = (days: number) => {
-  const today = new Date();
-  const seed = (i: number) =>
-    Math.max(0, Math.round(80 + Math.sin(i * 0.42) * 25 + (i % 7 === 0 ? 40 : 0) + (i / days) * 20));
-  return Array.from({ length: days }).map((_, i) => {
-    const d = subDays(today, days - 1 - i);
-    const sold = seed(i);
-    return {
-      date: d,
-      sold,
-      revenueCents: sold * 1500,
-    };
-  });
+interface EventRow {
+  id: string;
+  title: string;
+}
+
+const rangeToDays = (range: Range): number => {
+  switch (range) {
+    case "7d": return 7;
+    case "30d": return 30;
+    case "90d": return 90;
+    case "ytd": {
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      return Math.ceil((now.getTime() - yearStart.getTime()) / 86_400_000);
+    }
+  }
 };
 
-// =============================================================
-// Main
-// =============================================================
-
 export const PartnerReports = () => {
+  const { toast } = useToast();
   const [range, setRange] = useState<Range>("30d");
-  const days = range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 180;
-  const series = useMemo(() => buildSeries(days), [days]);
+  const days = rangeToDays(range);
 
-  const total = series.reduce(
-    (a, p) => ({ sold: a.sold + p.sold, rev: a.rev + p.revenueCents }),
-    { sold: 0, rev: 0 }
-  );
-  const prevTotal = useMemo(() => {
-    const prev = buildSeries(days);
-    return prev.reduce(
-      (a, p) => ({ sold: a.sold + Math.round(p.sold * 0.86), rev: a.rev + Math.round(p.revenueCents * 0.86) }),
-      { sold: 0, rev: 0 }
+  const [tickets, setTickets] = useState<TicketRow[]>([]);
+  const [prevTickets, setPrevTickets] = useState<TicketRow[]>([]);
+  const [events, setEvents] = useState<Map<string, EventRow>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) {
+        setTickets([]);
+        setPrevTickets([]);
+        setLoading(false);
+        return;
+      }
+
+      const now = new Date();
+      const start = startOfDay(subDays(now, days)).toISOString();
+      const prevStart = startOfDay(subDays(now, days * 2)).toISOString();
+      const prevEnd = startOfDay(subDays(now, days)).toISOString();
+
+      // Tickets del rango actual
+      const { data: curRows, error: curErr } = await supabase
+        .from("tickets")
+        .select(
+          "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email"
+        )
+        .eq("partner_id", uid)
+        .in("status", ["paid", "used"])
+        .gte("paid_at", start);
+      if (curErr) throw curErr;
+
+      // Tickets del rango anterior (para delta)
+      const { data: prevRows } = await supabase
+        .from("tickets")
+        .select("id, status, amount_paid_cents, paid_at")
+        .eq("partner_id", uid)
+        .in("status", ["paid", "used"])
+        .gte("paid_at", prevStart)
+        .lt("paid_at", prevEnd);
+
+      setTickets((curRows ?? []) as TicketRow[]);
+      setPrevTickets((prevRows ?? []) as TicketRow[]);
+
+      // Eventos referenciados para top events / titulares
+      const eventIds = Array.from(new Set((curRows ?? []).map((t) => t.event_id).filter(Boolean)));
+      if (eventIds.length > 0) {
+        const { data: evData } = await supabase
+          .from("events")
+          .select("id, title")
+          .in("id", eventIds);
+        const m = new Map<string, EventRow>();
+        for (const e of (evData ?? []) as EventRow[]) m.set(e.id, e);
+        setEvents(m);
+      } else {
+        setEvents(new Map());
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error cargando reports";
+      console.error("[PartnerReports] load:", err);
+      setError(msg);
+      toast({ title: "Error al cargar reports", description: msg, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [days, toast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Agregados
+  const stats = useMemo(() => {
+    const sold = tickets.length;
+    const revenue = tickets.reduce((s, t) => s + (t.amount_paid_cents ?? 0), 0);
+    const used = tickets.filter((t) => t.status === "used").length;
+    const usageRate = sold > 0 ? Math.round((used / sold) * 100) : 0;
+    const uniqueBuyers = new Set(
+      tickets.map((t) => t.buyer_user_id ?? t.buyer_email ?? "")
+        .filter((x) => x.length > 0)
+    ).size;
+
+    const prevSold = prevTickets.length;
+    const prevRev = prevTickets.reduce((s, t) => s + (t.amount_paid_cents ?? 0), 0);
+    const deltaSoldPct = prevSold > 0 ? ((sold - prevSold) / prevSold) * 100 : 0;
+    const deltaRevPct = prevRev > 0 ? ((revenue - prevRev) / prevRev) * 100 : 0;
+
+    return { sold, revenue, used, usageRate, uniqueBuyers, deltaSoldPct, deltaRevPct };
+  }, [tickets, prevTickets]);
+
+  // Serie diaria
+  const series = useMemo(() => {
+    const now = new Date();
+    const buckets = new Map<string, { sold: number; rev: number }>();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = subDays(now, i);
+      buckets.set(format(d, "yyyy-MM-dd"), { sold: 0, rev: 0 });
+    }
+    for (const t of tickets) {
+      if (!t.paid_at) continue;
+      const key = format(new Date(t.paid_at), "yyyy-MM-dd");
+      const cur = buckets.get(key);
+      if (cur) {
+        cur.sold++;
+        cur.rev += t.amount_paid_cents ?? 0;
+      }
+    }
+    return Array.from(buckets.entries()).map(([date, v]) => ({
+      date: new Date(date),
+      sold: v.sold,
+      revenueCents: v.rev,
+    }));
+  }, [tickets, days]);
+
+  // Top eventos por recaudación
+  const topEvents = useMemo(() => {
+    const map = new Map<string, { sold: number; rev: number; title: string }>();
+    for (const t of tickets) {
+      const cur = map.get(t.event_id);
+      if (cur) {
+        cur.sold++;
+        cur.rev += t.amount_paid_cents ?? 0;
+      } else {
+        map.set(t.event_id, {
+          sold: 1,
+          rev: t.amount_paid_cents ?? 0,
+          title: events.get(t.event_id)?.title ?? "Evento",
+        });
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.rev - a.rev)
+      .slice(0, 5);
+  }, [tickets, events]);
+
+  // Heatmap dia/hora (Lun=1..Dom=0)
+  const heatmap = useMemo(() => {
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    for (const t of tickets) {
+      if (!t.paid_at) continue;
+      const d = new Date(t.paid_at);
+      const dow = d.getDay();
+      const h = d.getHours();
+      grid[dow][h]++;
+    }
+    return grid;
+  }, [tickets]);
+
+  const exportCsv = () => {
+    if (tickets.length === 0) {
+      toast({ title: "Nada que exportar", description: "Aún no tienes ventas en este rango." });
+      return;
+    }
+    const header = "id,event_id,status,amount_paid_cents,paid_at,buyer_email\n";
+    const lines = tickets.map((t) =>
+      [t.id, t.event_id, t.status, t.amount_paid_cents, t.paid_at ?? "", (t.buyer_email ?? "").replace(/,/g, ";")].join(",")
     );
-  }, [days]);
-
-  const deltaSold = total.sold - prevTotal.sold;
-  const deltaSoldPct = prevTotal.sold > 0 ? (deltaSold / prevTotal.sold) * 100 : 0;
-  const deltaRev = total.rev - prevTotal.rev;
-  const deltaRevPct = prevTotal.rev > 0 ? (deltaRev / prevTotal.rev) * 100 : 0;
+    const csv = header + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pasify-reports-${range}-${format(new Date(), "yyyyMMdd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Range selector */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div
@@ -103,6 +278,9 @@ export const PartnerReports = () => {
           <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
             {RANGE_LABEL[range]}
           </h2>
+          <p className="mt-1 text-xs text-muted-foreground" style={mono}>
+            Datos reales · {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} en el rango
+          </p>
         </div>
         <div className="flex gap-2">
           <Select value={range} onValueChange={(v) => setRange(v as Range)}>
@@ -116,506 +294,325 @@ export const PartnerReports = () => {
               <SelectItem value="ytd">Año</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline">
+          <Button variant="outline" onClick={exportCsv} disabled={tickets.length === 0}>
             <Download className="mr-2 h-4 w-4" />
-            Exportar
+            Exportar CSV
           </Button>
         </div>
       </header>
 
-      {/* KPI grid with deltas */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-        <KpiCardDelta
-          icon={<Ticket className="h-4 w-4" />}
-          color="#FF7A4D"
-          eyebrow="Entradas vendidas"
-          value={total.sold.toString()}
-          deltaPct={deltaSoldPct}
-        />
-        <KpiCardDelta
-          icon={<Euro className="h-4 w-4" />}
-          color="#E8542A"
-          eyebrow="Recaudado"
-          value={`${(total.rev / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })}€`}
-          deltaPct={deltaRevPct}
-        />
-        <KpiCardDelta
-          icon={<Users className="h-4 w-4" />}
-          color="#4DB87A"
-          eyebrow="Clientes únicos"
-          value={Math.round(total.sold * 0.72).toString()}
-          deltaPct={9.2}
-        />
-        <KpiCardDelta
-          icon={<ScanLine className="h-4 w-4" />}
-          color="#E8B04C"
-          eyebrow="Tasa entrada"
-          value="92%"
-          deltaPct={2.1}
-        />
-      </section>
+      {error && (
+        <div
+          className="rounded-2xl border p-4 text-sm"
+          style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+        >
+          <p className="font-semibold text-foreground">No pudimos cargar los reports</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{error}</p>
+        </div>
+      )}
 
-      {/* Revenue chart */}
-      <RevenueChart series={series} />
+      {loading && (
+        <div className="rounded-2xl border border-dashed border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
+          <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+          Cargando métricas reales…
+        </div>
+      )}
 
-      {/* Two columns: top RRPP + Hours heatmap */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <TopRrppCard />
-        <HoursHeatmap />
-      </div>
+      {!loading && tickets.length === 0 && !error && (
+        <PasifyEmptyState
+          icon={<BarChart3 className="h-7 w-7" />}
+          eyebrow="Sin datos todavía"
+          title={<>Aún no hay <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>ventas</span> en este rango.</>}
+          subtitle="Cuando empieces a vender tickets aparecerán aquí KPIs, serie diaria, top eventos y heatmap de horas. Datos reales, sin maquillaje."
+        />
+      )}
 
-      {/* Channels + retention */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ChannelsCard />
-        <RetentionCard />
-      </div>
+      {!loading && tickets.length > 0 && (
+        <>
+          <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+            <Kpi
+              icon={<Ticket className="h-4 w-4" />}
+              color="#FF7A4D"
+              eyebrow="Entradas vendidas"
+              value={stats.sold.toString()}
+              deltaPct={stats.deltaSoldPct}
+            />
+            <Kpi
+              icon={<Euro className="h-4 w-4" />}
+              color="#E8542A"
+              eyebrow="Recaudado"
+              value={`${(stats.revenue / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })}€`}
+              deltaPct={stats.deltaRevPct}
+            />
+            <Kpi
+              icon={<Users className="h-4 w-4" />}
+              color="#4DB87A"
+              eyebrow="Compradores únicos"
+              value={stats.uniqueBuyers.toString()}
+              deltaPct={null}
+            />
+            <Kpi
+              icon={<ScanLine className="h-4 w-4" />}
+              color="#E8B04C"
+              eyebrow="Tasa entrada"
+              value={`${stats.usageRate}%`}
+              deltaPct={null}
+              sub={`${stats.used}/${stats.sold} usados`}
+            />
+          </section>
+
+          <RevenueChart series={series} />
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <TopEvents items={topEvents} />
+            <HoursHeatmap grid={heatmap} />
+          </div>
+        </>
+      )}
     </div>
   );
 };
 
 // =============================================================
-// KPI with delta
+// KPI
 // =============================================================
 
-const KpiCardDelta = ({
+const Kpi = ({
   icon,
   color,
   eyebrow,
   value,
   deltaPct,
+  sub,
 }: {
   icon: React.ReactNode;
   color: string;
   eyebrow: string;
   value: string;
-  deltaPct: number;
-}) => {
-  const up = deltaPct >= 0;
-  return (
+  deltaPct: number | null;
+  sub?: string;
+}) => (
+  <article
+    className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5"
+    style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }}
+  >
     <div
-      className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 12px -6px rgba(0,0,0,0.4)" }}
-    >
+      aria-hidden="true"
+      className="pointer-events-none absolute -right-12 -top-12 h-24 w-24 rounded-full opacity-50"
+      style={{ background: `${color}33`, filter: "blur(30px)" }}
+    />
+    <div className="relative flex items-start justify-between">
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full"
-        style={{ background: `${color}26`, filter: "blur(28px)" }}
-      />
-      <div className="relative flex items-center justify-between">
-        <div
-          className="inline-flex items-center gap-1.5 text-[10px] uppercase"
-          style={{ ...mono, letterSpacing: "0.18em", color }}
-        >
-          {icon}
-          {eyebrow}
-        </div>
+        className="grid h-9 w-9 place-items-center rounded-xl text-white"
+        style={{ background: color }}
+      >
+        {icon}
+      </div>
+      {deltaPct !== null && (
         <span
-          className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+          className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px]"
           style={{
             ...mono,
-            letterSpacing: "0.08em",
-            color: up ? "#4DB87A" : "#B8381A",
-            background: up ? "rgba(77,184,122,0.12)" : "rgba(184,56,26,0.12)",
+            background: deltaPct >= 0 ? "rgba(77,184,122,0.15)" : "rgba(184,56,26,0.15)",
+            color: deltaPct >= 0 ? "#4DB87A" : "#FF7A4D",
           }}
         >
-          {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-          {up ? "+" : ""}
-          {deltaPct.toFixed(1)}%
+          {deltaPct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+          {Math.abs(deltaPct).toFixed(0)}%
         </span>
-      </div>
+      )}
+    </div>
+    <div className="relative mt-3">
       <div
-        className="relative mt-3 text-2xl font-bold tracking-tight text-foreground md:text-3xl"
-        style={mono}
+        className="text-[10px] uppercase text-muted-foreground"
+        style={{ ...mono, letterSpacing: "0.18em" }}
       >
+        {eyebrow}
+      </div>
+      <div className="mt-0.5 text-2xl font-bold text-foreground" style={mono}>
         {value}
       </div>
-      <div
-        className="relative mt-1 text-[10px] uppercase text-muted-foreground"
-        style={{ ...mono, letterSpacing: "0.14em" }}
-      >
-        vs período anterior
-      </div>
+      {sub && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground" style={mono}>
+          {sub}
+        </div>
+      )}
     </div>
-  );
-};
+  </article>
+);
 
 // =============================================================
-// Revenue chart (svg sparkline + bars)
+// Revenue chart (SVG simple, sin libs externas)
 // =============================================================
 
-const RevenueChart = ({
-  series,
-}: {
-  series: Array<{ date: Date; sold: number; revenueCents: number }>;
-}) => {
-  const maxRev = Math.max(1, ...series.map((p) => p.revenueCents));
-  const peakIdx = series.findIndex((p) => p.revenueCents === maxRev);
-  const peak = series[peakIdx];
+const RevenueChart = ({ series }: { series: Array<{ date: Date; sold: number; revenueCents: number }> }) => {
+  if (series.length === 0) return null;
+  const maxRev = Math.max(...series.map((s) => s.revenueCents), 1);
+  const W = 600;
+  const H = 160;
+  const pad = 8;
+  const step = (W - pad * 2) / Math.max(series.length - 1, 1);
+
+  const points = series
+    .map((s, i) => {
+      const x = pad + i * step;
+      const y = H - pad - (s.revenueCents / maxRev) * (H - pad * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
-    <section
-      className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full"
-        style={{ background: "rgba(232,84,42,0.18)", filter: "blur(80px)" }}
-      />
-
-      <header className="relative mb-5 flex items-start justify-between gap-3">
-        <div>
-          <div
-            className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-            style={{ ...mono, letterSpacing: "0.2em" }}
-          >
-            <TrendingUp className="h-3 w-3" />
-            Evolución diaria
-          </div>
-          <h3 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-            Recaudado por día
-          </h3>
+    <article className="rounded-2xl border border-border bg-card p-5">
+      <header className="mb-4 flex items-center justify-between">
+        <div
+          className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+          style={{ ...mono, letterSpacing: "0.22em" }}
+        >
+          <TrendingUp className="h-3 w-3" />
+          Ventas diarias
         </div>
-        {peak && (
-          <div className="rounded-2xl border border-orange-500/40 bg-orange-500/[0.08] px-4 py-2.5 text-right">
-            <div
-              className="text-[10px] uppercase text-orange-500"
-              style={{ ...mono, letterSpacing: "0.2em" }}
-            >
-              Pico
-            </div>
-            <div className="mt-0.5 text-sm font-bold text-foreground" style={mono}>
-              {(peak.revenueCents / 100).toFixed(0)}€
-            </div>
-            <div className="text-[10px] text-muted-foreground" style={mono}>
-              {format(peak.date, "d MMM", { locale: es })}
-            </div>
-          </div>
-        )}
+        <div className="text-xs text-muted-foreground" style={mono}>
+          Pico: {(maxRev / 100).toFixed(0)}€/día
+        </div>
       </header>
-
-      <div className="relative flex h-44 items-end gap-1 md:h-56">
-        {series.map((p, i) => {
-          const h = (p.revenueCents / maxRev) * 100;
-          const isPeak = i === peakIdx;
-          return (
-            <div
-              key={i}
-              className="group/bar relative flex-1 rounded-t-sm transition-all"
-              style={{
-                height: `${Math.max(2, h)}%`,
-                background: isPeak
-                  ? "linear-gradient(180deg, #FF7A4D 0%, #E8542A 100%)"
-                  : `rgba(232,84,42,${0.35 + (i / series.length) * 0.45})`,
-                boxShadow: isPeak ? "0 0 12px rgba(232,84,42,0.7)" : undefined,
-              }}
-              title={`${format(p.date, "d MMM", { locale: es })} · ${(p.revenueCents / 100).toFixed(0)}€`}
-            />
-          );
-        })}
-      </div>
-
-      <div
-        className="relative mt-3 flex justify-between text-[10px] uppercase text-muted-foreground"
-        style={{ ...mono, letterSpacing: "0.16em" }}
-      >
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FF7A4D" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#FF7A4D" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polyline points={points} fill="none" stroke="#FF7A4D" strokeWidth="2" strokeLinejoin="round" />
+        <polyline
+          points={`${pad},${H - pad} ${points} ${W - pad},${H - pad}`}
+          fill="url(#revGrad)"
+          stroke="none"
+        />
+      </svg>
+      <div className="mt-2 flex justify-between text-[10px] text-muted-foreground" style={mono}>
         <span>{format(series[0].date, "d MMM", { locale: es })}</span>
-        <span>{format(series[Math.floor(series.length / 2)].date, "d MMM", { locale: es })}</span>
         <span>{format(series[series.length - 1].date, "d MMM", { locale: es })}</span>
       </div>
-    </section>
+    </article>
   );
 };
 
 // =============================================================
-// Top RRPP
+// Top events
 // =============================================================
 
-const TopRrppCard = () => {
-  const top = [
-    { name: "Carla Sánchez", sold: 38, revenueCents: 57000, color: "#FF7A4D" },
-    { name: "Diego Reyes", sold: 27, revenueCents: 40500, color: "#E8542A" },
-    { name: "Lucía García", sold: 19, revenueCents: 28500, color: "#B8381A" },
-    { name: "Pablo López", sold: 14, revenueCents: 21000, color: "#E8B04C" },
-    { name: "Alba Martínez", sold: 11, revenueCents: 16500, color: "#4DB87A" },
-  ];
-  const maxSold = Math.max(...top.map((t) => t.sold));
-  return (
-    <section
-      className="rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
-    >
-      <div className="mb-4">
-        <div
-          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.2em" }}
-        >
-          <Trophy className="h-3 w-3" />
-          Top RRPP
-        </div>
-        <h3 className="text-xl font-semibold tracking-tight text-foreground">
-          Ranking del período
-        </h3>
+const TopEvents = ({
+  items,
+}: {
+  items: Array<{ id: string; sold: number; rev: number; title: string }>;
+}) => (
+  <article className="rounded-2xl border border-border bg-card p-5">
+    <header className="mb-4 flex items-center justify-between">
+      <div
+        className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+        style={{ ...mono, letterSpacing: "0.22em" }}
+      >
+        <Trophy className="h-3 w-3" />
+        Top eventos
       </div>
-
-      <div className="space-y-3">
-        {top.map((t, i) => {
-          const w = (t.sold / maxSold) * 100;
-          return (
-            <div key={t.name}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <span
-                    className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
-                    style={{
-                      ...mono,
-                      background: i < 3
-                        ? "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)"
-                        : "rgba(255,255,255,0.06)",
-                      color: i < 3 ? "#fff" : "#8A8275",
-                    }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="font-medium text-foreground">{t.name}</span>
-                </div>
-                <span className="text-sm font-bold text-foreground" style={mono}>
-                  {t.sold} · {(t.revenueCents / 100).toFixed(0)}€
-                </span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${w}%`,
-                    background: `linear-gradient(90deg, ${t.color}88 0%, ${t.color} 100%)`,
-                    boxShadow: `0 0 8px ${t.color}66`,
-                  }}
-                />
+    </header>
+    {items.length === 0 ? (
+      <div className="py-4 text-center text-xs text-muted-foreground">Sin datos</div>
+    ) : (
+      <ol className="space-y-3">
+        {items.map((it, i) => (
+          <li key={it.id} className="flex items-center gap-3">
+            <span
+              className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold"
+              style={{
+                ...mono,
+                background: i === 0 ? "rgba(255,122,77,0.2)" : "rgba(255,255,255,0.04)",
+                color: i === 0 ? "#FF7A4D" : "#9b9388",
+              }}
+            >
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-foreground">{it.title}</div>
+              <div className="text-[10px] text-muted-foreground" style={mono}>
+                {it.sold} {it.sold === 1 ? "ticket" : "tickets"}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-};
+            <div className="text-right">
+              <div className="text-sm font-bold text-foreground" style={mono}>
+                {(it.rev / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })}€
+              </div>
+            </div>
+            {i === 0 && <Star className="h-3.5 w-3.5 text-orange-500" />}
+          </li>
+        ))}
+      </ol>
+    )}
+  </article>
+);
 
 // =============================================================
 // Hours heatmap
 // =============================================================
 
-const HoursHeatmap = () => {
-  // Generate 7 days × 24 hours data biased to nightlife (22h–4h peak)
-  const data = useMemo(() => {
-    const rows: number[][] = [];
-    for (let d = 0; d < 7; d++) {
-      const row: number[] = [];
-      for (let h = 0; h < 24; h++) {
-        const peak = h >= 22 || h <= 4 ? 0.85 + Math.sin(d + h * 0.3) * 0.15 : 0.15 + Math.sin(d + h * 0.5) * 0.1;
-        const weekend = d >= 4 ? 1.2 : 0.8;
-        row.push(Math.max(0, Math.min(1, peak * weekend)));
-      }
-      rows.push(row);
-    }
-    return rows;
-  }, []);
+const DOW_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-  const days = ["L", "M", "X", "J", "V", "S", "D"];
+const HoursHeatmap = ({ grid }: { grid: number[][] }) => {
+  const max = Math.max(...grid.flat(), 1);
   return (
-    <section
-      className="rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
-    >
-      <div className="mb-4">
+    <article className="rounded-2xl border border-border bg-card p-5">
+      <header className="mb-4 flex items-center justify-between">
         <div
-          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.2em" }}
+          className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+          style={{ ...mono, letterSpacing: "0.22em" }}
         >
-          <Activity className="h-3 w-3" />
-          Cuándo entra la gente
+          <BarChart3 className="h-3 w-3" />
+          Heatmap día / hora
         </div>
-        <h3 className="text-xl font-semibold tracking-tight text-foreground">
-          Heatmap horario × día
-        </h3>
-      </div>
-
-      <div className="flex gap-1.5">
-        <div className="flex flex-col justify-around text-[10px] text-muted-foreground" style={mono}>
-          {days.map((d) => (
-            <div key={d}>{d}</div>
-          ))}
+        <div className="text-[10px] text-muted-foreground" style={mono}>
+          Pico {max} compras
         </div>
-        <div className="flex-1">
-          {data.map((row, di) => (
-            <div key={di} className="mb-0.5 flex gap-0.5">
-              {row.map((v, hi) => (
-                <div
-                  key={hi}
-                  className="flex-1 rounded-sm"
-                  style={{
-                    height: 14,
-                    background: `rgba(232,84,42,${0.05 + v * 0.7})`,
-                  }}
-                  title={`${days[di]} · ${hi}h · ${Math.round(v * 100)}%`}
-                />
-              ))}
-            </div>
-          ))}
+      </header>
+      <div className="grid grid-cols-[auto_repeat(24,minmax(0,1fr))] gap-0.5 text-[9px]">
+        <div></div>
+        {Array.from({ length: 24 }).map((_, h) => (
           <div
-            className="mt-2 flex justify-between text-[9px] uppercase text-muted-foreground"
-            style={{ ...mono, letterSpacing: "0.16em" }}
+            key={h}
+            className="text-center text-muted-foreground"
+            style={mono}
           >
-            <span>00h</span>
-            <span>06h</span>
-            <span>12h</span>
-            <span>18h</span>
-            <span>23h</span>
+            {h % 3 === 0 ? h : ""}
           </div>
-        </div>
-      </div>
-    </section>
-  );
-};
-
-// =============================================================
-// Channels card
-// =============================================================
-
-const ChannelsCard = () => {
-  const channels = [
-    { name: "Web", pct: 47, color: "#FF7A4D" },
-    { name: "RRPP", pct: 26, color: "#E8542A" },
-    { name: "Taquilla", pct: 14, color: "#E8B04C" },
-    { name: "Instagram", pct: 8, color: "#B8381A" },
-    { name: "Otros", pct: 5, color: "#5C544A" },
-  ];
-  return (
-    <section
-      className="rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
-    >
-      <div className="mb-4">
-        <div
-          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.2em" }}
-        >
-          <Flag className="h-3 w-3" />
-          Canales
-        </div>
-        <h3 className="text-xl font-semibold tracking-tight text-foreground">
-          Origen del ticket
-        </h3>
-      </div>
-
-      {/* Donut svg */}
-      <div className="flex items-center gap-5">
-        <Donut channels={channels} />
-        <ul className="flex-1 space-y-2">
-          {channels.map((c) => (
-            <li key={c.name} className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-2 text-sm text-foreground">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ background: c.color }}
-                />
-                {c.name}
-              </span>
-              <span className="text-sm font-bold text-foreground" style={mono}>
-                {c.pct}%
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-};
-
-const Donut = ({ channels }: { channels: Array<{ name: string; pct: number; color: string }> }) => {
-  const total = channels.reduce((s, c) => s + c.pct, 0);
-  const radius = 50;
-  const circ = 2 * Math.PI * radius;
-  let offset = 0;
-  return (
-    <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
-      <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" />
-      {channels.map((c) => {
-        const len = (c.pct / total) * circ;
-        const dash = `${len} ${circ - len}`;
-        const dashOffset = -offset;
-        offset += len;
-        return (
-          <circle
-            key={c.name}
-            cx="60"
-            cy="60"
-            r={radius}
-            fill="none"
-            stroke={c.color}
-            strokeWidth="14"
-            strokeDasharray={dash}
-            strokeDashoffset={dashOffset}
-          />
-        );
-      })}
-    </svg>
-  );
-};
-
-// =============================================================
-// Retention
-// =============================================================
-
-const RetentionCard = () => {
-  const cohorts = [
-    { label: "Compraron 1 vez", pct: 100, color: "#5C544A" },
-    { label: "Volvieron 2ª", pct: 47, color: "#E8B04C" },
-    { label: "Volvieron 3ª+", pct: 28, color: "#E8542A" },
-    { label: "VIP (8+)", pct: 9, color: "#FF7A4D" },
-  ];
-  return (
-    <section
-      className="rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)" }}
-    >
-      <div className="mb-4">
-        <div
-          className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.2em" }}
-        >
-          <Crown className="h-3 w-3" />
-          Retención
-        </div>
-        <h3 className="text-xl font-semibold tracking-tight text-foreground">
-          Embudo de fidelidad
-        </h3>
-      </div>
-      <ul className="space-y-3">
-        {cohorts.map((c) => (
-          <li key={c.label}>
-            <div
-              className="mb-1 flex items-center justify-between text-sm"
-              style={{ color: c.color }}
-            >
-              <span style={{ color: "#F4EEE2" }}>{c.label}</span>
-              <span className="font-bold" style={mono}>
-                {c.pct}%
-              </span>
-            </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${c.pct}%`,
-                  background: `linear-gradient(90deg, ${c.color}88 0%, ${c.color} 100%)`,
-                }}
-              />
-            </div>
-          </li>
         ))}
-      </ul>
-    </section>
+        {grid.map((row, dow) => (
+          <>
+            <div
+              key={`d-${dow}`}
+              className="pr-1 text-right text-muted-foreground"
+              style={mono}
+            >
+              {DOW_LABELS[dow]}
+            </div>
+            {row.map((cell, h) => {
+              const intensity = cell / max;
+              return (
+                <div
+                  key={`${dow}-${h}`}
+                  title={`${DOW_LABELS[dow]} ${h}h · ${cell}`}
+                  className="aspect-square rounded-sm"
+                  style={{
+                    background:
+                      cell === 0
+                        ? "rgba(255,255,255,0.03)"
+                        : `rgba(255,122,77,${Math.max(0.12, intensity)})`,
+                  }}
+                />
+              );
+            })}
+          </>
+        ))}
+      </div>
+    </article>
   );
 };
 
