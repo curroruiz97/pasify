@@ -6183,8 +6183,6 @@ export type Database = {
         Args: { _key: string; _value: Json }
         Returns: undefined
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       start_partner_trial: {
         Args: { _org_id?: string }
         Returns: {
@@ -6221,7 +6219,6 @@ export type Database = {
         Args: { _message?: string; _ticket_id: string; _to_email: string }
         Returns: string
       }
-      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       account_status_t: "pending" | "approved" | "rejected"
