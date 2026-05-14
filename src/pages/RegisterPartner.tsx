@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/countries";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
+import { redirectToApp } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
@@ -180,7 +181,7 @@ const RegisterPartner = () => {
         }
 
         toast({ title: "¡Cuenta creada!", description: "Bienvenido a Pasify." });
-        window.location.assign(`${window.location.origin}/#/partner-dashboard`);
+        redirectToApp("/partner-dashboard");
       }
     } catch (error: any) {
       toast({ title: t("errors.signupFailed"), description: error.message, variant: "destructive" });

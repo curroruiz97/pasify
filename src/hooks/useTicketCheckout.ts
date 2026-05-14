@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { buildAppUrl } from "@/lib/redirect-url";
 
 /**
  * useTicketCheckout — hook único de compra de tickets reutilizable entre
@@ -134,8 +135,8 @@ export const useTicketCheckout = () => {
             // + poll/realtime hasta que webhook confirme. El edge function
             // añade `?order_id=<uuid>&session_id={CHECKOUT_SESSION_ID}` que
             // TicketSuccess parsea para sus consultas.
-            success_url: `${window.location.origin}/#/ticket/success`,
-            cancel_url: `${window.location.origin}/#/calendar`,
+            success_url: buildAppUrl("/ticket/success"),
+            cancel_url: buildAppUrl("/calendar"),
           }),
         });
 

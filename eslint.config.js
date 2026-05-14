@@ -7,11 +7,21 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // Carpetas que no se lintan:
   // - `dist` (build output)
-  // - `supabase/functions/_legacy` (edge functions arqueológicas, congeladas
-  //   con su lint legacy; conservadas en disco via `_` prefix que el bundler
-  //   y los workflows de deploy ignoran)
+  // - `tools/legacy-supabase-functions` (edge functions arqueológicas
+  //   conservadas en disco como referencia histórica; movidas aquí desde
+  //   supabase/functions/_legacy/ en mayo 2026 para que ni siquiera
+  //   aparezcan en deploy scripts. Lint legacy congelado.)
+  // - `supabase/functions/_legacy` (alias por si vuelve durante un
+  //   revert; defensa extra)
   // - `supabase/migrations.legacy-backup` (backup gitignored — defensa extra)
-  { ignores: ["dist", "supabase/functions/_legacy/**", "supabase/migrations.legacy-backup/**"] },
+  {
+    ignores: [
+      "dist",
+      "tools/legacy-supabase-functions/**",
+      "supabase/functions/_legacy/**",
+      "supabase/migrations.legacy-backup/**",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

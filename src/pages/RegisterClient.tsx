@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/countries";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
+import { redirectToApp } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
@@ -119,8 +120,7 @@ const RegisterClient = () => {
 
         if (autoApproved) {
           toast({ title: t("auth.loginSuccess"), description: t("auth.welcome") });
-          const targetPath = nextPath ?? "/client-dashboard";
-          window.location.assign(`${window.location.origin}/#${targetPath}`);
+          redirectToApp(nextPath ?? "/client-dashboard");
           return;
         }
 

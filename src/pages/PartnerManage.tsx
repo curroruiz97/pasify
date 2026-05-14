@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerSubscription } from "@/hooks/usePartnerSubscription";
 import { openWebWithAuth } from "@/lib/openWebAuth";
+import { buildAppUrl } from "@/lib/redirect-url";
 import { TimelineContent } from "@/components/ui/timeline-animation";
 import { VerticalCutReveal } from "@/components/ui/vertical-cut-reveal";
 import logo from "@/assets/logo.webp";
@@ -89,7 +90,7 @@ const PartnerManage = () => {
           "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ returnUrl: `${window.location.origin}/#/partner/manage` }),
+        body: JSON.stringify({ returnUrl: buildAppUrl("/partner/manage") }),
       });
       const raw = await resp.text();
       if (!resp.ok) {
@@ -137,8 +138,8 @@ const PartnerManage = () => {
         },
         body: JSON.stringify({
           locale: "es",
-          successUrl: `${window.location.origin}/#/partner/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/#/partner/manage`,
+          successUrl: `${buildAppUrl("/partner/success")}?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: buildAppUrl("/partner/manage"),
         }),
       });
       const raw = await resp.text();

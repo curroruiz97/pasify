@@ -176,11 +176,13 @@ const ClientDashboard = () => {
         setUserCity(p?.city ?? "");
       }
 
+      // Leemos de la view `public_partners` (mig 0045) que ya aplica
+      // el filtro account_status='approved' AND business_name NOT NULL.
+      // Cuando migremos `profiles.business_*` → `organizations` solo
+      // cambia la definición de la view.
       const { data } = await supabase
-        .from("profiles")
+        .from("public_partners")
         .select("id, business_name, business_category, city, avatar_url, cover_image_url")
-        .eq("account_status", "approved")
-        .not("business_name", "is", null)
         .order("business_name");
       const real = (data ?? []) as Partner[];
       // Sin fallback a demo: si no hay partners aprobados, mostramos

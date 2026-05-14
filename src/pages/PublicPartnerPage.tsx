@@ -89,8 +89,10 @@ const PublicPartnerPage = () => {
 
       // Demo partners eliminados — si el id es legacy "demo-*" caemos al
       // empty state (partner=null tras el query).
+      // Leemos de `public_partners` (mig 0045) en vez de profiles directo:
+      // la view ya filtra approved + business_name NOT NULL y oculta PII.
       const { data: p } = await supabase
-        .from("profiles")
+        .from("public_partners")
         .select("id, business_name, business_category, business_description, city, avatar_url, cover_image_url")
         .eq("id", id)
         .maybeSingle();
