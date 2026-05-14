@@ -1,7 +1,7 @@
 import { useMemo } from "react";
+import { ReferAFriendCard } from "@/components/client/ReferAFriendCard";
 import {
   Cake,
-  ChevronRight,
   Crown,
   Diamond,
   Gem,
@@ -11,13 +11,9 @@ import {
   Ticket,
   TrendingUp,
   Trophy,
-  UserPlus,
-  Zap,
   Loader2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useLoyalty, type LoyaltyLevel, type LoyaltyMovement } from "@/hooks/useLoyalty";
-import { BetaBadge } from "@/components/shared/BetaBadge";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -365,60 +361,10 @@ export const ClientLoyalty = () => {
         )}
       </section>
 
-      {/* Refer-a-friend CTA — leyenda (referral codes pendientes en futura iteración) */}
-      <section
-        className="relative overflow-hidden rounded-2xl border p-5 md:p-6"
-        style={{
-          background: "linear-gradient(135deg, rgba(232,84,42,0.12) 0%, rgba(184,56,26,0.04) 100%)",
-          borderColor: "rgba(232,84,42,0.4)",
-          boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset",
-        }}
-      >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-24 -top-24 h-60 w-60 rounded-full"
-          style={{ background: "rgba(232,84,42,0.2)", filter: "blur(70px)" }}
-        />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white"
-              style={{
-                background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 16px -6px rgba(232,84,42,0.6)",
-              }}
-            >
-              <UserPlus className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span
-                  className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-                  style={{ ...mono, letterSpacing: "0.22em" }}
-                >
-                  <Zap className="h-3 w-3" />
-                  Refer a friend
-                </span>
-                <BetaBadge
-                  label="Próximamente"
-                  reason="Refer-a-friend requiere flujo de invitación con código único, tracking de attribution y recompensa atómica para ambos lados. Llegará en próximas versiones de Pasify."
-                  variant="compact"
-                />
-              </div>
-              <h3 className="text-xl font-semibold tracking-tight text-foreground">
-                Trae un amigo, <span style={serif} className="text-orange-500">5€</span> para los dos
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Disponible en próximas versiones de Pasify. Mientras tanto, comparte Pasify en tus redes.
-              </p>
-            </div>
-          </div>
-          <Button disabled title="Disponible en próxima iteración">
-            Compartir
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
-      </section>
+      {/* Refer-a-friend real — backend en mig 0052 (referral_codes +
+          referral_claims + RPCs). El componente carga el código del
+          usuario al montar y permite canjear códigos ajenos. */}
+      <ReferAFriendCard />
     </div>
   );
 };
