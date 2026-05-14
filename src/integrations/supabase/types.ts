@@ -3815,6 +3815,102 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_claims: {
+        Row: {
+          claimed_at: string
+          id: string
+          referee_user_id: string
+          referral_code: string
+          referrer_user_id: string
+          reward_points: number
+        }
+        Insert: {
+          claimed_at?: string
+          id?: string
+          referee_user_id: string
+          referral_code: string
+          referrer_user_id: string
+          reward_points?: number
+        }
+        Update: {
+          claimed_at?: string
+          id?: string
+          referee_user_id?: string
+          referral_code?: string
+          referrer_user_id?: string
+          reward_points?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_claims_referee_user_id_fkey"
+            columns: ["referee_user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_claims_referee_user_id_fkey"
+            columns: ["referee_user_id"]
+            isOneToOne: true
+            referencedRelation: "public_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_claims_referral_code_fkey"
+            columns: ["referral_code"]
+            isOneToOne: false
+            referencedRelation: "referral_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "referral_claims_referrer_user_id_fkey"
+            columns: ["referrer_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_claims_referrer_user_id_fkey"
+            columns: ["referrer_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_codes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_codes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refund_request_messages: {
         Row: {
           body: string
@@ -5971,6 +6067,7 @@ export type Database = {
         Args: { _code: string; _org_id?: string }
         Returns: boolean
       }
+      get_or_create_my_referral_code: { Args: never; Returns: string }
       get_user_role: { Args: { _user_id: string }; Returns: string }
       get_user_roles: { Args: { _user_id: string }; Returns: string[] }
       global_search: {
@@ -6130,6 +6227,13 @@ export type Database = {
           primary_venue_id: string
           should_show_wizard: boolean
           user_id: string
+        }[]
+      }
+      redeem_referral_code: {
+        Args: { _code: string }
+        Returns: {
+          claim_id: string
+          reward_points: number
         }[]
       }
       request_refund: {
