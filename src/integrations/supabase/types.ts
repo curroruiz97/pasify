@@ -5849,6 +5849,14 @@ export type Database = {
           title: string
         }[]
       }
+      apply_pricing_proposal: {
+        Args: { _proposal_id: string }
+        Returns: {
+          new_price_cents: number
+          proposal_id: string
+          tier_id: string
+        }[]
+      }
       assign_admin_to_conversation: {
         Args: { _admin_id: string; _conv_id: string }
         Returns: undefined
