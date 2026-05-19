@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+// ============================================================
+// Signing properties · leídas desde android/keystore.properties
+// (gitignored). Si el archivo NO existe, signingConfig.release no se
+// poblará y el build de release fallará con un mensaje claro — esto es
+// intencional: una APK release SIN firmar no debe distribuirse. Para
+// crear el keystore y el archivo properties, ver el README.md sección
+// "APK Android" o el plan en C:\Users\USUARIO\.claude\plans\.
+// ============================================================
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace "es.pasify.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,12 +30,41 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    buildTypes {
+
+    signingConfigs {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
         }
     }
+
+    buildTypes {
+        release {
+            // R8 activo: ofusca, elimina código muerto y reduce el APK
+            // de ~22MB a ~9MB en builds típicos de Capacitor + React.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            // Debug build NO se firma con keystore producción.
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    // Si en algún momento aparece "More than one file was found with OS independent path"
+    // descomenta el packagingOptions para excluir LICENSE duplicados.
+    // packagingOptions {
+    //     resources {
+    //         excludes += ['META-INF/LICENSE.md', 'META-INF/LICENSE-notice.md']
+    //     }
+    // }
 }
 
 repositories {

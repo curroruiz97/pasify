@@ -10,7 +10,10 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     captureInput: true,
-    webContentsDebuggingEnabled: true,
+    // Debugging vía chrome://inspect SOLO en debug builds. En release (la APK
+    // firmada que distribuyes) debe ser false para no exponer la WebView a
+    // un inspector remoto en un dispositivo robado o comprometido.
+    webContentsDebuggingEnabled: false,
   },
   ios: {
     contentInset: "always",

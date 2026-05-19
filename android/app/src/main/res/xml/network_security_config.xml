@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Config · Pasify
+  · cleartext desactivado globalmente (toda comunicación HTTPS obligatoria).
+    Supabase, Stripe, Sentry, Resend y Vercel sirven HTTPS por defecto.
+  · trust-anchors solo desde el system store (cert pinning custom no
+    aplicable hasta que tengamos certificado propio).
+  · Si necesitas dev local contra http://10.0.2.2 (emulador → host machine)
+    descomenta el domain-config inferior; OJO con dejarlo activo en release.
+-->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+
+  <!--
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">10.0.2.2</domain>
+    <domain includeSubdomains="true">localhost</domain>
+  </domain-config>
+  -->
+</network-security-config>

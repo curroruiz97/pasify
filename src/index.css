@@ -733,3 +733,19 @@ animation-play-state: paused;
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40% { transform: translateY(-4px); opacity: 1; }
 }
+
+/* ============================================================
+   NATIVE WRAP UTILITIES (Capacitor Android/iOS)
+   Por qué: en WebView nativa el viewport pierde altura cuando aparecen
+   barras dinámicas (gesture nav, address bar) si usas 100vh. 100dvh sí
+   responde correctamente. Las clases .safe-* respetan notch/punch-hole/
+   gesture-bar usando env(safe-area-inset-*) con fallback razonable.
+   ============================================================ */
+.app-shell, .full-viewport { min-height: 100dvh; }
+@supports not (height: 100dvh) {
+  .app-shell, .full-viewport { min-height: 100vh; }
+}
+
+.safe-top    { padding-top: max(env(safe-area-inset-top), 12px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+.safe-x      { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }

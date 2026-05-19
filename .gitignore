@@ -35,7 +35,11 @@ android/app/release.keystore
 android/app/*.keystore
 android/app/*.jks
 android/key.properties
+android/keystore.properties
 android/app/key.properties
+android/app/keystore.properties
+**/*.jks
+**/*.keystore
 
 # Claude Code local config
 .claude/

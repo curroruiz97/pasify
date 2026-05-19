@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data Extraction Rules · Pasify · Android 12+ (API 31+)
+  Complementa allowBackup="false" para impedir que el sistema operativo
+  exfiltre tokens de auth, preferencias o WebView storage a Google Drive
+  o a procesos device-to-device.
+-->
+<data-extraction-rules>
+  <cloud-backup>
+    <exclude domain="root" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+    <exclude domain="file" />
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="root" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+    <exclude domain="file" />
+  </device-transfer>
+</data-extraction-rules>

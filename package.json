@@ -14,7 +14,13 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "i18n:check": "node scripts/fix-i18n-mojibake.mjs --check",
-    "i18n:fix": "node scripts/fix-i18n-mojibake.mjs"
+    "i18n:fix": "node scripts/fix-i18n-mojibake.mjs",
+    "cap:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run build && cap sync android && cap run android",
+    "android:build:release": "npm run build && cap sync android && cd android && ./gradlew assembleRelease",
+    "android:build:bundle": "npm run build && cap sync android && cd android && ./gradlew bundleRelease",
+    "android:clean": "cd android && ./gradlew clean"
   },
   "lint-staged": {
     "*.{ts,tsx}": "eslint --fix"
@@ -33,6 +39,7 @@
     "@capacitor/preferences": "^7.0.2",
     "@capacitor/push-notifications": "^7.0.3",
     "@capacitor/share": "^7.0.2",
+    "@capacitor/status-bar": "^8.0.2",
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",

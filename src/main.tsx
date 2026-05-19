@@ -9,6 +9,26 @@ import { initSentry } from "./lib/sentry";
 // No-op se VITE_SENTRY_DSN non è settato.
 initSentry();
 
+// --- STATUS BAR NATIVO (Android/iOS) ---
+// La APK arranca con la status bar en color blanco/sistema. Aquí la forzamos
+// al ink Pasify (#0F0F0F) para que sea continuo con el theme oscuro de la
+// app. setOverlaysWebView(false) evita que la WebView dibuje por debajo de
+// la barra del sistema (que ya gestionamos con env(safe-area-inset-top) en
+// MobileTopBar). Errores se tragan: si el plugin no está disponible (web
+// dev en navegador) no debe romper el boot.
+(async () => {
+  const { Capacitor } = await import('@capacitor/core');
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar');
+    await StatusBar.setBackgroundColor({ color: '#0F0F0F' });
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setOverlaysWebView({ overlay: false });
+  } catch (err) {
+    console.warn('[StatusBar] init skipped', err);
+  }
+})();
+
 // --- INTERCETTA TOKEN DI RECOVERY PRIMA DI HASHROUTER ---
 // Supabase aggiunge i token come fragment (#access_token=...) ma HashRouter usa anche #
 // Quindi dobbiamo intercettarli prima che vengano persi
@@ -191,6 +211,17 @@ if (localStorage.getItem(cacheVersionKey) !== CACHE_VERSION) {
   }
 }
 
+// En nativo (Capacitor) NO queremos el Service Worker registrado: el bundle
+// se sirve desde capacitor://localhost y un SW activo (registrado en una
+// build PWA anterior) puede cachear assets con scope incorrecto y dejar la
+// APK en un estado raro. Desregistramos cualquier SW que haya quedado vivo
+// de una versión web previa instalada en la misma WebView.
+if (Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister().then(() => console.log('🧹 SW unregistered (native)')));
+  }).catch(() => { /* swallow */ });
+}
+
 // Renderizza il componente principale dell'app
 import { Sentry } from "./lib/sentry";
 
@@ -202,7 +233,7 @@ createRoot(document.getElementById("root")!).render(
       // h1 heredaba el foreground del body en dark mode y el botón cyan
       // era inconsistente con el branding terracota.
       <div style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
