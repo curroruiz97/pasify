@@ -746,7 +746,7 @@ export const SettingsSheet = ({
               <Row
                 icon={<ChevronRight className="h-4 w-4" />}
                 label="Política de privacidad"
-                onPress={() => toast({ title: "Privacy", description: "Próximamente · pasify.es/privacy" })}
+                onPress={() => window.open("/privacidad.html", "_blank", "noopener,noreferrer")}
               />
               <Divider />
               <Row
