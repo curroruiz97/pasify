@@ -59,4 +59,14 @@
     <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/login" />
   </url>
 
+  <!-- Política de Privacidad -->
+  <url>
+    <loc>https://pasify.es/privacidad.html</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+    <mobile:mobile/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/privacidad.html" />
+  </url>
+
 </urlset>
