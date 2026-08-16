@@ -95,7 +95,10 @@
 <ul>
   <li>Identificadores técnicos, tipo de dispositivo, sistema operativo, versión de la app, dirección IP (anonimizada) y registros de errores.</li>
   <li><strong>Cámara:</strong> la app solicita permiso de cámara únicamente para escanear códigos QR en el control de acceso. Las imágenes se procesan en el propio dispositivo, en tiempo real, y <strong>no se almacenan ni se envían a nuestros servidores</strong>.</li>
+  <li><strong>Micrófono:</strong> solo se solicita si grabas una nota de voz en el chat de soporte. La grabación se envía como mensaje y no se activa el micrófono en ningún otro momento.</li>
+  <li><strong>Fotos:</strong> para elegir una imagen de perfil o la portada de un evento usamos el selector de fotos del sistema Android. La app <strong>no pide acceso a tu galería</strong>: solo recibe el archivo concreto que tú seleccionas.</li>
   <li><strong>Notificaciones:</strong> si las autorizas, usamos un identificador de dispositivo para enviarte avisos sobre tus entradas y eventos.</li>
+  <li><strong>Informes de fallos:</strong> cuando la app falla enviamos a Sentry un informe técnico con el mensaje de error, la traza, el modelo de dispositivo, la versión del sistema y la versión de la app, asociado a tu identificador de usuario para poder reproducir la incidencia. No incluye el contenido de tus mensajes ni datos de pago.</li>
 </ul>
 
 <h3>3.6 Datos que no tratamos</h3>
@@ -129,6 +132,7 @@
     <tr><td>Supabase Inc.</td><td>Base de datos y autenticación</td><td>Unión Europea</td></tr>
     <tr><td>Vercel Inc.</td><td>Alojamiento de la aplicación</td><td>UE / EE. UU.</td></tr>
     <tr><td>Stripe Payments Europe, Ltd.</td><td>Pagos, cashless y suscripciones</td><td>Unión Europea</td></tr>
+    <tr><td>Functional Software, Inc. (Sentry)</td><td>Informes de fallos y diagnóstico</td><td>EE. UU.</td></tr>
   </tbody>
 </table>
 <p>Cuando compras una entrada, el <strong>local o promotor organizador del evento</strong> accede a los datos estrictamente necesarios para gestionar el acceso y el aforo (nombre, tipo de entrada y estado del check-in). En ese tratamiento el organizador actúa como responsable independiente respecto a su propia relación contigo.</p>
@@ -156,7 +160,8 @@
 <h2>9. Tus derechos</h2>
 <p>Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y portabilidad, así como retirar el consentimiento prestado.</p>
 <ul>
-  <li>Desde tu perfil en la app puedes consultar y modificar tus datos, revisar tus compras y solicitar la eliminación de tu cuenta.</li>
+  <li>Desde tu perfil en la app puedes consultar y modificar tus datos, revisar tus compras y eliminar tu cuenta (Ajustes → Eliminar cuenta).</li>
+  <li>Si ya no tienes la app instalada, puedes solicitar el borrado desde <a href="/eliminar-cuenta.html">esta página</a>, que detalla qué datos se eliminan y cuáles se conservan por obligación legal.</li>
   <li>Para el resto de solicitudes, escríbenos a <a href="mailto:hola@pasify.es">hola@pasify.es</a>. Responderemos en el plazo máximo de un mes.</li>
   <li>Si consideras que no hemos atendido correctamente tu solicitud, puedes reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es" rel="noopener">aepd.es</a>).</li>
 </ul>

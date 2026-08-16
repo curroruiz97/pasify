@@ -69,4 +69,15 @@
     <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/privacidad.html" />
   </url>
 
+  <!-- Eliminación de cuenta · exigida por Google Play como recurso web
+       accesible sin tener la app instalada. Debe seguir siendo indexable. -->
+  <url>
+    <loc>https://pasify.es/eliminar-cuenta.html</loc>
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+    <mobile:mobile/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/eliminar-cuenta.html" />
+  </url>
+
 </urlset>

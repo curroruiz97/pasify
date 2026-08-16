@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   CreditCard,
+  ExternalLink,
   Loader2,
   Rocket,
   ShieldCheck,
@@ -477,43 +478,79 @@ const PartnerChoosePlan = () => {
                 </li>
               </ul>
 
-              {/* CTA */}
-              <button
-                type="button"
-                onClick={handleGoPremium}
-                disabled={claimingFree || startingCheckout || isNative}
-                className="pasify-cta relative mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-                style={{
-                  background:
-                    "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                  color: "#fff",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-                }}
-              >
-                {startingCheckout ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Abriendo Stripe…
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4" />
-                    Activar Premium
-                    <ArrowRight className="pasify-arrow h-4 w-4" />
-                  </>
-                )}
-              </button>
-              <p
-                className="relative mt-2 text-center text-[10.5px] uppercase"
-                style={{
-                  ...FONT_MONO,
-                  letterSpacing: "0.18em",
-                  color: "rgba(247,243,236,0.55)",
-                }}
-              >
-                Pago seguro vía Stripe · cancela cuando quieras
-              </p>
+              {/* CTA
+                  En nativo NO se pinta un boton de compra. Antes se renderizaba
+                  el mismo boton con `disabled={isNative}`: al estar deshabilitado
+                  el onClick no llegaba a dispararse, asi que pulsar "Activar
+                  Premium" en Android no producia absolutamente ninguna respuesta,
+                  y el pie seguia anunciando "Pago seguro via Stripe". Eso es
+                  justo el patron por el que Google Play rechazo la app el 15 ago
+                  2026 (Broken Functionality · "elementos de la interfaz que no
+                  responden"), ademas de anunciar un pago externo dentro de la app.
+                  Se sustituye por el mismo bloque informativo que ya usa
+                  PartnerSubscribe en nativo. */}
+              {isNative ? (
+                <div
+                  className="relative mt-5 rounded-2xl border p-4"
+                  style={{
+                    borderColor: "rgba(255,201,176,0.32)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "rgba(247,243,236,0.9)",
+                  }}
+                >
+                  <div
+                    className="mb-1.5 flex items-center gap-2 text-[10.5px] font-semibold uppercase"
+                    style={{ ...FONT_MONO, letterSpacing: "0.18em" }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Se gestiona desde la web
+                  </div>
+                  <p className="text-[13px] leading-snug">
+                    El plan Premium se contrata y se administra desde tu cuenta en
+                    el navegador. Mientras tanto puedes empezar con la cuenta
+                    gratuita y tener acceso completo al panel.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGoPremium}
+                    disabled={claimingFree || startingCheckout}
+                    className="pasify-cta relative mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                      color: "#fff",
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+                    }}
+                  >
+                    {startingCheckout ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Abriendo Stripe…
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4" />
+                        Activar Premium
+                        <ArrowRight className="pasify-arrow h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                  <p
+                    className="relative mt-2 text-center text-[10.5px] uppercase"
+                    style={{
+                      ...FONT_MONO,
+                      letterSpacing: "0.18em",
+                      color: "rgba(247,243,236,0.55)",
+                    }}
+                  >
+                    Pago seguro vía Stripe · cancela cuando quieras
+                  </p>
+                </>
+              )}
             </article>
           </div>
         </div>

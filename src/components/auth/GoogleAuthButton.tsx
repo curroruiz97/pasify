@@ -68,9 +68,26 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
         if (error) throw error;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "No se pudo iniciar sesión con Google";
+      // El plugin nativo devuelve errores crudos de Google Play Services
+      // ("Something went wrong", "12501", el temido "10" = DEVELOPER_ERROR
+      // cuando la huella SHA-1 del certificado no está registrada en el cliente
+      // OAuth de Android). Volcarlos tal cual en un toast rojo deja al usuario
+      // —o al revisor de Play— delante de un mensaje incomprensible en la
+      // primera pantalla de la app. Traducimos a algo accionable y dejamos el
+      // detalle técnico en consola y en Sentry.
       console.error("Google auth error:", err);
-      toast({ title: "Error", description: msg, variant: "destructive" });
+
+      const raw = err instanceof Error ? err.message : String(err ?? "");
+      const cancelado = /12501|canceled|cancelled|popup_closed/i.test(raw);
+      const description = cancelado
+        ? "Has cancelado el acceso con Google."
+        : "No hemos podido conectar con Google. Puedes entrar con tu email y contraseña mientras tanto.";
+
+      toast({
+        title: cancelado ? "Acceso cancelado" : "Google no disponible",
+        description,
+        variant: cancelado ? "default" : "destructive",
+      });
       setLoading(false);
     }
   };

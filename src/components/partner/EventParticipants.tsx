@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import { Capacitor } from "@capacitor/core";
 
 const dateLocales: Record<string, any> = {
@@ -267,28 +268,38 @@ const EventParticipants = ({ open, onOpenChange, event }: EventParticipantsProps
       const fileName = `partecipanti-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`;
 
       if (Capacitor.isNativePlatform()) {
-        // Request permissions first
-        const permStatus = await Filesystem.checkPermissions();
-        if (permStatus.publicStorage !== 'granted') {
-          const reqResult = await Filesystem.requestPermissions();
-          if (reqResult.publicStorage !== 'granted') {
-            throw new Error('Storage permission denied');
-          }
-        }
-
-        // On mobile, save directly to Downloads folder
+        // Guardamos en el directorio privado de cache de la app y delegamos en
+        // la hoja de compartir del sistema, que deja al usuario mandarlo por
+        // WhatsApp/email o guardarlo donde quiera.
+        //
+        // Antes esto pedia el permiso `publicStorage` y escribia en
+        // Directory.ExternalStorage → `Download/`. Desde Android 11 (API 30) el
+        // scoped storage bloquea esa ruta salvo con MANAGE_EXTERNAL_STORAGE, un
+        // permiso que Google Play restringe severamente y que la app no
+        // declara. Resultado: requestPermissions() devolvia denied y la
+        // exportacion moria con "Storage permission denied" — un boton que
+        // fallaba siempre en el movil. Cache + Share no necesita permisos.
         const pdfBase64 = doc.output("datauristring").split(",")[1];
 
         await Filesystem.writeFile({
-          path: `Download/${fileName}`,
+          path: fileName,
           data: pdfBase64,
-          directory: Directory.ExternalStorage,
+          directory: Directory.Cache,
           recursive: true,
+        });
+
+        const { uri } = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache,
+        });
+
+        await Share.share({
+          title: fileName,
+          files: [uri],
         });
 
         toast({
           title: t("participants.pdfGenerated"),
-          description: t("participants.pdfSavedToDownloads"),
         });
       } else {
         // On web, use the standard save method

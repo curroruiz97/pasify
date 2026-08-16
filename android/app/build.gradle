@@ -21,11 +21,15 @@ android {
         applicationId "es.pasify.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Play Console rechaza un AAB con un versionCode ya subido. La build
-        // rechazada el 15 ago 2026 ocupa el 1, asi que la corregida sube al 2.
-        // Si Play dice que el 2 tambien esta usado, incrementa hasta que pase.
-        versionCode 2
-        versionName "1.0.1"
+        // OJO: mantener esto sincronizado con lo que hay en Play Console.
+        // La build rechazada del 15 ago 2026 se subio como versionCode 2 /
+        // versionName 1.1, pero ese bump se hizo a mano y nunca se commiteo:
+        // el repo se quedo en 1 y la correccion salio con un 2 duplicado que
+        // Play no admite. De ahi el 3.
+        // Antes de cada envio, comprueba el versionCode de la ultima version
+        // en Play y sube desde ahi, no desde lo que ponga este fichero.
+        versionCode 4
+        versionName "1.1.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -53,6 +57,15 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+
+            // Símbolos de depuración nativos dentro del propio AAB. Sin esto
+            // Play avisa en cada subida ("contiene código nativo pero no has
+            // subido símbolos") y las trazas de fallos y ANR de las .so de
+            // Sentry llegan a Android Vitals sin simbolizar, es decir,
+            // ilegibles. Aplica a las librerías nativas, no al código Java.
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
         debug {
             // Debug build NO se firma con keystore producción.
