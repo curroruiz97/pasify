@@ -18,9 +18,9 @@
     "cap:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run build && cap sync android && cap run android",
-    "android:build:release": "npm run build && cap sync android && cd android && ./gradlew assembleRelease",
-    "android:build:bundle": "npm run build && cap sync android && cd android && ./gradlew bundleRelease",
-    "android:clean": "cd android && ./gradlew clean"
+    "android:build:release": "npm run build && cap sync android && node scripts/gradle.mjs assembleRelease",
+    "android:build:bundle": "npm run build && cap sync android && node scripts/gradle.mjs bundleRelease",
+    "android:clean": "node scripts/gradle.mjs clean"
   },
   "lint-staged": {
     "*.{ts,tsx}": "eslint --fix"
