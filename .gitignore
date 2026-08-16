@@ -12,10 +12,14 @@ dist
 dist-ssr
 *.local
 
-# Env files — variabili gestite su Vercel
+# Env files — i segreti stanno su Vercel / supabase secrets.
+# .env.production è versionato a posta: contiene solo valori pubblici
+# (URL Supabase + publishable key) e serve perché il build dell'AAB Android
+# si fa in locale, dove .env.local può non esistere. Vedi il file stesso.
 .env
 .env.*
 !.env.example
+!.env.production
 
 # Editor directories and files
 .vscode/*
