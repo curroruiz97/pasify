@@ -23,6 +23,58 @@ const resolveGitSha = (): string => {
 
 const GIT_SHA = resolveGitSha();
 
+/**
+ * Guardia de build · impide publicar un bundle sin configuración de Supabase.
+ *
+ * `src/integrations/supabase/client.ts` cae en `https://placeholder.supabase.co`
+ * cuando faltan las env vars, para que la app al menos monte en dev. En web eso
+ * nunca se notó porque Vercel inyecta las variables desde su dashboard, pero el
+ * AAB de Android se compila en local: si ahí no hay `.env.local` ni
+ * `.env.production`, el bundle sale apuntando a un host que no existe y TODA
+ * petición muere con "Failed to fetch" — incluido el login.
+ *
+ * Eso fue exactamente lo que rechazó Google Play el 15 ago 2026 (Broken
+ * Functionality). Antes de este guardia el build salía con exit 0 y sin un solo
+ * aviso, así que el fallo solo era visible con la app ya instalada.
+ *
+ * Ahora `vite build` en modo producción revienta si la config no es real.
+ */
+const supabaseEnvGuard = () => ({
+  name: "pasify-supabase-env-guard",
+  configResolved(config: { command: string; mode: string; env: Record<string, string> }) {
+    if (config.command !== "build" || config.mode !== "production") return;
+
+    const isMissing = (v?: string) => !v || /placeholder/i.test(v);
+    const faltan = [
+      !config.env.VITE_SUPABASE_URL || isMissing(config.env.VITE_SUPABASE_URL)
+        ? "VITE_SUPABASE_URL"
+        : null,
+      isMissing(config.env.VITE_SUPABASE_PUBLISHABLE_KEY)
+        ? "VITE_SUPABASE_PUBLISHABLE_KEY"
+        : null,
+    ].filter(Boolean);
+
+    if (faltan.length > 0) {
+      throw new Error(
+        [
+          "",
+          "  ✖ Build de producción abortado: configuración de Supabase ausente o placeholder.",
+          "",
+          `    Variables sin valor real: ${faltan.join(", ")}`,
+          "",
+          "    Sin ellas el bundle apunta a https://placeholder.supabase.co, que no",
+          "    resuelve, y el login falla con «Failed to fetch» en el dispositivo.",
+          "",
+          "    Los valores públicos están versionados en .env.production. Si ese",
+          "    fichero falta, recupéralo del repo o copia .env.example a .env.local",
+          "    y rellena las dos variables (ver DEPLOY_VERCEL.md).",
+          "",
+        ].join("\n"),
+      );
+    }
+  },
+});
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   define: {
@@ -51,6 +103,7 @@ export default defineConfig(({ mode }) => ({
   //   : null;
 
   plugins: [
+    supabaseEnvGuard(),
     react(),
     mode === "development" && componentTagger(),
     // sentryPlugin,
