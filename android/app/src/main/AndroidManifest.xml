@@ -4,17 +4,36 @@
          PERMISSIONS · justificados por los plugins Capacitor en uso
          INTERNET .................... Supabase/Stripe/Sentry (obligatorio)
          CAMERA ...................... @capacitor/camera + QR scanner (html5-qrcode)
-         READ_MEDIA_IMAGES/VIDEO ..... Pick foto de perfil + cover de evento (SDK 33+)
+         RECORD_AUDIO ................ notas de voz del chat (VoiceRecorderButton →
+                                       getUserMedia({audio:true}) + MediaRecorder).
+                                       Sin este permiso la WebView deniega la
+                                       captura y el boton del microfono falla
+                                       siempre en Android.
          POST_NOTIFICATIONS .......... @capacitor/push-notifications runtime (SDK 33+)
+
+         NO añadir READ_MEDIA_IMAGES ni READ_MEDIA_VIDEO.
+         Estaban declarados a mano desde el commit de mayo 2026 y no los pide
+         ninguna librería: ningún AndroidManifest de node_modules los menciona.
+         @capacitor/camera declara el alias PHOTOS con `strings = {}` (cero
+         permisos) y elige fotos con ActivityResultContracts.PickVisualMedia,
+         es decir, el selector de fotos del sistema. Los permisos amplios de
+         almacenamiento sobraban.
+
+         Google Play los detectó en las comprobaciones previas del 16 ago 2026
+         ("Usar selectores de sistema alternativos para fotos o vídeos"): la
+         política solo los permite en apps que apuntan a API 33+ cuando los
+         selectores del sistema no bastan para la funcionalidad principal, y
+         aquí bastan de sobra.
          ============================================================ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Camera no es obligatoria para que la APK sea instalable en tablets sin cámara -->
+    <!-- Ni cámara ni micrófono son obligatorios: así la app sigue siendo
+         instalable en tablets y dispositivos sin ese hardware. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:allowBackup="false"
