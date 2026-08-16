@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
     <!-- ============================================================
          PERMISSIONS · justificados por los plugins Capacitor en uso
          INTERNET .................... Supabase/Stripe/Sentry (obligatorio)
@@ -29,6 +30,13 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- USE_CREDENTIALS lo arrastra @codetrix-studio/capacitor-google-auth en su
+         propio manifest. Es un permiso obsoleto que Android ELIMINÓ en API 23, y
+         el minSdk de esta app es justo 23: no hace absolutamente nada salvo
+         aparecer en la lista de permisos de la ficha de Play y dar que pensar a
+         quien la lee. Lo quitamos de la fusión. -->
+    <uses-permission android:name="android.permission.USE_CREDENTIALS" tools:node="remove" />
 
     <!-- Ni cámara ni micrófono son obligatorios: así la app sigue siendo
          instalable en tablets y dispositivos sin ese hardware. -->
