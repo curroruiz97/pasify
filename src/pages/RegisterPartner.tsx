@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/countries";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
+import AppleAuthButton from "@/components/auth/AppleAuthButton";
 import { redirectToApp } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
@@ -211,6 +212,8 @@ const RegisterPartner = () => {
         </p>
 
         <GoogleAuthButton label="Registrarme con Google" />
+        <div className="h-3" />
+        <AppleAuthButton label="Registrarme con Apple" />
 
         <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-slate-400">
           <div className="h-px flex-1 bg-slate-200" />

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
+import AppleAuthButton from "@/components/auth/AppleAuthButton";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
@@ -150,6 +151,8 @@ const Login = () => {
 
         {/* Google OAuth */}
         <GoogleAuthButton label="Continuar con Google" />
+        <div className="h-3" />
+        <AppleAuthButton label="Continuar con Apple" />
 
         {/* Divider */}
         <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-slate-400">
