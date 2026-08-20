@@ -58,6 +58,9 @@ const PartnerManage = () => {
   const [openingPortal, setOpeningPortal] = useState(false);
   const [openingCheckout, setOpeningCheckout] = useState(false);
   const isNative = Capacitor.isNativePlatform();
+  // Ver nota en PartnerSubscribe: en iOS no puede haber CTA de pago ni
+  // enlaces a comprar fuera de la app (guia 3.1.3(f)).
+  const isIOS = Capacitor.getPlatform() === "ios";
 
   useEffect(() => {
     (async () => {
@@ -332,7 +335,7 @@ const PartnerManage = () => {
                 {meta.sub}
               </p>
 
-              {isNative && (meta.cta === "checkout" || meta.cta === "portal") && (
+              {isNative && !isIOS && (meta.cta === "checkout" || meta.cta === "portal") && (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={() => openWebWithAuth("/partner/manage")}
@@ -410,7 +413,7 @@ const PartnerManage = () => {
                 customVariants={gridVariants}
                 onClick={() => {
                   if (disabled) return;
-                  if (isNative) openWebWithAuth("/partner/manage");
+                  if (isNative && !isIOS) openWebWithAuth("/partner/manage");
                   else openPortal();
                 }}
                 className={`group flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/90 p-4 text-left backdrop-blur transition ${

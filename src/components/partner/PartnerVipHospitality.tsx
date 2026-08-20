@@ -121,7 +121,7 @@ export const PartnerVipHospitality = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6 overflow-x-clip">
       {/* Hero KPIs */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <KpiTile icon={<Users className="h-4 w-4" />} color="#FF7A4D" eyebrow="Aforo VIP" value={stats.bookedCap.toString()} sub={`/ ${stats.totalCap} (${stats.occupancyPct}%)`} />
@@ -132,7 +132,10 @@ export const PartnerVipHospitality = () => {
 
       {/* Tabs */}
       <div className="flex items-end justify-between gap-4 border-b border-border">
-        <div className="flex gap-1">
+        {/* min-w-0 + overflow-x-auto: sin esto las 4 pestañas suman mas ancho
+            que la pantalla de un movil y desbordan TODA la pagina hacia la
+            derecha, cortando titulo y tarjetas. Ahora la tira scrollea sola. */}
+        <div className="flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Tab active={tab === "tables"} onClick={() => setTab("tables")} icon={<Gem className="h-4 w-4" />}>
             Mesas
           </Tab>
@@ -170,7 +173,7 @@ const Tab = ({
   <button
     type="button"
     onClick={onClick}
-    className="group relative inline-flex items-center gap-2 px-4 pb-3 pt-1 text-sm font-medium transition"
+    className="group relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap px-4 pb-3 pt-1 text-sm font-medium transition"
     style={{ color: active ? "#F4EEE2" : "#8A8275" }}
   >
     {icon}
