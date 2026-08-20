@@ -121,9 +121,12 @@ export const PartnerReports = () => {
       const { data: curRows, error: curErr } = await supabase
         .from("tickets")
         .select(
-          "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email"
+          // tickets NO tiene partner_id: el vinculo con el partner va por
+          // tickets.event_id -> events.partner_id. El !inner fuerza el join
+          // para poder filtrar por la columna de la tabla relacionada.
+          "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email, events!inner(partner_id)"
         )
-        .eq("partner_id", uid)
+        .eq("events.partner_id", uid)
         .in("status", ["paid", "used"])
         .gte("paid_at", start);
       if (curErr) throw curErr;
@@ -131,8 +134,8 @@ export const PartnerReports = () => {
       // Tickets del rango anterior (para delta)
       const { data: prevRows } = await supabase
         .from("tickets")
-        .select("id, status, amount_paid_cents, paid_at")
-        .eq("partner_id", uid)
+        .select("id, status, amount_paid_cents, paid_at, events!inner(partner_id)")
+        .eq("events.partner_id", uid)
         .in("status", ["paid", "used"])
         .gte("paid_at", prevStart)
         .lt("paid_at", prevEnd);

@@ -68,6 +68,10 @@ const PartnerSubscribe = () => {
   const { i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
   const isNative = Capacitor.isNativePlatform();
+  // iOS: la guia 3.1.3(f) de Apple prohibe mostrar precios, checkout o
+  // cualquier llamada a comprar fuera de la app. Android y web no tienen
+  // esa restriccion, asi que solo capamos iOS.
+  const isIOS = Capacitor.getPlatform() === "ios";
 
   // El hook resuelve internamente la org del caller vía useOrganization.
   // No necesitamos pasar userId — la firma legacy se mantiene compatible.
@@ -157,12 +161,18 @@ const PartnerSubscribe = () => {
 
     const nativeDescription = (() => {
       if (partnerSub.status === "trialing" && partnerSub.daysLeft !== null && partnerSub.daysLeft <= 0) {
-        return "Gracias por probar Pasify. Para seguir usando todas las funciones Partner, activa tu cuenta desde el navegador.";
+        return isIOS
+          ? "Gracias por probar Pasify. Tu cuenta ya no tiene un plan activo."
+          : "Gracias por probar Pasify. Para seguir usando todas las funciones Partner, activa tu cuenta desde el navegador.";
       }
       if (partnerSub.hasRecord && !partnerSub.hasAccess) {
-        return "Tu acceso a las funciones Partner se ha interrumpido. Reactívalo desde el portal web en pocos segundos.";
+        return isIOS
+          ? "Tu acceso a las funciones Partner está interrumpido."
+          : "Tu acceso a las funciones Partner se ha interrumpido. Reactívalo desde el portal web en pocos segundos.";
       }
-      return "Gestiona tu cuenta Partner desde pasifyy.vercel.app. Te llevamos allí con la sesión ya iniciada.";
+      return isIOS
+        ? "Tu cuenta no tiene un plan Partner activo. Escríbenos a hola@pasify.es y te ayudamos."
+        : "Gestiona tu cuenta Partner desde pasifyy.vercel.app. Te llevamos allí con la sesión ya iniciada.";
     })();
 
     return (
@@ -264,6 +274,7 @@ const PartnerSubscribe = () => {
             {nativeDescription}
           </p>
 
+          {!isIOS && (
           <motion.button
             whileTap={{ scale: 0.985, y: 1 }}
             onClick={() => openWebWithAuth("/partner/manage")}
@@ -279,6 +290,7 @@ const PartnerSubscribe = () => {
             <span>Abrir pasifyy.vercel.app</span>
             <ArrowRight className="pasify-arrow h-4 w-4" />
           </motion.button>
+          )}
 
           <p
             className="mt-4 text-center leading-relaxed"
@@ -290,7 +302,7 @@ const PartnerSubscribe = () => {
               color: "#8A8275",
             }}
           >
-            Se abrirá el portal con tu sesión iniciada
+            {isIOS ? "Soporte · hola@pasify.es" : "Se abrirá el portal con tu sesión iniciada"}
           </p>
         </motion.div>
 
