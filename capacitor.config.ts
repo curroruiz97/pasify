@@ -21,6 +21,10 @@ const config: CapacitorConfig = {
     backgroundColor: "#0F0F0F",
   },
   plugins: {
+    GoogleAuth: {
+      scopes: ["profile", "email"],
+      iosClientId: "899901016052-5ltqfpu3qa3a9k9lu140n42s6lgqt476.apps.googleusercontent.com",
+    },
     SplashScreen: {
       launchShowDuration: 1500,
       backgroundColor: "#0F0F0F",
