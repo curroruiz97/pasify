@@ -15,6 +15,9 @@ interface GoogleAuthButtonProps {
 const WEB_CLIENT_ID =
   "892613837659-jtggfc6ufrhqrob0hsubm95q0an1koec.apps.googleusercontent.com";
 
+const IOS_CLIENT_ID =
+  "899901016052-5ltqfpu3qa3a9k9lu140n42s6lgqt476.apps.googleusercontent.com";
+
 let googleAuthInitialized = false;
 
 /**
@@ -33,9 +36,9 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
     if (!isNative || googleAuthInitialized) return;
     try {
       GoogleAuth.initialize({
-        clientId: WEB_CLIENT_ID,
+        clientId: Capacitor.getPlatform() === "ios" ? IOS_CLIENT_ID : WEB_CLIENT_ID,
         scopes: ["profile", "email"],
-        grantOfflineAccess: true,
+        grantOfflineAccess: Capacitor.getPlatform() !== "ios",
       });
       googleAuthInitialized = true;
     } catch (err) {

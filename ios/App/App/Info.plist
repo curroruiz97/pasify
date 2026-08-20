@@ -18,20 +18,31 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.899901016052-5ltqfpu3qa3a9k9lu140n42s6lgqt476</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Pasify usa la cámara para escanear los códigos QR de las entradas y validarlas en la puerta del local.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Pasify usa el micrófono para que puedas enviar notas de voz en el chat de soporte.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pasify accede a tus fotos para que puedas elegir imágenes de tu local o de tus eventos desde el dispositivo.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Pasify guarda en tu carrete las entradas y los códigos QR que descargues desde la aplicación.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pasify accede a tus fotos para que puedas elegir imágenes de tu local o de tus eventos desde el dispositivo.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
