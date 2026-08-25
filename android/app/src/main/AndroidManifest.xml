@@ -10,7 +10,6 @@
                                        Sin este permiso la WebView deniega la
                                        captura y el boton del microfono falla
                                        siempre en Android.
-         POST_NOTIFICATIONS .......... @capacitor/push-notifications runtime (SDK 33+)
 
          NO añadir READ_MEDIA_IMAGES ni READ_MEDIA_VIDEO.
          Estaban declarados a mano desde el commit de mayo 2026 y no los pide
@@ -29,7 +28,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- USE_CREDENTIALS lo arrastra @codetrix-studio/capacitor-google-auth en su
          propio manifest. Es un permiso obsoleto que Android ELIMINÓ en API 23, y

@@ -50,7 +50,6 @@ import LoaderOne from "@/components/ui/loader-one";
 
 // Usa il sistema di auth centralizzato
 import { useAuth, resolveInitialDashboard } from "@/hooks/useAuth";
-import { useFCMToken } from "@/hooks/useFCMToken";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 
 // React Query persister: usa la libreria ufficiale TanStack +
@@ -286,8 +285,6 @@ const OfflineBanner = () => {
 
 const App = () => {
   const { session, loading } = useAuth();
-  // FCM token registration (no-op on web)
-  useFCMToken();
 
   // Listen for foreground push notifications and show toast
   // Skip city notifications (event/discount) - native push is enough
