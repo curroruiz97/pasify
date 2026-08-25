@@ -38,6 +38,10 @@ const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
 const AuthBridge = lazy(() => import("./pages/AuthBridge"));
+// Paginas publicas exigidas por App Store Connect y Google Play:
+// URL de soporte y politica de privacidad. Accesibles sin sesion.
+const Soporte = lazy(() => import("./pages/Soporte"));
+const Privacidad = lazy(() => import("./pages/Privacidad"));
 const Calendar = lazy(() => import("./pages/Calendar"));
 const PublicPartnerPage = lazy(() => import("./pages/PublicPartnerPage"));
 
@@ -476,6 +480,8 @@ const App = () => {
                   vía webhook. */}
               <Route path="/ticket/success" element={<TicketSuccess />} />
 
+              <Route path="/soporte" element={<Soporte />} />
+              <Route path="/privacidad" element={<Privacidad />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </PageTransitions>
