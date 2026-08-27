@@ -16,9 +16,6 @@ verify_jwt = false
 [functions.verify-captcha]
 verify_jwt = false
 
-[functions.resolve-whitelabel-host]
-verify_jwt = false
-
 # -------- Magic links (token propio) --------
 [functions.accept-ticket-transfer]
 verify_jwt = false
