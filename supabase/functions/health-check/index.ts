@@ -73,15 +73,26 @@ Deno.serve(async (req) => {
   ]);
   const checks = [db, stripe, resend, fcm, storage];
 
-  // Persistir snapshots
-  await supabaseAdmin.from("service_status_snapshots").insert(
-    checks.map((c) => ({
-      service: c.service,
-      status: c.status,
-      latency_ms: c.latency_ms ?? null,
-      message: c.message ?? null,
-    }))
-  ).catch(() => null);
+  // Persistir snapshots.
+  // OJO: el builder que devuelve .from().insert() es un PromiseLike — tiene
+  // then() pero NO catch(). Encadenar .catch() aqui lanzaba
+  // "TypeError: ....catch is not a function" y tumbaba la funcion entera con
+  // un 500, que es lo que hacia fallar el check "Smoke production" en cada
+  // commit. Los errores de Postgrest vienen dentro de { error }, no como
+  // rechazo, asi que basta con envolver en try/catch e ignorarlos: el snapshot
+  // es informativo y nunca debe impedir responder el estado de salud.
+  try {
+    await supabaseAdmin.from("service_status_snapshots").insert(
+      checks.map((c) => ({
+        service: c.service,
+        status: c.status,
+        latency_ms: c.latency_ms ?? null,
+        message: c.message ?? null,
+      }))
+    );
+  } catch {
+    // best-effort: si no se puede guardar el snapshot, seguimos.
+  }
 
   const allOperational = checks.every((c) => c.status === "operational" || c.status === "maintenance");
   const overall = allOperational ? "operational" : checks.some((c) => c.status === "major_outage") ? "major_outage" : "degraded";
