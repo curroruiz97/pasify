@@ -30,10 +30,18 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const isNative = Capacitor.isNativePlatform();
+  // En iOS no se ofrece acceso con Google. El plugin nativo arrastra al binario
+  // GoogleSignIn 6.2.4, GTMAppAuth 1.3.1 y GTMSessionFetcher 2.3.0, versiones sin
+  // manifiesto de privacidad; Apple las rechaza desde 2024 con ITMS-91061 y el
+  // plugin fija esa version en su podspec, asi que no hay actualizacion posible.
+  // El pod esta fuera del Podfile de iOS y aqui se corta el boton, de modo que el
+  // plugin no llega a invocarse nunca. En iPhone quedan Sign in with Apple y el
+  // acceso por email. Android y web siguen exactamente igual.
+  const isIOS = Capacitor.getPlatform() === "ios";
 
   // Inizializzazione plugin (solo native, una volta sola)
   useEffect(() => {
-    if (!isNative || googleAuthInitialized) return;
+    if (isIOS || !isNative || googleAuthInitialized) return;
     try {
       GoogleAuth.initialize({
         clientId: Capacitor.getPlatform() === "ios" ? IOS_CLIENT_ID : WEB_CLIENT_ID,
@@ -44,7 +52,7 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
     } catch (err) {
       console.error("GoogleAuth.initialize error:", err);
     }
-  }, [isNative]);
+  }, [isNative, isIOS]);
 
   const handleClick = async () => {
     setLoading(true);
@@ -94,6 +102,8 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
       setLoading(false);
     }
   };
+
+  if (isIOS) return null;
 
   return (
     <button
