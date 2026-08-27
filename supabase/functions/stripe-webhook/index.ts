@@ -135,16 +135,31 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       }
     }
 
-    // Insertar application_fees_ledger
-    await supabaseAdmin.from("application_fees_ledger").insert({
-      org_id: order.org_id,
-      ticket_order_id: order.id,
-      stripe_payment_intent_id: pi,
-      amount_cents: feeCents,
-      gross_cents: totalCents,
-      net_to_partner_cents: totalCents - feeCents,
-      currency: session.currency?.toUpperCase() ?? "EUR",
-    }).catch((e) => log.warn("fee_ledger_insert_failed", { error: String(e) }));
+    // Insertar application_fees_ledger.
+    // OJO: el builder de .from().insert() es PromiseLike — tiene then() pero
+    // NO catch(). El .catch() que habia aqui lanzaba
+    // "TypeError: ....catch is not a function", el handler entero moria, el
+    // webhook devolvia 500 y Stripe lo reintentaba. Como el guardia
+    // anti-duplicados solo salta con status 'processed' (y el evento quedaba
+    // en 'failed'), cada reintento re-ejecutaba la compra completa: puntos de
+    // fidelidad duplicados y notificaciones repetidas. Postgrest reporta los
+    // errores en { error }, no rechazando, asi que se comprueban; el try/catch
+    // cubre fallos de red. Esta linea nunca debe tumbar el webhook: la venta
+    // ya esta procesada y el ledger es contabilidad, se puede reconciliar.
+    try {
+      const { error: ledgerError } = await supabaseAdmin.from("application_fees_ledger").insert({
+        org_id: order.org_id,
+        ticket_order_id: order.id,
+        stripe_payment_intent_id: pi,
+        amount_cents: feeCents,
+        gross_cents: totalCents,
+        net_to_partner_cents: totalCents - feeCents,
+        currency: session.currency?.toUpperCase() ?? "EUR",
+      });
+      if (ledgerError) log.warn("fee_ledger_insert_failed", { error: ledgerError.message, order_id: order.id });
+    } catch (e) {
+      log.warn("fee_ledger_insert_failed", { error: String(e), order_id: order.id });
+    }
   }
 }
 

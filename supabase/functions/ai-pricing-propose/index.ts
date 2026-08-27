@@ -85,6 +85,10 @@ Deno.serve(async (req) => {
         const deltaPct = ((suggestedPrice - tier.price_cents) / tier.price_cents) * 100;
         const expectedUpliftCents = Math.round((suggestedPrice - tier.price_cents) * (tier.capacity - tier.sold) * 0.7);
 
+        // Mismo motivo que en stripe-webhook: el builder de Postgrest no tiene
+        // catch(). Se envuelve en try/catch para que una propuesta que falle no
+        // aborte el recorrido de los demas tiers.
+        try {
         await supabaseAdmin.from("pricing_proposals").insert({
           event_id: ev.id,
           tier_id: tier.id,
@@ -96,7 +100,8 @@ Deno.serve(async (req) => {
           rationale,
           status: "pending",
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        }).select("id").single().catch(() => null);
+        }).select("id").single();
+        } catch { /* propuesta descartada, seguimos con el siguiente tier */ }
 
         proposals++;
       }
