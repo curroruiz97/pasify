@@ -8,6 +8,27 @@ use_frameworks!
 # Requires CocoaPods 1.6 or newer
 install! 'cocoapods', :disable_input_output_paths => true
 
+# ATENCION: dos plugins estan deliberadamente FUERA de esta lista.
+#
+# 1. CodetrixStudioCapacitorGoogleAuth (acceso con Google en iOS).
+#    Arrastra GoogleSignIn 6.2.4, GTMAppAuth 1.3.1 y GTMSessionFetcher 2.3.0.
+#    Ninguna de esas versiones incluye manifiesto de privacidad, obligatorio en
+#    los SDK de terceros desde 2024, y Apple rechaza el binario con
+#    ITMS-91061 (Missing privacy manifest). El podspec del plugin fija
+#    'GoogleSignIn ~> 6.2.4' incluso en su ultima version publicada, de modo que
+#    no existe actualizacion que lo resuelva. El paquete SIGUE instalado en
+#    package.json porque Android lo usa con normalidad: lo unico que se excluye
+#    es su compilacion en iOS.
+#
+# 2. CapacitorPushNotifications. El paquete se retiro de package.json el 25 de
+#    agosto (crasheaba la app de Android al arrancar por Firebase sin
+#    configurar), pero esta linea se quedo aqui apuntando a una carpeta que ya
+#    no existe: cualquier 'pod install' sobre un clon limpio fallaba.
+#
+# SI EJECUTAS 'npx cap sync ios' ESTE ARCHIVO SE REGENERA y el plugin de Google
+# vuelve a entrar, con otro rechazo de Apple detras. Tras un sync, vuelve a
+# quitar esa linea antes de archivar.
+
 def capacitor_pods
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
@@ -19,10 +40,8 @@ def capacitor_pods
   pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
   pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
-  pod 'CapacitorPushNotifications', :path => '../../node_modules/@capacitor/push-notifications'
   pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
-  pod 'CodetrixStudioCapacitorGoogleAuth', :path => '../../node_modules/@codetrix-studio/capacitor-google-auth'
   pod 'SentryCapacitor', :path => '../../node_modules/@sentry/capacitor'
 end
 
