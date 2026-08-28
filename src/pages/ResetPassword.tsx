@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Wordmark from "@/components/Wordmark";
-import { buildAppUrl } from "@/lib/redirect-url";
+import { buildExternalReturnUrl } from "@/lib/redirect-url";
 
 const FONT_SERIF: React.CSSProperties = {
   fontFamily: "'Instrument Serif', Georgia, serif",
@@ -93,7 +93,7 @@ const ResetPassword = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: buildAppUrl("/update-password"),
+        redirectTo: buildExternalReturnUrl("/update-password"),
       });
       if (error) throw error;
       setSent(true);

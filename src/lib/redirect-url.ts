@@ -14,10 +14,43 @@
  *     consumers son client-only, por eso lee `window.location.origin`).
  */
 
+import { Capacitor } from "@capacitor/core";
+
+/**
+ * URL publica del sitio. Hardcode obligatorio: en la app nativa
+ * `window.location.origin` no es una direccion web sino el origen interno
+ * de la WebView (`capacitor://localhost` en iOS, `https://localhost` en
+ * Android).
+ */
+export const WEB_BASE =
+  import.meta.env.VITE_PUBLIC_WEB_URL ||
+  import.meta.env.VITE_APP_BASE_URL ||
+  "https://pasifyy.vercel.app";
+
 /** Construye una URL absoluta para una ruta de la SPA. */
 export const buildAppUrl = (path: string): string => {
   const clean = path.startsWith("/") ? path : `/${path}`;
   return `${window.location.origin}/#${clean}`;
+};
+
+/**
+ * URL de retorno para servicios EXTERNOS (Stripe Checkout, portal de
+ * facturacion, enlaces de recuperacion de contrasena de Supabase).
+ *
+ * OJO: no vale buildAppUrl aqui. En la app nativa devuelve
+ * `capacitor://localhost/#/...`, y eso se lo tragaba Stripe sin rechistar
+ * al crear la sesion — el error aparecia despues, al terminar el pago:
+ * Safari recibe ese destino, no sabe abrirlo y suelta "Safari no puede
+ * abrir la pagina porque la direccion no es valida". El cobro se habia
+ * hecho y el usuario se quedaba plantado fuera de la app.
+ *
+ * En nativo devolvemos siempre la web publica, que si es una https real.
+ * En web se comporta exactamente igual que buildAppUrl.
+ */
+export const buildExternalReturnUrl = (path: string): string => {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  const base = Capacitor.isNativePlatform() ? WEB_BASE : window.location.origin;
+  return `${base}/#${clean}`;
 };
 
 /**

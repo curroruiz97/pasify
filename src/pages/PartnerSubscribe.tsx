@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerSubscription } from "@/hooks/usePartnerSubscription";
 import { openWebWithAuth } from "@/lib/openWebAuth";
-import { buildAppUrl } from "@/lib/redirect-url";
+import { buildExternalReturnUrl } from "@/lib/redirect-url";
 import Wordmark from "@/components/Wordmark";
 
 /* ============ DESIGN TOKENS ============ */
@@ -112,8 +112,8 @@ const PartnerSubscribe = () => {
         body: JSON.stringify({
           locale: i18n.language || "es",
           mode: "subscription",
-          successUrl: `${buildAppUrl("/partner/success")}?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: buildAppUrl("/partner/cancel"),
+          successUrl: `${buildExternalReturnUrl("/partner/success")}?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: buildExternalReturnUrl("/partner/cancel"),
         }),
       });
       const raw = await resp.text();

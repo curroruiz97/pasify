@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { usePendingCheckoutResume } from "@/hooks/usePendingCheckoutResume";
 import { supabase } from "@/integrations/supabase/client";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useTranslation } from "react-i18next";
@@ -34,6 +35,7 @@ const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
 const PartnerManage = lazy(() => import("./pages/PartnerManage"));
 const PartnerSuccess = lazy(() => import("./pages/PartnerSuccess"));
 const TicketSuccess = lazy(() => import("./pages/TicketSuccess"));
+const TicketReturn = lazy(() => import("./pages/TicketReturn"));
 const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
@@ -290,6 +292,10 @@ const OfflineBanner = () => {
 const App = () => {
   const { session, loading } = useAuth();
 
+  // Confirma la compra al volver de Stripe Checkout en la app nativa. Sin
+  // esto, si el webhook de Stripe no llega, la entrada pagada nunca aparece.
+  usePendingCheckoutResume();
+
   // Listen for foreground push notifications and show toast
   // Skip city notifications (event/discount) - native push is enough
   useEffect(() => {
@@ -479,6 +485,10 @@ const App = () => {
                   poll/realtime contra ticket_orders hasta confirmar el pago
                   vía webhook. */}
               <Route path="/ticket/success" element={<TicketSuccess />} />
+
+              {/* Retorno de Stripe para la app nativa. Publica a proposito:
+                  quien llega es Safari sin sesion. Ver TicketReturn.tsx. */}
+              <Route path="/ticket/gracias" element={<TicketReturn />} />
 
               <Route path="/soporte" element={<Soporte />} />
               <Route path="/privacidad" element={<Privacidad />} />

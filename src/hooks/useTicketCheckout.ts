@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { buildAppUrl } from "@/lib/redirect-url";
+import { Capacitor } from "@capacitor/core";
+import { buildExternalReturnUrl } from "@/lib/redirect-url";
+import { recordPendingCheckout } from "@/hooks/usePendingCheckoutResume";
 
 /**
  * useTicketCheckout — hook único de compra de tickets reutilizable entre
@@ -135,8 +137,13 @@ export const useTicketCheckout = () => {
             // + poll/realtime hasta que webhook confirme. El edge function
             // añade `?order_id=<uuid>&session_id={CHECKOUT_SESSION_ID}` que
             // TicketSuccess parsea para sus consultas.
-            success_url: buildAppUrl("/ticket/success"),
-            cancel_url: buildAppUrl("/calendar"),
+            // En nativo el checkout ocurre en Safari, sin sesion: mandamos a
+            // una pagina publica que no consulta nada. En web seguimos en
+            // /ticket/success, que si puede leer el pedido y enseñar el detalle.
+            success_url: Capacitor.isNativePlatform()
+              ? buildExternalReturnUrl("/ticket/gracias")
+              : buildExternalReturnUrl("/ticket/success"),
+            cancel_url: buildExternalReturnUrl("/calendar"),
           }),
         });
 
@@ -163,6 +170,13 @@ export const useTicketCheckout = () => {
 
         const data = JSON.parse(raw);
         if (data?.url) {
+          // En nativo el checkout se abre en Safari, fuera de la app, y el
+          // usuario vuelve a mano. Dejamos apuntada la sesion para confirmar
+          // la compra al reabrir la app aunque el webhook de Stripe no haya
+          // llegado. Ver usePendingCheckoutResume.
+          if (Capacitor.isNativePlatform() && data?.session_id) {
+            await recordPendingCheckout(data.session_id, data.order_id);
+          }
           // Redirect a Stripe Checkout hosted. El control vuelve a
           // /#/client-dashboard?order_id=...&session_id=... tras pago OK.
           window.location.href = data.url;
