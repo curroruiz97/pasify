@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft,
   ArrowRight,
@@ -48,6 +49,10 @@ const serif = {
   fontStyle: "italic" as const,
   fontWeight: 400,
 };
+
+/** Correo real de soporte. Es el mismo que publica /soporte, la URL que
+ *  Apple abre desde la ficha de App Store. */
+const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
 
 export type SettingsRole = "client" | "partner" | "admin";
 
@@ -104,6 +109,69 @@ export const SettingsSheet = ({
   const [language, setLanguage] = useState<"es" | "en" | "fr" | "it">("es");
   const [searchRadius, setSearchRadius] = useState(50);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  /* ------------------------------------------------------------------
+     Borrado de cuenta — guia 5.1.1(v) de Apple.
+     OJO: hasta la build 4 esta fila solo lanzaba un toast ("Te enviaremos
+     un email para confirmar") y no llamaba a nada. La edge function
+     delete-own-account ya existia y funcionaba, pero solo la invocaban
+     partner/SettingsSheet.tsx y client/ClientSettingsSheet.tsx, que
+     quedaron sin ruta al retirar del router las pantallas social/perfil.
+     Este es el unico panel de ajustes accesible en la app, asi que el
+     borrado real tiene que salir de aqui.
+     ------------------------------------------------------------------ */
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-own-account");
+      if (error) throw error;
+
+      // La cuenta ya no existe: el token local es basura. Limpiamos sesion
+      // y mandamos al login, si no la app se queda con una sesion fantasma.
+      await supabase.auth.signOut();
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+      toast({
+        title: "Cuenta eliminada",
+        description: "Tu cuenta y tus datos se han borrado. Hasta pronto.",
+      });
+      window.location.hash = "#/login";
+    } catch (err) {
+      console.error("delete-own-account:", err);
+      toast({
+        title: "No hemos podido eliminar la cuenta",
+        description: `Vuelve a intentarlo o escríbenos a ${SUPPORT_EMAIL}.`,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /* Peticion de acceso a datos (art. 15 RGPD). No prometemos un ZIP
+     automatico que no existe: abrimos el correo de soporte con la
+     solicitud ya redactada y la atiende una persona. */
+  const handleRequestData = () => {
+    const asunto = "Solicitud de acceso a mis datos (RGPD)";
+    const cuerpo = [
+      "Hola,",
+      "",
+      "Solicito una copia de los datos personales que Pasify tiene sobre mi cuenta,",
+      "conforme al artículo 15 del RGPD.",
+      "",
+      `Correo de la cuenta: ${email ?? ""}`,
+      "",
+      "Gracias.",
+    ].join("\n");
+    window.location.href =
+      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(asunto)}` +
+      `&body=${encodeURIComponent(cuerpo)}`;
+    toast({
+      title: "Abriendo tu correo",
+      description: `Envíanos la solicitud a ${SUPPORT_EMAIL} y te respondemos en 30 días como máximo.`,
+    });
+  };
 
   const handleSave = () => {
     toast({
@@ -453,14 +521,14 @@ export const SettingsSheet = ({
               <Row
                 icon={<Download className="h-4 w-4" />}
                 label="Descargar mis datos"
-                value="GDPR · ZIP"
-                onPress={() => toast({ title: "Solicitud enviada", description: "Recibirás un email con tus datos en 24h." })}
+                value="RGPD"
+                onPress={handleRequestData}
               />
               <Divider />
               <DangerRow
                 icon={<Trash2 className="h-4 w-4" />}
                 label="Eliminar mi cuenta"
-                description="Permanente. Tus tickets, puntos y datos se perderán en 30 días."
+                description="Permanente. Se borran tu cuenta, tus entradas y tus puntos."
                 onPress={() => setShowDeleteConfirm(true)}
               />
               {showDeleteConfirm && (
@@ -474,7 +542,9 @@ export const SettingsSheet = ({
                   <div className="flex items-start gap-2">
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
                     <div className="text-[12px] leading-relaxed text-foreground">
-                      Esta acción es <strong>irreversible</strong>. Si confirmas, se eliminará tu cuenta y tus datos asociados en 30 días.
+                      Esta acción es <strong>irreversible</strong>. Si confirmas, se
+                      eliminarán ahora mismo tu cuenta y tus datos asociados, y se
+                      cerrará la sesión.
                     </div>
                   </div>
                   <div className="mt-3 flex gap-2">
@@ -482,6 +552,7 @@ export const SettingsSheet = ({
                       variant="outline"
                       size="sm"
                       className="flex-1"
+                      disabled={deleting}
                       onClick={() => setShowDeleteConfirm(false)}
                     >
                       Cancelar
@@ -490,15 +561,10 @@ export const SettingsSheet = ({
                       size="sm"
                       className="flex-1"
                       style={{ background: "#EF4444", border: 0, color: "#fff" }}
-                      onClick={() => {
-                        setShowDeleteConfirm(false);
-                        toast({
-                          title: "Solicitud recibida",
-                          description: "Te enviaremos un email para confirmar.",
-                        });
-                      }}
+                      disabled={deleting}
+                      onClick={handleDeleteAccount}
                     >
-                      Confirmar
+                      {deleting ? "Eliminando…" : "Confirmar"}
                     </Button>
                   </div>
                 </div>
