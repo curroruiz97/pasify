@@ -73,9 +73,13 @@ const RegisterPartner = () => {
 
     setLoading(true);
     try {
+      // Ver RegisterClient: el rol se asigna en el servidor a partir de estos
+      // metadatos (trigger zz_on_auth_user_created_role). Sin este dato el
+      // trigger asignaria 'client' por defecto y el local no llegaria a su panel.
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: { data: { initial_role: "partner" } },
       });
       if (authError) {
         if (authError.message.includes("already registered") || authError.status === 422) {

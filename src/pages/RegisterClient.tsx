@@ -66,42 +66,65 @@ const RegisterClient = () => {
 
     setLoading(true);
     try {
+      // `initial_role` viaja en los metadatos del usuario. El trigger
+      // `zz_on_auth_user_created_role` lo lee y asigna el rol EN EL SERVIDOR,
+      // al crear la cuenta. Antes el rol se reclamaba desde aqui, con el token
+      // recien emitido, y si esa llamada fallaba la cuenta quedaba creada pero
+      // SIN ROL: el usuario entraba a una pantalla en blanco porque la app no
+      // sabe a que panel llevarle. Paso dos veces seguidas en produccion.
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: { data: { initial_role: "client" } },
       });
       if (authError) throw authError;
 
       if (authData.user) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone || null,
-            country: formData.country,
-            city: formData.city || null,
-          })
-          .eq("id", authData.user.id);
-        if (profileError) throw profileError;
-
-        // Reclamar rol client vía RPC canónica `claim_initial_role`
-        // (mig 20260513120000). La RPC es atómica y bloquea acumulación
-        // de roles; reemplaza el INSERT directo en user_roles que
-        // dependía de RLS amplia. Errores "already has a role" se tratan
-        // como no-fatales (igual que en RegisterPartner.tsx).
-        const { error: roleError } = await supabase.rpc("claim_initial_role", {
-          _role: "client",
-        });
-        if (roleError && !String(roleError.message).includes("already has a role")) {
-          throw roleError;
+        // Garantizar sesion: si signUp no la abrio, entramos explicitamente.
+        // RegisterPartner ya lo hacia; aqui faltaba.
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          });
+          if (signInErr) throw signInErr;
         }
 
-        let autoApproved = false;
+        // A partir de aqui NADA es fatal. La cuenta ya existe y ya tiene rol.
+        // Que falle guardar el telefono o avisar a un administrador no puede
+        // dejar al usuario plantado en el formulario de registro.
         try {
-          const { data, error: approveErr } = await supabase.rpc("auto_approve_if_allowed", { _role: "client" });
-          if (approveErr) console.error("auto_approve_if_allowed error:", approveErr);
-          autoApproved = data === true;
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .update({
+              first_name: formData.firstName,
+              last_name: formData.lastName,
+              phone: formData.phone || null,
+              country: formData.country,
+              city: formData.city || null,
+            })
+            .eq("id", authData.user.id);
+          if (profileError) console.error("profiles update:", profileError);
+        } catch (e) {
+          console.error("profiles update exception:", e);
+        }
+
+        // Red de seguridad por si el trigger no estuviera desplegado. Si ya
+        // hay rol, la RPC responde "already has a role" y no hacemos nada.
+        try {
+          const { error: roleError } = await supabase.rpc("claim_initial_role", {
+            _role: "client",
+          });
+          if (roleError && !String(roleError.message).includes("already has a role")) {
+            console.error("claim_initial_role:", roleError);
+          }
+        } catch (e) {
+          console.error("claim_initial_role exception:", e);
+        }
+
+        try {
+          await supabase.rpc("auto_approve_if_allowed", { _role: "client" });
         } catch (e) {
           console.error("auto_approve_if_allowed exception:", e);
         }
@@ -116,22 +139,12 @@ const RegisterClient = () => {
             },
           });
         } catch (notifyError) {
-          console.error("Errore invio notifica admin:", notifyError);
+          console.error("notify-new-registration:", notifyError);
         }
 
-        if (autoApproved) {
-          toast({ title: t("auth.loginSuccess"), description: t("auth.welcome") });
-          redirectToApp(nextPath ?? "/client-dashboard");
-          return;
-        }
-
-        await supabase.auth.signOut();
-        toast({ title: t("auth.pendingApproval"), description: t("auth.pendingApprovalMessage"), duration: 10000 });
-        if (nextPath) {
-          navigate(`/login?next=${encodeURIComponent(nextPath)}`);
-        } else {
-          navigate("/login");
-        }
+        toast({ title: t("auth.loginSuccess"), description: t("auth.welcome") });
+        redirectToApp(nextPath ?? "/client-dashboard");
+        return;
       }
     } catch (error: any) {
       toast({ title: t("errors.signupFailed"), description: error.message, variant: "destructive" });
