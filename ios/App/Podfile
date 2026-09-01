@@ -28,6 +28,11 @@ install! 'cocoapods', :disable_input_output_paths => true
 # SI EJECUTAS 'npx cap sync ios' ESTE ARCHIVO SE REGENERA y el plugin de Google
 # vuelve a entrar, con otro rechazo de Apple detras. Tras un sync, vuelve a
 # quitar esa linea antes de archivar.
+#
+# YA HA PASADO UNA VEZ: la compilacion 7 se archivo con la linea puesta y Apple
+# la tumbo al procesarla con ITMS-91061 (Missing privacy manifest) por
+# GoogleSignIn, GTMAppAuth y GTMSessionFetcher. Ni siquiera llego a revision.
+# Antes de archivar, comprueba que esta linea sigue sin estar.
 
 def capacitor_pods
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
@@ -42,7 +47,6 @@ def capacitor_pods
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
   pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
-  pod 'CodetrixStudioCapacitorGoogleAuth', :path => '../../node_modules/@codetrix-studio/capacitor-google-auth'
   pod 'SentryCapacitor', :path => '../../node_modules/@sentry/capacitor'
 end
 
