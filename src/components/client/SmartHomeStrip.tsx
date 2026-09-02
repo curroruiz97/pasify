@@ -167,7 +167,12 @@ const DiscoveryStrip = ({ strip, onOpen }: { strip: Strip; onOpen: (id: string) 
       </div>
       <button
         type="button"
-        className="hidden text-[11px] uppercase text-muted-foreground transition hover:text-orange-500 sm:inline-flex sm:items-center sm:gap-1"
+        onClick={() => {
+          const first = strip.partners[0];
+          if (first) onOpen(first.id);
+        }}
+        disabled={strip.partners.length === 0}
+        className="hidden text-[11px] uppercase text-muted-foreground transition hover:text-orange-500 disabled:opacity-40 sm:inline-flex sm:items-center sm:gap-1"
         style={{ ...mono, letterSpacing: "0.18em" }}
       >
         Ver todos

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Camera,
@@ -43,6 +43,33 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { BetaBadge } from "@/components/shared/BetaBadge";
+import { useToast } from "@/hooks/use-toast";
+
+/* ------------------------------------------------------------------
+   Sets guardados — persistencia local real (sobrevive a reinicios de
+   la app). Antes el boton "Guardar set" no tenia onClick y no hacia
+   nada al tocarlo: mismo patron que Apple reporto en "Editar perfil"
+   (Guideline 2.1(a)).
+   ------------------------------------------------------------------ */
+const SAVED_SETS_KEY = "pasify.savedSets";
+
+const readSavedSets = (): string[] => {
+  try {
+    const raw = window.localStorage.getItem(SAVED_SETS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeSavedSets = (ids: string[]) => {
+  try {
+    window.localStorage.setItem(SAVED_SETS_KEY, JSON.stringify(ids));
+  } catch {
+    /* storage lleno o bloqueado: la UI sigue funcionando en memoria */
+  }
+};
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -348,7 +375,23 @@ const MiniStat = ({ label, value, icon }: { label: string; value: string; icon: 
 
 const LineupView = ({ event }: { event: LiveEvent }) => {
   const now = new Date();
+  const { toast } = useToast();
+  const [savedSets, setSavedSets] = useState<string[]>(() => readSavedSets());
   const [pingTick, setPingTick] = useState(0);
+
+  const toggleSavedSet = (slot: { artist: string; stage: string }) => {
+    const id = `${slot.artist}__${slot.stage}`;
+    setSavedSets((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      writeSavedSets(next);
+      toast(
+        prev.includes(id)
+          ? { title: "Set quitado", description: `${slot.artist} ya no esta en tus sets guardados.` }
+          : { title: "Set guardado", description: `${slot.artist} · ${slot.stage} guardado en tus sets.` },
+      );
+      return next;
+    });
+  };
   useEffect(() => {
     const id = window.setInterval(() => setPingTick((t) => t + 1), 60_000);
     return () => window.clearInterval(id);
@@ -451,16 +494,24 @@ const LineupView = ({ event }: { event: LiveEvent }) => {
                   <div className="mt-1.5 text-sm font-semibold text-foreground md:text-base">
                     {slot.artist}
                   </div>
-                  {isLive && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3"
-                    >
-                      <Heart className="mr-1.5 h-3.5 w-3.5" />
-                      Guardar set
-                    </Button>
-                  )}
+                  {isLive && (() => {
+                    const isSaved = savedSets.includes(`${slot.artist}__${slot.stage}`);
+                    return (
+                      <Button
+                        size="sm"
+                        variant={isSaved ? "default" : "outline"}
+                        className="mt-3"
+                        onClick={() => toggleSavedSet(slot)}
+                        aria-pressed={isSaved}
+                      >
+                        <Heart
+                          className="mr-1.5 h-3.5 w-3.5"
+                          fill={isSaved ? "currentColor" : "none"}
+                        />
+                        {isSaved ? "Set guardado" : "Guardar set"}
+                      </Button>
+                    );
+                  })()}
                 </div>
               </li>
             );
@@ -809,9 +860,26 @@ const USER_POS: Record<FloorId, { x: number; y: number }> = {
 };
 
 const VenueMap = () => {
+  const { toast } = useToast();
   const [floor, setFloor] = useState<FloorId>("planta_principal");
   const [selectedId, setSelectedId] = useState<ZoneId>("sala_principal");
   const [showHeatmap, setShowHeatmap] = useState(true);
+  /* Navegacion interior real: el marcador del usuario recorre el camino
+     hasta la zona elegida. Antes el CTA "Llevarme aqui" no tenia onClick
+     (Guideline 2.1(a) — controles que no responden al toque). */
+  const [userPos, setUserPos] = useState(USER_POS["planta_principal"]);
+  const [navState, setNavState] = useState<"idle" | "walking" | "arrived">("idle");
+
+  // Al cambiar de planta, el usuario vuelve a su ancla y se cancela la ruta
+  useEffect(() => {
+    setUserPos(USER_POS[floor]);
+    setNavState("idle");
+  }, [floor]);
+
+  // Cambiar de zona cancela la ruta en curso
+  useEffect(() => {
+    setNavState("idle");
+  }, [selectedId]);
 
   // ensure selectedId is on current floor
   useEffect(() => {
@@ -824,7 +892,29 @@ const VenueMap = () => {
 
   const floorZones = ZONES.filter((z) => z.floor === floor);
   const selected = ZONES.find((z) => z.id === selectedId) ?? floorZones[0];
-  const user = USER_POS[floor];
+  const user = userPos;
+
+  const walkTo = (zone: VenueZone) => {
+    if (navState === "walking") return;
+    const from = userPos;
+    const to = { x: zone.shape.x + zone.shape.w / 2, y: zone.shape.y + zone.shape.h / 2 };
+    setNavState("walking");
+    const steps = 28;
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      const t = i / steps;
+      setUserPos({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t });
+      if (i >= steps) {
+        window.clearInterval(id);
+        setNavState("arrived");
+        toast({
+          title: `Has llegado a ${zone.label}`,
+          description: `${zone.distanceM} m recorridos · ${zone.tip}`,
+        });
+      }
+    }, 45);
+  };
 
   // Recommendation (lowest cost = queue + distance + capacity penalty)
   const recommendedBarId: ZoneId | null = useMemo(() => {
@@ -1219,15 +1309,26 @@ const VenueMap = () => {
             {/* CTA navigate */}
             <button
               type="button"
-              className="group inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition"
+              onClick={() => walkTo(selected)}
+              disabled={navState === "walking"}
+              aria-live="polite"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition disabled:opacity-70"
               style={{
                 background: `linear-gradient(180deg, ${selected.accent} 0%, ${selected.accent}DD 60%, ${selected.accent}AA 100%)`,
                 color: "#fff",
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 22px -10px ${selected.glow}`,
               }}
             >
-              <Navigation className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
-              Llevarme aquí · {selected.distanceM}m
+              <Navigation
+                className={`h-3.5 w-3.5 transition group-hover:translate-x-0.5 ${
+                  navState === "walking" ? "animate-pulse" : ""
+                }`}
+              />
+              {navState === "walking"
+                ? `Yendo a ${selected.short}…`
+                : navState === "arrived"
+                  ? `Has llegado a ${selected.short}`
+                  : `Llevarme aquí · ${selected.distanceM}m`}
             </button>
           </div>
         )}
@@ -1316,7 +1417,48 @@ const ZoneMetric = ({
 // =============================================================
 
 const PhotoWall = ({ photoCount }: { photoCount: number }) => {
-  const cells = Array.from({ length: 12 });
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  /* Fotos que sube el usuario en esta sesion. Antes el boton "Subir" no
+     tenia onClick y no abria nada (Guideline 2.1(a)). */
+  const [myPhotos, setMyPhotos] = useState<string[]>([]);
+
+  // Libera las object URLs SOLO al desmontar (con [myPhotos] revocaria
+  // en cada cambio las URLs que siguen en uso y las fotos se romperian).
+  const photosRef = useRef<string[]>([]);
+  photosRef.current = myPhotos;
+  useEffect(() => {
+    return () => photosRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
+  const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    const tooBig = files.filter((f) => f.size > 10 * 1024 * 1024);
+    const valid = files.filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024);
+
+    if (tooBig.length > 0) {
+      toast({
+        title: "Imagen demasiado grande",
+        description: "El limite por foto es 10 MB.",
+        variant: "destructive",
+      });
+    }
+
+    if (valid.length > 0) {
+      setMyPhotos((prev) => [...valid.map((f) => URL.createObjectURL(f)), ...prev]);
+      toast({
+        title: valid.length === 1 ? "Foto anadida" : `${valid.length} fotos anadidas`,
+        description: "Ya aparecen en el muro de fotos del evento.",
+      });
+    }
+
+    // Permite volver a elegir el mismo archivo
+    e.target.value = "";
+  };
+
+  const cells = Array.from({ length: Math.max(0, 12 - myPhotos.length) });
   return (
     <section
       className="rounded-2xl border border-border bg-card p-5 md:p-6"
@@ -1329,19 +1471,47 @@ const PhotoWall = ({ photoCount }: { photoCount: number }) => {
             style={{ ...mono, letterSpacing: "0.2em" }}
           >
             <Camera className="h-3 w-3" />
-            Photo wall · {photoCount} fotos
+            Photo wall · {photoCount + myPhotos.length} fotos
           </div>
           <h3 className="text-xl font-semibold tracking-tight text-foreground">
             Lo que la gente está subiendo
           </h3>
         </div>
-        <Button size="sm">
+        <Button size="sm" onClick={() => fileInputRef.current?.click()}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Subir
         </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handlePick}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-1.5 md:grid-cols-4">
+        {myPhotos.map((url) => (
+          <div
+            key={url}
+            className="relative aspect-square overflow-hidden rounded-xl"
+            style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)" }}
+          >
+            <img src={url} alt="Foto subida por ti" className="h-full w-full object-cover" />
+            <div
+              className="absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[8px] uppercase"
+              style={{
+                ...mono,
+                letterSpacing: "0.16em",
+                background: "rgba(232,84,42,0.85)",
+                color: "#fff",
+              }}
+            >
+              Tuya
+            </div>
+          </div>
+        ))}
         {cells.map((_, i) => {
           const gradients = [
             "linear-gradient(135deg, #3D1F12 0%, #7A2A0F 50%, #E8542A 100%)",
