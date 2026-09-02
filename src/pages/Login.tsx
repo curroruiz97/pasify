@@ -137,6 +137,22 @@ const Login = () => {
         </button>
       )}
 
+      {/* Guideline 5.1.1(v) — Apple exige que las funciones que NO requieren
+          cuenta (explorar eventos, ver info de locales) sean accesibles sin
+          registrarse/iniciar sesión. En nativo, `/` redirige siempre a
+          `/login` (ver RootRoute en App.tsx), así que este es el único punto
+          de entrada de la app sin sesión: debe ofrecer una salida clara hacia
+          contenido público. `/calendar` y `/p/:id` ya funcionan sin sesión
+          (solo esconden acciones "account-based" como Participar/favoritos),
+          simplemente no había ningún enlace visible hacia ellos. */}
+      <button
+        type="button"
+        onClick={() => navigate("/calendar")}
+        className="mb-5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white/60 px-3 py-2.5 text-xs font-medium text-slate-600 transition hover:border-orange-300 hover:text-orange-700"
+      >
+        Explorar eventos sin cuenta
+      </button>
+
       <motion.div
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

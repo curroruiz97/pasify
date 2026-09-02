@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import EditPersonalInfoSheet from "@/components/shared/EditPersonalInfoSheet";
 import {
   ArrowLeft,
   ArrowRight,
@@ -110,6 +111,7 @@ export const SettingsSheet = ({
   const [searchRadius, setSearchRadius] = useState(50);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   /* ------------------------------------------------------------------
      Borrado de cuenta — guia 5.1.1(v) de Apple.
@@ -184,6 +186,7 @@ export const SettingsSheet = ({
     role === "client" ? "Cliente" : role === "partner" ? "Local" : "Admin";
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -278,6 +281,7 @@ export const SettingsSheet = ({
                 variant="outline"
                 size="sm"
                 className="relative mt-3 w-full"
+                onClick={() => setEditProfileOpen(true)}
               >
                 <UserCircle className="mr-1.5 h-3.5 w-3.5" />
                 Editar perfil
@@ -848,6 +852,8 @@ export const SettingsSheet = ({
         </footer>
       </SheetContent>
     </Sheet>
+    <EditPersonalInfoSheet open={editProfileOpen} onOpenChange={setEditProfileOpen} />
+    </>
   );
 };
 
