@@ -646,7 +646,17 @@ const ChatConversation = () => {
                 </div>
                 </div>
                 {!isOwn && (
-                  <div className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  /* DENUNCIAR UN MENSAJE: ESTABA SOLO AL PASAR EL RATON.
+                     `opacity-0 group-hover:opacity-100` significa invisible hasta
+                     que hay hover, y en un iPhone no hay hover: en el movil este
+                     era el unico camino para denunciar un mensaje de otra persona
+                     y no aparecia nunca. La directriz 1.2 pide que las apps con
+                     contenido escrito por usuarios ofrezcan una forma de
+                     denunciarlo, asi que en pantalla tactil se ve siempre, algo
+                     atenuado, y en escritorio se mantiene el comportamiento de
+                     antes. Bloquear ya funcionaba: esta en el menu de la
+                     cabecera de la conversacion. */
+                  <div className="absolute -right-8 top-2 opacity-60 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                     <ReportContentDialog
                       contentId={message.id}
                       contentType="message"
