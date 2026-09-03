@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -110,6 +111,44 @@ type Section =
 
 type NavNode = NavTreeNode<Section>;
 
+/**
+ * SECCIONES QUE HOY SON MAQUETA — FUERA DE LA APP.
+ *
+ * Estas pantallas no hablan con la base de datos: ni una sola llamada a
+ * Supabase en sus ~7.500 lineas juntas. Lo que ensenan (clientes del CRM,
+ * campanas, mesas VIP, liquidaciones al equipo, cierres de caja) son datos
+ * inventados en el propio fichero, y sus botones no hacen nada.
+ *
+ * POR QUE SE ESCONDEN EN EL MOVIL Y NO EN LA WEB. En la web sirven de
+ * escaparate para ensenar a donde va el producto en una demo comercial. Dentro
+ * de la app son dos problemas. Apple acaba de rechazar la 1.0 (8) por la
+ * directriz 2.1(a) —"la app tiene fallos"— y el fallo era un boton que no
+ * respondia; un revisor que entre con la cuenta de local y abra "CRM" o
+ * "Equipo" encuentra ese mismo fallo repetido casi sesenta veces. El segundo
+ * problema no es de Apple: un local de verdad que entre desde el movil ve
+ * cifras inventadas sobre su propio negocio.
+ *
+ * Segun cada una tenga backend, se quita de esta lista.
+ */
+const SECCIONES_SOLO_WEB = new Set<Section>([
+  "autopilot",
+  "door_vision",
+  "tpv",
+  "vip",
+  "crm",
+  "marketing",
+  "channels",
+  "team",
+  "apps",
+  "whitelabel",
+  "benchmarks",
+]);
+
+/** Dentro de la app nativa esas secciones no existen. */
+const enApp = Capacitor.isNativePlatform();
+const seccionVisible = (id: Section) => !enApp || !SECCIONES_SOLO_WEB.has(id);
+
+
 type EventRow = {
   id: string;
   title: string;
@@ -140,6 +179,9 @@ const PartnerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [section, setSection] = useState<Section>("metricas");
+  // Si un enlace guardado apunta a una seccion que en la app no existe, se cae
+  // a Metricas en vez de pintar una pantalla que no deberia estar ahi.
+  const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
   const [userId, setUserId] = useState<string>("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -353,7 +395,14 @@ const PartnerDashboard = () => {
       ],
     },
     { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
-  ];
+  ]
+    // Fuera del arbol lo que en la app no existe; si un grupo se queda sin
+    // hijos, desaparece el grupo entero en vez de dejar una carpeta vacia.
+    .flatMap<NavNode>((nodo) => {
+      if (nodo.kind === "item") return seccionVisible(nodo.id) ? [nodo] : [];
+      const hijos = nodo.children.filter((h) => seccionVisible(h.id));
+      return hijos.length ? [{ ...nodo, children: hijos }] : [];
+    });
 
   // Bottom tab bar mobile — 4 entradas más usadas; el resto en el drawer "Más".
   const tabBarItems: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -409,7 +458,7 @@ const PartnerDashboard = () => {
             )}
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
-            <NavTree tree={navTree} section={section} onSelect={setSection} />
+            <NavTree tree={navTree} section={seccionActiva} onSelect={setSection} />
           </nav>
           <div className="space-y-1 border-t border-border p-3">
             <Button
@@ -435,7 +484,7 @@ const PartnerDashboard = () => {
           endSlot={
             <PartnerDrawer
               navTree={navTree}
-              section={section}
+              section={seccionActiva}
               onSelect={setSection}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -486,7 +535,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* MÉTRICAS — Reports & BI online */}
-          {section === "metricas" && (
+          {seccionActiva === "metricas" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Métricas</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -513,7 +562,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* AUTOPILOT IA — Fase 6 */}
-          {section === "autopilot" && (
+          {seccionActiva === "autopilot" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">AutoPilot IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -524,7 +573,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* LIVE WAR ROOM */}
-          {section === "live" && (
+          {seccionActiva === "live" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">En vivo</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -555,7 +604,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* FORECAST IA */}
-          {section === "forecast" && (
+          {seccionActiva === "forecast" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Forecast IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -575,7 +624,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* DYNAMIC PRICING */}
-          {section === "pricing" && (
+          {seccionActiva === "pricing" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Pricing IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -590,7 +639,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* EVENTOS */}
-          {section === "eventos" && (
+          {seccionActiva === "eventos" && (
             <div>
               {/* Mobile-first: stack del título + acciones a flex-col, recupera
                   fila lateral en md+. Botones flex-1 en móvil para repartir
@@ -794,7 +843,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* ASISTENTES — control de puerta estilo Eventbrite */}
-          {section === "asistentes" && (
+          {seccionActiva === "asistentes" && (
             <div>
               <PartnerAttendees
                 events={events.map((e) => ({
@@ -811,7 +860,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* SCANNER */}
-          {section === "scanner" && (
+          {seccionActiva === "scanner" && (
             <div>
               <div className="mb-6">
                 <div
@@ -844,7 +893,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* DOOR VISION — Computer Vision */}
-          {section === "door_vision" && (
+          {seccionActiva === "door_vision" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Door Vision IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -855,7 +904,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* TPV — Cierre Z */}
-          {section === "tpv" && (
+          {seccionActiva === "tpv" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">TPV</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -866,7 +915,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* CASHLESS */}
-          {section === "cashless" && (
+          {seccionActiva === "cashless" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Cashless</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -877,7 +926,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* VIP & HOSPITALITY */}
-          {section === "vip" && (
+          {seccionActiva === "vip" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">VIP & Hospitality</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -888,7 +937,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* CRM & AUDIENCE */}
-          {section === "crm" && (
+          {seccionActiva === "crm" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">CRM & Audience</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -899,7 +948,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* MARKETING ENGINE */}
-          {section === "marketing" && (
+          {seccionActiva === "marketing" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Marketing</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -910,7 +959,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* SALES CHANNELS */}
-          {section === "channels" && (
+          {seccionActiva === "channels" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Canales de venta</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -921,7 +970,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* TEAM */}
-          {section === "team" && (
+          {seccionActiva === "team" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Equipo</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -932,7 +981,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* APP MARKETPLACE */}
-          {section === "apps" && (
+          {seccionActiva === "apps" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">App Marketplace</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -943,7 +992,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* WHITE-LABEL */}
-          {section === "whitelabel" && (
+          {seccionActiva === "whitelabel" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">White-label</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -954,14 +1003,14 @@ const PartnerDashboard = () => {
           )}
 
           {/* INDUSTRY BENCHMARKS — Fase 6 */}
-          {section === "benchmarks" && (
+          {seccionActiva === "benchmarks" && (
             <div>
               <IndustryBenchmarks />
             </div>
           )}
 
           {/* STRIPE */}
-          {section === "stripe" && (
+          {seccionActiva === "stripe" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Stripe Connect</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -998,7 +1047,7 @@ const PartnerDashboard = () => {
           )}
 
           {/* SOPORTE */}
-          {section === "soporte" && (
+          {seccionActiva === "soporte" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
               <p className="mb-6 text-sm text-muted-foreground">
@@ -1018,7 +1067,7 @@ const PartnerDashboard = () => {
           drawerSlot={
             <PartnerDrawer
               navTree={navTree}
-              section={section}
+              section={seccionActiva}
               onSelect={setSection}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -1180,7 +1229,7 @@ const PartnerDrawer = ({
           </div>
           <NavTree
             tree={navTree}
-            section={section}
+            section={seccionActiva}
             onSelect={(id) => {
               onSelect(id);
               setOpen(false);
