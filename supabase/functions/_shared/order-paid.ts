@@ -21,7 +21,14 @@ import { logger } from "./logger.ts";
 import { sendEmail } from "./resend.ts";
 import { DEFAULT_TIMEZONE, formatMoney, ticketDoorCode, ticketPurchasedEmail } from "./email-templates.ts";
 import { enqueueNotification } from "./notify.ts";
-import { executeRefund, loadRefundContext } from "./refund.ts";
+import {
+  executeRefund,
+  isStaleProcessing,
+  loadRefundContext,
+  notifyRefundsGrouped,
+  resumeStaleRefund,
+  type RefundContext,
+} from "./refund.ts";
 
 export interface HandleOrderPaidInput {
   sessionId: string;
@@ -64,11 +71,16 @@ export async function handleOrderPaid(input: HandleOrderPaidInput): Promise<Hand
   const row = (Array.isArray(data) ? data[0] : data) as MarkOrderPaidRow | null | undefined;
   if (!row?.order_id) throw new Error(`mark_order_paid_v2_no_order (session ${input.sessionId})`);
 
+  // Evento ya cancelado: ni entradas ni puntos, se devuelve el dinero. Va en
+  // las dos ramas: si falla, lanza y la siguiente entrega del webhook (ya con
+  // newly_paid = false) lo reintenta; y nunca se reenvían entradas de un
+  // evento cancelado.
+  if (await refundIfEventCancelled(row.order_id, row.event_id, log)) {
+    return { orderId: row.order_id, newlyPaid: !!row.newly_paid };
+  }
+
   if (row.newly_paid) {
     log.info("order_newly_paid", { order_id: row.order_id });
-    if (await refundIfEventCancelled(row.order_id, row.event_id, log)) {
-      return { orderId: row.order_id, newlyPaid: true };
-    }
     await runPaidEffects(row.order_id, log);
   } else {
     log.info("order_already_paid", { order_id: row.order_id });
@@ -89,28 +101,51 @@ async function refundIfEventCancelled(orderId: string, eventId: string | null, l
     .select("status, metadata")
     .eq("id", eventId)
     .maybeSingle();
-  if (error || ev?.status !== "cancelled") return false;
+  // Sin poder leer el evento no se mandan entradas a ciegas: error y reintento.
+  if (error) throw new Error(`event_status_check_failed: ${error.message}`);
+  if (ev?.status !== "cancelled") return false;
 
   log.warn("paid_order_for_cancelled_event", { order_id: orderId, event_id: eventId });
   const note = (ev.metadata as { cancel_reason?: string } | null)?.cancel_reason ?? null;
-  const { data: ids, error: reqErr } = await supabaseAdmin.rpc("create_cancellation_refund_requests", {
+  const { error: reqErr } = await supabaseAdmin.rpc("create_cancellation_refund_requests", {
     _event_id: eventId,
     _decided_by: null,
     _note: note,
     _order_id: orderId,
   });
-  if (reqErr) {
-    // El pago queda registrado y sin entradas enviadas; el local lo verá al
-    // reintentar los reembolsos de la cancelación.
-    log.error("late_payment_refund_requests_failed", { order_id: orderId, error: reqErr.message });
-    return true;
-  }
-  for (const id of (ids ?? []) as string[]) {
+  if (reqErr) throw new Error(`late_payment_refund_requests_failed: ${reqErr.message}`);
+
+  // Todas las de este pedido: las recién creadas, las aprobadas de un intento
+  // anterior y las que se quedaron en proceso (se buscan antes en Stripe).
+  const { data: pending, error: listErr } = await supabaseAdmin
+    .from("refund_requests")
+    .select("id")
+    .eq("order_id", orderId)
+    .eq("reason_code", "event_cancelled")
+    .in("status", ["approved", "processing"]);
+  if (listErr) throw new Error(`late_payment_refunds_list_failed: ${listErr.message}`);
+
+  const done: Array<{ ctx: RefundContext; amountCents: number }> = [];
+  let retryable = false;
+  for (const { id } of (pending ?? []) as Array<{ id: string }>) {
     const ctx = await loadRefundContext(id);
     if ("missing" in ctx) continue;
-    const out = await executeRefund(ctx);
-    if (!out.ok) log.error("late_payment_refund_failed", { order_id: orderId, request_id: id, code: out.code });
+    const out =
+      ctx.rr.status === "approved"
+        ? await executeRefund(ctx, { notify: false })
+        : isStaleProcessing(ctx)
+        ? await resumeStaleRefund(ctx, { notify: false })
+        : null;
+    if (!out) continue; // en proceso reciente: lo termina quien lo empezó
+    if (out.ok) done.push({ ctx, amountCents: out.amountCents });
+    else {
+      log.error("late_payment_refund_failed", { order_id: orderId, request_id: id, code: out.code });
+      if (out.code === "stripe_unavailable" || out.code === "internal_error") retryable = true;
+    }
   }
+  await notifyRefundsGrouped(done);
+  // Stripe no contestó: que el webhook se reintente más tarde.
+  if (retryable) throw new Error("late_payment_refund_retry");
   return true;
 }
 

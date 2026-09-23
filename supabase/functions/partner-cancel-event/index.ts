@@ -9,8 +9,9 @@
 //      aviso in-app a los titulares. Repetirla es seguro.
 //   2. Caduca en Stripe las sesiones de pago que seguían abiertas. Si aun así
 //      entra un pago, _shared/order-paid.ts lo devuelve solo.
-//   3. Reembolsa en Stripe por tandas (_shared/refund.ts). Si quedan más o
-//      alguna falla, el panel vuelve a llamar: solo se procesan las aprobadas.
+//   3. Reembolsa en Stripe (_shared/refund.ts) durante unos 60 s como mucho y
+//      retoma las que se quedaron en proceso. Si quedan, el panel vuelve a
+//      llamar. Los compradores reciben UN aviso por lote con su total.
 //
 // Body: { event_id, reason }
 // Returns: { event_id, already_cancelled, refunded, failed, remaining, refunds_pending, tickets_without_account }
@@ -22,10 +23,17 @@ import { requireStripe } from "../_shared/stripe.ts";
 import { logger } from "../_shared/logger.ts";
 import { safeErrorResponse } from "../_shared/internal-auth.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
-import { executeRefund, loadRefundContext } from "../_shared/refund.ts";
+import {
+  executeRefund,
+  loadRefundContext,
+  notifyRefundsGrouped,
+  resumeStaleRefund,
+  type RefundContext,
+} from "../_shared/refund.ts";
 
-// Unos 0,5 s por reembolso: 120 caben de sobra en el tiempo de una función.
-const REFUNDS_PER_CALL = 120;
+// Muy por debajo del límite de una edge function: se deja de empezar
+// reembolsos nuevos pasado este tiempo y el panel vuelve a llamar.
+const TIME_BUDGET_MS = 60_000;
 
 const FRIENDLY: Record<string, [number, string]> = {
   cancel_reason_required: [400, "cancel_reason_required"],
@@ -38,6 +46,7 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   const log = logger.child({ function: "partner-cancel-event" });
+  const started = Date.now();
   try {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
     const user = await requireUser(req);
@@ -62,8 +71,11 @@ Deno.serve(async (req) => {
       already_cancelled: boolean;
       pending_session_ids: string[];
       refund_request_ids: string[];
+      stale_refund_request_ids: string[];
       tickets_without_account: number;
     };
+    const approvedIds = res.refund_request_ids ?? [];
+    const staleIds = res.stale_refund_request_ids ?? [];
 
     let stripe;
     try {
@@ -79,7 +91,7 @@ Deno.serve(async (req) => {
         failed: 0,
         // Nada más que hacer en esta llamada: el panel ofrece reintentar.
         remaining: 0,
-        refunds_pending: res.refund_request_ids.length > 0,
+        refunds_pending: approvedIds.length + staleIds.length > 0,
         tickets_without_account: res.tickets_without_account,
       });
     }
@@ -88,34 +100,45 @@ Deno.serve(async (req) => {
       try {
         await stripe.checkout.sessions.expire(sessionId);
       } catch (err) {
-        // Ya completada o caducada: nada que hacer.
-        log.info("session_expire_skipped", { session_id: sessionId, error: String(err) });
+        // Ya completada o caducada es lo normal; cualquier otra cosa se ve en el log.
+        const msg = String(err);
+        if (/expired|complete|not open|status/i.test(msg)) log.info("session_expire_skipped", { session_id: sessionId });
+        else log.warn("session_expire_failed", { session_id: sessionId, error: msg });
       }
     }
 
-    const batch = (res.refund_request_ids ?? []).slice(0, REFUNDS_PER_CALL);
-    let refunded = 0;
+    const done: Array<{ ctx: RefundContext; amountCents: number }> = [];
     let failed = 0;
-    for (const id of batch) {
-      const ctx = await loadRefundContext(id);
+    let processed = 0;
+    const queue: Array<{ id: string; stale: boolean }> = [
+      ...staleIds.map((id) => ({ id, stale: true })),
+      ...approvedIds.map((id) => ({ id, stale: false })),
+    ];
+    for (const item of queue) {
+      if (Date.now() - started > TIME_BUDGET_MS) break;
+      processed += 1;
+      const ctx = await loadRefundContext(item.id);
       if ("missing" in ctx) {
         failed += 1;
         continue;
       }
-      const out = await executeRefund(ctx, { stripe });
-      if (out.ok) refunded += 1;
+      const out = item.stale
+        ? await resumeStaleRefund(ctx, { stripe, notify: false })
+        : await executeRefund(ctx, { stripe, notify: false });
+      if (out.ok) done.push({ ctx, amountCents: out.amountCents });
       else if (out.code !== "already_processing" && out.code !== "already_refunded") {
         failed += 1;
-        log.warn("cancel_refund_failed", { event_id, request_id: id, code: out.code });
+        log.warn("cancel_refund_failed", { event_id, request_id: item.id, code: out.code });
       }
     }
-    const remaining = Math.max(0, (res.refund_request_ids?.length ?? 0) - batch.length);
-    log.info("event_cancelled", { event_id, refunded, failed, remaining });
+    await notifyRefundsGrouped(done);
 
+    const remaining = Math.max(0, queue.length - processed);
+    log.info("event_cancelled", { event_id, refunded: done.length, failed, remaining });
     return jsonResponse({
       event_id,
       already_cancelled: res.already_cancelled,
-      refunded,
+      refunded: done.length,
       failed,
       remaining,
       refunds_pending: failed > 0 || remaining > 0,

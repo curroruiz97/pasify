@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, dashboardPathForRole, signOutLocal } from '@/hooks/useAuth';
 import LoaderOne from '@/components/ui/loader-one';
 import AuthErrorScreen from '@/components/auth/AuthErrorScreen';
+import { isDoorLocked } from '@/lib/doorLock';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -54,6 +55,7 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     reloadRoles,
   } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Usuario al que ya se le concedió esta ruta. Mientras sea el mismo, los
   // children siguen montados aunque los roles se estén recargando.
@@ -134,6 +136,12 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   }
 
   if (!user) return null;
+
+  // Modo puerta activo en este dispositivo: ninguna otra pantalla con sesión
+  // (ni con el botón atrás ni con un enlace), sin esperar a la red.
+  if (isDoorLocked(user.id) && location.pathname !== '/door') {
+    return <Navigate to="/door" replace />;
+  }
 
   if (!requireRole) return <>{children}</>;
 

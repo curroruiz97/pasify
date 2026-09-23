@@ -14,6 +14,14 @@
 --   * mark_refund_processed: casa el reembolso de Stripe por el id de la
 --     solicitud de sus metadatos. Antes buscaba "la primera en proceso del
 --     mismo pago", y una cancelación deja varias a la vez por pedido.
+--   * Compradores sin cuenta (compra como invitado o cuenta borrada): la
+--     solicitud se crea sin requester_user_id y con el email del pedido, para
+--     que también se les devuelva el dinero y se les avise por email.
+
+-- ============================================================================
+-- 0) Solicitudes de reembolso del sistema sin usuario (invitados)
+-- ============================================================================
+ALTER TABLE public.refund_requests ALTER COLUMN requester_user_id DROP NOT NULL;
 
 -- ============================================================================
 -- 1) Solicitudes de reembolso por cancelación
@@ -56,18 +64,21 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Sin cuenta (invitado o cuenta borrada): solicitud sin usuario, con el
+    -- email del pedido para el aviso.
     v_holder := COALESCE(v_ticket.transferred_to_user_id, v_ticket.buyer_user_id);
-    IF v_holder IS NULL THEN
-      CONTINUE; -- sin titular con cuenta: lo liquida el admin a mano
+    v_email := NULL;
+    IF v_holder IS NOT NULL THEN
+      SELECT u.email INTO v_email FROM auth.users u WHERE u.id = v_holder;
     END IF;
-    SELECT u.email INTO v_email FROM auth.users u WHERE u.id = v_holder;
+    v_email := COALESCE(v_email, v_ticket.holder_email, v_ticket.buyer_email);
 
     SELECT r.id INTO v_request FROM public.refund_requests r WHERE r.ticket_id = v_ticket.id FOR UPDATE;
     IF v_request IS NOT NULL THEN
       -- Una solicitud en proceso o ya reembolsada no se toca.
       UPDATE public.refund_requests
          SET order_id = v_ticket.order_id, event_id = v_ticket.event_id, org_id = v_event.org_id,
-             requester_user_id = v_holder, requester_email = COALESCE(v_email, requester_email),
+             requester_user_id = v_holder, requester_email = COALESCE(v_email, requester_email, ''),
              amount_cents = v_ticket.amount_paid_cents, currency = v_ticket.currency,
              reason = 'Evento cancelado por el local', reason_code = 'event_cancelled',
              status = 'approved', auto_approved = FALSE, auto_approve_reason = NULL,
@@ -86,7 +97,7 @@ BEGIN
         decided_by, decided_at, decision_note
       ) VALUES (
         v_ticket.id, v_ticket.order_id, v_ticket.event_id, v_event.org_id, v_holder,
-        COALESCE(v_email, v_ticket.buyer_email, ''), v_ticket.amount_paid_cents, v_ticket.currency,
+        COALESCE(v_email, ''), v_ticket.amount_paid_cents, v_ticket.currency,
         'Evento cancelado por el local', 'event_cancelled', 'approved', FALSE,
         _decided_by, now(), _note
       )
@@ -115,9 +126,11 @@ DECLARE
   v_event public.events%ROWTYPE;
   v_reason TEXT := NULLIF(btrim(COALESCE(_reason, '')), '');
   v_already BOOLEAN;
+  v_note TEXT;
   v_sessions TEXT[];
   v_requests UUID[];
   v_pending_refunds UUID[];
+  v_stale_refunds UUID[];
   v_holder RECORD;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
@@ -125,16 +138,20 @@ BEGIN
 
   SELECT * INTO v_event FROM public.events WHERE id = _event_id FOR UPDATE;
   IF v_event.id IS NULL THEN RAISE EXCEPTION 'Event not found'; END IF;
+  -- Un evento de una organización lo cancela su gestión (owner/admin/manager):
+  -- haberlo creado no basta (un RRPP o alguien ya fuera del equipo).
   IF NOT (
-    v_event.partner_id IS NOT DISTINCT FROM v_uid
+    public.has_role(v_uid, 'admin'::public.app_role)
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager']::public.org_member_role_t[]))
-    OR public.has_role(v_uid, 'admin'::public.app_role)
+    OR (v_event.org_id IS NULL AND v_event.partner_id IS NOT DISTINCT FROM v_uid)
   ) THEN
     RAISE EXCEPTION 'Forbidden' USING ERRCODE = '42501';
   END IF;
 
   v_already := v_event.status = 'cancelled';
+  -- En un reintento el motivo que ven los compradores es el de la cancelación.
+  v_note := CASE WHEN v_already THEN COALESCE(v_event.metadata->>'cancel_reason', v_reason) ELSE v_reason END;
   IF NOT v_already THEN
     IF v_event.status NOT IN ('published', 'draft') THEN
       RAISE EXCEPTION 'event_not_cancellable';
@@ -148,20 +165,25 @@ BEGIN
 
   -- Reservas sin pagar: fuera. Sus sesiones de Stripe las caduca la edge
   -- function; si aun así llega un pago, order-paid lo devuelve.
-  SELECT COALESCE(array_agg(o.stripe_session_id) FILTER (WHERE o.stripe_session_id IS NOT NULL), ARRAY[]::TEXT[])
-    INTO v_sessions
-    FROM public.ticket_orders o
-   WHERE o.event_id = _event_id AND o.status = 'pending';
   UPDATE public.tickets t
      SET status = 'cancelled'
     FROM public.ticket_orders o
    WHERE o.id = t.order_id AND o.event_id = _event_id AND o.status = 'pending' AND t.status = 'pending';
   UPDATE public.ticket_orders SET status = 'failed' WHERE event_id = _event_id AND status = 'pending';
+  -- Se devuelven en cada llamada (no solo la primera): caducar una sesión ya
+  -- cerrada no hace nada, y así un reintento cubre un fallo anterior.
+  SELECT COALESCE(array_agg(o.stripe_session_id), ARRAY[]::TEXT[])
+    INTO v_sessions
+    FROM public.ticket_orders o
+   WHERE o.event_id = _event_id
+     AND o.status = 'failed'
+     AND o.stripe_session_id IS NOT NULL
+     AND o.created_at > now() - INTERVAL '3 hours';
 
-  v_requests := public.create_cancellation_refund_requests(_event_id, v_uid, v_reason, NULL);
+  v_requests := public.create_cancellation_refund_requests(_event_id, v_uid, v_note, NULL);
 
   -- Todas las aprobadas pendientes de Stripe (incluye las de un intento
-  -- anterior que falló): la edge function las procesa y se puede reintentar.
+  -- anterior que falló de forma definitiva): la edge function las procesa.
   SELECT COALESCE(array_agg(r.id ORDER BY r.id), ARRAY[]::UUID[]) INTO v_pending_refunds
     FROM public.refund_requests r
    WHERE r.event_id = _event_id AND r.reason_code = 'event_cancelled' AND r.status IN ('approved', 'failed');
@@ -169,6 +191,14 @@ BEGIN
   UPDATE public.refund_requests
      SET status = 'approved', stripe_failure_reason = NULL, created_at = now()
    WHERE event_id = _event_id AND reason_code = 'event_cancelled' AND status = 'failed';
+  -- En proceso hace más de 10 minutos sin reembolso de Stripe apuntado (la
+  -- función se cortó o Stripe no contestó): la edge function comprueba en
+  -- Stripe si llegó a crearse antes de volver a intentarlo.
+  SELECT COALESCE(array_agg(r.id ORDER BY r.id), ARRAY[]::UUID[]) INTO v_stale_refunds
+    FROM public.refund_requests r
+   WHERE r.event_id = _event_id AND r.reason_code = 'event_cancelled'
+     AND r.status = 'processing' AND r.stripe_refund_id IS NULL
+     AND r.updated_at < now() - INTERVAL '10 minutes';
 
   -- Aviso in-app a cada titular (una vez, al cancelar).
   IF NOT v_already THEN
@@ -176,7 +206,7 @@ BEGIN
       SELECT DISTINCT COALESCE(t.transferred_to_user_id, t.buyer_user_id) AS user_id
         FROM public.tickets t
        WHERE t.event_id = _event_id
-         AND t.status IN ('paid', 'cancelled')
+         AND t.status IN ('paid', 'used')
          AND COALESCE(t.transferred_to_user_id, t.buyer_user_id) IS NOT NULL
     LOOP
       PERFORM public.enqueue_notification(
@@ -194,10 +224,13 @@ BEGIN
     'already_cancelled', v_already,
     'pending_session_ids', to_jsonb(v_sessions),
     'refund_request_ids', to_jsonb(v_pending_refunds),
+    'stale_refund_request_ids', to_jsonb(v_stale_refunds),
+    -- Entradas pagadas sin solicitud posible (sin cuenta ni email): a mano.
     'tickets_without_account', (
       SELECT count(*) FROM public.tickets t
        WHERE t.event_id = _event_id AND t.status = 'paid' AND t.used_at IS NULL
-         AND COALESCE(t.transferred_to_user_id, t.buyer_user_id) IS NULL
+         AND COALESCE(t.amount_paid_cents, 0) > 0
+         AND NOT EXISTS (SELECT 1 FROM public.refund_requests r WHERE r.ticket_id = t.id)
     )
   );
 END;
