@@ -1,4 +1,4 @@
-import { Copy, MoreVertical, Music, Pencil, Trash2 } from "lucide-react";
+import { Copy, EyeOff, MoreVertical, Music, Pencil, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,6 +43,10 @@ export interface EventRowCardProps {
   onEdit?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  /** Publicado → borrador (deja de venderse). */
+  onUnpublish?: () => void;
+  /** Borrador → publicado. */
+  onPublish?: () => void;
 }
 
 const formatShortDate = (iso: string) =>
@@ -72,6 +76,8 @@ export const EventRowCard = ({
   onEdit,
   onDuplicate,
   onDelete,
+  onUnpublish,
+  onPublish,
 }: EventRowCardProps) => {
   return (
     <article
@@ -172,6 +178,18 @@ export const EventRowCard = ({
               <DropdownMenuItem onClick={onDuplicate}>
                 <Copy className="mr-2 h-4 w-4" />
                 Duplicar evento
+              </DropdownMenuItem>
+            )}
+            {onPublish && event.status === "draft" && (
+              <DropdownMenuItem onClick={onPublish}>
+                <Send className="mr-2 h-4 w-4" />
+                Publicar
+              </DropdownMenuItem>
+            )}
+            {onUnpublish && event.status === "published" && (
+              <DropdownMenuItem onClick={onUnpublish}>
+                <EyeOff className="mr-2 h-4 w-4" />
+                Retirar de la venta
               </DropdownMenuItem>
             )}
             {onDelete && (onEdit || onDuplicate) && (

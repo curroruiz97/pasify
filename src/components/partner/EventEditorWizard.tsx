@@ -26,7 +26,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTiersBuilder,
@@ -59,8 +67,13 @@ import {
  *   - "edit"      → carga evento existente y sus tiers; respeta candados
  *                   (precio bloqueado si hay ventas, no se pueden borrar
  *                   tiers vendidos, capacity no puede bajar de las ventas)
- *   - "duplicate" → carga evento + tiers como plantilla, shifta fecha +1
- *                   semana, status=draft, sin ventas (es un INSERT nuevo)
+ *   - "duplicate" → carga evento + tiers como plantilla: mismo día de la
+ *                   semana y misma hora de reloj, la próxima semana que no
+ *                   haya pasado; se guarda como borrador (INSERT nuevo)
+ *
+ * Guardar un evento existente NO cambia su estado ("Guardar cambios"). Un
+ * borrador se publica con "Guardar y publicar"; retirar o cancelar un
+ * evento publicado son acciones aparte en Mis eventos.
  *
  * UX por dispositivo:
  *   - Desktop (≥ lg): cabecera con stepper horizontal · contenido del paso
@@ -98,6 +111,14 @@ interface City {
   slug: string;
 }
 
+/** Local de la organización al que se asigna el evento (`events.venue_id`). */
+export interface EditorVenue {
+  id: string;
+  name: string;
+  city: string | null;
+  address: string | null;
+}
+
 interface Props {
   mode: EditorMode;
   open: boolean;
@@ -108,6 +129,12 @@ interface Props {
   cities: City[];
   defaultCity?: string;
   defaultVenueName?: string;
+  /**
+   * Locales de la organización. Con `venue_id` el trigger de la BD liga el
+   * evento a su organización (cobros, equipo, informes).
+   */
+  venues?: EditorVenue[];
+  defaultVenueId?: string | null;
   /** Llamado tras guardar con éxito. */
   onSaved: () => void | Promise<void>;
 }
@@ -140,6 +167,8 @@ export const EventEditorWizard = ({
   cities,
   defaultCity = "",
   defaultVenueName = "",
+  venues = [],
+  defaultVenueId = null,
   onSaved,
 }: Props) => {
   const { toast } = useToast();
@@ -170,6 +199,9 @@ export const EventEditorWizard = ({
   ]);
   const [imageUrl, setImageUrl] = useState("");
   const [willPublish, setWillPublish] = useState(true);
+  const [venueId, setVenueId] = useState<string | null>(defaultVenueId);
+  // Estado del evento al abrirlo en "edit": guardar no lo cambia.
+  const [originalStatus, setOriginalStatus] = useState<string | null>(null);
 
   // Edit-mode: ventas reales por tier para bloqueos UI + tiers eliminados
   const [tierSalesMap, setTierSalesMap] = useState<Record<string, TierSales>>({});
@@ -185,14 +217,17 @@ export const EventEditorWizard = ({
     setRemovedTierDbIds(new Set());
 
     if (mode === "create") {
+      const defaultVenue = venues.find((v) => v.id === defaultVenueId) ?? null;
       setTitle("");
       setDescription("");
       setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
       setLocation({
-        city: defaultCity,
-        venueName: defaultVenueName,
-        address: "",
+        city: defaultVenue?.city || defaultCity,
+        venueName: defaultVenue?.name || defaultVenueName,
+        address: defaultVenue?.address ?? "",
       });
+      setVenueId(defaultVenue?.id ?? null);
+      setOriginalStatus(null);
       setTiers([createEmptyTier("Entrada General", "15.00")]);
       setImageUrl("");
       setWillPublish(true);
@@ -214,7 +249,7 @@ export const EventEditorWizard = ({
       const { data: evt, error: evtErr } = await supabase
         .from("events")
         .select(
-          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents"
+          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id"
         )
         .eq("id", eid)
         .maybeSingle();
@@ -273,16 +308,23 @@ export const EventEditorWizard = ({
       const dt = (() => {
         if (!start) return { date: "", startTime: "23:30", endTime: "06:00" };
         const pad = (n: number) => String(n).padStart(2, "0");
-        // Duplicate: +7 días
-        const baseStart =
-          m === "duplicate"
-            ? new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
-            : start;
-        const baseEnd = end
-          ? m === "duplicate"
-            ? new Date(end.getTime() + 7 * 24 * 60 * 60 * 1000)
-            : end
-          : null;
+        // Duplicate: mismo día de la semana y misma hora de reloj, la próxima
+        // semana que aún no haya pasado. setDate trabaja en hora local, así
+        // que un cambio de horario no desplaza la hora (sumar 7×24 h sí).
+        const plusDays = (d: Date, days: number) => {
+          const n = new Date(d);
+          n.setDate(n.getDate() + days);
+          return n;
+        };
+        let weeks = 0;
+        if (m === "duplicate") {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          weeks = 1;
+          while (plusDays(start, 7 * weeks) < today && weeks < 520) weeks++;
+        }
+        const baseStart = plusDays(start, 7 * weeks);
+        const baseEnd = end ? plusDays(end, 7 * weeks) : null;
         const date = `${baseStart.getFullYear()}-${pad(baseStart.getMonth() + 1)}-${pad(baseStart.getDate())}`;
         const startTime = `${pad(baseStart.getHours())}:${pad(baseStart.getMinutes())}`;
         const endTime = baseEnd
@@ -300,7 +342,10 @@ export const EventEditorWizard = ({
         address: evt.address ?? "",
       });
       setImageUrl(evt.image_url ?? "");
-      setWillPublish(m === "edit" ? evt.status === "published" : true);
+      // Una copia nace como borrador; en edit el estado no se toca al guardar.
+      setWillPublish(false);
+      setOriginalStatus(m === "edit" ? evt.status ?? null : null);
+      setVenueId(evt.venue_id ?? defaultVenueId ?? null);
       setEventHasSales(m === "edit" ? hasSales : false);
       setTierSalesMap(salesMap);
 
@@ -361,9 +406,9 @@ export const EventEditorWizard = ({
       minPriceEur: minPrice,
       totalCapacity: totalCap,
       imageUrl: imageUrl || null,
-      willPublish,
+      willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish]);
+  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -378,6 +423,7 @@ export const EventEditorWizard = ({
         if (dtErr) return dtErr;
         const locErr = validateLocation(location);
         if (locErr) return locErr;
+        if (venues.length > 0 && !venueId) return "Elige el local del evento";
       }
       if (idx === 2) {
         const activeTiers = tiers.filter((t) => t.active);
@@ -402,7 +448,7 @@ export const EventEditorWizard = ({
       }
       return null;
     },
-    [title, dateTime, location, tiers, tierSalesMap]
+    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId]
   );
 
   const goNext = () => {
@@ -421,17 +467,25 @@ export const EventEditorWizard = ({
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      toast({ title: "Imagen muy grande", description: "Máximo 8 MB.", variant: "destructive" });
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Formato no válido", description: "Sube una imagen JPG, PNG o WEBP.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      toast({ title: "Imagen muy grande", description: "Máximo 25 MB.", variant: "destructive" });
       return;
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      // Se reduce a 1600×2000 como máximo (cartel 4:5) y se pasa a JPEG: una
+      // foto del móvil pasa de varios MB a unos cientos de KB.
+      const blob = await compressImage(file, { maxWidth: 1600, maxHeight: 2000, quality: 0.82 });
+      if (blob.size > 10 * 1024 * 1024) throw new Error("La imagen sigue ocupando más de 10 MB.");
+      const ext = blob.type === "image/jpeg" ? "jpg" : file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${partnerId}/event-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("event-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
+        .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: blob.type || file.type });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("event-images").getPublicUrl(path);
       setImageUrl(pub.publicUrl);
@@ -459,8 +513,10 @@ export const EventEditorWizard = ({
     return null;
   };
 
-  const submit = async (status: "draft" | "published") => {
-    const err = validateAll(status);
+  const submit = async (status: "draft" | "published" | "keep") => {
+    const effective: "draft" | "published" =
+      status === "keep" ? (originalStatus === "published" ? "published" : "draft") : status;
+    const err = validateAll(effective);
     if (err) {
       toast({ title: "Faltan datos", description: err, variant: "destructive" });
       return;
@@ -489,21 +545,25 @@ export const EventEditorWizard = ({
     setSubmitting(true);
     try {
       if (mode === "edit" && eventId) {
-        await persistEdit(eventId, status, startIso, endIso, minPriceCents, totalCap);
+        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents, totalCap);
       } else {
-        await persistCreate(status, startIso, endIso, minPriceCents, totalCap);
+        await persistCreate(effective, startIso, endIso, minPriceCents, totalCap);
       }
       toast({
         title:
           mode === "edit"
             ? status === "published"
-              ? "Cambios publicados"
+              ? "Evento publicado"
               : "Cambios guardados"
-            : status === "published"
+            : effective === "published"
             ? "Evento publicado"
             : "Borrador guardado",
         description:
-          status === "published"
+          status === "keep"
+            ? originalStatus === "published"
+              ? "El evento sigue publicado con los cambios."
+              : "Lo encontrarás en Mis eventos."
+            : effective === "published"
             ? "Ya aparece en el calendario público y se puede comprar."
             : "Lo encontrarás en Mis eventos.",
       });
@@ -521,6 +581,10 @@ export const EventEditorWizard = ({
           ? "No se puede eliminar este evento porque tiene ventas. Cámbialo a borrador en lugar de eliminarlo."
           : raw.includes("Cannot delete tier")
           ? "Hay tipos vendidos que no se pueden borrar. Desactívalos (oculto) en lugar de eliminarlos."
+          : raw.includes("cancelado no se puede")
+          ? "Un evento cancelado no se puede volver a publicar."
+          : raw.includes("row-level security") || raw.includes("42501")
+          ? "No tienes permiso para guardar este evento en ese local."
           : raw;
       toast({
         title: "Error guardando",
@@ -554,6 +618,8 @@ export const EventEditorWizard = ({
         price_cents: minPriceCents,
         capacity: totalCap,
         image_url: imageUrl || null,
+        // Con venue_id el trigger rellena brand_id y org_id.
+        venue_id: venueId,
         status,
       })
       .select("id")
@@ -583,7 +649,8 @@ export const EventEditorWizard = ({
   // ------- EDIT persistence (UPDATE event + reconciliate tiers) -------
   const persistEdit = async (
     eid: string,
-    status: "draft" | "published",
+    /** null = no tocar el estado */
+    status: "draft" | "published" | null,
     startIso: string,
     endIso: string | null,
     minPriceCents: number,
@@ -604,7 +671,8 @@ export const EventEditorWizard = ({
         price_cents: minPriceCents,
         capacity: totalCap,
         image_url: imageUrl || null,
-        status,
+        ...(venueId ? { venue_id: venueId } : {}),
+        ...(status ? { status } : {}),
       })
       .eq("id", eid);
     if (evtErr) throw new Error(evtErr.message);
@@ -851,6 +919,19 @@ export const EventEditorWizard = ({
                       location={location}
                       onLocationChange={setLocation}
                       cities={cities}
+                      venues={venues}
+                      venueId={venueId}
+                      onVenueChange={(id) => {
+                        const v = venues.find((x) => x.id === id);
+                        setVenueId(id);
+                        if (v) {
+                          setLocation((prev) => ({
+                            city: v.city || prev.city,
+                            venueName: v.name,
+                            address: v.address || prev.address,
+                          }));
+                        }
+                      }}
                       disabled={submitting}
                     />
                   )}
@@ -877,6 +958,7 @@ export const EventEditorWizard = ({
                     <StepPublish
                       willPublish={willPublish}
                       onWillPublishChange={setWillPublish}
+                      editStatus={mode === "edit" ? originalStatus ?? "draft" : null}
                       disabled={submitting}
                       eventHasSales={eventHasSales}
                     />
@@ -929,22 +1011,41 @@ export const EventEditorWizard = ({
               </Button>
             ) : (
               <div className="flex items-center gap-2">
+                {mode === "edit" ? (
+                  originalStatus === "draft" && (
+                    <Button
+                      variant="outline"
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => submit("published")}
+                      className="h-10"
+                    >
+                      <Send className="mr-1.5 h-4 w-4" />
+                      Guardar y publicar
+                    </Button>
+                  )
+                ) : (
+                  // Con "Publicar al guardar" apagado el botón principal ya
+                  // es "Guardar borrador": no se repite.
+                  willPublish && (
+                    <Button
+                      variant="outline"
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => submit("draft")}
+                      className="h-10"
+                    >
+                      {submitting ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Guardar borrador
+                    </Button>
+                  )
+                )}
                 <Button
-                  variant="outline"
                   type="button"
                   disabled={submitting}
-                  onClick={() => submit("draft")}
-                  className="h-10"
-                >
-                  {submitting ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Guardar borrador
-                </Button>
-                <Button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => submit(willPublish ? "published" : "draft")}
+                  onClick={() => submit(mode === "edit" ? "keep" : willPublish ? "published" : "draft")}
                   className="h-10"
                   style={{
                     background:
@@ -959,10 +1060,12 @@ export const EventEditorWizard = ({
                       <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                       Guardando…
                     </>
+                  ) : mode === "edit" ? (
+                    "Guardar cambios"
                   ) : willPublish ? (
                     <>
                       <Send className="mr-1.5 h-4 w-4" />
-                      {mode === "edit" ? "Guardar y publicar" : "Publicar evento"}
+                      Publicar evento
                     </>
                   ) : (
                     "Guardar borrador"
@@ -1040,6 +1143,9 @@ const StepWhenWhere = ({
   location,
   onLocationChange,
   cities,
+  venues,
+  venueId,
+  onVenueChange,
   disabled,
 }: {
   dateTime: DateTimeValue;
@@ -1047,6 +1153,9 @@ const StepWhenWhere = ({
   location: LocationValue;
   onLocationChange: (v: LocationValue) => void;
   cities: City[];
+  venues: EditorVenue[];
+  venueId: string | null;
+  onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
   <StepShell
@@ -1071,6 +1180,29 @@ const StepWhenWhere = ({
           <MapPin className="h-4 w-4 text-orange-500" />
           Ubicación
         </h3>
+        {venues.length > 0 && (
+          <div className="mb-4">
+            <Label htmlFor="evt-venue" className="text-xs">
+              Local *
+            </Label>
+            <Select value={venueId ?? ""} onValueChange={onVenueChange} disabled={disabled}>
+              <SelectTrigger id="evt-venue" className="mt-1.5">
+                <SelectValue placeholder="Elige el local" />
+              </SelectTrigger>
+              <SelectContent>
+                {venues.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                    {v.city ? ` · ${v.city}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Las ventas, el equipo y los informes de este evento van a este local.
+            </p>
+          </div>
+        )}
         <EventLocationSection
           value={location}
           onChange={onLocationChange}
@@ -1183,14 +1315,36 @@ const StepMedia = ({
   </StepShell>
 );
 
+const EDIT_STATUS_TEXT: Record<string, { title: string; text: string }> = {
+  published: {
+    title: "Publicado",
+    text: "«Guardar cambios» mantiene el evento publicado. Para retirarlo de la venta usa las acciones del evento en Mis eventos.",
+  },
+  draft: {
+    title: "Borrador",
+    text: "«Guardar cambios» lo deja como borrador. Usa «Guardar y publicar» para ponerlo a la venta.",
+  },
+  cancelled: {
+    title: "Cancelado",
+    text: "Un evento cancelado no vuelve a la venta. Puedes corregir sus datos, pero seguirá cancelado.",
+  },
+  past: {
+    title: "Finalizado",
+    text: "El evento ya pasó. Los cambios no lo vuelven a poner a la venta.",
+  },
+};
+
 const StepPublish = ({
   willPublish,
   onWillPublishChange,
+  editStatus,
   disabled,
   eventHasSales,
 }: {
   willPublish: boolean;
   onWillPublishChange: (v: boolean) => void;
+  /** Estado actual en modo edit (null en create/duplicate). */
+  editStatus: string | null;
   disabled?: boolean;
   eventHasSales: boolean;
 }) => (
@@ -1200,6 +1354,21 @@ const StepPublish = ({
     subtitle="Guárdalo como borrador para seguir ajustándolo o publícalo ya en el calendario."
   >
     <div className="mx-auto max-w-3xl">
+      {editStatus ? (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            {editStatus === "published" ? (
+              <Eye className="h-4 w-4 text-orange-500" />
+            ) : (
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            )}
+            Estado actual: {(EDIT_STATUS_TEXT[editStatus] ?? EDIT_STATUS_TEXT.draft).title}
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            {(EDIT_STATUS_TEXT[editStatus] ?? EDIT_STATUS_TEXT.draft).text}
+          </p>
+        </div>
+      ) : (
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-start gap-3">
           <Switch
@@ -1230,6 +1399,7 @@ const StepPublish = ({
           </div>
         </div>
       </div>
+      )}
 
       {eventHasSales && (
         <div
@@ -1309,7 +1479,15 @@ const StepReview = ({
         />
         <ReviewRow
           label="Visibilidad"
-          value={summary.willPublish ? "Se publicará al guardar" : "Borrador (no visible)"}
+          value={
+            mode === "edit"
+              ? summary.willPublish
+                ? "Publicado (sigue igual al guardar)"
+                : "Sin publicar"
+              : summary.willPublish
+              ? "Se publicará al guardar"
+              : "Borrador (no visible)"
+          }
         />
         {eventHasSales && (
           <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-[12px] leading-relaxed text-orange-200">

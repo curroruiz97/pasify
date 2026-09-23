@@ -20,9 +20,10 @@ import {
   Loader2,
   Radio,
   Copy,
+  EyeOff,
+  Send,
   MoreVertical,
   Receipt,
-  Music,
   Trash2,
   Menu,
   Settings,
@@ -41,7 +42,6 @@ import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
 import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
 import { usePartnerContext } from "@/hooks/usePartnerContext";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
-import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
 import { PartnerCRM } from "@/components/partner/PartnerCRM";
 import { PartnerSalesChannels } from "@/components/partner/PartnerSalesChannels";
 import { PartnerVipHospitality } from "@/components/partner/PartnerVipHospitality";
@@ -206,7 +206,6 @@ const PartnerDashboard = () => {
   // Fallo de la carga de eventos (o del arranque). Mientras no es null no se
   // pinta nada que dependa de la lista: ni "Tu primer evento" ni KPIs a cero.
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [festivalOpen, setFestivalOpen] = useState(false);
   // Editor state: única fuente para create/edit/duplicate. Cuando es null
   // el modal está cerrado. Cuando hay objeto, el wizard se abre en el modo
   // y con el evento indicado.
@@ -214,6 +213,9 @@ const PartnerDashboard = () => {
   // Confirmación de borrado: se guarda el evento target hasta que el usuario
   // confirma o cancela. AlertDialog se monta al final del árbol.
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
+  // Retirar de la venta (publicado → borrador), con confirmación.
+  const [unpublishTarget, setUnpublishTarget] = useState<EventRow | null>(null);
+  const [changingStatus, setChangingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Email del user (para autocompletar email facturación del wizard)
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -418,6 +420,57 @@ const PartnerDashboard = () => {
     setEditor({ mode: "edit", eventId: source.id });
   };
 
+  // Cambios de estado explícitos: editar un evento ya no los hace (el
+  // editor guarda sin tocar el estado).
+  const changeEventStatus = async (target: EventRow, to: "draft" | "published") => {
+    if (!userId) return;
+    setChangingStatus(true);
+    try {
+      if (to === "published") {
+        const { count, error: tierErr } = await supabase
+          .from("ticket_tiers")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", target.id)
+          .eq("status", "active");
+        if (tierErr) throw tierErr;
+        if (!count) {
+          toast({
+            title: "Falta un tipo de entrada",
+            description: "Añade al menos un tipo de entrada activo antes de publicar.",
+            variant: "destructive",
+          });
+          setEditor({ mode: "edit", eventId: target.id });
+          return;
+        }
+      }
+      const { error } = await supabase.from("events").update({ status: to }).eq("id", target.id);
+      if (error) throw error;
+      toast(
+        to === "published"
+          ? { title: "Evento publicado", description: `"${target.title}" ya está a la venta.` }
+          : {
+              title: "Retirado de la venta",
+              description: "Ya no aparece en el calendario. Las entradas vendidas siguen siendo válidas.",
+            },
+      );
+      await reloadEvents();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "";
+      toast({
+        title: "No se pudo cambiar el estado",
+        description: msg.includes("cancelado")
+          ? "Un evento cancelado no se puede volver a publicar."
+          : msg.includes("42501") || msg.includes("permission") || msg.includes("row-level")
+          ? "Tu cuenta no puede publicar eventos ahora mismo. Escríbenos desde Soporte."
+          : "Revisa tu conexión y vuelve a intentarlo.",
+        variant: "destructive",
+      });
+    } finally {
+      setChangingStatus(false);
+      setUnpublishTarget(null);
+    }
+  };
+
   const handleDeleteEvent = async () => {
     if (!deleteTarget || !userId) return;
     setDeleting(true);
@@ -429,7 +482,7 @@ const PartnerDashboard = () => {
       // real del fallo para que el partner entienda la causa.
       const msg = error.message ?? "";
       const friendly = msg.includes("Cannot delete event")
-        ? "Este evento ya tiene entradas vendidas. No se puede eliminar — cámbialo a borrador o crea uno nuevo."
+        ? "Este evento ya tiene entradas vendidas y no se puede eliminar. Puedes retirarlo de la venta desde su menú."
         : msg.includes("foreign key") || msg.includes("violates")
         ? "El evento tiene tickets vendidos o relacionados. Cancélalo en lugar de borrarlo."
         : msg;
@@ -769,16 +822,10 @@ const PartnerDashboard = () => {
                   <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Mis eventos</h1>
                   <p className="text-sm text-muted-foreground">Crea y gestiona los eventos de tu local.</p>
                 </div>
+                {/* "Festival multi-día" oculto hasta la Fase 3: el pase se
+                    invalidaba el primer día (scan_ticket no tiene acceso por
+                    día). FestivalBuilder sigue en el repo. */}
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 md:flex-initial"
-                    onClick={() => setFestivalOpen(true)}
-                    disabled={!userId}
-                  >
-                    <Music className="mr-2 h-4 w-4" />
-                    Festival multi-día
-                  </Button>
                 <Button
                   className="flex-1 md:flex-initial"
                   onClick={() => setEditor({ mode: "create" })}
@@ -803,22 +850,11 @@ const PartnerDashboard = () => {
                 partnerId={userId}
                 eventId={editor?.eventId}
                 cities={cities}
-                defaultCity={profile?.city ?? profile?.business_city ?? ""}
-                defaultVenueName={profile?.business_name ?? ""}
+                defaultCity={partnerCtx.venue?.city || profile?.city || profile?.business_city || ""}
+                defaultVenueName={partnerCtx.venue?.name || profile?.business_name || ""}
+                venues={partnerCtx.venues}
+                defaultVenueId={partnerCtx.venue?.id ?? null}
                 onSaved={reloadEvents}
-              />
-
-              <FestivalBuilder
-                open={festivalOpen}
-                onOpenChange={setFestivalOpen}
-                partnerId={userId}
-                defaultCity={profile?.city ?? profile?.business_city ?? ""}
-                defaultVenueName={profile?.business_name ?? ""}
-                cities={cities}
-                onCreated={async () => {
-                  setFestivalOpen(false);
-                  await reloadEvents();
-                }}
               />
 
               {loading ? (
@@ -895,6 +931,21 @@ const PartnerDashboard = () => {
                                       <Copy className="mr-2 h-4 w-4" />
                                       Duplicar evento
                                     </DropdownMenuItem>
+                                    {e.status === "draft" && (
+                                      <DropdownMenuItem
+                                        disabled={changingStatus}
+                                        onClick={() => void changeEventStatus(e, "published")}
+                                      >
+                                        <Send className="mr-2 h-4 w-4" />
+                                        Publicar
+                                      </DropdownMenuItem>
+                                    )}
+                                    {e.status === "published" && (
+                                      <DropdownMenuItem onClick={() => setUnpublishTarget(e)}>
+                                        <EyeOff className="mr-2 h-4 w-4" />
+                                        Retirar de la venta
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       onClick={() => setDeleteTarget(e)}
@@ -924,6 +975,8 @@ const PartnerDashboard = () => {
                         onEdit={() => handleEditEvent(e)}
                         onDuplicate={() => handleDuplicateEvent(e)}
                         onDelete={() => setDeleteTarget(e)}
+                        onPublish={() => void changeEventStatus(e, "published")}
+                        onUnpublish={() => setUnpublishTarget(e)}
                       />
                     ))}
                   </div>
@@ -1195,6 +1248,37 @@ const PartnerDashboard = () => {
         onOpenSupport={() => setSection("soporte")}
         onReopenOnboarding={() => setReopenOnboarding(true)}
       />
+
+      {/* Confirmación de retirar de la venta */}
+      <AlertDialog
+        open={unpublishTarget !== null}
+        onOpenChange={(open) => !open && !changingStatus && setUnpublishTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Retirar de la venta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold text-foreground">"{unpublishTarget?.title}"</span>{" "}
+              dejará de verse en el calendario y no se podrán comprar más entradas. Las
+              entradas ya vendidas siguen siendo válidas en la puerta. Puedes volver a
+              publicarlo cuando quieras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={changingStatus}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(ev) => {
+                ev.preventDefault();
+                if (unpublishTarget) void changeEventStatus(unpublishTarget, "draft");
+              }}
+              disabled={changingStatus}
+            >
+              {changingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <EyeOff className="mr-2 h-4 w-4" />}
+              Retirar de la venta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmación de borrado de evento — destructive */}
       <AlertDialog
