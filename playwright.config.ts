@@ -11,6 +11,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./tests/e2e",
+  // El smoke del panel necesita el Supabase simulado: va con playwright.partner.config.ts.
+  testIgnore: "**/partner-shell.spec.ts",
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
   fullyParallel: true,

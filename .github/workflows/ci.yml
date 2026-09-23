@@ -30,6 +30,31 @@ jobs:
       - name: i18n encoding check (no mojibake)
         run: npm run i18n:check
 
+  e2e-partner:
+    name: E2E · panel de local (Supabase simulado)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci --prefer-offline --no-audit
+      - name: Instalar Chromium de Playwright
+        run: npx playwright install --with-deps chromium
+      # Arranca su propio Vite en :8090 apuntando a un Supabase falso: no
+      # necesita secretos ni toca ningún proyecto real.
+      - name: Smoke del panel de local
+        run: npm run test:e2e:partner
+      - name: Trazas y capturas del fallo
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-partner-test-results
+          path: test-results/partner-shell/
+          retention-days: 7
+
   security:
     name: Security scan
     runs-on: ubuntu-latest

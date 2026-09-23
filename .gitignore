@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Salida de Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+
 # Env files — i segreti stanno su Vercel / supabase secrets.
 # .env.production è versionato a posta: contiene solo valori pubblici
 # (URL Supabase + publishable key) e serve perché il build dell'AAB Android

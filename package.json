@@ -15,6 +15,7 @@
     "typecheck:full": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.app.json",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:partner": "playwright test -c playwright.partner.config.ts",
     "i18n:check": "node scripts/fix-i18n-mojibake.mjs --check",
     "i18n:fix": "node scripts/fix-i18n-mojibake.mjs",
     "cap:sync": "npm run build && cap sync android",
