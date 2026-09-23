@@ -36,8 +36,19 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 // =============================================================
-// Channels data model (demo)
+// Channels data model (demo · nombres, cuentas y dominios ficticios;
+// los @ llevan guion para que no puedan ser cuentas reales de Instagram)
 // =============================================================
 
 type ChannelKind = "web" | "instagram" | "rrpp" | "reseller" | "embed" | "affiliate";
@@ -66,12 +77,12 @@ const channelKindConfig: Record<
 };
 
 const DEMO_CHANNELS: Channel[] = [
-  { id: "ch-1", kind: "web", name: "pacha-ibiza.pasify.es", sold: 487, revenueCents: 7305_00, commission: 0, active: true },
-  { id: "ch-2", kind: "instagram", name: "@pachaibiza", sold: 142, revenueCents: 2130_00, commission: 0, active: true, meta: "12K seguidores" },
+  { id: "ch-1", kind: "web", name: "pasify.es/p/sala-demo", sold: 487, revenueCents: 7305_00, commission: 0, active: true },
+  { id: "ch-2", kind: "instagram", name: "@sala-demo", sold: 142, revenueCents: 2130_00, commission: 0, active: true, meta: "12K seguidores" },
   { id: "ch-3", kind: "rrpp", name: "Red interna · 14 RRPP", sold: 268, revenueCents: 4020_00, commission: 0.1, active: true },
-  { id: "ch-4", kind: "reseller", name: "Hotel Ushuaïa", sold: 64, revenueCents: 960_00, commission: 0.15, active: true, meta: "Concierge → cliente VIP" },
-  { id: "ch-5", kind: "embed", name: "Widget · pachaibiza.com", sold: 92, revenueCents: 1380_00, commission: 0, active: true },
-  { id: "ch-6", kind: "affiliate", name: "@martagomez (124K)", sold: 38, revenueCents: 570_00, commission: 0.08, active: true, meta: "Código MARTA10" },
+  { id: "ch-4", kind: "reseller", name: "Hotel Demo Mar", sold: 64, revenueCents: 960_00, commission: 0.15, active: true, meta: "Concierge → cliente VIP" },
+  { id: "ch-5", kind: "embed", name: "Widget · salademo.example", sold: 92, revenueCents: 1380_00, commission: 0, active: true },
+  { id: "ch-6", kind: "affiliate", name: "@influencer-demo (124K)", sold: 38, revenueCents: 570_00, commission: 0.08, active: true, meta: "Código DEMO10" },
 ];
 
 interface Rrpp {
@@ -402,7 +413,7 @@ const RrppRow = ({ rrpp, rank, top }: { rrpp: Rrpp; rank: number; top: boolean }
         </div>
       </div>
 
-      <Button variant="ghost" size="icon" aria-label="Más acciones">
+      <Button variant="ghost" size="icon" aria-label="Más acciones (demo)" disabled>
         <MoreVertical className="h-4 w-4" />
       </Button>
     </article>
@@ -410,7 +421,6 @@ const RrppRow = ({ rrpp, rank, top }: { rrpp: Rrpp; rank: number; top: boolean }
 };
 
 const InviteRrppDialog = ({ onClose }: { onClose: () => void }) => {
-  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [commission, setCommission] = useState("10");
@@ -421,7 +431,7 @@ const InviteRrppDialog = ({ onClose }: { onClose: () => void }) => {
       </DialogHeader>
       <div className="space-y-3 text-sm">
         <p className="text-muted-foreground">
-          Le mandaremos un email con su código personalizado y un enlace para que se descargue la app de Pasify RRPP.
+          Vista de ejemplo: desde aquí todavía no se envía ninguna invitación.
         </p>
         <div>
           <Label className="text-xs">Email del promotor</Label>
@@ -458,21 +468,10 @@ const InviteRrppDialog = ({ onClose }: { onClose: () => void }) => {
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>
-        <Button
-          onClick={() => {
-            if (!email) {
-              toast({ title: "Falta email", variant: "destructive" });
-              return;
-            }
-            toast({
-              title: "Invitación enviada",
-              description: `Hemos mandado el enlace a ${email}`,
-            });
-            onClose();
-          }}
-        >
+        <Button disabled>
           <UserPlus className="mr-2 h-4 w-4" />
           Enviar invitación
+          <DemoTag />
         </Button>
       </DialogFooter>
     </DialogContent>

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   Euro,
+  Loader2,
   Radio,
+  RefreshCcw,
   ScanLine,
   Ticket,
   Users,
@@ -13,7 +15,9 @@ import {
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { es } from "date-fns/locale";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { eventPhase } from "@/lib/pickActiveEvent";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -26,15 +30,15 @@ export interface LiveWarRoomEvent {
   id: string;
   title: string;
   date_start: string;
+  /** Fin real del evento; si falta se asume inicio + 12 h (pickActiveEvent). */
+  date_end?: string | null;
+  /** Aforo del evento. null = sin aforo definido: nunca se inventa uno. */
   capacity: number | null;
-  tickets_sold: number;
-  price_cents: number;
-  partner_category?: string | null;
   partner_name?: string | null;
 }
 
 interface Props {
-  /** Próximo evento publicado (o el más cercano en el tiempo). */
+  /** Evento en curso o el próximo (pickActiveEvent). */
   event: LiveWarRoomEvent | null;
 }
 
@@ -96,19 +100,23 @@ type TierLiveStat = {
 const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
   const startDate = new Date(event.date_start);
   const now = useTicker(60_000);
-  const diff = startDate.getTime() - now;
-  const isLive = diff <= 0 && diff > -8 * 60 * 60 * 1000;
-  const isUpcoming = diff > 0;
-  const isPast = diff <= -8 * 60 * 60 * 1000;
-  const status = isLive ? "live" : isUpcoming ? "upcoming" : "past";
+  // Fase real con el fin del evento (date_end o inicio + 12 h), no una
+  // ventana fija de 8 h desde el inicio.
+  const phase = eventPhase(event, new Date(now)) ?? "upcoming";
+  const status = phase === "live" ? "live" : phase === "upcoming" ? "upcoming" : "past";
+  const isLive = status === "live";
 
   const [tiers, setTiers] = useState<TierLiveStat[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const realtimeId = useId();
+  // Descarta respuestas de un evento anterior si se cambia rápido de evento.
+  const requestRef = useRef(0);
 
   // Carga inicial + reload
   const loadStats = useCallback(async () => {
+    const requestId = ++requestRef.current;
     setRefreshing(true);
     try {
       // Cast hasta que se regeneren los types post-migration.
@@ -121,17 +129,30 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
       const { data, error } = await rpcAny.rpc("partner_event_tier_live_stats", {
         _event_id: event.id,
       });
-      if (!error) {
-        setTiers(data ?? []);
+      if (requestId !== requestRef.current) return;
+      if (error) {
+        // Antes el error se tragaba y se pintaba "sin tipos de ticket".
+        setLoadError(error.message);
+        return;
       }
+      setLoadError(null);
+      setTiers(data ?? []);
+    } catch (err) {
+      if (requestId !== requestRef.current) return;
+      setLoadError(err instanceof Error ? err.message : "Error de conexión");
     } finally {
-      setRefreshing(false);
+      if (requestId === requestRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
   }, [event.id]);
 
   useEffect(() => {
+    setTiers([]);
+    setLoadError(null);
     setLoading(true);
-    void loadStats().finally(() => setLoading(false));
+    void loadStats();
   }, [loadStats]);
 
   // Realtime: refresca cuando un ticket de este evento cambia. Cada
@@ -199,14 +220,14 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
       if (pct >= 100) {
         out.push({
           level: "danger",
-          title: `${t.tier_name}: aforo legal alcanzado`,
-          detail: `${t.sold_count} vendidas / ${t.capacity}`,
+          title: `${t.tier_name}: agotado`,
+          detail: `${t.sold_count} vendidas de ${t.capacity}`,
         });
       } else if (pct >= 85) {
         out.push({
           level: "warning",
-          title: `${t.tier_name}: cerca del aforo`,
-          detail: `${Math.round(pct)}% vendido · considera frenar venta`,
+          title: `${t.tier_name}: casi agotado`,
+          detail: `${Math.round(pct)}% vendido (${t.sold_count} de ${t.capacity})`,
         });
       }
       if (isLive && t.pending_count > 10 && t.sold_count > 0) {
@@ -337,6 +358,43 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
         </div>
       </header>
 
+      {loadError && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+          style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground">
+              {tiers.length > 0
+                ? "No se han podido actualizar los datos en vivo"
+                : "No pudimos cargar los datos en vivo"}
+            </div>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {tiers.length > 0 ? "Lo que ves son los últimos datos recibidos. " : ""}
+              Detalle: {loadError}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => void loadStats()}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+            )}
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      {/* Sin datos que enseñar tras un fallo: nada de KPIs a cero. */}
+      {loadError && tiers.length === 0 ? null : (
+      <>
       {/* KPI totales */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <KpiTile
@@ -406,7 +464,7 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
 
         {loading ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
-            Cargando stats por tier…
+            Cargando datos por tipo de entrada…
           </div>
         ) : tiers.length === 0 ? (
           <div className="rounded-xl border border-border bg-card/40 px-4 py-6 text-center text-sm text-muted-foreground">
@@ -449,6 +507,8 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
           ))}
         </ul>
       </section>
+      </>
+      )}
     </div>
   );
 };

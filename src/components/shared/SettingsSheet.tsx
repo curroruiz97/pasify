@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import {
   Sheet,
   SheetContent,
@@ -11,49 +15,39 @@ import { supabase } from "@/integrations/supabase/client";
 import EditPersonalInfoSheet from "@/components/shared/EditPersonalInfoSheet";
 import {
   ArrowLeft,
-  ArrowRight,
-  Bell,
-  CheckCircle2,
   ChevronRight,
   CircleAlert,
   Coins,
-  Database,
   Download,
-  Eye,
-  EyeOff,
-  Fingerprint,
-  Globe2,
-  Headphones,
+  FileText,
   KeyRound,
-  Languages,
+  LifeBuoy,
+  Loader2,
   Lock,
+  LogOut,
   Mail,
-  MapPin,
-  Moon,
-  Music2,
-  Palette,
-  Phone,
-  Save,
-  ScanFace,
+  MonitorSmartphone,
   ShieldCheck,
-  Smartphone,
   Sparkles,
+  Store,
   Trash2,
   UserCircle,
-  Wand2,
-  Zap,
 } from "lucide-react";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-const serif = {
-  fontFamily: "'Instrument Serif', Georgia, serif",
-  fontStyle: "italic" as const,
-  fontWeight: 400,
-};
 
 /** Correo real de soporte. Es el mismo que publica /soporte, la URL que
  *  Apple abre desde la ficha de App Store. */
 const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+
+const MIN_PASSWORD_LENGTH = 8;
+
+// Inyectado por vite.config.ts (`pasify@<sha12>`). Solo se enseña en web.
+declare const __PASIFY_RELEASE__: string;
+const WEB_BUILD =
+  typeof __PASIFY_RELEASE__ !== "undefined" && !__PASIFY_RELEASE__.endsWith("@dev")
+    ? __PASIFY_RELEASE__.replace(/^pasify@/, "")
+    : null;
 
 export type SettingsRole = "client" | "partner" | "admin";
 
@@ -61,7 +55,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   role: SettingsRole;
-  /** Email del usuario para mostrar en la tarjeta de cuenta */
+  /** Email del usuario para mostrar en la tarjeta de cuenta. Si no llega, se lee de la sesión. */
   email?: string | null;
   /** Nombre legible (Cliente: nombre · Partner: business_name · Admin: "Admin") */
   displayName?: string | null;
@@ -71,10 +65,32 @@ interface Props {
   partnerSlot?: React.ReactNode;
 }
 
+type LoadState = "loading" | "ready" | "error";
+
+const passwordErrorMessage = (code: string | undefined) => {
+  switch (code) {
+    case "same_password":
+      return "La nueva contraseña tiene que ser distinta de la actual.";
+    case "weak_password":
+      return "Esa contraseña es demasiado débil. Prueba con una más larga o que mezcle letras, números y símbolos.";
+    case "reauthentication_needed":
+    case "reauth_nonce_missing":
+      return "Por seguridad, cámbiala desde «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.";
+    case "session_not_found":
+    case "session_expired":
+      return "Tu sesión ha caducado. Vuelve a iniciar sesión.";
+    default:
+      return "No hemos podido cambiar la contraseña. Vuelve a intentarlo.";
+  }
+};
+
 /* ============================================================
-   SettingsSheet — configuración completa, role-aware.
-   Layout: Sheet right · 92vw max-w-md · scroll body · sticky save footer.
-   Cada sección sigue el patrón Pasify: eyebrow mono + heading + card rows.
+   SettingsSheet — ajustes de cuenta, role-aware.
+   Solo lleva controles que hacen algo de verdad. Este panel estaba
+   lleno de filas de maqueta (teléfono inventado, 2FA y sesiones
+   fingidas, Stripe "conectado", interruptores que no guardaban nada y
+   un "Guardar cambios" que solo lanzaba un toast): el mismo patrón de
+   la directriz 2.1(a) por la que Apple rechazó la 1.0.
    ============================================================ */
 
 export const SettingsSheet = ({
@@ -86,32 +102,192 @@ export const SettingsSheet = ({
   partnerSlot,
 }: Props) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  // Local controlled state. En prod estos vendrían del backend (Supabase).
-  const [twoFA, setTwoFA] = useState(false);
-  const [biometric, setBiometric] = useState(true);
-  const [pushMaster, setPushMaster] = useState(true);
-  const [emailMaster, setEmailMaster] = useState(true);
-  const [smsMaster, setSmsMaster] = useState(false);
-  const [notifEvents, setNotifEvents] = useState(true);
-  const [notifTickets, setNotifTickets] = useState(true);
-  const [notifPromos, setNotifPromos] = useState(true);
-  const [notifLoyalty, setNotifLoyalty] = useState(true);
-  const [notifNewsletter, setNotifNewsletter] = useState(false);
-  const [quietHours, setQuietHours] = useState(true);
-  const [shareTaste, setShareTaste] = useState(true);
-  const [locationShare, setLocationShare] = useState(true);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const [showVat, setShowVat] = useState(true);
-  const [shareBenchmarks, setShareBenchmarks] = useState(true);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [textSize, setTextSize] = useState<"S" | "M" | "L">("M");
-  const [city, setCity] = useState("Madrid");
-  const [language, setLanguage] = useState<"es" | "en" | "fr" | "it">("es");
-  const [searchRadius, setSearchRadius] = useState(50);
+  const [sessionUser, setSessionUser] = useState<{ id: string; email: string | null } | null>(null);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const [signingOutOthers, setSigningOutOthers] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const [salesEmail, setSalesEmail] = useState(true);
+  const [salesEmailState, setSalesEmailState] = useState<LoadState>("loading");
+  const [salesEmailReload, setSalesEmailReload] = useState(0);
+  const [savingSalesEmail, setSavingSalesEmail] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [deleteBlocked, setDeleteBlocked] = useState<string | null>(null);
+
+  const [appVersion, setAppVersion] = useState<string | null>(
+    Capacitor.isNativePlatform() ? null : WEB_BUILD ? `Web · ${WEB_BUILD}` : null
+  );
+
+  const accountEmail = email ?? sessionUser?.email ?? null;
+  const userId = sessionUser?.id ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      const user = data.session?.user;
+      setSessionUser(user ? { id: user.id, email: user.email ?? null } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    CapacitorApp.getInfo()
+      .then((info) => {
+        if (!cancelled) setAppVersion(`${info.version} (${info.build})`);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* Aviso por email de cada venta. dispatch-notification (stripe-webhook ->
+     notificación "Venta: <evento>", categoría tickets) lee esta fila antes de
+     mandar el correo; sin fila, el envío está activo. */
+  useEffect(() => {
+    if (!open || role !== "partner" || !userId) return;
+    let cancelled = false;
+    setSalesEmailState("loading");
+    (async () => {
+      const { data, error } = await supabase
+        .from("user_notification_prefs")
+        .select("enabled")
+        .eq("user_id", userId)
+        .eq("channel", "email")
+        .eq("category", "tickets")
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error("user_notification_prefs:", error);
+        setSalesEmailState("error");
+        return;
+      }
+      setSalesEmail(data ? data.enabled : true);
+      setSalesEmailState("ready");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, role, userId, salesEmailReload]);
+
+  const handleSalesEmailChange = async (next: boolean) => {
+    if (!userId || savingSalesEmail) return;
+    const previous = salesEmail;
+    setSalesEmail(next);
+    setSavingSalesEmail(true);
+    const { error } = await supabase
+      .from("user_notification_prefs")
+      .upsert(
+        { user_id: userId, channel: "email", category: "tickets", enabled: next },
+        { onConflict: "user_id,channel,category" }
+      );
+    setSavingSalesEmail(false);
+    if (error) {
+      console.error("user_notification_prefs upsert:", error);
+      setSalesEmail(previous);
+      toast({
+        title: "No se ha guardado el cambio",
+        description: "Revisa tu conexión y vuelve a intentarlo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetPasswordForm = () => {
+    setPasswordOpen(false);
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError(null);
+  };
+
+  const handlePasswordChange = async () => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Las contraseñas no coinciden.");
+      return;
+    }
+    setPasswordError(null);
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordError(passwordErrorMessage(error.code));
+        return;
+      }
+      resetPasswordForm();
+      toast({ title: "Contraseña actualizada", description: "La próxima vez entra con la nueva." });
+    } catch (err) {
+      console.error("updateUser(password):", err);
+      setPasswordError(passwordErrorMessage(undefined));
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleSignOutOthers = async () => {
+    setSigningOutOthers(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "others" });
+      if (error) throw error;
+      toast({
+        title: "Sesiones cerradas",
+        description: "Hemos cerrado tu sesión en el resto de dispositivos. En este sigues conectado.",
+      });
+    } catch (err) {
+      console.error("signOut(others):", err);
+      toast({
+        title: "No hemos podido cerrar las otras sesiones",
+        description: "Revisa tu conexión y vuelve a intentarlo.",
+        variant: "destructive",
+      });
+    } finally {
+      setSigningOutOthers(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) throw error;
+      onOpenChange(false);
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("signOut(local):", err);
+      toast({
+        title: "No hemos podido cerrar la sesión",
+        description: "Vuelve a intentarlo.",
+        variant: "destructive",
+      });
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const goTo = (path: string) => {
+    onOpenChange(false);
+    navigate(path);
+  };
 
   /* ------------------------------------------------------------------
      Borrado de cuenta — guia 5.1.1(v) de Apple.
@@ -122,23 +298,48 @@ export const SettingsSheet = ({
      quedaron sin ruta al retirar del router las pantallas social/perfil.
      Este es el unico panel de ajustes accesible en la app, asi que el
      borrado real tiene que salir de aqui.
+     Si el local tiene eventos futuros con entradas vendidas, la funcion
+     responde 409 partner_has_upcoming_sales y se enseña su mensaje.
      ------------------------------------------------------------------ */
   const handleDeleteAccount = async () => {
     setDeleting(true);
     try {
       const { error } = await supabase.functions.invoke("delete-own-account");
-      if (error) throw error;
+      if (error) {
+        let serverMessage: string | null = null;
+        if (error instanceof FunctionsHttpError) {
+          const response = error.context as Response;
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string; message?: string }
+            | null;
+          if (response.status === 409 && body?.error === "partner_has_upcoming_sales") {
+            setDeleteBlocked(
+              body.message ||
+                `Tu local tiene eventos próximos con entradas vendidas, así que todavía no se puede eliminar la cuenta. Escríbenos a ${SUPPORT_EMAIL} y lo resolvemos contigo.`
+            );
+            return;
+          }
+          serverMessage = body?.message ?? null;
+        }
+        console.error("delete-own-account:", error);
+        toast({
+          title: "No hemos podido eliminar la cuenta",
+          description: serverMessage ?? `Vuelve a intentarlo o escríbenos a ${SUPPORT_EMAIL}.`,
+          variant: "destructive",
+        });
+        return;
+      }
 
       // La cuenta ya no existe: el token local es basura. Limpiamos sesion
       // y mandamos al login, si no la app se queda con una sesion fantasma.
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       setShowDeleteConfirm(false);
       onOpenChange(false);
       toast({
         title: "Cuenta eliminada",
         description: "Tu cuenta y tus datos se han borrado. Hasta pronto.",
       });
-      window.location.hash = "#/login";
+      navigate("/login", { replace: true });
     } catch (err) {
       console.error("delete-own-account:", err);
       toast({
@@ -149,6 +350,11 @@ export const SettingsSheet = ({
     } finally {
       setDeleting(false);
     }
+  };
+
+  const closeDeleteConfirm = () => {
+    setShowDeleteConfirm(false);
+    setDeleteBlocked(null);
   };
 
   /* Peticion de acceso a datos (art. 15 RGPD). No prometemos un ZIP
@@ -162,7 +368,7 @@ export const SettingsSheet = ({
       "Solicito una copia de los datos personales que Pasify tiene sobre mi cuenta,",
       "conforme al artículo 15 del RGPD.",
       "",
-      `Correo de la cuenta: ${email ?? ""}`,
+      `Correo de la cuenta: ${accountEmail ?? ""}`,
       "",
       "Gracias.",
     ].join("\n");
@@ -172,13 +378,6 @@ export const SettingsSheet = ({
     toast({
       title: "Abriendo tu correo",
       description: `Envíanos la solicitud a ${SUPPORT_EMAIL} y te respondemos en 30 días como máximo.`,
-    });
-  };
-
-  const handleSave = () => {
-    toast({
-      title: "Cambios guardados",
-      description: "Tus preferencias se han actualizado correctamente.",
     });
   };
 
@@ -221,7 +420,7 @@ export const SettingsSheet = ({
         </header>
 
         {/* ============ BODY ============ */}
-        <div className="flex-1 overflow-y-auto p-4 pb-[100px]">
+        <div className="flex-1 overflow-y-auto p-4 pb-6">
           <div className="space-y-4">
             {/* === Account hero card === */}
             <section
@@ -250,30 +449,14 @@ export const SettingsSheet = ({
                   <UserCircle className="h-7 w-7" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">
-                      {displayName || "Tu cuenta"}
-                    </span>
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  <div className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+                    {displayName || "Tu cuenta"}
                   </div>
                   <div
                     className="mt-0.5 truncate text-[11px] text-muted-foreground"
                     style={mono}
                   >
-                    {email ?? "—"}
-                  </div>
-                  <div
-                    className="mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9.5px] uppercase"
-                    style={{
-                      ...mono,
-                      letterSpacing: "0.18em",
-                      borderColor: "rgba(77,184,122,0.4)",
-                      color: "#4DB87A",
-                      background: "rgba(77,184,122,0.08)",
-                    }}
-                  >
-                    <span className="inline-block h-1 w-1 rounded-full bg-emerald-500" />
-                    Verificada
+                    {accountEmail ?? "—"}
                   </div>
                 </div>
               </div>
@@ -291,47 +474,6 @@ export const SettingsSheet = ({
             {/* === Partner real persistence slot === */}
             {role === "partner" && partnerSlot}
 
-            {/* === Cuenta === */}
-            <SectionCard
-              eyebrow="Cuenta"
-              icon={<UserCircle className="h-3 w-3" />}
-              title="Datos personales"
-            >
-              <Row
-                icon={<Mail className="h-4 w-4" />}
-                label="Email"
-                value={email ?? "—"}
-                onPress={() => toast({ title: "Cambiar email", description: "Te enviaremos un código de verificación." })}
-              />
-              <Divider />
-              <Row
-                icon={<Phone className="h-4 w-4" />}
-                label="Teléfono"
-                value="+34 ··· ··· 412"
-                onPress={() => toast({ title: "Verifica tu teléfono", description: "Se enviará un SMS de verificación." })}
-              />
-              <Divider />
-              <SelectChipRow
-                icon={<Languages className="h-4 w-4" />}
-                label="Idioma"
-                value={language}
-                options={[
-                  { id: "es", label: "Español" },
-                  { id: "en", label: "English" },
-                  { id: "fr", label: "Français" },
-                  { id: "it", label: "Italiano" },
-                ]}
-                onChange={(v) => setLanguage(v as typeof language)}
-              />
-              <Divider />
-              <Row
-                icon={<Coins className="h-4 w-4" />}
-                label="Moneda"
-                value="EUR €"
-                onPress={() => toast({ title: "Moneda", description: "Solo EUR disponible en esta región." })}
-              />
-            </SectionCard>
-
             {/* === Seguridad === */}
             <SectionCard
               eyebrow="Seguridad"
@@ -340,148 +482,121 @@ export const SettingsSheet = ({
             >
               <Row
                 icon={<KeyRound className="h-4 w-4" />}
-                label="Contraseña"
-                value="Cambiada hace 14 días"
-                onPress={() => toast({ title: "Cambiar contraseña", description: "Te llevamos al flujo seguro." })}
+                label="Cambiar contraseña"
+                onPress={() => (passwordOpen ? resetPasswordForm() : setPasswordOpen(true))}
+                expanded={passwordOpen}
               />
-              <Divider />
-              <ToggleRow
-                icon={<Lock className="h-4 w-4" />}
-                label="Verificación en 2 pasos"
-                description="Recibirás un código por SMS o app authenticator al iniciar sesión."
-                checked={twoFA}
-                onChange={setTwoFA}
-                meta={twoFA ? "Activa" : undefined}
-              />
-              <Divider />
-              <ToggleRow
-                icon={<Fingerprint className="h-4 w-4" />}
-                label="Desbloqueo biométrico"
-                description="Face ID o huella en este dispositivo."
-                checked={biometric}
-                onChange={setBiometric}
-              />
+              {passwordOpen && (
+                <form
+                  className="mx-3 mb-2 mt-1 space-y-2 rounded-xl border border-border p-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handlePasswordChange();
+                  }}
+                >
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Nueva contraseña"
+                    aria-label="Nueva contraseña"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={savingPassword}
+                  />
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Repite la nueva contraseña"
+                    aria-label="Repite la nueva contraseña"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={savingPassword}
+                  />
+                  <p
+                    className={`text-[11.5px] leading-relaxed ${passwordError ? "text-red-500" : "text-muted-foreground"}`}
+                    role={passwordError ? "alert" : undefined}
+                  >
+                    {passwordError ?? `Mínimo ${MIN_PASSWORD_LENGTH} caracteres.`}
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={savingPassword}
+                      onClick={resetPasswordForm}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="flex-1"
+                      disabled={savingPassword || !newPassword || !confirmPassword}
+                    >
+                      {savingPassword ? "Guardando…" : "Guardar contraseña"}
+                    </Button>
+                  </div>
+                </form>
+              )}
               <Divider />
               <Row
-                icon={<Smartphone className="h-4 w-4" />}
-                label="Sesiones activas"
-                value="2 dispositivos"
-                onPress={() => toast({ title: "Sesiones activas", description: "Próximamente · iPhone 15 + MacBook Pro." })}
-              />
-              <Divider />
-              <DangerRow
-                icon={<EyeOff className="h-4 w-4" />}
-                label="Cerrar otras sesiones"
-                description="Desconecta todos los dispositivos excepto este."
-                onPress={() => toast({ title: "Sesiones cerradas", description: "Se han cerrado 1 sesión adicional." })}
+                icon={<MonitorSmartphone className="h-4 w-4" />}
+                label="Cerrar sesión en otros dispositivos"
+                description="Este dispositivo sigue conectado."
+                onPress={handleSignOutOthers}
+                busy={signingOutOthers}
               />
             </SectionCard>
 
-            {/* === Notificaciones === */}
-            <SectionCard
-              eyebrow="Notificaciones"
-              icon={<Bell className="h-3 w-3" />}
-              title="Cómo quieres que te avisemos"
-            >
-              <ToggleRow
-                icon={<Smartphone className="h-4 w-4" />}
-                label="Push del móvil"
-                description="Avisos en tiempo real en este dispositivo."
-                checked={pushMaster}
-                onChange={setPushMaster}
-              />
-              <Divider />
-              <ToggleRow
-                icon={<Mail className="h-4 w-4" />}
-                label="Email"
-                checked={emailMaster}
-                onChange={setEmailMaster}
-              />
-              <Divider />
-              <ToggleRow
-                icon={<Phone className="h-4 w-4" />}
-                label="SMS"
-                description="Solo para confirmaciones críticas y 2FA."
-                checked={smsMaster}
-                onChange={setSmsMaster}
-              />
-
-              {/* Categorías */}
-              {(pushMaster || emailMaster) && (
-                <>
-                  <DividerLabeled label="Categorías" />
-                  <ToggleRow
-                    icon={<Sparkles className="h-4 w-4" />}
-                    label={role === "client" ? "Eventos cerca de ti" : "Eventos & promotores"}
-                    checked={notifEvents}
-                    onChange={setNotifEvents}
-                    compact
-                  />
-                  <Divider />
-                  <ToggleRow
-                    icon={<ScanFace className="h-4 w-4" />}
-                    label={
-                      role === "client"
-                        ? "Recordatorios de mis tickets"
-                        : role === "partner"
-                          ? "Ventas y aforo en vivo"
-                          : "Alertas de plataforma"
-                    }
-                    checked={notifTickets}
-                    onChange={setNotifTickets}
-                    compact
-                  />
-                  <Divider />
-                  <ToggleRow
-                    icon={<Zap className="h-4 w-4" />}
-                    label={
-                      role === "client"
-                        ? "Promos y descuentos"
-                        : role === "partner"
-                          ? "Recomendaciones IA"
-                          : "Anomalías AI Safety"
-                    }
-                    checked={notifPromos}
-                    onChange={setNotifPromos}
-                    compact
-                  />
-                  {role === "client" && (
-                    <>
-                      <Divider />
-                      <ToggleRow
-                        icon={<Sparkles className="h-4 w-4" />}
-                        label="Pasify Points & perks"
-                        checked={notifLoyalty}
-                        onChange={setNotifLoyalty}
-                        compact
-                      />
-                    </>
+            {/* === Cobros y avisos (local) === */}
+            {role === "partner" && (
+              <SectionCard
+                eyebrow="Tu local"
+                icon={<Store className="h-3 w-3" />}
+                title="Cobros y avisos"
+              >
+                <Row
+                  icon={<Coins className="h-4 w-4" />}
+                  label="Cobros"
+                  description="Pasify cobra las entradas por ti y te liquida lo vendido. Sin cuotas: solo se aplica una comisión por entrada vendida."
+                />
+                <Divider />
+                <div className="flex items-start gap-3 rounded-xl px-3 py-2.5">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium text-foreground">Email por cada venta</div>
+                    <div className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">
+                      {salesEmailState === "error"
+                        ? "No hemos podido cargar esta preferencia."
+                        : "Te escribimos cuando alguien compra entradas para tus eventos."}
+                    </div>
+                  </div>
+                  {salesEmailState === "loading" ? (
+                    <Loader2 className="mt-1 h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : salesEmailState === "error" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-[11px]"
+                      onClick={() => setSalesEmailReload((n) => n + 1)}
+                    >
+                      Reintentar
+                    </Button>
+                  ) : (
+                    <Switch
+                      checked={salesEmail}
+                      onCheckedChange={handleSalesEmailChange}
+                      disabled={savingSalesEmail}
+                      aria-label="Email por cada venta"
+                    />
                   )}
-                  <Divider />
-                  <ToggleRow
-                    icon={<Mail className="h-4 w-4" />}
-                    label="Newsletter mensual"
-                    checked={notifNewsletter}
-                    onChange={setNotifNewsletter}
-                    compact
-                  />
-                </>
-              )}
-
-              {pushMaster && (
-                <>
-                  <DividerLabeled label="Modo silencio" />
-                  <ToggleRow
-                    icon={<Moon className="h-4 w-4" />}
-                    label="No molestar de noche"
-                    description="No te llegan push entre 23:00 y 09:00, excepto urgencias."
-                    checked={quietHours}
-                    onChange={setQuietHours}
-                    meta="23:00–09:00"
-                  />
-                </>
-              )}
-            </SectionCard>
+                </div>
+              </SectionCard>
+            )}
 
             {/* === Privacidad === */}
             <SectionCard
@@ -489,39 +604,6 @@ export const SettingsSheet = ({
               icon={<Lock className="h-3 w-3" />}
               title="Tu información, tus reglas"
             >
-              <ToggleRow
-                icon={<Wand2 className="h-4 w-4" />}
-                label="Personalización con IA"
-                description={
-                  role === "client"
-                    ? "Pasify usa tu historial para recomendarte eventos y locales."
-                    : "Pasify usa datos agregados para optimizar pricing y marketing."
-                }
-                checked={shareTaste}
-                onChange={setShareTaste}
-              />
-              <Divider />
-              <ToggleRow
-                icon={<MapPin className="h-4 w-4" />}
-                label="Datos de ubicación"
-                description="Mejora 'cerca de ti' y check-in automático en eventos."
-                checked={locationShare}
-                onChange={setLocationShare}
-              />
-              {role === "partner" && (
-                <>
-                  <Divider />
-                  <ToggleRow
-                    icon={<Database className="h-4 w-4" />}
-                    label="Aportar a Industry Benchmarks"
-                    description="Tus métricas agregadas (k=15, anonimizadas) alimentan los benchmarks. Tú también los consumes."
-                    checked={shareBenchmarks}
-                    onChange={setShareBenchmarks}
-                    meta="Anónimo"
-                  />
-                </>
-              )}
-              <Divider />
               <Row
                 icon={<Download className="h-4 w-4" />}
                 label="Descargar mis datos"
@@ -529,11 +611,24 @@ export const SettingsSheet = ({
                 onPress={handleRequestData}
               />
               <Divider />
+              <Row
+                icon={<FileText className="h-4 w-4" />}
+                label="Política de privacidad"
+                onPress={() => goTo("/privacidad")}
+              />
+              <Divider />
               <DangerRow
                 icon={<Trash2 className="h-4 w-4" />}
                 label="Eliminar mi cuenta"
-                description="Permanente. Se borran tu cuenta, tus entradas y tus puntos."
-                onPress={() => setShowDeleteConfirm(true)}
+                description={
+                  role === "partner"
+                    ? "Permanente: se borra tu cuenta y dejas de tener acceso al panel del local."
+                    : "Permanente: se borran tu cuenta y tus datos personales."
+                }
+                onPress={() => {
+                  setDeleteBlocked(null);
+                  setShowDeleteConfirm(true);
+                }}
               />
               {showDeleteConfirm && (
                 <div
@@ -543,256 +638,56 @@ export const SettingsSheet = ({
                     borderColor: "rgba(239,68,68,0.4)",
                   }}
                 >
-                  <div className="flex items-start gap-2">
-                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                    <div className="text-[12px] leading-relaxed text-foreground">
-                      Esta acción es <strong>irreversible</strong>. Si confirmas, se
-                      eliminarán ahora mismo tu cuenta y tus datos asociados, y se
-                      cerrará la sesión.
-                    </div>
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      disabled={deleting}
-                      onClick={() => setShowDeleteConfirm(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      style={{ background: "#EF4444", border: 0, color: "#fff" }}
-                      disabled={deleting}
-                      onClick={handleDeleteAccount}
-                    >
-                      {deleting ? "Eliminando…" : "Confirmar"}
-                    </Button>
-                  </div>
+                  {deleteBlocked ? (
+                    <>
+                      <div className="flex items-start gap-2" role="alert">
+                        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                        <div className="text-[12px] leading-relaxed text-foreground">{deleteBlocked}</div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full"
+                        onClick={closeDeleteConfirm}
+                      >
+                        Entendido
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                        <div className="text-[12px] leading-relaxed text-foreground">
+                          Esta acción es <strong>irreversible</strong>. Si confirmas, se
+                          eliminará ahora mismo tu cuenta y se cerrará la sesión.
+                          {role === "partner" &&
+                            " Si tu local tiene eventos próximos con entradas vendidas, todavía no se podrá eliminar."}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          disabled={deleting}
+                          onClick={closeDeleteConfirm}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          style={{ background: "#EF4444", border: 0, color: "#fff" }}
+                          disabled={deleting}
+                          onClick={handleDeleteAccount}
+                        >
+                          {deleting ? "Eliminando…" : "Confirmar"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-            </SectionCard>
-
-            {/* === Preferencias role-specific === */}
-            {role === "client" && (
-              <SectionCard
-                eyebrow="Preferencias"
-                icon={<Sparkles className="h-3 w-3" />}
-                title="Cómo descubres locales"
-              >
-                <Row
-                  icon={<MapPin className="h-4 w-4" />}
-                  label="Ciudad por defecto"
-                  value={city}
-                  onPress={() =>
-                    setCity((c) =>
-                      c === "Madrid" ? "Barcelona" : c === "Barcelona" ? "Valencia" : "Madrid"
-                    )
-                  }
-                />
-                <Divider />
-                <Row
-                  icon={<Music2 className="h-4 w-4" />}
-                  label="Géneros musicales"
-                  value="5 seleccionados"
-                  onPress={() => toast({ title: "Géneros musicales", description: "Próximamente · selector multi." })}
-                />
-                <Divider />
-                <div className="px-3 py-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-muted-foreground">
-                        <Globe2 className="h-4 w-4" />
-                      </span>
-                      <span className="text-[13px] font-medium">Distancia máx. de búsqueda</span>
-                    </div>
-                    <span style={mono} className="text-[12.5px] font-bold text-orange-500">
-                      {searchRadius} km
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={5}
-                    max={150}
-                    step={5}
-                    value={searchRadius}
-                    onChange={(e) => setSearchRadius(Number(e.target.value))}
-                    className="mt-3 w-full accent-orange-500"
-                  />
-                </div>
-                <Divider />
-                <ToggleRow
-                  icon={<Coins className="h-4 w-4" />}
-                  label="Mostrar precios con IVA"
-                  checked={showVat}
-                  onChange={setShowVat}
-                  compact
-                />
-              </SectionCard>
-            )}
-
-            {role === "partner" && (
-              <SectionCard
-                eyebrow="Operación"
-                icon={<Sparkles className="h-3 w-3" />}
-                title="Configuración del local"
-              >
-                <Row
-                  icon={<Coins className="h-4 w-4" />}
-                  label="Stripe Connect"
-                  value="Conectado · acct_•••421"
-                  onPress={() => toast({ title: "Stripe", description: "Te llevamos a Stripe dashboard." })}
-                />
-                <Divider />
-                <Row
-                  icon={<Wand2 className="h-4 w-4" />}
-                  label="White-label"
-                  value="Activo · pacha.pasify.es"
-                  onPress={() => toast({ title: "White-label", description: "Configuración detallada en el módulo." })}
-                />
-                <Divider />
-                <Row
-                  icon={<KeyRound className="h-4 w-4" />}
-                  label="API Keys"
-                  value="2 activas"
-                  onPress={() => toast({ title: "API Keys", description: "Sección Apps · Developer Portal." })}
-                />
-                <Divider />
-                <Row
-                  icon={<UserCircle className="h-4 w-4" />}
-                  label="Equipo"
-                  value="5 miembros"
-                  onPress={() => toast({ title: "Equipo", description: "Sección Equipo del dashboard." })}
-                />
-              </SectionCard>
-            )}
-
-            {role === "admin" && (
-              <SectionCard
-                eyebrow="Plataforma"
-                icon={<Sparkles className="h-3 w-3" />}
-                title="Controles globales"
-              >
-                <ToggleRow
-                  icon={<CircleAlert className="h-4 w-4" />}
-                  label="Modo mantenimiento"
-                  description="Pone la plataforma en modo solo-lectura para todos los tenants."
-                  checked={maintenanceMode}
-                  onChange={setMaintenanceMode}
-                  meta={maintenanceMode ? "Activo" : undefined}
-                  danger
-                />
-                <Divider />
-                <Row
-                  icon={<Wand2 className="h-4 w-4" />}
-                  label="Feature flags"
-                  value="14 activos · 3 beta"
-                  onPress={() => toast({ title: "Feature flags", description: "Próximamente · panel granular." })}
-                />
-                <Divider />
-                <Row
-                  icon={<Zap className="h-4 w-4" />}
-                  label="Rate limits API"
-                  value="1000 req/min/tenant"
-                  onPress={() => toast({ title: "Rate limits", description: "Configurable por tenant en Developer Portal." })}
-                />
-              </SectionCard>
-            )}
-
-            {/* === Apariencia === */}
-            <SectionCard
-              eyebrow="Apariencia"
-              icon={<Palette className="h-3 w-3" />}
-              title="Cómo se ve Pasify"
-            >
-              <div className="px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-muted-foreground">
-                    <Moon className="h-4 w-4" />
-                  </span>
-                  <div className="flex-1">
-                    <div className="text-[13px] font-medium">Tema</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      Pasify <span style={serif} className="text-orange-500">nace</span> en dark. Light mode llegará en 2026.
-                    </div>
-                  </div>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[9.5px] uppercase"
-                    style={{
-                      ...mono,
-                      letterSpacing: "0.18em",
-                      background: "rgba(232,84,42,0.12)",
-                      color: "#FF7A4D",
-                    }}
-                  >
-                    Dark
-                  </span>
-                </div>
-              </div>
-              <Divider />
-              <div className="px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-muted-foreground">
-                    <span style={mono} className="text-[11px] font-bold">Aa</span>
-                  </span>
-                  <span className="flex-1 text-[13px] font-medium">Tamaño del texto</span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-1.5">
-                  {(["S", "M", "L"] as const).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setTextSize(s)}
-                      className="rounded-lg border px-3 py-2 text-[12px] font-semibold transition"
-                      style={{
-                        ...mono,
-                        background:
-                          textSize === s ? "rgba(232,84,42,0.12)" : "transparent",
-                        borderColor:
-                          textSize === s
-                            ? "rgba(232,84,42,0.45)"
-                            : "rgba(244,238,226,0.10)",
-                        color: textSize === s ? "#FF7A4D" : "#8A8275",
-                      }}
-                    >
-                      {s === "S" ? "Pequeño" : s === "M" ? "Normal" : "Grande"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Divider />
-              <ToggleRow
-                icon={<Eye className="h-4 w-4" />}
-                label="Reducir animaciones"
-                description="Respeta tu preferencia del sistema (prefers-reduced-motion)."
-                checked={reduceMotion}
-                onChange={setReduceMotion}
-                compact
-              />
-            </SectionCard>
-
-            {/* === Datos & almacenamiento === */}
-            <SectionCard
-              eyebrow="Datos & almacenamiento"
-              icon={<Database className="h-3 w-3" />}
-              title="En este dispositivo"
-            >
-              <Row
-                icon={<Database className="h-4 w-4" />}
-                label="Caché"
-                value="32 MB"
-                actionLabel="Limpiar"
-                onPress={() => toast({ title: "Caché limpiada", description: "Liberados 32 MB." })}
-              />
-              <Divider />
-              <Row
-                icon={<Download className="h-4 w-4" />}
-                label="Tickets offline"
-                value="Sincronizados · hace 1m"
-                actionLabel="Sincronizar"
-                onPress={() => toast({ title: "Sincronización", description: "Tickets actualizados." })}
-              />
             </SectionCard>
 
             {/* === Acerca de === */}
@@ -802,31 +697,21 @@ export const SettingsSheet = ({
               title="Pasify"
             >
               <Row
-                icon={<Sparkles className="h-4 w-4" />}
-                label="Versión"
-                value="v0.1.0 · build 2026.05"
+                icon={<LifeBuoy className="h-4 w-4" />}
+                label="Soporte"
+                onPress={() => goTo("/soporte")}
               />
-              <Divider />
-              <Row
-                icon={<ChevronRight className="h-4 w-4" />}
-                label="Términos de servicio"
-                onPress={() => toast({ title: "ToS", description: "Próximamente · pasify.es/terms" })}
-              />
-              <Divider />
-              <Row
-                icon={<ChevronRight className="h-4 w-4" />}
-                label="Política de privacidad"
-                onPress={() => window.open("/privacidad.html", "_blank", "noopener,noreferrer")}
-              />
-              <Divider />
-              <Row
-                icon={<ChevronRight className="h-4 w-4" />}
-                label="Licencias open source"
-                onPress={() => toast({ title: "Licencias", description: "Generamos un README con todas." })}
-              />
+              {appVersion && (
+                <>
+                  <Divider />
+                  <Row
+                    icon={<Sparkles className="h-4 w-4" />}
+                    label="Versión"
+                    value={appVersion}
+                  />
+                </>
+              )}
             </SectionCard>
-
-            <div className="h-2" />
           </div>
         </div>
 
@@ -836,18 +721,17 @@ export const SettingsSheet = ({
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
         >
           <Button
-            onClick={handleSave}
-            className="h-11 w-full text-[14px] font-semibold text-white"
-            style={{
-              background:
-                "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-              border: 0,
-              boxShadow:
-                "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 22px -8px rgba(232,84,42,0.55)",
-            }}
+            variant="outline"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="h-11 w-full text-[14px] font-semibold"
           >
-            <Save className="mr-2 h-4 w-4" />
-            Guardar cambios
+            {signingOut ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <LogOut className="mr-2 h-4 w-4" />
+            )}
+            Cerrar sesión
           </Button>
         </footer>
       </SheetContent>
@@ -892,168 +776,69 @@ const SectionCard = ({
   </section>
 );
 
+/** Fila de ajustes. Sin `onPress` es solo informativa (no se pinta como botón). */
 const Row = ({
   icon,
   label,
   value,
+  description,
   onPress,
-  actionLabel,
+  busy,
+  expanded,
 }: {
   icon: React.ReactNode;
   label: string;
   value?: string;
-  onPress?: () => void;
-  actionLabel?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onPress}
-    disabled={!onPress}
-    className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent"
-  >
-    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-      {icon}
-    </span>
-    <span className="flex-1 truncate text-[13px] font-medium text-foreground">
-      {label}
-    </span>
-    {value && (
-      <span
-        className="truncate text-right text-[11.5px] text-muted-foreground"
-        style={mono}
-      >
-        {value}
-      </span>
-    )}
-    {actionLabel && onPress && (
-      <span
-        className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-orange-500 transition group-hover:border-orange-500/50"
-        style={{ ...mono, letterSpacing: "0.16em", borderColor: "rgba(232,84,42,0.32)" }}
-      >
-        {actionLabel}
-      </span>
-    )}
-    {!actionLabel && onPress && (
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70 transition group-hover:text-foreground" />
-    )}
-  </button>
-);
-
-const ToggleRow = ({
-  icon,
-  label,
-  description,
-  checked,
-  onChange,
-  meta,
-  compact,
-  danger,
-}: {
-  icon: React.ReactNode;
-  label: string;
   description?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  meta?: string;
-  compact?: boolean;
-  danger?: boolean;
-}) => (
-  <div className={`flex items-start gap-3 rounded-xl px-3 ${compact ? "py-2" : "py-2.5"}`}>
-    <span
-      className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg"
-      style={{
-        background: danger ? "rgba(239,68,68,0.12)" : "hsl(var(--muted))",
-        color: danger ? "#EF4444" : "hsl(var(--muted-foreground))",
-      }}
-    >
-      {icon}
-    </span>
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[13px] font-medium text-foreground">{label}</span>
-        {meta && (
-          <span
-            className="rounded-full px-1.5 py-0.5 text-[9.5px] uppercase"
-            style={{
-              ...mono,
-              letterSpacing: "0.16em",
-              background: danger ? "rgba(239,68,68,0.12)" : "rgba(77,184,122,0.12)",
-              color: danger ? "#EF4444" : "#4DB87A",
-            }}
-          >
-            {meta}
+  onPress?: () => void;
+  busy?: boolean;
+  expanded?: boolean;
+}) => {
+  const content = (
+    <>
+      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-foreground">{label}</span>
+        {description && (
+          <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted-foreground">
+            {description}
           </span>
         )}
-      </div>
-      {description && (
-        <div className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">
-          {description}
-        </div>
+      </span>
+      {value && (
+        <span
+          className="mt-1.5 max-w-[45%] truncate text-right text-[11.5px] text-muted-foreground"
+          style={mono}
+        >
+          {value}
+        </span>
       )}
-    </div>
-    <Switch checked={checked} onCheckedChange={onChange} />
-  </div>
-);
+    </>
+  );
 
-const SelectChipRow = ({
-  icon,
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (v: string) => void;
-}) => {
-  const [open, setOpen] = useState(false);
+  if (!onPress) {
+    return <div className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5">{content}</div>;
+  }
+
   return (
-    <div className="px-3 py-2.5">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 rounded-xl"
-      >
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-          {icon}
-        </span>
-        <span className="flex-1 text-left text-[13px] font-medium text-foreground">
-          {label}
-        </span>
-        <span style={mono} className="text-[11.5px] text-orange-500">
-          {options.find((o) => o.id === value)?.label ?? value}
-        </span>
+    <button
+      type="button"
+      onClick={onPress}
+      disabled={busy}
+      aria-expanded={expanded}
+      className="group flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-muted disabled:cursor-wait disabled:opacity-70"
+    >
+      {content}
+      {busy ? (
+        <Loader2 className="mt-1.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+      ) : (
         <ChevronRight
-          className={`h-4 w-4 text-muted-foreground/70 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`mt-1.5 h-4 w-4 shrink-0 text-muted-foreground/70 transition group-hover:text-foreground ${expanded ? "rotate-90" : ""}`}
         />
-      </button>
-      {open && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {options.map((o) => {
-            const active = o.id === value;
-            return (
-              <button
-                key={o.id}
-                onClick={() => {
-                  onChange(o.id);
-                  setOpen(false);
-                }}
-                className="rounded-full border px-2.5 py-1 text-[11.5px] transition"
-                style={{
-                  borderColor: active ? "rgba(232,84,42,0.45)" : "rgba(244,238,226,0.10)",
-                  background: active ? "rgba(232,84,42,0.10)" : "transparent",
-                  color: active ? "#FF7A4D" : "#8A8275",
-                }}
-              >
-                {o.label}
-              </button>
-            );
-          })}
-        </div>
       )}
-    </div>
+    </button>
   );
 };
 
@@ -1093,19 +878,6 @@ const DangerRow = ({
 
 const Divider = () => (
   <div className="mx-3 h-px" style={{ background: "rgba(244,238,226,0.06)" }} />
-);
-
-const DividerLabeled = ({ label }: { label: string }) => (
-  <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-    <div className="h-px flex-1" style={{ background: "rgba(244,238,226,0.06)" }} />
-    <span
-      className="text-[9.5px] uppercase text-muted-foreground"
-      style={{ ...mono, letterSpacing: "0.2em" }}
-    >
-      {label}
-    </span>
-    <div className="h-px flex-1" style={{ background: "rgba(244,238,226,0.06)" }} />
-  </div>
 );
 
 export default SettingsSheet;

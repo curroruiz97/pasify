@@ -39,6 +39,16 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 /* ============================================================
    PartnerAutoPilot — Fase 6
    Agente IA autónomo que opera el local 24/7 dentro de las
@@ -318,10 +328,10 @@ export const PartnerAutoPilot = () => {
                 />
               </div>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
-                Tu local funciona <span style={serif} className="text-orange-500">solo</span>.
+                Así funcionaría tu local en <span style={serif} className="text-orange-500">piloto automático</span>.
               </h2>
               <p className="mt-1 max-w-[60ch] text-sm text-muted-foreground">
-                Pasify pilotará pricing, marketing, soporte y reembolsos dentro de las políticas que tú defines. Tú firmas las decisiones grandes; el agente ejecuta las pequeñas. <span className="text-orange-400">Esta vista es un preview del producto final.</span>
+                La idea: un agente que gestione pricing, marketing, soporte y reembolsos dentro de las políticas que tú definas. Tú firmarías las decisiones grandes; el agente ejecutaría las pequeñas. <span className="text-orange-400">Hoy no existe: todo lo que ves aquí es una simulación con datos ficticios.</span>
               </p>
               <div
                 className="mt-3 inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground"
@@ -337,12 +347,14 @@ export const PartnerAutoPilot = () => {
 
           <div className="flex flex-col items-stretch gap-2 md:items-end">
             {status === "active" ? (
-              <Button variant="outline" onClick={() => setStatus("paused")}>
+              <Button variant="outline" disabled onClick={() => setStatus("paused")}>
                 <Pause className="mr-2 h-4 w-4" />
                 Pausar agente
+                <DemoTag />
               </Button>
             ) : (
               <Button
+                disabled
                 onClick={() => setStatus("active")}
                 style={{
                   background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
@@ -353,15 +365,18 @@ export const PartnerAutoPilot = () => {
               >
                 <Play className="mr-2 h-4 w-4" />
                 Reanudar agente
+                <DemoTag />
               </Button>
             )}
             <button
+              disabled
               onClick={() => setStatus("intervention")}
-              className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-[11px] uppercase transition hover:border-red-500/40 hover:text-red-500"
+              className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-[11px] uppercase transition hover:border-red-500/40 hover:text-red-500 disabled:pointer-events-none disabled:opacity-50"
               style={{ ...mono, letterSpacing: "0.16em", borderColor: "rgba(255,255,255,0.08)" }}
             >
               <Power className="h-3.5 w-3.5" />
               Modo intervención
+              <DemoTag />
             </button>
           </div>
         </div>
@@ -373,7 +388,7 @@ export const PartnerAutoPilot = () => {
         role="tablist"
       >
         <TabBtn active={tab === "overview"}  onClick={() => setTab("overview")}  icon={<Activity className="h-3.5 w-3.5" />}  label="Resumen" />
-        <TabBtn active={tab === "stream"}    onClick={() => setTab("stream")}    icon={<CircleDot className="h-3.5 w-3.5" />} label="Stream live" count={actions.length} />
+        <TabBtn active={tab === "stream"}    onClick={() => setTab("stream")}    icon={<CircleDot className="h-3.5 w-3.5" />} label="Stream" count={actions.length} />
         <TabBtn active={tab === "policies"}  onClick={() => setTab("policies")}  icon={<Settings2 className="h-3.5 w-3.5" />} label="Políticas" count={`${enabledPoliciesCount}/${totalPoliciesCount}`} />
         <TabBtn active={tab === "approvals"} onClick={() => setTab("approvals")} icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Aprobaciones" count={pending.length} highlight={pending.length > 0} />
         <TabBtn active={tab === "roi"}       onClick={() => setTab("roi")}       icon={<TrendingUp className="h-3.5 w-3.5" />} label="ROI" />
@@ -513,7 +528,7 @@ export const PartnerAutoPilot = () => {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500" style={{ ...mono, letterSpacing: "0.22em" }}>
-                <Activity className="h-3 w-3" /> Stream live
+                <Activity className="h-3 w-3" /> Stream · simulado
               </div>
               <h3 className="text-base font-semibold">Cada decisión, en orden</h3>
             </div>
@@ -531,7 +546,7 @@ export const PartnerAutoPilot = () => {
                 {status === "active" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />}
                 <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${status === "active" ? "bg-emerald-500" : "bg-muted-foreground"}`} />
               </span>
-              {status === "active" ? "Live" : "Pausado"}
+              {status === "active" ? "Simulado" : "Pausado"}
             </span>
           </div>
 
@@ -556,6 +571,10 @@ export const PartnerAutoPilot = () => {
                 <p className="mt-1 max-w-[60ch] text-[12px] text-muted-foreground">
                   Por debajo de este umbral el agente nunca actúa solo — escala a tu cola humana.
                 </p>
+                <p className="mt-2 inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <DemoTag />
+                  El umbral y las políticas de abajo no se pueden cambiar en esta demo.
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <input
@@ -564,7 +583,8 @@ export const PartnerAutoPilot = () => {
                   max={95}
                   value={confidenceThreshold}
                   onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-                  className="w-40 accent-orange-500"
+                  disabled
+                  className="w-40 accent-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <div
                   className="rounded-md border px-3 py-1.5"
@@ -656,15 +676,15 @@ export const PartnerAutoPilot = () => {
             />
             <KpiTile
               label="Horas humanas ahorradas"
-              value="42 h"
-              sub="vs gestión manual"
+              value="—"
+              sub="sin datos: el agente no existe todavía"
               icon={<Clock className="h-4 w-4" />}
               tone="info"
             />
             <KpiTile
               label="Coste agente"
               value="—"
-              sub="incluido en tu plan"
+              sub="sin precio definido"
               icon={<Zap className="h-4 w-4" />}
             />
           </div>
@@ -676,11 +696,12 @@ export const PartnerAutoPilot = () => {
               </div>
               <h3 className="mb-1 text-base font-semibold">Resumen ejecutivo · cada lunes 09:00</h3>
               <p className="text-[12px] text-muted-foreground">
-                Email automático con cada decisión del agente, ROI estimado, y qué políticas conviene ajustar para la semana siguiente.
+                Email automático con cada decisión del agente, ROI estimado, y qué políticas conviene ajustar para la semana siguiente. Todavía no se envía.
               </p>
-              <Button variant="outline" size="sm" className="mt-4">
+              <Button variant="outline" size="sm" className="mt-4" disabled>
                 <Eye className="mr-2 h-4 w-4" />
                 Ver último reporte
+                <DemoTag />
               </Button>
             </div>
 
@@ -698,13 +719,14 @@ export const PartnerAutoPilot = () => {
               <p className="text-[12px] text-muted-foreground">
                 Las últimas 6 subidas dentro de banda +0/+15% se agotaron en menos de 24h. Ampliando la banda a +20% podrías capturar ~€1.4k adicionales por evento sin afectar conversión.
               </p>
-              <div className="mt-4 flex gap-2">
-                <Button size="sm" style={{ background: "#4DB87A", color: "#fff", border: 0 }}>
+              <div className="mt-4 flex items-center gap-2">
+                <Button size="sm" disabled style={{ background: "#4DB87A", color: "#fff", border: 0 }}>
                   <Check className="mr-2 h-4 w-4" /> Aplicar
                 </Button>
-                <Button size="sm" variant="outline">
+                <Button size="sm" variant="outline" disabled>
                   Ver evidencia
                 </Button>
+                <DemoTag />
               </div>
             </div>
           </div>
@@ -720,7 +742,7 @@ export const PartnerAutoPilot = () => {
 
 const StatusChip = ({ status }: { status: AgentStatus }) => {
   const cfg = {
-    active:       { label: "Operando solo", color: "#4DB87A", bg: "rgba(77,184,122,0.10)", border: "rgba(77,184,122,0.40)" },
+    active:       { label: "Simulación", color: "#4DB87A", bg: "rgba(77,184,122,0.10)", border: "rgba(77,184,122,0.40)" },
     paused:       { label: "Pausado",       color: "#8A8275", bg: "rgba(138,130,117,0.10)", border: "rgba(138,130,117,0.40)" },
     intervention: { label: "Intervención manual", color: "#FF7A4D", bg: "rgba(232,84,42,0.10)", border: "rgba(232,84,42,0.40)" },
   }[status];
@@ -873,20 +895,23 @@ const StreamRow = ({ action, onApprove, onReject }: { action: AgentAction; onApp
           </span>
         )}
         {action.needsApproval && (
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground"><DemoTag /></span>
             <button
+              disabled
               onClick={onApprove}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:border-emerald-500/40 hover:text-emerald-500"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:border-emerald-500/40 hover:text-emerald-500 disabled:pointer-events-none disabled:opacity-50"
               style={{ borderColor: "rgba(255,255,255,0.08)", color: "#8A8275" }}
-              aria-label="Aprobar"
+              aria-label="Aprobar (demo)"
             >
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
+              disabled
               onClick={onReject}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:border-red-500/40 hover:text-red-500"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:border-red-500/40 hover:text-red-500 disabled:pointer-events-none disabled:opacity-50"
               style={{ borderColor: "rgba(255,255,255,0.08)", color: "#8A8275" }}
-              aria-label="Rechazar"
+              aria-label="Rechazar (demo)"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -934,23 +959,26 @@ const PendingRow = ({
           {action.policyScope} · {formatAgo(action.ts)}
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col items-center gap-1.5">
         <button
+          disabled
           onClick={onApprove}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition"
+          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition disabled:pointer-events-none disabled:opacity-50"
           style={{ background: "#4DB87A", color: "#fff", border: 0 }}
         >
           <Check className="h-3 w-3" />
           Aprobar
         </button>
         <button
+          disabled
           onClick={onReject}
-          className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           style={{ borderColor: "rgba(255,255,255,0.08)" }}
         >
           <X className="h-3 w-3" />
           Rechazar
         </button>
+        <span className="text-muted-foreground"><DemoTag /></span>
       </div>
     </div>
   );
@@ -982,10 +1010,11 @@ const PolicyRow = ({
       <div className="mt-0.5 text-[11.5px] text-muted-foreground">{toggle.description}</div>
     </div>
     <button
+      disabled
       onClick={onToggle}
       role="switch"
       aria-checked={toggle.enabled}
-      className="relative h-6 w-11 rounded-full border transition"
+      className="relative h-6 w-11 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         background: toggle.enabled ? color : "rgba(255,255,255,0.04)",
         borderColor: toggle.enabled ? color : "rgba(255,255,255,0.08)",

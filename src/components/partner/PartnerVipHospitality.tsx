@@ -34,8 +34,18 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 // =============================================================
-// Mock data — mesas VIP, reservas, bottles
+// Mock data — mesas VIP, reservas, bottles (nombres ficticios)
 // =============================================================
 
 type TableStatus = "available" | "held" | "booked" | "checked_in";
@@ -53,10 +63,10 @@ interface VipTable {
 
 const TABLES: VipTable[] = [
   { id: "t-01", zone: "VIP Center", number: "01", capacity: 6, minSpendCents: 80000, status: "checked_in", guest: "Familia Pereda", host: "Carla" },
-  { id: "t-02", zone: "VIP Center", number: "02", capacity: 8, minSpendCents: 100000, status: "booked", guest: "@martagomez +6", host: "Diego" },
+  { id: "t-02", zone: "VIP Center", number: "02", capacity: 8, minSpendCents: 100000, status: "booked", guest: "@cliente-demo +6", host: "Diego" },
   { id: "t-03", zone: "VIP Center", number: "03", capacity: 4, minSpendCents: 60000, status: "available" },
-  { id: "t-04", zone: "VIP Center", number: "04", capacity: 4, minSpendCents: 60000, status: "held", guest: "Reserva tentativa · Hotel Ushuaïa", host: "Lucía" },
-  { id: "t-05", zone: "Pool side", number: "P1", capacity: 10, minSpendCents: 150000, status: "booked", guest: "Equipo agencia Razzmatazz", host: "Carla" },
+  { id: "t-04", zone: "VIP Center", number: "04", capacity: 4, minSpendCents: 60000, status: "held", guest: "Reserva tentativa · Hotel Demo Mar", host: "Lucía" },
+  { id: "t-05", zone: "Pool side", number: "P1", capacity: 10, minSpendCents: 150000, status: "booked", guest: "Equipo Agencia Nocturna Demo", host: "Carla" },
   { id: "t-06", zone: "Pool side", number: "P2", capacity: 6, minSpendCents: 90000, status: "available" },
   { id: "t-07", zone: "Pool side", number: "P3", capacity: 6, minSpendCents: 90000, status: "checked_in", guest: "Despedida Andrea", host: "Pablo" },
   { id: "t-08", zone: "Terraza", number: "TR-1", capacity: 4, minSpendCents: 50000, status: "available" },
@@ -73,12 +83,12 @@ interface Bottle {
 }
 
 const BOTTLES: Bottle[] = [
-  { id: "b-1", name: "Moët & Chandon Brut", category: "champagne", priceCents: 22000, available: 24, sold: 7 },
-  { id: "b-2", name: "Veuve Clicquot Rosé", category: "champagne", priceCents: 28000, available: 12, sold: 4 },
-  { id: "b-3", name: "Dom Pérignon Vintage", category: "premium", priceCents: 65000, available: 6, sold: 2 },
-  { id: "b-4", name: "Belvedere Pure 1.75L", category: "spirit", priceCents: 18000, available: 18, sold: 6 },
-  { id: "b-5", name: "Grey Goose 1L", category: "spirit", priceCents: 16000, available: 22, sold: 9 },
-  { id: "b-6", name: "Hennessy XO", category: "premium", priceCents: 38000, available: 8, sold: 1 },
+  { id: "b-1", name: "Champagne brut", category: "champagne", priceCents: 22000, available: 24, sold: 7 },
+  { id: "b-2", name: "Champagne rosé", category: "champagne", priceCents: 28000, available: 12, sold: 4 },
+  { id: "b-3", name: "Champagne gran reserva", category: "premium", priceCents: 65000, available: 6, sold: 2 },
+  { id: "b-4", name: "Vodka premium 1,75 L", category: "spirit", priceCents: 18000, available: 18, sold: 6 },
+  { id: "b-5", name: "Vodka premium 1 L", category: "spirit", priceCents: 16000, available: 22, sold: 9 },
+  { id: "b-6", name: "Coñac XO", category: "premium", priceCents: 38000, available: 8, sold: 1 },
 ];
 
 const STATUS_CONFIG: Record<TableStatus, { label: string; color: string; bg: string }> = {
@@ -233,9 +243,10 @@ const TablesMap = ({ tables, onCycle }: { tables: VipTable[]; onCycle: (id: stri
                 {list.filter((t) => t.status === "available").length} disponibles
               </p>
             </div>
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" disabled>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               Mesa
+              <DemoTag />
             </Button>
           </header>
 
@@ -253,10 +264,12 @@ const TablesMap = ({ tables, onCycle }: { tables: VipTable[]; onCycle: (id: stri
 const TableCard = ({ table, onClick }: { table: VipTable; onClick: () => void }) => {
   const cfg = STATUS_CONFIG[table.status];
   return (
+    // Demo: el estado de la mesa no se puede cambiar (no se guardaría en ningún sitio).
     <button
       type="button"
+      disabled
       onClick={onClick}
-      className="group/table relative overflow-hidden rounded-2xl border p-4 text-left transition hover:-translate-y-0.5"
+      className="group/table relative overflow-hidden rounded-2xl border p-4 text-left transition disabled:cursor-default"
       style={{
         background: cfg.bg,
         borderColor: `${cfg.color}40`,
@@ -354,9 +367,10 @@ const BottleCatalog = ({ bottles }: { bottles: Bottle[] }) => {
               {(totalRev / 100).toFixed(0)}€ <span className="text-muted-foreground" style={serif}>vendido en bottles</span>
             </h3>
           </div>
-          <Button size="sm">
+          <Button size="sm" disabled>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Añadir botella
+            <DemoTag />
           </Button>
         </div>
       </div>
@@ -456,15 +470,15 @@ const BottleCatalog = ({ bottles }: { bottles: Bottle[] }) => {
 const CONCIERGE_REQUESTS = [
   {
     id: "cn-1",
-    from: "Hotel Ushuaïa · Concierge",
+    from: "Hotel Demo Mar · Concierge",
     via: "whatsapp",
-    text: "Tenemos clientes VIP llegando esta noche. Necesitamos mesa para 6 con Dom Pérignon, ¿podéis confirmar?",
+    text: "Tenemos clientes VIP llegando esta noche. Necesitamos mesa para 6 con champagne gran reserva, ¿podéis confirmar?",
     at: new Date(Date.now() - 12 * 60 * 1000),
     status: "open",
   },
   {
     id: "cn-2",
-    from: "@martagomez",
+    from: "@cliente-demo",
     via: "ig",
     text: "Es el cumple de mi amiga, ¿podríais ponerle algo especial cuando llegue?",
     at: new Date(Date.now() - 38 * 60 * 1000),
@@ -472,7 +486,7 @@ const CONCIERGE_REQUESTS = [
   },
   {
     id: "cn-3",
-    from: "Razzmatazz Group",
+    from: "Agencia Nocturna Demo",
     via: "email",
     text: "Reserva confirmada · 10 personas zona Pool side · adjunto detalles de allergens.",
     at: new Date(Date.now() - 4 * 60 * 60 * 1000),
@@ -522,11 +536,12 @@ const ConciergeInbox = () => (
             </div>
             <p className="mt-2 text-sm text-foreground/85">{r.text}</p>
             {r.status === "open" && (
-              <div className="mt-3 flex gap-2">
-                <Button size="sm">Confirmar</Button>
-                <Button size="sm" variant="outline">
+              <div className="mt-3 flex items-center gap-2">
+                <Button size="sm" disabled>Confirmar</Button>
+                <Button size="sm" variant="outline" disabled>
                   Responder
                 </Button>
+                <span className="text-muted-foreground"><DemoTag /></span>
               </div>
             )}
           </div>
@@ -722,12 +737,13 @@ const NoShowPredictor = ({ tables }: { tables: VipTable[] }) => {
                   <div className="mt-0.5 text-3xl font-bold" style={{ ...mono, color }}>
                     {risk}%
                   </div>
-                  <div className="mt-3 flex gap-2 sm:justify-end">
-                    <Button size="sm" variant="outline">
+                  <div className="mt-3 flex items-center gap-2 sm:justify-end">
+                    <span className="text-muted-foreground"><DemoTag /></span>
+                    <Button size="sm" variant="outline" disabled>
                       Confirmar por WhatsApp
                     </Button>
                     {risk >= 70 && (
-                      <Button size="sm">
+                      <Button size="sm" disabled>
                         Liberar mesa
                       </Button>
                     )}

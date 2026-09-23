@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Clock,
   Download,
   Filter,
+  Loader2,
   RefreshCw,
   Search,
   Ticket as TicketIcon,
@@ -23,38 +24,48 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { useToast } from "@/hooks/use-toast";
+import { pickActiveEvent } from "@/lib/pickActiveEvent";
+import {
+  fileDateStamp,
+  formatCsvDateTime,
+  formatEurosCsv,
+  saveOrShareFile,
+  slugForFilename,
+  toCsv,
+  type CsvCell,
+} from "@/lib/saveOrShareFile";
 
 /**
- * PartnerAttendees — sección operativa estilo Eventbrite para gestionar la
- * entrada al evento. Permite al partner:
- *   - seleccionar uno de sus eventos
- *   - ver KPIs en tiempo real (vendidos / entrados / pendientes / % checkin)
- *   - filtrar por estado y buscar por nombre/email
- *   - exportar el listado a CSV
- *   - ver quién escaneó cada ticket y a qué hora
+ * PartnerAttendees — asistentes y entradas validadas de un evento.
+ *   - selector de evento (por defecto el de ahora, vía pickActiveEvent)
+ *   - KPIs (vendidas / han entrado / por entrar / reembolsadas)
+ *   - filtros por estado y tipo de entrada, búsqueda sin tildes
+ *   - exportación a CSV (también en la app, vía hoja de compartir)
  *
- * Las queries se ejecutan vía las RPCs SECURITY DEFINER:
- *   - public.partner_event_attendees(_event_id)
+ * Datos por RPC SECURITY DEFINER, que comprueban permisos:
+ *   - public.partner_event_attendees(_event_id): ya NO devuelve qr_token (era
+ *     una credencial por asistente) y, para el rol de puerta, email y
+ *     teléfono llegan a null.
  *   - public.partner_event_checkin_stats(_event_id)
- * Ambas verifican ownership (partner_id, org_member, o admin) antes de
- * devolver data, por lo que la RLS frontend es transparente.
  *
- * Realtime: nos suscribimos a UPDATE/INSERT sobre `tickets` filtrado por
- * `event_id`. Cuando un escaneo cambia un ticket a 'used' la lista y los
- * KPIs se refrescan sin recargar.
+ * Realtime: UPDATE/INSERT sobre `tickets` del evento refrescan la lista
+ * (típicamente paid → used tras un escaneo).
  */
 
+export interface AttendeesEvent {
+  id: string;
+  title: string;
+  date_start: string;
+  date_end?: string | null;
+  city: string;
+  capacity: number | null;
+  tickets_sold: number;
+  status: string;
+}
+
 interface Props {
-  /** Eventos del partner (vienen ya filtrados desde PartnerDashboard). */
-  events: Array<{
-    id: string;
-    title: string;
-    date_start: string;
-    city: string;
-    capacity: number | null;
-    tickets_sold: number;
-    status: string;
-  }>;
+  /** Eventos del local (vienen ya filtrados desde PartnerDashboard). */
+  events: AttendeesEvent[];
 }
 
 type Attendee = {
@@ -63,16 +74,17 @@ type Attendee = {
   status: string;
   buyer_first_name: string | null;
   buyer_last_name: string | null;
-  buyer_email: string;
+  /** null para el rol de puerta. */
+  buyer_email: string | null;
+  /** null para el rol de puerta. */
   buyer_phone: string | null;
   amount_paid_cents: number;
-  currency: string;
+  currency: string | null;
   paid_at: string | null;
   used_at: string | null;
   used_by_partner_id: string | null;
   scanned_by_name: string | null;
   tier_name: string | null;
-  qr_token: string;
 };
 
 type Stats = {
@@ -117,8 +129,23 @@ const STATUS_META: Record<string, { label: string; cls: string; icon: typeof Che
   },
 };
 
+/** Minúsculas y sin tildes: "José" encuentra "jose" y al revés. */
+const normalizeText = (s: string | null | undefined) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+const digitsOnly = (s: string | null | undefined) => (s ?? "").replace(/\D+/g, "");
+
+const formatEur = (cents: number | null | undefined) =>
+  `${((cents ?? 0) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
 export const PartnerAttendees = ({ events }: Props) => {
   const { toast } = useToast();
+
+  // Selector: próximos primero (el más cercano delante), después los pasados
+  // (el más reciente delante).
   const upcomingFirst = useMemo(() => {
     const now = Date.now();
     const list = [...events];
@@ -132,22 +159,30 @@ export const PartnerAttendees = ({ events }: Props) => {
     });
     return list;
   }, [events]);
-  const [selectedEventId, setSelectedEventId] = useState<string | "">(
-    upcomingFirst[0]?.id ?? ""
+
+  // Evento por defecto: el de ahora (en curso o el próximo); si no hay, el
+  // primero de la lista (el pasado más reciente).
+  const defaultEventId = useMemo(
+    () => pickActiveEvent(events)?.id ?? upcomingFirst[0]?.id ?? "",
+    [events, upcomingFirst]
   );
+
+  const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
+  const requestRef = useRef(0);
 
-  // Re-seleccionar si llegan eventos nuevos y el seleccionado deja de existir
+  // Si aún no hay evento elegido o el elegido desaparece, vuelta al de por defecto.
   useEffect(() => {
-    if (!selectedEventId && upcomingFirst[0]) {
-      setSelectedEventId(upcomingFirst[0].id);
-    }
-  }, [upcomingFirst, selectedEventId]);
+    if (selectedEventId && events.some((e) => e.id === selectedEventId)) return;
+    if (defaultEventId !== selectedEventId) setSelectedEventId(defaultEventId);
+  }, [events, selectedEventId, defaultEventId]);
 
   const selectedEvent = useMemo(
     () => events.find((e) => e.id === selectedEventId) ?? null,
@@ -155,6 +190,7 @@ export const PartnerAttendees = ({ events }: Props) => {
   );
 
   const loadData = useCallback(async () => {
+    const requestId = ++requestRef.current;
     if (!selectedEventId) return;
     setLoading(true);
     try {
@@ -164,24 +200,30 @@ export const PartnerAttendees = ({ events }: Props) => {
       ]);
       if (att.error) throw new Error(att.error.message);
       if (st.error) throw new Error(st.error.message);
-      setAttendees((att.data ?? []) as Attendee[]);
+      if (requestId !== requestRef.current) return;
+      setAttendees((att.data ?? []) as unknown as Attendee[]);
       const statsRow = Array.isArray(st.data) ? st.data[0] : st.data;
-      setStats(statsRow as Stats);
+      setStats((statsRow ?? null) as Stats | null);
+      setLoadError(null);
     } catch (e: unknown) {
+      if (requestId !== requestRef.current) return;
       const msg = e instanceof Error ? e.message : "Error cargando asistentes";
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      setLoadError(msg);
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
-  }, [selectedEventId, toast]);
+  }, [selectedEventId]);
 
+  // Al cambiar de evento no se enseñan los asistentes del anterior.
   useEffect(() => {
-    loadData();
+    setAttendees([]);
+    setStats(null);
+    setLoadError(null);
+    setTierFilter("all");
+    void loadData();
   }, [loadData]);
 
-  // Realtime: refresca cuando un ticket de ESTE evento cambia (típicamente
-  // de paid → used tras un escaneo). También reaccionamos a INSERTs en
-  // ticket_scan_logs para conocer scans rechazados en vivo.
+  // Realtime: refresca cuando un ticket de ESTE evento cambia.
   useEffect(() => {
     if (!selectedEventId) return;
     const channel = supabase
@@ -194,7 +236,7 @@ export const PartnerAttendees = ({ events }: Props) => {
           table: "tickets",
           filter: `event_id=eq.${selectedEventId}`,
         },
-        () => loadData()
+        () => void loadData()
       )
       .on(
         "postgres_changes",
@@ -204,31 +246,25 @@ export const PartnerAttendees = ({ events }: Props) => {
           table: "tickets",
           filter: `event_id=eq.${selectedEventId}`,
         },
-        () => loadData()
+        () => void loadData()
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [selectedEventId, loadData]);
 
-  // Lista de tier names disponibles para el filtro — se calcula a partir de
-  // los asistentes cargados. "Sin tier" agrupa los tickets sin tier_id (caso
-  // legacy / festival pass sin asignar).
+  // Tipos de entrada presentes para el filtro. "Sin tipo" agrupa las entradas
+  // sin tier (legacy / pase de festival sin asignar).
   const availableTiers = useMemo(() => {
     const set = new Map<string, string>();
     for (const a of attendees) {
       const key = a.tier_name ?? "__none__";
-      const label = a.tier_name ?? "Sin tier";
+      const label = a.tier_name ?? "Sin tipo";
       if (!set.has(key)) set.set(key, label);
     }
     return Array.from(set.entries()).map(([key, label]) => ({ key, label }));
   }, [attendees]);
-
-  // Reset tier filter when the selected event changes (its tier list cambia)
-  useEffect(() => {
-    setTierFilter("all");
-  }, [selectedEventId]);
 
   const filtered = useMemo(() => {
     let list = attendees;
@@ -236,82 +272,78 @@ export const PartnerAttendees = ({ events }: Props) => {
       list = list.filter((a) => a.status === statusFilter);
     }
     if (tierFilter !== "all") {
-      list = list.filter((a) => {
-        const key = a.tier_name ?? "__none__";
-        return key === tierFilter;
-      });
+      list = list.filter((a) => (a.tier_name ?? "__none__") === tierFilter);
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    const q = normalizeText(search.trim());
+    if (q) {
+      const qDigits = digitsOnly(q);
       list = list.filter((a) => {
-        const name =
-          `${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`.toLowerCase();
+        const name = normalizeText(`${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`);
         return (
           name.includes(q) ||
-          (a.buyer_email ?? "").toLowerCase().includes(q) ||
-          (a.buyer_phone ?? "").includes(q)
+          normalizeText(a.buyer_email).includes(q) ||
+          (qDigits.length >= 3 && digitsOnly(a.buyer_phone).includes(qDigits))
         );
       });
     }
     return list;
   }, [attendees, statusFilter, tierFilter, search]);
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     if (filtered.length === 0) {
       toast({ title: "Sin datos", description: "No hay filas que exportar." });
       return;
     }
-    const headers = [
-      "ticket_id",
-      "order_id",
-      "estado",
-      "nombre",
-      "apellidos",
-      "email",
-      "telefono",
-      "tier",
-      "importe_eur",
-      "pagado_en",
-      "entrada_en",
-      "escaneado_por",
-    ];
-    const rows = filtered.map((a) => [
-      a.ticket_id,
-      a.order_id ?? "",
-      STATUS_META[a.status]?.label ?? a.status,
-      a.buyer_first_name ?? "",
-      a.buyer_last_name ?? "",
-      a.buyer_email,
-      a.buyer_phone ?? "",
-      a.tier_name ?? "—",
-      (a.amount_paid_cents / 100).toFixed(2),
-      a.paid_at ?? "",
-      a.used_at ?? "",
-      a.scanned_by_name ?? "",
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => {
-            const s = String(cell ?? "");
-            // Quote y escape de comillas según RFC 4180
-            return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-          })
-          .join(",")
-      )
-      .join("\n");
-    // Prepend BOM (U+FEFF) so Excel detecta UTF-8 correctamente al abrir.
-    const BOM = String.fromCharCode(0xfeff);
-    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const slug = selectedEvent?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") ?? "evento";
-    a.download = `pasify-asistentes-${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setExporting(true);
+    try {
+      const eventTitle = selectedEvent?.title ?? "";
+      const rows: CsvCell[][] = [
+        [
+          "Evento",
+          "Nombre",
+          "Apellidos",
+          "Email",
+          "Teléfono",
+          "Tipo de entrada",
+          "Estado",
+          "Importe",
+          "Moneda",
+          "Pagada el",
+          "Entró el",
+          "Validada por",
+          "ID de la entrada",
+          "ID del pedido",
+        ],
+        ...filtered.map((a): CsvCell[] => [
+          eventTitle,
+          a.buyer_first_name ?? "",
+          a.buyer_last_name ?? "",
+          a.buyer_email ?? "",
+          a.buyer_phone ?? "",
+          a.tier_name ?? "Sin tipo",
+          STATUS_META[a.status]?.label ?? a.status,
+          formatEurosCsv(a.amount_paid_cents),
+          (a.currency ?? "EUR").toUpperCase(),
+          formatCsvDateTime(a.paid_at),
+          formatCsvDateTime(a.used_at),
+          a.used_at ? (a.scanned_by_name ?? "") : "",
+          a.ticket_id,
+          a.order_id ?? "",
+        ]),
+      ];
+      await saveOrShareFile({
+        filename: `pasify-asistentes-${slugForFilename(eventTitle, "evento")}-${fileDateStamp()}.csv`,
+        mimeType: "text/csv;charset=utf-8",
+        data: toCsv(rows),
+        dialogTitle: "Exportar asistentes",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error preparando el fichero";
+      console.error("[PartnerAttendees] exportCSV:", err);
+      toast({ title: "No se pudo exportar el CSV", description: msg, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (events.length === 0) {
@@ -333,6 +365,8 @@ export const PartnerAttendees = ({ events }: Props) => {
     );
   }
 
+  const showInitialLoading = loading && stats === null && !loadError;
+
   return (
     <div className="space-y-6">
       {/* Header: event selector + refresh + export */}
@@ -345,16 +379,16 @@ export const PartnerAttendees = ({ events }: Props) => {
             <span className="inline-block h-px w-5 bg-orange-500/70" />
             Control de puerta
           </div>
-          <h2 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">
             Asistentes y check-ins
-          </h2>
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Listado en tiempo real de compradores y entradas validadas.
+            Compradores y entradas validadas, al momento.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedEventId} onValueChange={(v) => setSelectedEventId(v)}>
-            <SelectTrigger className="w-full min-w-[220px] md:w-auto">
+            <SelectTrigger className="w-full min-w-[220px] md:w-auto" aria-label="Evento">
               <SelectValue placeholder="Selecciona evento" />
             </SelectTrigger>
             <SelectContent>
@@ -367,7 +401,7 @@ export const PartnerAttendees = ({ events }: Props) => {
           </Select>
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => void loadData()}
             disabled={loading}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition hover:border-orange-500/60 hover:text-foreground disabled:opacity-50"
             aria-label="Recargar"
@@ -377,162 +411,198 @@ export const PartnerAttendees = ({ events }: Props) => {
           </button>
           <button
             type="button"
-            onClick={exportCSV}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition hover:border-orange-500/60"
+            onClick={() => void exportCSV()}
+            disabled={exporting || filtered.length === 0}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition hover:border-orange-500/60 disabled:opacity-50"
+            aria-label="Exportar CSV"
+            title="Exportar CSV"
           >
-            <Download className="h-4 w-4" />
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             <span className="hidden sm:inline">CSV</span>
           </button>
         </div>
       </div>
 
-      {/* KPIs row */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
-          icon={<TicketIcon className="h-4 w-4" />}
-          label="Vendidos"
-          value={String(stats?.tickets_sold ?? 0)}
-          sub={
-            stats?.capacity
-              ? `${stats.tickets_sold} de ${stats.capacity}`
-              : "sin aforo"
-          }
-        />
-        <KpiCard
-          icon={<UserCheck className="h-4 w-4" />}
-          label="Han entrado"
-          value={String(stats?.tickets_used ?? 0)}
-          sub={`${stats?.checkin_pct ?? 0}% check-in`}
-          accent
-        />
-        <KpiCard
-          icon={<Clock className="h-4 w-4" />}
-          label="Por entrar"
-          value={String(stats?.tickets_pending ?? 0)}
-          sub="aún en puerta"
-        />
-        <KpiCard
-          icon={<XCircle className="h-4 w-4" />}
-          label="Reembolsados"
-          value={String(stats?.tickets_refunded ?? 0)}
-          sub={
-            stats?.revenue_cents
-              ? `€${((stats.revenue_cents ?? 0) / 100).toFixed(2)} ingresados`
-              : "—"
-          }
-        />
-      </div>
-
-      {/* Search + status filter */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre, email o teléfono..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-full min-w-[160px] md:w-auto">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              <SelectItem value="paid">Pendientes de entrar</SelectItem>
-              <SelectItem value="used">Han entrado</SelectItem>
-              <SelectItem value="refunded">Reembolsados</SelectItem>
-              <SelectItem value="cancelled">Cancelados</SelectItem>
-            </SelectContent>
-          </Select>
-          {availableTiers.length > 0 && (
-            <Select value={tierFilter} onValueChange={setTierFilter}>
-              <SelectTrigger className="w-full min-w-[180px] md:w-auto">
-                <SelectValue placeholder="Tipo de entrada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                {availableTiers.map((t) => (
-                  <SelectItem key={t.key} value={t.key}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
-
-      {/* Table / list */}
-      {selectedEvent && stats?.tickets_sold === 0 ? (
-        <PasifyEmptyState
-          icon={<TicketIcon className="h-7 w-7" />}
-          eyebrow="Sin ventas"
-          title={
-            <>
-              Este evento aún no tiene{" "}
-              <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>
-                entradas
-              </span>{" "}
-              vendidas.
-            </>
-          }
-          subtitle="Cuando se vendan tickets aparecerán aquí en tiempo real, listos para escanear en la puerta."
-        />
-      ) : filtered.length === 0 ? (
-        <PasifyEmptyState
-          icon={<Search className="h-7 w-7" />}
-          eyebrow="Sin coincidencias"
-          title="Ningún asistente con esos filtros"
-          subtitle="Prueba a quitar el filtro de estado o limpiar la búsqueda."
-        />
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-2xl border border-border bg-card md:block">
-            <table className="w-full text-sm">
-              <thead
-                className="border-b border-border bg-card/60 text-[10px] uppercase text-muted-foreground"
-                style={{ ...mono, letterSpacing: "0.16em" }}
-              >
-                <tr>
-                  <th className="px-4 py-3 text-left">Comprador</th>
-                  <th className="px-4 py-3 text-left">Email</th>
-                  <th className="px-4 py-3 text-left">Tier</th>
-                  <th className="px-4 py-3 text-left">Estado</th>
-                  <th className="px-4 py-3 text-left">Hora entrada</th>
-                  <th className="px-4 py-3 text-left">Escaneado por</th>
-                  <th className="px-4 py-3 text-right">Importe</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((a) => (
-                  <AttendeeRow key={a.ticket_id} attendee={a} />
-                ))}
-              </tbody>
-            </table>
+      {loadError && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+          style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground">
+              {stats ? "No se han podido actualizar los asistentes" : "No pudimos cargar los asistentes"}
+            </div>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {stats ? "Lo que ves son los últimos datos recibidos. " : ""}
+              Detalle: {loadError}
+            </p>
           </div>
-
-          {/* Mobile cards */}
-          <div className="grid gap-3 md:hidden">
-            {filtered.map((a) => (
-              <AttendeeCard key={a.ticket_id} attendee={a} />
-            ))}
-          </div>
-        </>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            disabled={loading}
+            className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-orange-500/40 disabled:opacity-50"
+          >
+            Reintentar
+          </button>
+        </div>
       )}
 
-      {/* Footer count */}
-      {filtered.length > 0 && (
-        <div
-          className="text-[11px] uppercase text-muted-foreground"
-          style={{ ...mono, letterSpacing: "0.18em" }}
-        >
-          Mostrando {filtered.length} de {attendees.length} asistentes
-        </div>
+      {showInitialLoading && (
+        <PasifyEmptyState
+          icon={<Users className="h-7 w-7" />}
+          eyebrow="Cargando"
+          title="Cargando asistentes…"
+          spin
+          compact
+        />
+      )}
+
+      {stats && (
+        <>
+          {/* KPIs row */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KpiCard
+              icon={<TicketIcon className="h-4 w-4" />}
+              label="Vendidos"
+              value={String(stats.tickets_sold ?? 0)}
+              sub={stats.capacity ? `${stats.tickets_sold} de ${stats.capacity}` : "sin aforo definido"}
+            />
+            <KpiCard
+              icon={<UserCheck className="h-4 w-4" />}
+              label="Han entrado"
+              value={String(stats.tickets_used ?? 0)}
+              sub={`${stats.checkin_pct ?? 0} % check-in`}
+              accent
+            />
+            <KpiCard
+              icon={<Clock className="h-4 w-4" />}
+              label="Por entrar"
+              value={String(stats.tickets_pending ?? 0)}
+              sub="aún en puerta"
+            />
+            <KpiCard
+              icon={<XCircle className="h-4 w-4" />}
+              label="Reembolsados"
+              value={String(stats.tickets_refunded ?? 0)}
+              sub={stats.revenue_cents ? `${formatEur(stats.revenue_cents)} ingresados` : "—"}
+            />
+          </div>
+
+          {/* Search + status filter */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre, email o teléfono..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                aria-label="Buscar asistentes"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <SelectTrigger className="w-full min-w-[160px] md:w-auto" aria-label="Estado">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="paid">Pendientes de entrar</SelectItem>
+                  <SelectItem value="used">Han entrado</SelectItem>
+                  <SelectItem value="refunded">Reembolsados</SelectItem>
+                  <SelectItem value="cancelled">Cancelados</SelectItem>
+                </SelectContent>
+              </Select>
+              {availableTiers.length > 0 && (
+                <Select value={tierFilter} onValueChange={setTierFilter}>
+                  <SelectTrigger className="w-full min-w-[180px] md:w-auto" aria-label="Tipo de entrada">
+                    <SelectValue placeholder="Tipo de entrada" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los tipos</SelectItem>
+                    {availableTiers.map((t) => (
+                      <SelectItem key={t.key} value={t.key}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {/* Table / list */}
+          {selectedEvent && stats.tickets_sold === 0 && attendees.length === 0 ? (
+            <PasifyEmptyState
+              icon={<TicketIcon className="h-7 w-7" />}
+              eyebrow="Sin ventas"
+              title={
+                <>
+                  Este evento aún no tiene{" "}
+                  <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>
+                    entradas
+                  </span>{" "}
+                  vendidas.
+                </>
+              }
+              subtitle="Cuando se vendan aparecerán aquí al momento, listas para validar en la puerta."
+            />
+          ) : filtered.length === 0 ? (
+            <PasifyEmptyState
+              icon={<Search className="h-7 w-7" />}
+              eyebrow="Sin coincidencias"
+              title="Ningún asistente con esos filtros"
+              subtitle="Prueba a quitar el filtro de estado o limpiar la búsqueda."
+            />
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden overflow-hidden rounded-2xl border border-border bg-card md:block">
+                <table className="w-full text-sm">
+                  <thead
+                    className="border-b border-border bg-card/60 text-[10px] uppercase text-muted-foreground"
+                    style={{ ...mono, letterSpacing: "0.16em" }}
+                  >
+                    <tr>
+                      <th className="px-4 py-3 text-left">Comprador</th>
+                      <th className="px-4 py-3 text-left">Email</th>
+                      <th className="px-4 py-3 text-left">Tipo</th>
+                      <th className="px-4 py-3 text-left">Estado</th>
+                      <th className="px-4 py-3 text-left">Hora entrada</th>
+                      <th className="px-4 py-3 text-left">Validada por</th>
+                      <th className="px-4 py-3 text-right">Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filtered.map((a) => (
+                      <AttendeeRow key={a.ticket_id} attendee={a} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="grid gap-3 md:hidden">
+                {filtered.map((a) => (
+                  <AttendeeCard key={a.ticket_id} attendee={a} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Footer count */}
+          {filtered.length > 0 && (
+            <div
+              className="text-[11px] uppercase text-muted-foreground"
+              style={{ ...mono, letterSpacing: "0.18em" }}
+            >
+              Mostrando {filtered.length} de {attendees.length} asistentes
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -597,7 +667,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 const fullName = (a: Attendee) =>
-  `${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`.trim() || "—";
+  `${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`.trim() || "Sin nombre";
 
 const formatDateTime = (iso: string | null) => {
   if (!iso) return "—";
@@ -617,7 +687,7 @@ const AttendeeRow = ({ attendee: a }: { attendee: Attendee }) => (
         <div className="text-[11px] text-muted-foreground">{a.buyer_phone}</div>
       )}
     </td>
-    <td className="px-4 py-3 align-middle text-muted-foreground">{a.buyer_email}</td>
+    <td className="px-4 py-3 align-middle text-muted-foreground">{a.buyer_email ?? "—"}</td>
     <td className="px-4 py-3 align-middle text-muted-foreground">{a.tier_name ?? "—"}</td>
     <td className="px-4 py-3 align-middle">
       <StatusBadge status={a.status} />
@@ -626,10 +696,10 @@ const AttendeeRow = ({ attendee: a }: { attendee: Attendee }) => (
       {formatDateTime(a.used_at)}
     </td>
     <td className="px-4 py-3 align-middle text-muted-foreground">
-      {a.scanned_by_name ?? "—"}
+      {a.used_at ? (a.scanned_by_name ?? "—") : "—"}
     </td>
     <td className="px-4 py-3 text-right align-middle font-medium" style={mono}>
-      €{(a.amount_paid_cents / 100).toFixed(2)}
+      {formatEur(a.amount_paid_cents)}
     </td>
   </tr>
 );
@@ -641,22 +711,24 @@ const AttendeeCard = ({ attendee: a }: { attendee: Attendee }) => (
         <h3 className="truncate text-base font-semibold leading-tight tracking-tight text-foreground">
           {fullName(a)}
         </h3>
-        <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
-          {a.buyer_email}
-        </div>
+        {(a.buyer_email || a.buyer_phone) && (
+          <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+            {a.buyer_email ?? a.buyer_phone}
+          </div>
+        )}
       </div>
       <StatusBadge status={a.status} />
     </div>
 
     <div className="mt-4 grid grid-cols-3 gap-2">
-      <Stat label="Tier" value={a.tier_name ?? "—"} />
-      <Stat label="Importe" value={`€${(a.amount_paid_cents / 100).toFixed(2)}`} mono />
+      <Stat label="Tipo" value={a.tier_name ?? "—"} />
+      <Stat label="Importe" value={formatEur(a.amount_paid_cents)} mono />
       <Stat label="Entrada" value={formatDateTime(a.used_at)} mono />
     </div>
 
     {a.scanned_by_name && a.status === "used" && (
       <div className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
-        Escaneado por <span className="text-foreground">{a.scanned_by_name}</span>
+        Validada por <span className="text-foreground">{a.scanned_by_name}</span>
       </div>
     )}
   </article>

@@ -80,7 +80,15 @@ const PublicPartnerPage = () => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   // Hook único de compra. `pendingId` se compara con event.id en cada
   // card para mostrar el spinner solo en la que el usuario pulsó.
-  const { checkout: buyTicket, pendingId } = useTicketCheckout();
+  // `checkoutSheet` es el selector de tipo/cantidad: se renderiza abajo.
+  const { checkout: buyTicket, pendingId, checkoutSheet } = useTicketCheckout();
+  const buyEvent = (e: EventRow) =>
+    buyTicket({
+      id: e.id,
+      title: e.title,
+      dateStart: e.date_start,
+      place: partner?.business_name ?? e.city,
+    });
 
   useEffect(() => {
     (async () => {
@@ -314,7 +322,7 @@ const PublicPartnerPage = () => {
                   event={e}
                   partnerId={partner.id}
                   partnerName={partner.business_name ?? undefined}
-                  onBuyTicket={(id, qty) => buyTicket({ id, title: e.title, qty })}
+                  onBuyTicket={() => buyEvent(e)}
                   pending={pendingId === e.id}
                 />
               ))
@@ -357,7 +365,7 @@ const PublicPartnerPage = () => {
                       event={e}
                       partnerId={partner.id}
                       partnerName={partner.business_name ?? undefined}
-                      onBuyTicket={(id, qty) => buyTicket({ id, title: e.title, qty })}
+                      onBuyTicket={() => buyEvent(e)}
                       pending={pendingId === e.id}
                     />
                   ))
@@ -367,6 +375,9 @@ const PublicPartnerPage = () => {
           </div>
         )}
       </div>
+
+      {/* Selector de entradas del hook de compra */}
+      {checkoutSheet}
     </div>
   );
 };

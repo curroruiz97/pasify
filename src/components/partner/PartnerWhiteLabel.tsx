@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Check,
   ChevronRight,
   Crown,
   Download,
@@ -30,6 +29,16 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 interface WhiteLabelConfig {
   subdomain: string;
   customDomain: string;
@@ -46,17 +55,18 @@ interface WhiteLabelConfig {
   poweredByPasify: boolean;
 }
 
+// Marca ficticia: el dominio .example está reservado y nunca apunta a un sitio real.
 const DEFAULT_CONFIG: WhiteLabelConfig = {
-  subdomain: "pacha-ibiza",
-  customDomain: "entradas.pachaibiza.com",
+  subdomain: "sala-demo",
+  customDomain: "entradas.salademo.example",
   primary: "#E8542A",
   accent: "#FF7A4D",
   textColor: "#F4EEE2",
   background: "#0B0908",
   logoUrl: "",
-  emailSender: "Pacha Ibiza",
-  emailReplyTo: "tickets@pachaibiza.com",
-  legalCopyright: "© 2026 Pacha Ibiza · Todos los derechos reservados",
+  emailSender: "Sala Demo",
+  emailReplyTo: "tickets@salademo.example",
+  legalCopyright: "© 2026 Sala Demo · Todos los derechos reservados",
   languages: ["es", "en"],
   appWhitelabel: false,
   poweredByPasify: true,
@@ -114,7 +124,7 @@ export const PartnerWhiteLabel = () => {
                 style={{ ...mono, letterSpacing: "0.22em", color: "rgba(255,255,255,0.85)" }}
               >
                 <Star className="h-3 w-3" />
-                Plan Enterprise · White-label activo
+                White-label · Vista previa
               </div>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
                 Tu marca, <span style={serif}>tu universo</span>.
@@ -127,9 +137,10 @@ export const PartnerWhiteLabel = () => {
               </div>
             </div>
           </div>
-          <Button variant="outline" className="border-white/30 text-white hover:bg-white/10">
+          <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" disabled>
             <Eye className="mr-2 h-4 w-4" />
             Previsualizar
+            <DemoTag />
           </Button>
         </div>
       </section>
@@ -157,6 +168,10 @@ export const PartnerWhiteLabel = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_1fr]">
         {/* Settings */}
         <section className="space-y-4">
+          <p className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+            <DemoTag />
+            Los cambios solo actualizan la vista previa: no se guardan ni se publican.
+          </p>
           {tab === "branding" && <BrandingPanel config={config} onChange={update} />}
           {tab === "domain" && <DomainPanel config={config} onChange={update} />}
           {tab === "emails" && <EmailPanel config={config} onChange={update} />}
@@ -306,11 +321,12 @@ const BrandingPanel = ({
         <div className="flex items-start gap-2">
           <Wand2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#E8B04C" }} />
           <p className="text-[12px] text-foreground/85">
-            <span className="font-semibold">Sugerencia IA</span> · A partir de tu logo podemos
-            generar la paleta completa automáticamente.
+            <span className="font-semibold">Próximamente</span> · generar la paleta completa
+            automáticamente a partir de tu logo.
           </p>
-          <Button size="sm" variant="ghost" className="ml-auto text-amber-400">
+          <Button size="sm" variant="ghost" className="ml-auto text-amber-400" disabled>
             Auto-generar
+            <DemoTag />
           </Button>
         </div>
       </div>
@@ -377,19 +393,19 @@ const DomainPanel = ({
         <div
           className="mt-2 rounded-xl border p-3 text-[12px] text-foreground/85"
           style={{
-            background: "rgba(77,184,122,0.08)",
-            borderColor: "rgba(77,184,122,0.3)",
+            background: "rgba(232,176,76,0.08)",
+            borderColor: "rgba(232,176,76,0.3)",
           }}
         >
           <div className="flex items-start gap-2">
-            <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#4DB87A" }} />
+            <Globe className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#E8B04C" }} />
             <div>
-              <p className="font-semibold text-emerald-400">CNAME verificado · SSL emitido</p>
+              <p className="font-semibold text-amber-400">Dominio propio no disponible todavía</p>
               <p
                 className="mt-0.5 text-[11px] uppercase text-muted-foreground"
                 style={{ ...mono, letterSpacing: "0.14em" }}
               >
-                Apunta a · cname.pasify.cloud · TTL 300
+                Sin verificación de CNAME ni certificado SSL
               </p>
             </div>
           </div>
@@ -405,8 +421,9 @@ const DomainPanel = ({
               {config.languages.length} · {config.languages.join(" · ").toUpperCase()}
             </p>
           </div>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" disabled>
             Configurar
+            <DemoTag />
           </Button>
         </div>
       </div>
@@ -447,19 +464,19 @@ const EmailPanel = ({
       <div
         className="rounded-xl border p-3 text-[12px] text-foreground/85"
         style={{
-          background: "rgba(77,184,122,0.08)",
-          borderColor: "rgba(77,184,122,0.3)",
+          background: "rgba(232,176,76,0.08)",
+          borderColor: "rgba(232,176,76,0.3)",
         }}
       >
         <div className="flex items-start gap-2">
-          <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#4DB87A" }} />
+          <Mail className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#E8B04C" }} />
           <div>
-            <p className="font-semibold text-emerald-400">SPF · DKIM · DMARC OK</p>
+            <p className="font-semibold text-amber-400">Remitente propio no disponible todavía</p>
             <p
               className="mt-0.5 text-[11px] uppercase text-muted-foreground"
               style={{ ...mono, letterSpacing: "0.14em" }}
             >
-              Deliverability score · 98.4/100
+              SPF · DKIM · DMARC sin configurar
             </p>
           </div>
         </div>
@@ -493,7 +510,7 @@ const LegalPanel = ({
         <Label className="text-xs">Términos y condiciones</Label>
         <Textarea
           className="mt-1.5 min-h-[100px] rounded-xl"
-          placeholder="Pega aquí tus TyC personalizados — sobreescriben los de Pasify cuando se compra en tu dominio."
+          placeholder="Pega aquí tus TyC personalizados (en esta demo no se guardan ni se aplican)."
         />
       </div>
       <div
@@ -546,8 +563,7 @@ const AppPanel = ({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">App móvil con tu marca</p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Publica una app iOS + Android con tu logo, splash y nombre. Pasify la mantiene.
-            Coste único 2.490€ + 99€/mes.
+            Próximamente · app iOS + Android con tu logo, splash y nombre. Sin precio definido.
           </p>
         </div>
         <Toggle on={config.appWhitelabel} onChange={(v) => onChange("appWhitelabel", v)} />
@@ -581,9 +597,10 @@ const AppPanel = ({
               </p>
             </div>
           </div>
-          <Button variant="outline" className="w-full">
+          <Button variant="outline" className="w-full" disabled>
             <Download className="mr-2 h-4 w-4" />
-            Solicitar build (ETA 3 días)
+            Solicitar build
+            <DemoTag />
           </Button>
         </div>
       )}
@@ -629,7 +646,7 @@ const PreviewCard = ({ config, tab }: { config: WhiteLabelConfig; tab: string })
           style={{ ...mono, letterSpacing: "0.22em" }}
         >
           <Eye className="h-3 w-3" />
-          Preview · landing live
+          Vista previa · no publicada
         </div>
         <h3 className="text-base font-semibold tracking-tight text-foreground">
           {config.customDomain || `${config.subdomain}.pasify.es`}

@@ -29,7 +29,13 @@ import { es } from "date-fns/locale";
 import type { FavEvent } from "@/hooks/useFavorites";
 import SupportChat from "@/components/support/SupportChat";
 import ProfileSheet from "@/components/client/ProfileSheet";
-import TicketQRModal, { type Ticket, type TicketEventInfo } from "@/components/client/TicketQRModal";
+// `Ticket` a secas es el icono de lucide-react: el tipo va renombrado.
+import TicketQRModal, {
+  type Ticket as WalletTicket,
+  type TicketEventInfo,
+} from "@/components/client/TicketQRModal";
+import { TICKETS_UPDATED_EVENT } from "@/hooks/usePendingCheckoutResume";
+import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useFavoritePartners } from "@/hooks/useFavoritePartners";
 import { MonthGrid } from "@/components/event/MonthGrid";
@@ -110,7 +116,7 @@ const ClientDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     navigate("/");
   };
   // HashRouter: ?session_id=... aparece como query del hash. `useSearchParams`
@@ -119,18 +125,21 @@ const ClientDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const postCheckoutSessionId = searchParams.get("session_id");
   const postCheckoutOrderId = searchParams.get("order_id");
+  // `?wallet=<event_id|1>`: abre la cartera (lo usan el botón "Mi entrada"
+  // del calendario, TicketSuccess, la vuelta a la app tras pagar en nativo…).
+  const walletParam = searchParams.get("wallet");
 
   // Vista inicial: si venimos de Stripe Checkout con ?session_id=..., abrimos
   // directamente el Wallet (en vez de "home") para que el cliente vea su
   // ticket recién comprado sin tener que navegar.
   const [view, setView] = useState<View>(
-    postCheckoutSessionId || postCheckoutOrderId ? "wallet" : "home"
+    postCheckoutSessionId || postCheckoutOrderId || walletParam ? "wallet" : "home"
   );
   const [userCity, setUserCity] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
   const { events: favEvents, ids: favIds, toggle: toggleFav } = useFavorites();
   const [favTab, setFavTab] = useState<"list" | "calendar">("list");
-  const [tickets, setTickets] = useState<Array<Ticket & { event: TicketEventInfo | null }>>([]);
+  const [tickets, setTickets] = useState<Array<WalletTicket & { event: TicketEventInfo | null }>>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   /**
    * Error explícito del loader de tickets. NO usamos catch silencioso a
@@ -140,7 +149,7 @@ const ClientDashboard = () => {
    * Si esto es NOT null, el wallet renderiza banner con Reintentar.
    */
   const [ticketsError, setTicketsError] = useState<string | null>(null);
-  const [openTicket, setOpenTicket] = useState<{ ticket: Ticket; event: TicketEventInfo | null } | null>(null);
+  const [openTicket, setOpenTicket] = useState<{ ticket: WalletTicket; event: TicketEventInfo | null } | null>(null);
   const [favMonthCursor, setFavMonthCursor] = useState<Date>(new Date());
   const [favSelectedDay, setFavSelectedDay] = useState<Date | null>(null);
 
@@ -220,12 +229,15 @@ const ClientDashboard = () => {
     setTicketsLoading(true);
     setTicketsError(null);
     try {
-      const { data: ticks, error: tixErr } = await supabase
+      // Entradas que tienes AHORA: compradas por ti y no transferidas, o
+      // transferidas a ti. RLS ya filtra las que dejaste de tener; el filtro
+      // de abajo aplica la misma regla por si la política cambia.
+      const { data: rows, error: tixErr } = await supabase
         .from("tickets")
         .select(
-          "id, event_id, qr_token, status, buyer_first_name, buyer_last_name, buyer_email, amount_paid_cents, used_at, paid_at"
+          "id, event_id, tier_id, qr_token, status, buyer_user_id, transferred_to_user_id, buyer_first_name, buyer_last_name, buyer_email, holder_first_name, holder_last_name, holder_email, amount_paid_cents, used_at, paid_at"
         )
-        .eq("buyer_user_id", userId)
+        .or(`buyer_user_id.eq.${userId},transferred_to_user_id.eq.${userId}`)
         .in("status", ["paid", "used"])
         .order("paid_at", { ascending: false });
 
@@ -234,31 +246,55 @@ const ClientDashboard = () => {
         // Surface el error: banner Reintentar en lugar de empty silencioso.
         setTicketsError(tixErr.message);
         setTickets([]);
-        setTicketsLoading(false);
         return;
       }
 
-      if (!ticks || ticks.length === 0) {
+      const ticks = (rows ?? []).filter((t) =>
+        t.transferred_to_user_id ? t.transferred_to_user_id === userId : t.buyer_user_id === userId
+      );
+      if (ticks.length === 0) {
         setTickets([]);
-        setTicketsLoading(false);
         return;
+      }
+
+      // Nombre del tipo de entrada (General, VIP…). Si RLS no deja leerlo
+      // (tipo ya no activo), la entrada se enseña como "Entrada".
+      const tierIds = Array.from(
+        new Set(ticks.map((t) => t.tier_id).filter((id): id is string => !!id))
+      );
+      const tierNames = new Map<string, string>();
+      if (tierIds.length > 0) {
+        const { data: tierData, error: tierErr } = await supabase
+          .from("ticket_tiers")
+          .select("id, name")
+          .in("id", tierIds);
+        if (tierErr) console.warn("[ClientDashboard] ticket_tiers query failed", tierErr);
+        (tierData ?? []).forEach((tr) => tierNames.set(tr.id, tr.name));
       }
 
       const eventIds = Array.from(
         new Set(ticks.map((t) => t.event_id).filter((id): id is string => !!id))
       );
 
-      let evs: any[] = [];
+      type WalletEventRow = {
+        id: string;
+        title: string | null;
+        date_start: string | null;
+        city: string | null;
+        venue_name: string | null;
+        image_url: string | null;
+        partner_id: string | null;
+      };
+      let evs: WalletEventRow[] = [];
       if (eventIds.length > 0) {
         const { data: evData, error: evErr } = await supabase
           .from("events")
           .select("id, title, date_start, city, venue_name, image_url, partner_id")
           .in("id", eventIds);
         if (evErr) {
-           
           console.warn("[ClientDashboard] events query failed", evErr);
         } else {
-          evs = evData ?? [];
+          evs = (evData ?? []) as WalletEventRow[];
         }
       }
 
@@ -266,41 +302,44 @@ const ClientDashboard = () => {
       const partnerIds = Array.from(
         new Set(
           evs
-            .map((e: any) => e.partner_id)
-            .filter((pid: unknown): pid is string => typeof pid === "string" && pid.length > 0)
+            .map((e) => e.partner_id)
+            .filter((pid): pid is string => typeof pid === "string" && pid.length > 0)
         )
       );
 
-      let prs: any[] = [];
+      // Nombres de locales desde la vista pública `public_partners`: la
+      // lectura directa de `profiles` de otros usuarios ya no está permitida.
+      const partnerNames = new Map<string, string>();
       if (partnerIds.length > 0) {
         const { data: prData, error: prErr } = await supabase
-          .from("profiles")
+          .from("public_partners")
           .select("id, business_name")
           .in("id", partnerIds);
         if (prErr) {
-           
-          console.warn("[ClientDashboard] profiles query failed", prErr);
+          console.warn("[ClientDashboard] public_partners query failed", prErr);
         } else {
-          prs = prData ?? [];
+          (prData ?? []).forEach((p) => {
+            if (p.id && p.business_name) partnerNames.set(p.id, p.business_name);
+          });
         }
       }
 
       const eventMap = new Map<string, TicketEventInfo>();
-      evs.forEach((e: any) => {
-        const partner = prs.find((p: any) => p.id === e.partner_id);
+      evs.forEach((e) => {
         eventMap.set(e.id, {
           title: e.title ?? "Evento",
           date_start: e.date_start ?? new Date().toISOString(),
           city: e.city ?? "",
           venue_name: e.venue_name ?? null,
           image_url: e.image_url ?? null,
-          partner_name: partner?.business_name ?? undefined,
+          partner_name: (e.partner_id && partnerNames.get(e.partner_id)) || undefined,
         });
       });
 
       setTickets(
-        ticks.map((t: any) => ({
+        ticks.map((t) => ({
           ...t,
+          tier_name: t.tier_id ? tierNames.get(t.tier_id) ?? null : null,
           event: eventMap.get(t.event_id) ?? null,
         }))
       );
@@ -320,6 +359,28 @@ const ClientDashboard = () => {
     if (view !== "wallet" || !userId) return;
     loadTickets();
   }, [view, userId, loadTickets]);
+
+  // `?wallet=` con la pantalla ya montada (p. ej. al volver a la app tras
+  // pagar en el navegador): abre la cartera y limpia el parámetro de la URL.
+  useEffect(() => {
+    if (!walletParam) return;
+    setView("wallet");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("wallet");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [walletParam, setSearchParams]);
+
+  // Compra confirmada en segundo plano (usePendingCheckoutResume): recarga.
+  useEffect(() => {
+    const onTicketsUpdated = () => void loadTickets();
+    window.addEventListener(TICKETS_UPDATED_EVENT, onTicketsUpdated);
+    return () => window.removeEventListener(TICKETS_UPDATED_EVENT, onTicketsUpdated);
+  }, [loadTickets]);
 
   // Post-checkout: cuando el cliente vuelve de Stripe con ?session_id=... /
   // ?order_id=..., el webhook `stripe-webhook` puede tardar 1-5s en procesar
@@ -630,7 +691,7 @@ const ClientDashboard = () => {
           <div>
             <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
             <p className="mb-6 text-sm text-muted-foreground">
-              Chatea con el equipo Pasify. Te respondemos en menos de 5 minutos en horario laboral.
+              Chatea con el equipo Pasify. Te respondemos en horario laboral, de lunes a viernes.
             </p>
             <SupportChat mode="client" />
           </div>
@@ -748,9 +809,9 @@ const ClientDashboard = () => {
             )}
           >
           <div>
-            <h1 className="mb-1 text-3xl font-bold tracking-tight">Mis tickets</h1>
+            <h1 className="mb-1 text-3xl font-bold tracking-tight">Mis entradas</h1>
             <p className="mb-6 text-sm text-muted-foreground">
-              Tus tickets QR aparecerán aquí después de la compra. Pulsa cualquiera para mostrar el código en la puerta.
+              Tus entradas con código QR aparecen aquí después de la compra. Pulsa cualquiera para mostrar el código en la puerta.
             </p>
 
             {/* Banner error explícito si falló el loader (RLS, network, etc.).
@@ -800,7 +861,7 @@ const ClientDashboard = () => {
               <PasifyEmptyState
                 icon={<Ticket className="h-7 w-7" />}
                 eyebrow="Wallet vacío"
-                title={<>Aún no tienes <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>tickets</span>.</>}
+                title={<>Aún no tienes <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>entradas</span>.</>}
                 subtitle="Cuando compres una entrada aparecerá aquí con su QR, cuenta atrás y opción de añadirla al calendario."
                 action={{ label: "Descubrir locales", onClick: () => setView("home") }}
               />
@@ -1026,6 +1087,8 @@ const FavoritePosterCard = ({
 }) => {
   const date = new Date(event.date_start);
   const initial = (event.title?.[0] ?? "?").toUpperCase();
+  // "Desde X €" (precio mínimo de sus tipos) o "Gratis".
+  const priceLabel = eventPriceLabel(event.price_cents);
   return (
     <div
       role="button"
@@ -1094,12 +1157,14 @@ const FavoritePosterCard = ({
               {event.partnerName ?? event.city}
               {event.partnerName && ` · ${event.city}`}
             </div>
-            <div
-              className="rounded-full px-2 py-0.5 text-[11px] font-bold"
-              style={{ background: "rgba(232,84,42,0.95)", color: "#fff" }}
-            >
-              {(event.price_cents / 100).toFixed(0)} €
-            </div>
+            {priceLabel && (
+              <div
+                className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold"
+                style={{ background: "rgba(232,84,42,0.95)", color: "#fff" }}
+              >
+                {priceLabel}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1264,15 +1329,20 @@ const TicketCard = ({
   refundStatus,
   onRequestRefund,
 }: {
-  ticket: Ticket & { event: TicketEventInfo | null };
+  ticket: WalletTicket & { event: TicketEventInfo | null };
   onOpenQR: () => void;
+  /** Solicitud de reembolso de esta entrada (si hay). */
   refundStatus: RefundRequest | null;
   onRequestRefund: (ticketId: string, reason: string) => Promise<unknown> | unknown;
 }) => {
   const event = ticket.event;
   const date = event ? new Date(event.date_start) : null;
+  // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
+  const dayMonth = event ? eventDayMonth(event.date_start) : null;
+  const time = event ? formatEventTime(event.date_start) : "";
   const countdown = useCountdown(date);
   const { toast } = useToast();
+  const refundState = refundStatus?.status ?? null;
   const canRefund =
     !refundStatus &&
     ticket.status !== "used" &&
@@ -1367,7 +1437,7 @@ const TicketCard = ({
         />
 
         {/* date pill top-left */}
-        {date && (
+        {dayMonth && (
           <div
             className="absolute left-3 top-3 flex flex-col items-center rounded-lg px-2.5 py-1.5 text-center backdrop-blur-md"
             style={{
@@ -1381,13 +1451,13 @@ const TicketCard = ({
               className="text-[9px] font-semibold uppercase leading-none"
               style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
             >
-              {format(date, "MMM", { locale: es })}
+              {dayMonth.month}
             </span>
             <span
               className="mt-1 text-xl font-bold leading-none"
               style={{ ...ticketCardMono, letterSpacing: "-0.02em" }}
             >
-              {format(date, "d", { locale: es })}
+              {dayMonth.day}
             </span>
           </div>
         )}
@@ -1409,8 +1479,8 @@ const TicketCard = ({
             className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-white/85 drop-shadow"
             style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
           >
-            {date && <span>{format(date, "HH:mm", { locale: es })}H</span>}
-            {date && (event?.venue_name || event?.partner_name) && (
+            {time && <span>{time}H</span>}
+            {time && (event?.venue_name || event?.partner_name) && (
               <span className="opacity-50">·</span>
             )}
             {(event?.venue_name || event?.partner_name) && (
@@ -1422,6 +1492,16 @@ const TicketCard = ({
 
       {/* BODY */}
       <div className="p-4">
+        {/* Tipo de entrada (si se ha podido leer) */}
+        {ticket.tier_name && (
+          <div
+            className="mb-2 truncate text-[10px] uppercase text-muted-foreground"
+            style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
+          >
+            Entrada · <span className="text-foreground">{ticket.tier_name}</span>
+          </div>
+        )}
+
         {/* Countdown */}
         <div className="mb-3 flex items-center justify-between gap-2">
           <span
@@ -1572,7 +1652,7 @@ const TicketCard = ({
             </Dialog>
           )}
 
-          {refundStatus === "pending" && (
+          {refundState === "pending" && (
             <div
               className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-center text-[10px] uppercase text-orange-400"
               style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
@@ -1580,7 +1660,9 @@ const TicketCard = ({
               Reembolso solicitado · En revisión
             </div>
           )}
-          {refundStatus === "approved" && (
+          {(refundState === "approved" ||
+            refundState === "processing" ||
+            refundState === "refunded") && (
             <div
               className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-center text-[10px] uppercase text-emerald-400"
               style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
@@ -1588,7 +1670,7 @@ const TicketCard = ({
               Reembolso aprobado
             </div>
           )}
-          {refundStatus === "rejected" && (
+          {refundState === "rejected" && (
             <div
               className="rounded-xl border border-muted bg-muted/10 px-3 py-2 text-center text-[10px] uppercase text-muted-foreground"
               style={{ ...ticketCardMono, letterSpacing: "0.18em" }}

@@ -36,6 +36,16 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 // =============================================================
 // Demo data
 // =============================================================
@@ -104,7 +114,7 @@ const CAMPAIGNS: Campaign[] = [
     id: "c-4",
     name: "Closing Party · invite VIPs",
     channels: ["whatsapp"],
-    audience: "VIPs Pacha",
+    audience: "VIPs Sala Demo",
     recipients: 42,
     status: "completed",
     scheduledAt: null,
@@ -185,9 +195,10 @@ export const PartnerMarketing = () => {
             Ads
           </Tab>
         </div>
-        <Button>
+        <Button disabled>
           <Plus className="mr-2 h-4 w-4" />
           Nueva campaña
+          <DemoTag />
         </Button>
       </div>
 
@@ -329,18 +340,19 @@ const CampaignRow = ({ c }: { c: Campaign }) => {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground"><DemoTag /></span>
           {c.status === "live" && (
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" disabled aria-label="Pausar (demo)">
               <Pause className="h-3.5 w-3.5" />
             </Button>
           )}
           {c.status === "draft" && (
-            <Button size="sm">
+            <Button size="sm" disabled>
               <Play className="mr-1.5 h-3.5 w-3.5" />
               Enviar
             </Button>
           )}
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" disabled aria-label="Ver detalle (demo)">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -375,18 +387,7 @@ const CampaignStudio = () => {
   const [body, setBody] = useState(
     "Hola {{firstName}},\n\nEste sábado tenemos un cartel que no querrás perderte. Resident DJs hasta el cierre, mesas VIP con bottle de cortesía y puerta abierta hasta las 03h.\n\nLas entradas vuelan — quedan menos de 200 disponibles."
   );
-  const [iaGenerating, setIaGenerating] = useState(false);
-
-  const generate = () => {
-    setIaGenerating(true);
-    setTimeout(() => {
-      setSubject("⚡ Quedan 187 entradas para tu sábado");
-      setBody(
-        "Hola {{firstName}},\n\nVi que llevas 2 sábados sin venir 👀 — no sería casualidad que justo esta semana cerremos con uno de los line-ups más fuertes del trimestre. Mesa VIP gratis si entras antes de las 23:30 con este enlace.\n\nNos vemos en {{venueName}}."
-      );
-      setIaGenerating(false);
-    }, 1200);
-  };
+  // Demo: no hay generación con IA real, así que el botón no la simula.
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_1fr]">
@@ -408,9 +409,10 @@ const CampaignStudio = () => {
               Composer
             </h3>
           </div>
-          <Button onClick={generate} disabled={iaGenerating} variant="outline">
+          <Button disabled variant="outline">
             <Sparkles className="mr-2 h-4 w-4" />
-            {iaGenerating ? "Generando…" : "Generar con IA"}
+            Generar con IA
+            <DemoTag />
           </Button>
         </div>
 
@@ -481,8 +483,9 @@ const CampaignStudio = () => {
                   Programar para entonces aumenta el open rate un +18% en histórico.
                 </p>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" disabled>
                 Activar
+                <DemoTag />
               </Button>
             </div>
           </div>
@@ -534,7 +537,7 @@ const CampaignStudio = () => {
                   className="text-[11px] text-muted-foreground"
                   style={mono}
                 >
-                  Pacha Ibiza · hace 2 min
+                  Sala Demo · hace 2 min
                 </div>
               </div>
             </div>
@@ -639,9 +642,10 @@ const Automations = () => (
         <Zap className="h-3 w-3" />
         Flows activos · {AUTOMATIONS.filter((a) => a.active).length} de {AUTOMATIONS.length}
       </div>
-      <Button size="sm">
+      <Button size="sm" disabled>
         <Plus className="mr-2 h-3.5 w-3.5" />
         Nueva automatización
+        <DemoTag />
       </Button>
     </div>
 
@@ -731,7 +735,7 @@ const Automations = () => (
 );
 
 // =============================================================
-// Ads dashboard (Meta/TikTok/Google integrated)
+// Ads dashboard (maqueta: no hay integración con Meta/TikTok/Google)
 // =============================================================
 
 const ADS_PLATFORMS = [
@@ -781,9 +785,10 @@ const AdsDashboard = () => {
               {totalSales} ventas · {blendedCpa.toFixed(2)}€ CPA blended
             </div>
           </div>
-          <Button>
+          <Button disabled>
             <Plus className="mr-2 h-4 w-4" />
             Nueva campaña ad
+            <DemoTag />
           </Button>
         </header>
 
@@ -859,8 +864,9 @@ const AdsDashboard = () => {
               TikTok tiene un CPA un 12% mejor y la audiencia 18-25 está infrarrepresentada en
               tu mix actual. Cambiarías ~5 ventas extras / semana sin subir presupuesto.
             </p>
-            <Button className="mt-3" size="sm">
+            <Button className="mt-3" size="sm" disabled>
               Aplicar reasignación
+              <DemoTag />
             </Button>
           </div>
         </div>

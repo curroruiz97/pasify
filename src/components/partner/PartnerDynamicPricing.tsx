@@ -22,17 +22,16 @@ import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 /**
  * PartnerDynamicPricing — propuestas reales desde `pricing_proposals`.
  *
- * Antes era mock puro (`buildPricingEvent()`, seed event.id). Ahora:
- *   1. SELECT a `pricing_proposals WHERE status='pending'` joineando
- *      `events` para autorización por partner_id/org_id (RLS lo hace).
- *   2. Aprobar → llama RPC `apply_pricing_proposal` (mig 0051) que
- *      UPDATE `ticket_tiers.price_cents` atómicamente.
- *   3. Rechazar → UPDATE pricing_proposals SET status='rejected'.
- *   4. "Generar propuestas ahora" → invoca edge function
- *      `ai-pricing-propose` (cron + on-demand) si el usuario es admin.
- *      Para partners sin admin: el cron de Pasify genera propuestas
- *      automáticamente cada 4h.
- *   5. Historial: últimas 30d con status accepted/applied/rejected/superseded.
+ *   1. SELECT a `pricing_proposals WHERE status='pending'` (la RLS filtra por
+ *      partner_id / miembro de la organización).
+ *   2. Aplicar → RPC `apply_pricing_proposal`, que cambia el precio del tipo
+ *      de entrada y marca la propuesta de forma atómica.
+ *   3. Rechazar → RPC `reject_pricing_proposal` (ya no hay UPDATE directo: la
+ *      policy que dejaba editar cualquier columna de la propuesta se retiró).
+ *   4. "Generar ahora" invoca la edge function `ai-pricing-propose`, que solo
+ *      acepta admins de Pasify: el botón solo se enseña a ellos. No hay cron
+ *      programado, así que la UI no promete análisis periódicos.
+ *   5. Historial: últimos 30 días (aplicadas, rechazadas, caducadas, reemplazadas).
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -82,6 +81,28 @@ export const PartnerDynamicPricing = () => {
   const [error, setError] = useState<string | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // "Generar ahora" llama a una función que solo admite admins de Pasify.
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u.user?.id;
+        if (!uid) return;
+        const { data } = await supabase.rpc("get_user_roles", { _user_id: uid });
+        if (!cancelled) {
+          setIsPlatformAdmin(Array.isArray(data) && (data as string[]).includes("admin"));
+        }
+      } catch {
+        /* sin rol admin: el botón no se enseña */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,10 +177,10 @@ export const PartnerDynamicPricing = () => {
       const { error: rpcErr } = await supabase.rpc("apply_pricing_proposal", {
         _proposal_id: proposalId,
       });
-      if (rpcErr) throw rpcErr;
+      if (rpcErr) throw new Error(rpcErr.message);
       toast({
         title: "Precio actualizado",
-        description: "El nuevo precio ya está aplicado al ticket tier.",
+        description: "El nuevo precio ya está aplicado al tipo de entrada.",
       });
       await load();
     } catch (err) {
@@ -173,16 +194,18 @@ export const PartnerDynamicPricing = () => {
   const reject = async (proposalId: string) => {
     setDecidingId(proposalId);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error: updErr } = await supabase
-        .from("pricing_proposals")
-        .update({
-          status: "rejected",
-          decided_at: new Date().toISOString(),
-          decided_by: user?.id ?? null,
-        })
-        .eq("id", proposalId);
-      if (updErr) throw updErr;
+      // Cast hasta que se regeneren los types con reject_pricing_proposal.
+      const rpcAny = supabase as unknown as {
+        rpc: (
+          name: string,
+          args: Record<string, unknown>
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+      const { error: rpcErr } = await rpcAny.rpc("reject_pricing_proposal", {
+        _proposal_id: proposalId,
+        _reason: null,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
       toast({ title: "Propuesta rechazada" });
       await load();
     } catch (err) {
@@ -202,14 +225,14 @@ export const PartnerDynamicPricing = () => {
       if (fnErr) throw fnErr;
       toast({
         title: "Análisis lanzado",
-        description: "La IA está evaluando tus tiers. Vuelve en unos segundos.",
+        description: "Se están evaluando los tipos de entrada. Vuelve en unos segundos.",
       });
       setTimeout(() => void load(), 2500);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error invocando IA";
+      const msg = err instanceof Error ? err.message : "Error invocando el análisis";
       toast({
-        title: "Solo admins pueden forzar análisis",
-        description: msg + " · La IA corre automáticamente cada 4h.",
+        title: "No se pudo lanzar el análisis",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -276,18 +299,20 @@ export const PartnerDynamicPricing = () => {
               )}
             </div>
           </div>
-          <Button
-            onClick={() => void generateNow()}
-            disabled={generating}
-            className="text-white"
-            style={{
-              background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-            }}
-          >
-            {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-            Generar ahora
-          </Button>
+          {isPlatformAdmin && (
+            <Button
+              onClick={() => void generateNow()}
+              disabled={generating}
+              className="text-white"
+              style={{
+                background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+              }}
+            >
+              {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+              Generar ahora
+            </Button>
+          )}
         </div>
       </header>
 
@@ -312,8 +337,12 @@ export const PartnerDynamicPricing = () => {
         <PasifyEmptyState
           icon={<Brain className="h-7 w-7" />}
           eyebrow="Aún sin análisis"
-          title={<>La IA no ha generado <span style={serif} className="text-orange-500">propuestas</span> aún.</>}
-          subtitle="El cron Pasify analiza tus eventos próximos cada 4h y propone subidas/bajadas de precio basadas en velocidad de venta vs baseline. Mientras tanto, puedes forzar un análisis con el botón de arriba."
+          title={<>Aún no hay <span style={serif} className="text-orange-500">propuestas</span> de precio.</>}
+          subtitle={
+            isPlatformAdmin
+              ? "Las propuestas comparan la velocidad de venta de cada tipo de entrada con lo esperado. Lanza un análisis con «Generar ahora»."
+              : "Cuando haya una propuesta de subida o bajada de precio para tus eventos aparecerá aquí, y tú decides si se aplica."
+          }
         />
       )}
 

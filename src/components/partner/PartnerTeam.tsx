@@ -33,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -43,6 +42,16 @@ const serif = {
   fontStyle: "italic" as const,
   fontWeight: 400,
 };
+
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
 
 type Role = "door" | "host" | "barman" | "rrpp" | "box_office" | "manager";
 
@@ -66,8 +75,8 @@ const STAFF: StaffMember[] = [
     id: "u-1",
     firstName: "Carla",
     lastName: "Sánchez",
-    email: "carla@pacha.es",
-    phone: "+34 612 345 678",
+    email: "carla@example.com",
+    phone: "600 000 000",
     roles: ["host", "manager"],
     hourlyCents: 1400,
     avatarColor: "#FF7A4D",
@@ -83,8 +92,8 @@ const STAFF: StaffMember[] = [
     id: "u-2",
     firstName: "Diego",
     lastName: "Reyes",
-    email: "diego@pacha.es",
-    phone: "+34 622 938 119",
+    email: "diego@example.com",
+    phone: "600 000 000",
     roles: ["door", "box_office"],
     hourlyCents: 1200,
     avatarColor: "#E8542A",
@@ -99,8 +108,8 @@ const STAFF: StaffMember[] = [
     id: "u-3",
     firstName: "Lucía",
     lastName: "García",
-    email: "lucia@pacha.es",
-    phone: "+34 600 471 829",
+    email: "lucia@example.com",
+    phone: "600 000 000",
     roles: ["barman"],
     hourlyCents: 1300,
     avatarColor: "#4DB87A",
@@ -116,8 +125,8 @@ const STAFF: StaffMember[] = [
     id: "u-4",
     firstName: "Pablo",
     lastName: "López",
-    email: "pablo@pacha.es",
-    phone: "+34 633 882 154",
+    email: "pablo@example.com",
+    phone: "600 000 000",
     roles: ["rrpp"],
     hourlyCents: 0,
     avatarColor: "#E8B04C",
@@ -130,8 +139,8 @@ const STAFF: StaffMember[] = [
     id: "u-5",
     firstName: "Alba",
     lastName: "Martínez",
-    email: "alba@pacha.es",
-    phone: "+34 644 290 188",
+    email: "alba@example.com",
+    phone: "600 000 000",
     roles: ["host", "barman"],
     hourlyCents: 1350,
     avatarColor: "#B8381A",
@@ -335,7 +344,7 @@ const StaffRow = ({ member }: { member: StaffMember }) => (
         </div>
       </div>
     </div>
-    <Button variant="ghost" size="icon" aria-label="Más">
+    <Button variant="ghost" size="icon" aria-label="Más (demo)" disabled>
       <Mail className="h-4 w-4" />
     </Button>
   </article>
@@ -375,9 +384,10 @@ const ScheduleView = () => {
           <CalendarIcon className="h-3 w-3" />
           Próximos 7 días
         </div>
-        <Button size="sm" variant="outline">
+        <Button size="sm" variant="outline" disabled>
           <Plus className="mr-2 h-3.5 w-3.5" />
           Programar turno
+          <DemoTag />
         </Button>
       </div>
 
@@ -511,9 +521,10 @@ const PayrollView = () => {
               </span>
             </h3>
           </div>
-          <Button>
+          <Button disabled>
             <CheckCircle2 className="mr-2 h-4 w-4" />
             Liquidar todo
+            <DemoTag />
           </Button>
         </div>
       </div>
@@ -571,7 +582,6 @@ const PayrollView = () => {
 // =============================================================
 
 const InviteDialog = ({ onClose }: { onClose: () => void }) => {
-  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("door");
   const [hourly, setHourly] = useState("12");
@@ -582,7 +592,7 @@ const InviteDialog = ({ onClose }: { onClose: () => void }) => {
       </DialogHeader>
       <div className="space-y-3 text-sm">
         <p className="text-muted-foreground">
-          Le enviaremos un email para descargar la app Pasify Staff con su rol pre-configurado.
+          Vista de ejemplo: desde aquí todavía no se envía ninguna invitación.
         </p>
         <div>
           <Label className="text-xs">Email</Label>
@@ -625,21 +635,10 @@ const InviteDialog = ({ onClose }: { onClose: () => void }) => {
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>
-        <Button
-          onClick={() => {
-            if (!email) {
-              toast({ title: "Falta email", variant: "destructive" });
-              return;
-            }
-            toast({
-              title: "Invitación enviada",
-              description: `${email} recibirá las instrucciones en breve`,
-            });
-            onClose();
-          }}
-        >
+        <Button disabled>
           <GraduationCap className="mr-2 h-4 w-4" />
           Enviar
+          <DemoTag />
         </Button>
       </DialogFooter>
     </DialogContent>

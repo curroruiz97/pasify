@@ -35,6 +35,7 @@ const PartnerManage = lazy(() => import("./pages/PartnerManage"));
 const PartnerSuccess = lazy(() => import("./pages/PartnerSuccess"));
 const TicketSuccess = lazy(() => import("./pages/TicketSuccess"));
 const TicketReturn = lazy(() => import("./pages/TicketReturn"));
+const PublicTicket = lazy(() => import("./pages/PublicTicket"));
 const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
@@ -54,7 +55,8 @@ import PanelSwitcher from "./components/shared/PanelSwitcher";
 import LoaderOne from "@/components/ui/loader-one";
 
 // Usa il sistema di auth centralizzato
-import { useAuth, resolveInitialDashboard } from "@/hooks/useAuth";
+import { useAuth, resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
+import AuthErrorScreen from "@/components/auth/AuthErrorScreen";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 
 // React Query persister: usa la libreria ufficiale TanStack +
@@ -120,9 +122,22 @@ const LoginRoute = ({ session }: { session: any }) => {
 // Wrapper para la ruta `/` (root). Igual que LoginRoute pero el fallback no
 // autenticado es Index (landing pública) en web, o /login en nativa.
 const RootRoute = ({ session }: { session: any }) => {
-  const { userRoles, roleLoading } = useAuth();
+  const { userRoles, roleLoading, roleError, reloadRoles } = useAuth();
 
   if (session) {
+    // Sin red no se pueden saber los roles: mejor "Reintentar" que una
+    // pantalla en blanco.
+    if (roleError && userRoles.length === 0) {
+      return (
+        <AuthErrorScreen
+          title="No hemos podido cargar tu cuenta"
+          description="Revisa tu conexión y vuelve a intentarlo."
+          detail={roleError}
+          onRetry={reloadRoles}
+          onSignOut={signOutLocal}
+        />
+      );
+    }
     if (roleLoading || userRoles.length === 0) {
       return null; // splash visible mientras useAuth carga
     }
@@ -489,6 +504,10 @@ const App = () => {
               {/* Retorno de Stripe para la app nativa. Publica a proposito:
                   quien llega es Safari sin sesion. Ver TicketReturn.tsx. */}
               <Route path="/ticket/gracias" element={<TicketReturn />} />
+
+              {/* Entrada pública (enlace "Ver entrada" del email). Sin sesión:
+                  la llave es el token `?k=`. Ver PublicTicket.tsx. */}
+              <Route path="/entrada/:ticketId" element={<PublicTicket />} />
 
               <Route path="/soporte" element={<Soporte />} />
               <Route path="/privacidad" element={<Privacidad />} />

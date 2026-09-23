@@ -19,22 +19,27 @@ interface DbRow {
   event_id: string;
   events: {
     id: string;
-    partner_id: string;
+    partner_id: string | null;
     title: string;
     description: string | null;
     date_start: string;
     city: string;
+    venue_name: string | null;
     price_cents: number;
     capacity: number | null;
     tickets_sold: number;
     image_url: string | null;
-    profiles?: { business_name: string | null };
-  };
+  } | null;
 }
 
 /**
  * useFavorites · backend-backed sobre favorites_v2.
  * Sustituye al hook localStorage anterior. RLS asegura aislamiento por user.
+ *
+ * El nombre del local sale de la vista pública `public_partners` (la lectura
+ * directa de `profiles` de otros usuarios ya no está permitida, así que el
+ * embed `profiles!events_partner_id_fkey` dejó de servir); si no está, se usa
+ * la sala del evento (`venue_name`).
  */
 export const useFavorites = () => {
   const [favEvents, setFavEvents] = useState<FavEvent[]>([]);
@@ -47,19 +52,42 @@ export const useFavorites = () => {
     const { data, error } = await supabase
       .from("favorites_v2")
       .select(
-        "event_id, events!inner(id, partner_id, title, description, date_start, city, price_cents, capacity, tickets_sold, image_url, profiles!events_partner_id_fkey(business_name))"
+        "event_id, events!inner(id, partner_id, title, description, date_start, city, venue_name, price_cents, capacity, tickets_sold, image_url)"
       )
       .eq("user_id", uid)
       .not("event_id", "is", null)
       .order("created_at", { ascending: false });
     if (error) {
+      console.warn("[useFavorites] favorites_v2 query failed", error);
       setLoading(false);
       return;
     }
-    const events = ((data ?? []) as unknown as DbRow[]).map((r) => ({
+    const rows = ((data ?? []) as unknown as DbRow[]).filter(
+      (r): r is DbRow & { events: NonNullable<DbRow["events"]> } => !!r.events
+    );
+
+    const partnerIds = Array.from(
+      new Set(rows.map((r) => r.events.partner_id).filter((id): id is string => !!id))
+    );
+    const partnerNames = new Map<string, string>();
+    if (partnerIds.length > 0) {
+      const { data: partners, error: partnersError } = await supabase
+        .from("public_partners")
+        .select("id, business_name")
+        .in("id", partnerIds);
+      if (partnersError) console.warn("[useFavorites] public_partners query failed", partnersError);
+      (partners ?? []).forEach((p) => {
+        if (p.id && p.business_name) partnerNames.set(p.id, p.business_name);
+      });
+    }
+
+    const events = rows.map((r) => ({
       id: r.events.id,
-      partnerId: r.events.partner_id,
-      partnerName: r.events.profiles?.business_name ?? undefined,
+      partnerId: r.events.partner_id ?? "",
+      partnerName:
+        (r.events.partner_id && partnerNames.get(r.events.partner_id)) ||
+        r.events.venue_name ||
+        undefined,
       title: r.events.title,
       description: r.events.description,
       date_start: r.events.date_start,

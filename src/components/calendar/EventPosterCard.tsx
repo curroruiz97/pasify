@@ -1,10 +1,11 @@
-import { Calendar, Share2, Loader2, Check, Ticket } from "lucide-react";
+import { Calendar, Share2, Loader2, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { optimizedImage } from "@/lib/image";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { eventPriceLabel } from "@/components/tickets/ticketUtils";
 import type { CalendarEvent } from "./EventListCard";
 
 interface EventPosterCardProps {
@@ -44,6 +45,10 @@ const EventPosterCard = ({
 
   const dateChip = format(new Date(event.start_date), "EEE d 'de' MMMM", { locale: es });
   const timeRange = formatRange(event.start_date, event.end_date);
+  // `price` (euros) = `events.price_cents` / 100, el mínimo de sus tipos de
+  // entrada: "Desde X €", o "Gratis".
+  const priceLabel =
+    event.price != null ? eventPriceLabel(Math.round(Number(event.price) * 100)) : null;
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -131,10 +136,8 @@ const EventPosterCard = ({
           </span>
         </div>
 
-        {event.price != null && (
-          <p className="text-sm font-semibold text-foreground">
-            {Number(event.price).toFixed(2)} €
-          </p>
+        {priceLabel && (
+          <p className="text-sm font-semibold text-foreground">{priceLabel}</p>
         )}
 
         <Button
@@ -154,8 +157,8 @@ const EventPosterCard = ({
             </>
           ) : (
             <>
-              <Check className="mr-1.5 h-3.5 w-3.5" />
-              {t("events.participate", "Participar")}
+              <Ticket className="mr-1.5 h-3.5 w-3.5" />
+              {t("calendar.buyTickets", "Comprar entradas")}
             </>
           )}
         </Button>

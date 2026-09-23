@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, dashboardPathForRole } from '@/hooks/useAuth';
+import { useAuth, dashboardPathForRole, signOutLocal } from '@/hooks/useAuth';
 import LoaderOne from '@/components/ui/loader-one';
+import AuthErrorScreen from '@/components/auth/AuthErrorScreen';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,6 +27,18 @@ const DEV_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW === 
  *
  *  - Si el usuario no tiene el rol requerido bajo NINGUNA circunstancia,
  *    redirige al dashboard del rol efectivo (el más privilegiado).
+ *
+ * Estabilidad (Fase 0 del panel de local):
+ *
+ *  - El loader solo sale mientras todavía NO se conocen los roles del usuario
+ *    (primera carga). Una vez concedido el acceso, los children se mantienen
+ *    montados durante cualquier refresco de sesión/roles: antes, cada
+ *    SIGNED_IN al volver a la pestaña o TOKEN_REFRESHED horario cambiaba el
+ *    panel por el loader y lo desmontaba entero.
+ *
+ *  - Si la primera carga de roles falla (red/timeout) NO redirigimos a
+ *    ciegas (antes mandaba al partner al panel de cliente): se muestra
+ *    "Reintentar".
  */
 const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   const {
@@ -36,20 +49,40 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     effectiveRole,
     canSwitchPanels,
     setActiveRole,
-    roleLoading,
+    rolesLoaded,
+    roleError,
+    reloadRoles,
   } = useAuth();
   const navigate = useNavigate();
+
+  // Usuario al que ya se le concedió esta ruta. Mientras sea el mismo, los
+  // children siguen montados aunque los roles se estén recargando.
+  const concedidoARef = useRef<string | null>(null);
+
+  // ¿Tiene acceso? Solo significativo cuando `rolesLoaded`.
+  // Super-admin: basta con tener el rol en su set. Usuario normal: el rol
+  // efectivo (= único rol) debe coincidir con requireRole.
+  const tieneAcceso =
+    !requireRole ||
+    (rolesLoaded && (canSwitchPanels ? userRoles.includes(requireRole) : effectiveRole === requireRole));
 
   useEffect(() => {
     if (DEV_PREVIEW) return;
     if (loading) return;
     if (!user) {
+      concedidoARef.current = null;
       navigate('/login', { replace: true });
       return;
     }
-    if (roleLoading) return;
-
     if (!requireRole) return; // ruta protegida sin rol específico
+    // Roles aún desconocidos (primera carga o error): no se decide nada.
+    if (!rolesLoaded) return;
+
+    if (tieneAcceso) {
+      concedidoARef.current = user.id;
+    } else {
+      concedidoARef.current = null;
+    }
 
     // 1) Super-admin: comportamiento legacy (auto-switch al rol pedido si está
     //    en su set; redirige si no lo tiene).
@@ -85,7 +118,8 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     userRoles,
     effectiveRole,
     canSwitchPanels,
-    roleLoading,
+    rolesLoaded,
+    tieneAcceso,
     requireRole,
     navigate,
     setActiveRole,
@@ -95,21 +129,37 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     return <>{children}</>;
   }
 
-  if (loading || (user && requireRole && roleLoading)) {
+  if (loading) {
     return <LoaderOne />;
   }
 
   if (!user) return null;
 
+  if (!requireRole) return <>{children}</>;
+
+  if (!rolesLoaded) {
+    // Refresco de un usuario que ya tenía acceso: no se desmonta nada.
+    if (concedidoARef.current === user.id) return <>{children}</>;
+    if (roleError) {
+      return (
+        <AuthErrorScreen
+          title="No pudimos cargar tu cuenta"
+          description="Parece un problema de conexión. Comprueba que tienes internet y vuelve a intentarlo."
+          detail={roleError}
+          onRetry={reloadRoles}
+          onSignOut={async () => {
+            await signOutLocal();
+            navigate('/login', { replace: true });
+          }}
+        />
+      );
+    }
+    return <LoaderOne />;
+  }
+
   // Render guard final: si el usuario es super-admin y tiene el rol, se renderiza.
   // Si es usuario normal, sólo se renderiza si effectiveRole === requireRole.
-  if (requireRole) {
-    if (canSwitchPanels) {
-      if (!userRoles.includes(requireRole)) return null;
-    } else {
-      if (effectiveRole !== requireRole) return null;
-    }
-  }
+  if (!tieneAcceso) return null;
 
   return <>{children}</>;
 };

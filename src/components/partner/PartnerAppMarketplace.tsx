@@ -41,6 +41,9 @@ import { Button } from "@/components/ui/button";
  * se adapta: "Conectar", "Preparar importación", "Solicitar acceso",
  * "Configurar". Sin promesas vacías.
  *
+ * Hoy NINGUNA integración tiene flujo real: todas van como `coming_soon`
+ * ("Próximamente") y sus CTA se muestran deshabilitados.
+ *
  * Logos: SVGs locales en /public/integrations/ (no hotlinks externos).
  */
 
@@ -50,6 +53,16 @@ const serif = {
   fontStyle: "italic" as const,
   fontWeight: 400,
 };
+
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
 
 type UseCase =
   | "customer_data"
@@ -152,7 +165,7 @@ const STATUS_CONFIG: Record<
     icon: <Sparkles className="h-3 w-3" />,
   },
   coming_soon: {
-    label: "Disponible próximamente",
+    label: "Próximamente",
     color: "#FF7A4D",
     bg: "rgba(255,122,77,0.10)",
     border: "rgba(255,122,77,0.32)",
@@ -194,7 +207,7 @@ const TOP_10: Integration[] = [
     benefit:
       "Mensajería 1-a-1 + broadcast con tasas de apertura del 95%.",
     logos: [{ src: "/integrations/whatsapp.svg", alt: "WhatsApp Business" }],
-    status: "beta",
+    status: "coming_soon",
     ctaLabel: "Solicitar acceso",
   },
   {
@@ -206,7 +219,7 @@ const TOP_10: Integration[] = [
     benefit:
       "Email + SMS + workflows desde un solo dashboard.",
     logos: [{ src: "/integrations/brevo.svg", alt: "Brevo" }],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Conectar Brevo",
   },
   {
@@ -221,7 +234,7 @@ const TOP_10: Integration[] = [
       { src: "/integrations/meta.svg", alt: "Meta Ads" },
       { src: "/integrations/instagram.svg", alt: "Instagram" },
     ],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Conectar Meta",
   },
   {
@@ -233,7 +246,7 @@ const TOP_10: Integration[] = [
     benefit:
       "Events API + Pixel para retargeting de noche y captación.",
     logos: [{ src: "/integrations/tiktok.svg", alt: "TikTok Ads" }],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Conectar TikTok",
   },
   {
@@ -248,7 +261,7 @@ const TOP_10: Integration[] = [
       { src: "/integrations/ga4.svg", alt: "Google Analytics 4" },
       { src: "/integrations/gtm.svg", alt: "Google Tag Manager" },
     ],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Configurar GA4 / GTM",
   },
   {
@@ -260,7 +273,7 @@ const TOP_10: Integration[] = [
     benefit:
       "Datáfono + caja unificada con tus ventas online.",
     logos: [{ src: "/integrations/stripe.svg", alt: "Stripe Terminal" }],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Configurar Terminal",
   },
   {
@@ -287,7 +300,7 @@ const TOP_10: Integration[] = [
       { src: "/integrations/zapier.svg", alt: "Zapier" },
       { src: "/integrations/make.svg", alt: "Make" },
     ],
-    status: "available",
+    status: "coming_soon",
     ctaLabel: "Ver triggers",
   },
   {
@@ -335,7 +348,6 @@ export const PartnerAppMarketplace = () => {
     [filtered]
   );
 
-  const availableCount = TOP_10.filter((i) => i.status === "available" || i.status === "beta").length;
   const useCasesCount = new Set(TOP_10.map((i) => i.useCase)).size;
 
   return (
@@ -383,8 +395,8 @@ export const PartnerAppMarketplace = () => {
                 </span>
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Conecta Pasify con las herramientas que ya usa tu local para importar
-                clientes, medir campañas, cobrar en puerta y automatizar tareas.
+                Integraciones previstas para importar clientes, medir campañas, cobrar
+                en puerta y automatizar tareas. Todavía no hay ninguna activa.
               </p>
               <div
                 className="mt-3 flex flex-wrap items-center gap-3 text-[10px] uppercase text-muted-foreground"
@@ -399,17 +411,14 @@ export const PartnerAppMarketplace = () => {
                   <span className="text-foreground">{useCasesCount}</span> áreas clave
                 </span>
                 <span className="text-muted-foreground/40">·</span>
-                <span>
-                  <span className="text-foreground">{availableCount}</span> disponibles
-                </span>
-                <span className="text-muted-foreground/40">·</span>
-                <span>OAuth / API · Webhooks</span>
+                <span>Todas próximamente</span>
               </div>
             </div>
           </div>
-          <Button variant="outline" className="shrink-0">
+          <Button variant="outline" className="shrink-0" disabled>
             <Webhook className="mr-2 h-4 w-4" />
             Mis webhooks
+            <DemoTag />
           </Button>
         </div>
       </section>
@@ -529,15 +538,16 @@ export const PartnerAppMarketplace = () => {
                 Webhooks + Zapier + Make
               </h3>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Pasify expone webhooks de eventos (orden pagada, ticket usado,
-                reembolso, etc.) y triggers en Zapier/Make. API pública abierta
-                próximamente.
+                Próximamente: webhooks de eventos (orden pagada, ticket usado,
+                reembolso, etc.), triggers para Zapier/Make y una API pública.
+                Hoy no hay ninguno disponible.
               </p>
             </div>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" disabled>
             <ExternalLink className="mr-2 h-4 w-4" />
             Ver webhooks
+            <DemoTag />
           </Button>
         </div>
       </section>
@@ -633,6 +643,7 @@ const FeaturedCard = ({ integration }: { integration: Integration }) => {
         <div className="flex flex-col items-stretch gap-2 lg:items-end">
           <StatusBadge status={integration.status} />
           <Button
+            disabled
             className="h-11"
             style={{
               background:
@@ -686,7 +697,7 @@ const IntegrationCard = ({ integration }: { integration: Integration }) => {
       </div>
 
       <footer className="relative mt-4 flex items-center justify-between">
-        <Button size="sm" variant="outline" className="text-xs">
+        <Button size="sm" variant="outline" className="text-xs" disabled>
           {integration.ctaLabel}
         </Button>
         <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover/app:translate-x-1 group-hover/app:text-orange-500" />

@@ -39,8 +39,19 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 // =============================================================
-// Mock CRM data
+// Mock CRM data (personas ficticias: emails en example.com y
+// teléfono de relleno, nunca contactos con formato real)
 // =============================================================
 
 export type SegmentId = "all" | "vip" | "recurrent" | "new" | "inactive" | "birthday";
@@ -77,8 +88,8 @@ const seedClients = (): CrmClient[] => {
       id: `c-${i.toString().padStart(2, "0")}`,
       firstName: fn,
       lastName: ln,
-      email: `${fn.toLowerCase()}.${ln.toLowerCase()}@pasify.es`,
-      phone: `+34 6${(10000000 + i * 31247).toString().slice(0, 8)}`,
+      email: `${fn.toLowerCase()}.${ln.toLowerCase()}@example.com`,
+      phone: "600 000 000",
       city: cities[i % cities.length],
       avatarColor: colors[i % colors.length],
       birthday: format(new Date(1990 + (i % 15), i % 12, 1 + ((i * 7) % 28)), "yyyy-MM-dd"),
@@ -525,18 +536,21 @@ const ClientProfile = ({ client, onClose }: { client: CrmClient; onClose: () => 
       {/* Actions footer */}
       <footer className="mt-auto border-t border-border p-4">
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" size="sm" disabled={!client.optin.email}>
+          <Button variant="outline" size="sm" disabled>
             <Mail className="mr-1.5 h-3.5 w-3.5" />
             Email
           </Button>
-          <Button variant="outline" size="sm" disabled={!client.optin.sms}>
+          <Button variant="outline" size="sm" disabled>
             <Phone className="mr-1.5 h-3.5 w-3.5" />
             SMS
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" disabled>
             <Heart className="mr-1.5 h-3.5 w-3.5" />
             VIP
           </Button>
+        </div>
+        <div className="mt-2 text-center text-muted-foreground">
+          <DemoTag />
         </div>
       </footer>
     </div>
@@ -738,7 +752,7 @@ const CampaignDialog = ({
               <label className="text-xs text-muted-foreground">Asunto</label>
               <Input
                 className="mt-1.5 h-10 rounded-xl"
-                placeholder="Tu sábado en Pacha te espera"
+                placeholder="Tu sábado en Sala Demo te espera"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
               />
@@ -767,13 +781,10 @@ const CampaignDialog = ({
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
+          {/* Demo: no hay envío real, así que el botón no simula ninguno. */}
           <button
             type="button"
-            disabled={!body.trim()}
-            onClick={() => {
-              // Demo only: simulate send + close
-              onClose();
-            }}
+            disabled
             className="group/send inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
             style={{
               background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
@@ -784,6 +795,7 @@ const CampaignDialog = ({
             <Send className="h-4 w-4" />
             Enviar a {recipients}
             <ArrowUpRight className="h-3.5 w-3.5 transition group-hover/send:translate-x-1 group-hover/send:-translate-y-0.5" />
+            <DemoTag />
           </button>
         </footer>
       </div>

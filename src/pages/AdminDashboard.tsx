@@ -82,6 +82,7 @@ type EventRow = {
 type SupportConv = {
   id: string;
   client_id: string;
+  kind?: string | null;
   last_message_at: string | null;
   last_message_preview: string | null;
   unread_for_admin: number;
@@ -118,7 +119,7 @@ const AdminDashboard = () => {
   });
   const [eventos, setEventos] = useState<EventRow[]>([]);
   const [conversations, setConversations] = useState<SupportConv[]>([]);
-  const [selectedClient, setSelectedClient] = useState<Profile | null>(null);
+  const [selectedConv, setSelectedConv] = useState<SupportConv | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -194,7 +195,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     navigate("/");
   };
 
@@ -265,7 +266,7 @@ const AdminDashboard = () => {
               section={section}
               onSelect={(id) => {
                 setSection(id);
-                setSelectedClient(null);
+                setSelectedConv(null);
               }}
               badgeFor={(id) => (id === "soporte" ? totalUnread : undefined)}
             />
@@ -288,7 +289,7 @@ const AdminDashboard = () => {
               section={section}
               onSelect={(id) => {
                 setSection(id);
-                setSelectedClient(null);
+                setSelectedConv(null);
               }}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -553,17 +554,26 @@ const AdminDashboard = () => {
                     </div>
                   ) : (
                     conversations.map((conv) => {
-                      const client = clientes.find((c) => c.id === conv.client_id) || null;
-                      const fullName =
-                        [client?.first_name, client?.last_name].filter(Boolean).join(" ") ||
-                        client?.email ||
-                        "Cliente sin nombre";
-                      const isActive = selectedClient?.id === conv.client_id;
+                      // Las conversaciones de locales (partner_admin) guardan en
+                      // client_id al usuario del local: se busca en ambas listas.
+                      const isPartnerConv = conv.kind === "partner_admin";
+                      const person =
+                        clientes.find((c) => c.id === conv.client_id) ||
+                        locales.find((l) => l.id === conv.client_id) ||
+                        null;
+                      const personName =
+                        [person?.first_name, person?.last_name].filter(Boolean).join(" ") ||
+                        person?.email ||
+                        null;
+                      const fullName = isPartnerConv
+                        ? `Local · ${person?.business_name || personName || "sin nombre"}`
+                        : personName || "Cliente sin nombre";
+                      const isActive = selectedConv?.id === conv.id;
                       const unread = conv.unread_for_admin ?? 0;
                       return (
                         <button
                           key={conv.id}
-                          onClick={() => setSelectedClient(client)}
+                          onClick={() => setSelectedConv(conv)}
                           className={`flex w-full flex-col items-start gap-1 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 ${isActive ? "bg-muted/60" : ""}`}
                         >
                           <div className="flex w-full items-center justify-between gap-2">
@@ -595,17 +605,27 @@ const AdminDashboard = () => {
 
                 {/* Selected conversation */}
                 <div className="rounded-2xl border border-border bg-card min-h-[400px]">
-                  {selectedClient ? (
-                    <SupportChat
-                      mode="admin"
-                      selectedClientId={selectedClient.id}
-                      selectedClient={{
-                        id: selectedClient.id,
-                        first_name: selectedClient.first_name ?? null,
-                        last_name: selectedClient.last_name ?? null,
-                        email: selectedClient.email ?? null,
-                      }}
-                    />
+                  {selectedConv ? (
+                    (() => {
+                      const person =
+                        clientes.find((c) => c.id === selectedConv.client_id) ||
+                        locales.find((l) => l.id === selectedConv.client_id) ||
+                        null;
+                      return (
+                        <SupportChat
+                          key={selectedConv.id}
+                          mode="admin"
+                          conversationId={selectedConv.id}
+                          selectedClientId={selectedConv.client_id}
+                          selectedClient={{
+                            id: selectedConv.client_id,
+                            first_name: person?.first_name ?? null,
+                            last_name: person?.last_name ?? null,
+                            email: person?.email ?? null,
+                          }}
+                        />
+                      );
+                    })()
                   ) : (
                     <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center text-sm text-muted-foreground">
                       <MessageCircle className="mb-3 h-10 w-10 opacity-40" />
@@ -628,7 +648,7 @@ const AdminDashboard = () => {
           activeId={section}
           onSelect={(id) => {
             setSection(id);
-            setSelectedClient(null);
+            setSelectedConv(null);
           }}
           drawerSlot={
             <AdminDrawer
@@ -636,7 +656,7 @@ const AdminDashboard = () => {
               section={section}
               onSelect={(id) => {
                 setSection(id);
-                setSelectedClient(null);
+                setSelectedConv(null);
               }}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -662,7 +682,7 @@ const AdminDashboard = () => {
         role="admin"
         onOpenSupport={() => {
           setSection("soporte");
-          setSelectedClient(null);
+          setSelectedConv(null);
         }}
       />
     </div>

@@ -31,11 +31,23 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 /* ============================================================
    IndustryBenchmarks — Fase 6
    Inteligencia ANÓNIMA cross-tenant. Cada partner ve cómo se
    compara con locales similares (mismo segmento, ciudad, tamaño)
    sin saber quiénes son. Pasify-only — el moat de datos.
+   Hoy es una maqueta: todas las cifras son ficticias y los planes
+   de "Data products" no tienen precio.
    ============================================================ */
 
 type VenueSegment = "discoteca" | "club" | "festival" | "bar-musica" | "sala-concierto";
@@ -135,18 +147,15 @@ const AGE_BUCKETS = [
 interface BenchmarkPaywallTier {
   id: string;
   name: string;
-  priceEur: number;
-  cycle: "mes" | "año";
   bullets: string[];
   highlight?: boolean;
 }
 
+// Propuesta de planes: sin precios (no existen todavía).
 const PAYWALL_TIERS: BenchmarkPaywallTier[] = [
   {
     id: "industry",
     name: "Industry Pulse",
-    priceEur: 0,
-    cycle: "mes",
     bullets: [
       "Tendencias mensuales agregadas",
       "Reparto de géneros y demografía",
@@ -156,8 +165,6 @@ const PAYWALL_TIERS: BenchmarkPaywallTier[] = [
   {
     id: "compare",
     name: "Compare",
-    priceEur: 79,
-    cycle: "mes",
     highlight: true,
     bullets: [
       "Benchmarks vs locales similares (segmento + ciudad + tamaño)",
@@ -169,8 +176,6 @@ const PAYWALL_TIERS: BenchmarkPaywallTier[] = [
   {
     id: "edge",
     name: "Edge API",
-    priceEur: 290,
-    cycle: "mes",
     bullets: [
       "Acceso programático vía API a todos los datasets",
       "Updates diarios + alertas push",
@@ -206,7 +211,7 @@ export const IndustryBenchmarks = () => {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">Industry Benchmarks</h1>
         <p className="max-w-[68ch] text-sm text-muted-foreground">
-          Inteligencia anónima cross-tenant para que cada partner sepa cómo se compara con locales similares — sin ver datos individuales de nadie. Pasify es la única plataforma con datos suficientes para esto en España.
+          Inteligencia anónima cross-tenant para que cada partner sepa cómo se compara con locales similares — sin ver datos individuales de nadie. Vista de ejemplo: todavía no hay panel real y todas las cifras son ficticias.
         </p>
       </header>
 
@@ -248,11 +253,11 @@ export const IndustryBenchmarks = () => {
                 className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
                 style={mono}
               >
-                <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3 w-3 text-emerald-500" /> Anonimato k=15</span>
+                <span>Datos de ejemplo</span>
                 <span>·</span>
-                <span>Actualizado hace 3h</span>
+                <span>Sin conexión a datos reales</span>
                 <span>·</span>
-                <span>{snapshot.tenants} locales en el panel</span>
+                <span>{snapshot.tenants} locales ficticios</span>
               </div>
             </div>
           </div>
@@ -355,7 +360,7 @@ export const IndustryBenchmarks = () => {
             <div className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase" style={{ ...mono, letterSpacing: "0.22em", color: "#A78BFA" }}>
               <Lock className="h-3 w-3" /> Privacidad por diseño
             </div>
-            <h3 className="text-base font-semibold">Anonimato garantizado</h3>
+            <h3 className="text-base font-semibold">Principios previstos · aún no implementados</h3>
             <ul className="mt-4 space-y-3 text-[12px] text-muted-foreground">
               <PrivacyBullet
                 title="k-anonimato 15"
@@ -406,15 +411,16 @@ export const IndustryBenchmarks = () => {
                   <Sliders className="h-5 w-5" />
                 </span>
                 <div>
-                  <h3 className="text-base font-semibold">Recomendación auto · Friday Sessions</h3>
+                  <h3 className="text-base font-semibold">Ejemplo de recomendación · Friday Sessions</h3>
                   <p className="mt-1 max-w-[60ch] text-[12px] text-muted-foreground">
                     Tu mediana de “Late release” está en €18, P75 del segmento es €28. Hay margen para subir hasta €22-24 sin salir del rango competitivo.
                   </p>
                 </div>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" disabled>
                 <Eye className="mr-2 h-4 w-4" />
                 Ver evidencia
+                <DemoTag />
               </Button>
             </div>
           </div>
@@ -560,7 +566,7 @@ export const IndustryBenchmarks = () => {
               })}
             </div>
             <div className="mt-5 border-t pt-4 text-[11px] text-muted-foreground" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-              Datos derivados de tickets comprados con cuenta verificada. Edad inferida del documento KYC, jamás de redes ni terceros.
+              Datos ficticios de ejemplo: no proceden de tickets ni de documentos reales.
             </div>
           </div>
         </section>
@@ -582,15 +588,16 @@ export const IndustryBenchmarks = () => {
                   <Layers className="h-5 w-5" />
                 </span>
                 <div>
-                  <h3 className="text-lg font-semibold">Industry Pulse — ahora también monetizable</h3>
+                  <h3 className="text-lg font-semibold">Industry Pulse — idea de producto de datos</h3>
                   <p className="mt-1 max-w-[64ch] text-[12px] text-muted-foreground">
-                    Los datos agregados que generamos para los partners ya tienen valor fuera: agencias, sellos, marcas y municipios pagan por entender la noche en tiempo real. Los planes Compare y Edge API son el primer paso.
+                    Si el panel llega a existir, los datos agregados podrían interesar también a agencias, sellos, marcas y municipios. Los planes de abajo son una propuesta: no existen ni tienen precio.
                   </p>
                 </div>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" disabled>
                 <Eye className="mr-2 h-4 w-4" />
                 Roadmap completo
+                <DemoTag />
               </Button>
             </div>
           </div>
@@ -789,19 +796,14 @@ const TierCard = ({ tier }: { tier: BenchmarkPaywallTier }) => (
         className="absolute right-3 top-3 rounded-full px-2 py-0.5 text-[9.5px] uppercase"
         style={{ ...mono, letterSpacing: "0.16em", color: "#FF7A4D", background: "rgba(232,84,42,0.10)", border: "1px solid rgba(232,84,42,0.40)" }}
       >
-        Más vendido
+        Recomendado
       </span>
     )}
     <h3 className="text-lg font-semibold">{tier.name}</h3>
     <div className="mt-2 flex items-baseline gap-1">
-      <span className="text-3xl font-bold tracking-tight" style={{ color: tier.highlight ? "#FF7A4D" : "#F4EEE2" }}>
-        {tier.priceEur === 0 ? "Gratis" : `${tier.priceEur}€`}
+      <span className="text-[11px] uppercase text-muted-foreground" style={{ ...mono, letterSpacing: "0.18em" }}>
+        Precio por definir
       </span>
-      {tier.priceEur > 0 && (
-        <span className="text-[11px] uppercase text-muted-foreground" style={{ ...mono, letterSpacing: "0.18em" }}>
-          /{tier.cycle}
-        </span>
-      )}
     </div>
     <ul className="mt-4 space-y-2 text-[12.5px] text-muted-foreground">
       {tier.bullets.map((b, i) => (
@@ -825,8 +827,9 @@ const TierCard = ({ tier }: { tier: BenchmarkPaywallTier }) => (
       }
       variant={tier.highlight ? "default" : "outline"}
       size="sm"
+      disabled
     >
-      {tier.priceEur === 0 ? "Disponible para partners" : "Activar plan"}
+      Próximamente
     </Button>
   </div>
 );

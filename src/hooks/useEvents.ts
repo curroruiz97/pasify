@@ -98,17 +98,34 @@ const fetchEventsWithProfiles = async (
   const events = (eventsData ?? []) as EventRow[];
   if (events.length === 0) return [];
 
-  // Step 2: profiles del partner
-  const partnerIds = [...new Set(events.map((e) => e.partner_id))];
-  const { data: profilesData } = await supabase
-    .from("profiles")
-    .select("id, business_name, first_name, last_name, avatar_url")
-    .in("id", partnerIds);
-  const profilesMap = new Map(
-    (profilesData ?? []).map((p) => [p.id, p as Profile])
-  );
+  // Step 2: nombre y avatar del local desde la vista pública `public_partners`
+  // (la lectura directa de `profiles` de otros usuarios no está permitida).
+  // `partner_id` puede ser null (local dado de baja): se filtra.
+  const partnerIds = [
+    ...new Set(events.map((e) => e.partner_id).filter((id): id is string => !!id)),
+  ];
+  const profilesMap = new Map<string, Profile>();
+  if (partnerIds.length > 0) {
+    const { data: partnersData, error: partnersError } = await supabase
+      .from("public_partners")
+      .select("id, business_name, avatar_url")
+      .in("id", partnerIds);
+    if (partnersError) {
+      console.warn("[useEvents] public_partners query failed", partnersError);
+    }
+    (partnersData ?? []).forEach((p) => {
+      if (!p.id) return;
+      profilesMap.set(p.id, {
+        id: p.id,
+        business_name: p.business_name,
+        first_name: null,
+        last_name: null,
+        avatar_url: p.avatar_url,
+      });
+    });
+  }
 
-  return events.map((e) => decorate(e, profilesMap.get(e.partner_id) ?? null));
+  return events.map((e) => decorate(e, (e.partner_id && profilesMap.get(e.partner_id)) || null));
 };
 
 /* ============ usePartnerEvents (dashboard del partner) ============ */

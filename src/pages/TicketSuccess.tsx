@@ -1,41 +1,45 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import QRCodeLib from "qrcode";
 import {
   CalendarDays,
   Check,
+  Clock,
   Home,
   Loader2,
+  LogIn,
   MapPin,
   Receipt,
+  RotateCcw,
   Ticket as TicketIcon,
+  XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
+import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import {
+  formatEventDateTime,
+  formatPriceCents,
+  ticketHolderName,
+} from "@/components/tickets/ticketUtils";
 
 /**
- * TicketSuccess — landing post-Stripe Checkout. Stripe redirige aquí con
- * `?order_id=<uuid>&session_id=cs_test_...`. Esta página:
+ * TicketSuccess — vuelta de Stripe Checkout en WEB
+ * (`/#/ticket/success?order_id=<uuid>&session_id=cs_…`).
  *
- *   1) Lee los params y dispara dos canales que esperan a que
- *      `ticket_orders.status` pase a 'paid':
- *        - Realtime: subscribe a UPDATE en ticket_orders por buyer_user_id
- *        - Poll: cada 2s comprueba el order (max 30 intentos = 60s)
- *   2) Mientras espera muestra "Procesando tu pago…" con spinner.
- *   3) Cuando confirma: anima un check verde, muestra resumen del evento
- *      (título, venue, fecha, total, nº tickets) y dos CTAs:
- *        - "Ver mis tickets" → /#/client-dashboard (abre wallet via params)
- *        - "Volver al inicio" → /#/
- *   4) Si pasa el timeout sin confirmar, muestra un estado "Procesando"
- *      con explicación de que el email llegará por su lado y botones
- *      "Reintentar" + "Ver mis tickets".
- *   5) Si el order ni siquiera existe (order_id inválido o RLS bloquea),
- *      muestra error claro con botón volver.
+ *   1) Pregunta a `confirm-checkout-session` con `{session_id, order_id}`,
+ *      con o sin sesión: la función consulta a Stripe y, si está pagado,
+ *      emite las entradas (misma RPC que el webhook, idempotente). Si Stripe
+ *      aún no confirma, reintenta con esperas crecientes.
+ *   2) Pagado + sesión → carga el pedido y enseña "Tus entradas" con su QR
+ *      aquí mismo, más el botón "Ver en mi cartera".
+ *   3) Pagado sin sesión → confirmación y aviso de iniciar sesión.
+ *   4) Caducado / sin confirmar / error → mensaje honesto. Solo decimos "te
+ *      hemos enviado un email" cuando el pago está confirmado.
  *
- * Mantiene la estética Pasify: dark mode, terracota, mono labels, italic
- * accent en el headline, warm shadows.
+ * En la app nativa la vuelta de Stripe es /ticket/gracias (TicketReturn).
+ * Estética Pasify: dark, terracota, mono labels, itálica serif en el titular.
  */
-
-type PollState = "loading" | "paid" | "timeout" | "error";
 
 type OrderRow = {
   id: string;
@@ -44,8 +48,6 @@ type OrderRow = {
   total_cents: number;
   currency: string;
   buyer_email: string;
-  buyer_user_id: string | null;
-  paid_at: string | null;
 };
 
 type EventRow = {
@@ -57,11 +59,23 @@ type EventRow = {
   image_url: string | null;
 };
 
-type TicketRow = {
+type OrderTicket = {
   id: string;
   qr_token: string;
   status: string;
+  tier_id: string | null;
+  tier_name: string | null;
+  holder: string;
+  qrDataUrl: string | null;
 };
+
+type Details =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "no_session" }
+  /** Pagado, pero esta sesión no ve el pedido (compraste con otra cuenta). */
+  | { kind: "not_visible" }
+  | { kind: "ready"; order: OrderRow; event: EventRow | null; tickets: OrderTicket[] };
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -69,223 +83,231 @@ const serif = {
   fontStyle: "italic" as const,
   fontWeight: 400,
 };
+const gradient = "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)";
+const primaryShadow =
+  "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 12px 30px -10px rgba(232,84,42,0.55), 0 24px 48px -16px rgba(184,56,26,0.45)";
 
-const POLL_INTERVAL_MS = 2000;
-const POLL_MAX_ATTEMPTS = 30; // 60s total
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+/** Entradas del pedido que ve esta sesión, con tipo y QR ya generado. */
+async function loadOrderTickets(orderId: string): Promise<OrderTicket[]> {
+  const fetchRows = () =>
+    supabase
+      .from("tickets")
+      .select(
+        "id, qr_token, status, tier_id, holder_first_name, holder_last_name, holder_email, buyer_first_name, buyer_last_name, buyer_email, transferred_to_user_id"
+      )
+      .eq("order_id", orderId)
+      .in("status", ["paid", "used"])
+      .order("created_at", { ascending: true });
+
+  let { data: rows } = await fetchRows();
+  if (!rows || rows.length === 0) {
+    // Recién confirmado: damos un respiro por si la réplica va por detrás.
+    await wait(2000);
+    ({ data: rows } = await fetchRows());
+  }
+  if (!rows || rows.length === 0) return [];
+
+  const tierIds = Array.from(
+    new Set(rows.map((r) => r.tier_id).filter((id): id is string => !!id))
+  );
+  const tierNames = new Map<string, string>();
+  if (tierIds.length > 0) {
+    const { data: tiers } = await supabase.from("ticket_tiers").select("id, name").in("id", tierIds);
+    (tiers ?? []).forEach((t) => tierNames.set(t.id, t.name));
+  }
+
+  return Promise.all(
+    rows.map(async (r) => {
+      let qrDataUrl: string | null = null;
+      try {
+        qrDataUrl = await QRCodeLib.toDataURL(r.qr_token, {
+          width: 360,
+          margin: 2,
+          color: { dark: "#0F0F0F", light: "#F4EEE2" },
+          errorCorrectionLevel: "M",
+        });
+      } catch (err) {
+        console.error("[TicketSuccess] QR", err);
+      }
+      return {
+        id: r.id,
+        qr_token: r.qr_token,
+        status: r.status,
+        tier_id: r.tier_id,
+        tier_name: r.tier_id ? tierNames.get(r.tier_id) ?? null : null,
+        holder: ticketHolderName(r),
+        qrDataUrl,
+      };
+    })
+  );
+}
 
 const TicketSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get("order_id");
+  const orderIdParam = searchParams.get("order_id");
   const sessionId = searchParams.get("session_id");
 
-  const [state, setState] = useState<PollState>("loading");
-  const [order, setOrder] = useState<OrderRow | null>(null);
-  const [event, setEvent] = useState<EventRow | null>(null);
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
+  const { state, retry } = useCheckoutConfirmation(sessionId, orderIdParam);
+  const [details, setDetails] = useState<Details>({ kind: "idle" });
 
-  // Carga el order/event/tickets (snapshot). Reusable para poll + post-confirmación.
-  const fetchSnapshot = useCallback(async () => {
-    if (!orderId && !sessionId) {
-      setErrorMsg(
-        "No se recibió referencia de tu compra. Si pagaste, revisa tu correo o tus tickets."
-      );
-      setState("error");
-      return null;
-    }
-    let query = supabase
-      .from("ticket_orders")
-      .select(
-        "id, event_id, status, total_cents, currency, buyer_email, buyer_user_id, paid_at"
-      );
-    query = orderId
-      ? query.eq("id", orderId)
-      : query.eq("stripe_session_id", sessionId!);
-    const { data: orderData, error: orderErr } = await query.maybeSingle();
-    if (orderErr) {
-       
-      console.error("[TicketSuccess] order fetch failed", orderErr);
-      setErrorMsg(orderErr.message);
-      setState("error");
-      return null;
-    }
-    if (!orderData) {
-      // RLS puede bloquear si la sesión del usuario no es la del comprador.
-      // Mostramos mensaje pero no como error crítico — el webhook puede aún
-      // no haber asignado buyer_user_id si el usuario pagó como anónimo.
-      return null;
-    }
-    setOrder(orderData as OrderRow);
+  const isPaid = state.phase === "paid";
+  const paidOrderId = state.phase === "paid" ? state.orderId ?? orderIdParam : null;
 
-    // Evento (lectura paralela)
-    const { data: evData } = await supabase
-      .from("events")
-      .select("id, title, date_start, venue_name, city, image_url")
-      .eq("id", orderData.event_id)
-      .maybeSingle();
-    if (evData) setEvent(evData as EventRow);
-
-    // Tickets — pueden ser 0 si pending todavía
-    const { data: tixData } = await supabase
-      .from("tickets")
-      .select("id, qr_token, status")
-      .eq("order_id", orderData.id)
-      .order("created_at", { ascending: true });
-    if (tixData) setTickets(tixData as TicketRow[]);
-
-    return orderData as OrderRow;
-  }, [orderId, sessionId]);
-
-  // Effect principal — orquesta carga inicial + poll + realtime
+  // Pagado → cargamos pedido, evento y entradas (solo con sesión: RLS).
   useEffect(() => {
-    if (!orderId && !sessionId) {
-      setErrorMsg(
-        "URL de éxito sin parámetros (?order_id / ?session_id). ¿Llegaste aquí directamente? Reintenta la compra."
-      );
-      setState("error");
-      return;
-    }
-
-    let finished = false;
+    if (!isPaid) return;
     let cancelled = false;
-    const finish = (next: PollState) => {
-      if (finished) return;
-      finished = true;
-      setState(next);
-    };
-
-    // Pide al backend que consulte Stripe directamente. Es la red de
-    // seguridad para casos donde el webhook nunca llega (cuentas Stripe
-    // desalineadas, signing secret roto, routing fail, etc.). El edge
-    // function `confirm-checkout-session` retrieve la session via API y
-    // llama a `mark_order_paid` si Stripe confirma que está paid.
-    const confirmViaStripeAPI = async () => {
-      if (!sessionId) return false;
+    (async () => {
+      setDetails({ kind: "loading" });
       try {
         const {
-          data: { session: authSession },
+          data: { session },
         } = await supabase.auth.getSession();
-        if (!authSession) return false;
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-checkout-session`;
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${authSession.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ session_id: sessionId }),
-        });
-        if (!resp.ok) return false;
-        const data = await resp.json();
-        return data?.status === "paid";
-      } catch {
-        return false;
-      }
-    };
-
-    // Carga inicial — quizás el webhook ya pasó (DB cache) o pedimos a
-    // Stripe directamente si no ha pasado.
-    (async () => {
-      const snap = await fetchSnapshot();
-      if (cancelled) return;
-      if (snap?.status === "paid") {
-        finish("paid");
-        return;
-      }
-      // Si la DB sigue 'pending', preguntamos a Stripe directamente.
-      const stripeConfirmed = await confirmViaStripeAPI();
-      if (cancelled) return;
-      if (stripeConfirmed) {
-        await fetchSnapshot();
-        finish("paid");
-      }
-    })();
-
-    // Realtime: cuando el webhook actualiza ticket_orders → 'paid', recargamos.
-    // Filtramos por id (si tenemos) o por stripe_session_id para no recibir
-    // eventos de otros orders.
-    const channel = supabase
-      .channel(`ticket-success-${orderId ?? sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "ticket_orders",
-          ...(orderId
-            ? { filter: `id=eq.${orderId}` }
-            : { filter: `stripe_session_id=eq.${sessionId}` }),
-        },
-        async (payload: any) => {
-          if (cancelled) return;
-          const next = payload.new;
-          if (!next) return;
-          if (next.status === "paid") {
-            await fetchSnapshot();
-            finish("paid");
-          }
-        }
-      )
-      .subscribe();
-
-    // Poll de respaldo (DB) + confirmación directa a Stripe cada 5 intentos
-    // (10s). Si Stripe dice paid pero el webhook no llegó, marcamos manual.
-    let attemptCount = 0;
-    const interval = setInterval(async () => {
-      if (finished || cancelled) return;
-      attemptCount++;
-      setAttempts(attemptCount);
-      const snap = await fetchSnapshot();
-      if (snap?.status === "paid") {
-        finish("paid");
-        return;
-      }
-      // Cada 5 intentos (10s) preguntamos a Stripe directamente
-      if (attemptCount % 5 === 0) {
-        const stripeConfirmed = await confirmViaStripeAPI();
-        if (!cancelled && stripeConfirmed) {
-          await fetchSnapshot();
-          finish("paid");
+        if (cancelled) return;
+        if (!session) {
+          setDetails({ kind: "no_session" });
           return;
         }
-      }
-      if (attemptCount >= POLL_MAX_ATTEMPTS) {
-        finish("timeout");
-      }
-    }, POLL_INTERVAL_MS);
+        if (!paidOrderId) {
+          setDetails({ kind: "not_visible" });
+          return;
+        }
 
+        const { data: order } = await supabase
+          .from("ticket_orders")
+          .select("id, event_id, status, total_cents, currency, buyer_email")
+          .eq("id", paidOrderId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!order) {
+          setDetails({ kind: "not_visible" });
+          return;
+        }
+
+        const [{ data: ev }, tickets] = await Promise.all([
+          supabase
+            .from("events")
+            .select("id, title, date_start, venue_name, city, image_url")
+            .eq("id", order.event_id)
+            .maybeSingle(),
+          loadOrderTickets(order.id),
+        ]);
+        if (cancelled) return;
+        setDetails({
+          kind: "ready",
+          order: order as OrderRow,
+          event: (ev as EventRow | null) ?? null,
+          tickets,
+        });
+      } catch (err) {
+        console.error("[TicketSuccess] no se pudo cargar el pedido", err);
+        if (!cancelled) setDetails({ kind: "not_visible" });
+      }
+    })();
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      supabase.removeChannel(channel);
     };
-  }, [orderId, sessionId, fetchSnapshot]);
+  }, [isPaid, paidOrderId]);
 
-  const formattedAmount = useMemo(() => {
-    if (!order) return null;
-    return `${(order.total_cents / 100).toFixed(2)} ${order.currency}`;
-  }, [order]);
+  const ready = details.kind === "ready" ? details : null;
+  const ticketCount = ready?.tickets.length ?? 0;
+  const walletPath = `/client-dashboard?wallet=${encodeURIComponent(ready?.order.event_id ?? "1")}`;
 
-  const formattedDate = useMemo(() => {
-    if (!event) return null;
-    return new Date(event.date_start).toLocaleString("es-ES", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, [event]);
+  // ---------------------------------------------------------------- copy
+  const busy = state.phase === "checking" || (state.phase === "pending" && !state.exhausted);
+  const tone: "ok" | "wait" | "bad" = isPaid ? "ok" : busy ? "wait" : "bad";
+
+  const eyebrow = isPaid
+    ? "Compra confirmada"
+    : state.phase === "checking"
+    ? "Procesando tu pago"
+    : state.phase === "pending"
+    ? "Aún confirmando"
+    : state.phase === "expired"
+    ? "Pago no completado"
+    : state.phase === "unverifiable"
+    ? "Pendiente de confirmar"
+    : "Ha habido un problema";
+
+  const accent = (word: string) => (
+    <span style={serif} className="text-orange-500">
+      {word}
+    </span>
+  );
+
+  const headline = isPaid ? (
+    ticketCount === 1 ? (
+      <>¡Tu entrada está {accent("lista")}!</>
+    ) : (
+      <>¡Tus entradas están {accent("listas")}!</>
+    )
+  ) : state.phase === "checking" ? (
+    <>Confirmando tu {accent("pago")}…</>
+  ) : state.phase === "pending" ? (
+    <>Estamos {accent("confirmando")} tu pago</>
+  ) : state.phase === "expired" ? (
+    <>La compra no se {accent("completó")}</>
+  ) : state.phase === "unverifiable" ? (
+    <>Inicia sesión para {accent("confirmar")}</>
+  ) : (
+    <>Algo salió mal</>
+  );
+
+  const errorStatus = state.phase === "error" ? state.httpStatus : 0;
+  const subtitle: React.ReactNode = (() => {
+    if (isPaid) {
+      const email = ready?.order.buyer_email;
+      return (
+        <>
+          Pago confirmado. Te hemos enviado un email
+          {email ? (
+            <>
+              {" "}a <span className="text-foreground">{email}</span>
+            </>
+          ) : null}{" "}
+          con tus entradas.
+          {details.kind === "no_session" &&
+            " Inicia sesión con la cuenta con la que compraste para verlas en Mis entradas."}
+          {details.kind === "not_visible" &&
+            " Las encontrarás en Mis entradas de la cuenta con la que hiciste la compra."}
+        </>
+      );
+    }
+    switch (state.phase) {
+      case "checking":
+        return "Estamos comprobando el pago con Stripe. Suele tardar unos segundos.";
+      case "pending":
+        return state.exhausted
+          ? "Stripe todavía no ha confirmado el pago. Si se completa, tus entradas aparecerán en Mis entradas. Puedes volver a comprobarlo."
+          : "Stripe todavía no nos ha confirmado el pago. Seguimos comprobándolo automáticamente; no cierres esta página.";
+      case "expired":
+        return "La sesión de pago caducó y no se ha realizado ningún cargo. Puedes volver a intentarlo cuando quieras.";
+      case "unverifiable":
+        return "Sin sesión no podemos comprobar el pago desde aquí. Inicia sesión con la cuenta de la compra: si el pago se completó, tus entradas estarán en Mis entradas.";
+      case "idle":
+        return "No hemos recibido la referencia de tu compra. Si has pagado, tus entradas aparecerán en Mis entradas.";
+      default:
+        return errorStatus === 404 || errorStatus === 403 || errorStatus === 400
+          ? "No encontramos este pedido. Si has pagado, tus entradas aparecerán en Mis entradas; si no, escríbenos a soporte."
+          : "No hemos podido comprobar el pago ahora mismo. Si se completó, tus entradas aparecerán en Mis entradas.";
+    }
+  })();
+
+  const ticketsSummary = (() => {
+    if (!ready || ticketCount === 0) return null;
+    const names = Array.from(new Set(ready.tickets.map((t) => t.tier_name || "Entrada")));
+    return names.length === 1 ? `${ticketCount} × ${names[0]}` : `${ticketCount} entradas`;
+  })();
 
   return (
     <div
       className="min-h-screen bg-background text-foreground"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
-      {/* Top bar — siempre presente */}
+      {/* Top bar */}
       <header
         className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:px-6"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
@@ -300,28 +322,24 @@ const TicketSuccess = () => {
       </header>
 
       <main className="mx-auto flex max-w-2xl flex-col items-center px-4 py-10 md:py-16">
-        {/* Subtle terracota glow behind icon */}
+        {/* Icono de estado con halo */}
         <div className="relative mb-8 flex h-28 w-28 items-center justify-center">
           <div
             aria-hidden="true"
             className="absolute inset-0 rounded-full"
             style={{
               background:
-                state === "paid"
+                tone === "ok"
                   ? "radial-gradient(circle, rgba(77,184,122,0.35) 0%, transparent 65%)"
-                  : state === "error" || state === "timeout"
-                  ? "radial-gradient(circle, rgba(232,84,42,0.30) 0%, transparent 65%)"
                   : "radial-gradient(circle, rgba(232,84,42,0.30) 0%, transparent 65%)",
               filter: "blur(20px)",
             }}
           />
-
-          {state === "paid" ? (
+          {tone === "ok" ? (
             <div
               className="relative flex h-24 w-24 items-center justify-center rounded-full"
               style={{
-                background:
-                  "linear-gradient(180deg, #5BCB8A 0%, #4DB87A 55%, #3C9F65 100%)",
+                background: "linear-gradient(180deg, #5BCB8A 0%, #4DB87A 55%, #3C9F65 100%)",
                 boxShadow:
                   "inset 0 1px 0 rgba(255,255,255,0.35), 0 18px 40px -10px rgba(77,184,122,0.55)",
                 animation: "pasify-pop 320ms cubic-bezier(.2,.9,.4,1.2) both",
@@ -329,12 +347,11 @@ const TicketSuccess = () => {
             >
               <Check className="h-12 w-12 text-white" strokeWidth={3} />
             </div>
-          ) : state === "loading" ? (
+          ) : tone === "wait" ? (
             <div
               className="relative flex h-24 w-24 items-center justify-center rounded-full"
               style={{
-                background:
-                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                background: gradient,
                 boxShadow:
                   "inset 0 1px 0 rgba(255,255,255,0.35), 0 18px 40px -10px rgba(232,84,42,0.55)",
               }}
@@ -351,7 +368,13 @@ const TicketSuccess = () => {
                 border: "1px solid rgba(232,84,42,0.4)",
               }}
             >
-              <TicketIcon className="h-12 w-12" strokeWidth={2.2} />
+              {state.phase === "expired" ? (
+                <XCircle className="h-12 w-12" strokeWidth={2.2} />
+              ) : state.phase === "pending" ? (
+                <Clock className="h-12 w-12" strokeWidth={2.2} />
+              ) : (
+                <TicketIcon className="h-12 w-12" strokeWidth={2.2} />
+              )}
             </div>
           )}
         </div>
@@ -362,81 +385,88 @@ const TicketSuccess = () => {
           style={{ ...mono, letterSpacing: "0.22em" }}
         >
           <span className="inline-block h-px w-5 bg-orange-500/70" />
-          {state === "paid"
-            ? "Compra confirmada"
-            : state === "loading"
-            ? "Procesando tu pago"
-            : state === "timeout"
-            ? "Aún confirmando"
-            : "Ha habido un problema"}
+          {eyebrow}
         </div>
 
-        {/* Headline */}
         <h1 className="mb-4 text-center text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
-          {state === "paid" ? (
-            <>
-              ¡Tu entrada está{" "}
-              <span style={serif} className="text-orange-500">
-                lista
-              </span>
-              !
-            </>
-          ) : state === "loading" ? (
-            <>
-              Confirmando tu{" "}
-              <span style={serif} className="text-orange-500">
-                pago
-              </span>
-              …
-            </>
-          ) : state === "timeout" ? (
-            <>
-              Estamos{" "}
-              <span style={serif} className="text-orange-500">
-                procesando
-              </span>{" "}
-              tu compra
-            </>
-          ) : (
-            <>Algo salió mal</>
-          )}
+          {headline}
         </h1>
 
-        {/* Subtitle */}
         <p className="mb-8 max-w-md text-center text-sm leading-relaxed text-muted-foreground md:text-base">
-          {state === "paid" && (
-            <>
-              Tu pago se ha confirmado y los tickets están disponibles en tu
-              Wallet con su código QR. Te hemos enviado una copia a{" "}
-              <span className="text-foreground">{order?.buyer_email}</span>.
-            </>
-          )}
-          {state === "loading" && (
-            <>
-              Stripe ha cobrado correctamente. Estamos sincronizando tu ticket
-              en la plataforma — suele tardar unos segundos.
-              {attempts > 5 && (
-                <span className="block mt-2 text-xs text-muted-foreground/70">
-                  Intento {attempts} de {POLL_MAX_ATTEMPTS}…
-                </span>
-              )}
-            </>
-          )}
-          {state === "timeout" && (
-            <>
-              Tu pago se ha procesado pero la confirmación del ticket está
-              tardando más de lo habitual. No te preocupes: recibirás un email
-              con tu QR en cuanto el sistema termine, y el ticket aparecerá en
-              tu Wallet automáticamente. Puedes cerrar esta página.
-            </>
-          )}
-          {state === "error" && errorMsg && (
-            <span className="text-destructive">{errorMsg}</span>
-          )}
+          {subtitle}
         </p>
 
-        {/* Order summary card — visible cuando ya tenemos datos */}
-        {(state === "paid" || state === "timeout") && event && order && (
+        {/* Tus entradas — QR de cada entrada del pedido */}
+        {isPaid && details.kind === "loading" && (
+          <div className="mb-8 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando tus entradas…
+          </div>
+        )}
+
+        {ready && ticketCount > 0 && (
+          <section className="mb-8 w-full" aria-label="Tus entradas">
+            <div
+              className="mb-3 inline-flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
+              style={{ ...mono, letterSpacing: "0.18em" }}
+            >
+              Tus entradas · {ticketCount.toString().padStart(2, "0")}
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {ready.tickets.map((t, i) => (
+                <article
+                  key={t.id}
+                  className="overflow-hidden rounded-2xl border border-border bg-card"
+                  style={{ boxShadow: "0 22px 50px -18px rgba(232,84,42,0.18)" }}
+                >
+                  <div
+                    className="flex items-center justify-between gap-2 px-4 py-3 text-white"
+                    style={{ background: "linear-gradient(160deg, #E8542A 0%, #B8381A 100%)" }}
+                  >
+                    <span className="truncate text-sm font-semibold">{t.tier_name || "Entrada"}</span>
+                    <span
+                      className="shrink-0 text-[10px] uppercase text-white/80"
+                      style={{ ...mono, letterSpacing: "0.16em" }}
+                    >
+                      {i + 1} de {ticketCount}
+                    </span>
+                  </div>
+                  <div
+                    className="flex flex-col items-center px-4 py-5"
+                    style={{ background: "#F4EEE2", color: "#0F0F0F" }}
+                  >
+                    {t.qrDataUrl ? (
+                      <img
+                        src={t.qrDataUrl}
+                        alt={`Código QR de la entrada ${i + 1}`}
+                        className="aspect-square w-full max-w-[220px] rounded-xl"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="aspect-square w-full max-w-[220px] animate-pulse rounded-xl bg-black/10" />
+                    )}
+                    {t.holder && <p className="mt-3 text-sm font-semibold">{t.holder}</p>}
+                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider opacity-50">
+                      Ref. {t.id.slice(0, 8)}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <p className="mt-3 text-center text-[12px] text-muted-foreground">
+              Muéstralas en la puerta desde aquí o desde Mis entradas en la app.
+            </p>
+          </section>
+        )}
+
+        {ready && ticketCount === 0 && (
+          <p className="mb-8 max-w-md text-center text-sm text-muted-foreground">
+            Tus entradas estarán en Mis entradas en unos segundos.
+          </p>
+        )}
+
+        {/* Resumen del pedido */}
+        {ready && ready.event && (
           <article
             className="mb-8 w-full overflow-hidden rounded-2xl border border-border bg-card"
             style={{
@@ -444,12 +474,11 @@ const TicketSuccess = () => {
                 "0 1px 0 rgba(255,255,255,0.02) inset, 0 22px 50px -18px rgba(232,84,42,0.18)",
             }}
           >
-            {/* Hero image */}
-            {event.image_url && (
+            {ready.event.image_url && (
               <div className="relative aspect-[16/7] w-full overflow-hidden">
                 <img
-                  src={event.image_url}
-                  alt={event.title}
+                  src={ready.event.image_url}
+                  alt={ready.event.title}
                   className="h-full w-full object-cover"
                   loading="eager"
                 />
@@ -473,163 +502,82 @@ const TicketSuccess = () => {
                   Evento
                 </div>
                 <h2 className="text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
-                  {event.title}
+                  {ready.event.title}
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
-                    <CalendarDays className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      Cuándo
-                    </div>
-                    <div className="mt-0.5 text-sm font-medium capitalize text-foreground">
-                      {formattedDate}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
-                    <MapPin className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      Dónde
-                    </div>
-                    <div className="mt-0.5 text-sm font-medium text-foreground">
-                      {event.venue_name ?? event.city}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
-                    <TicketIcon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      Tickets
-                    </div>
-                    <div className="mt-0.5 text-sm font-medium text-foreground">
-                      {tickets.length > 0
-                        ? `${tickets.length} × Entrada`
-                        : "1 × Entrada"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
-                    <Receipt className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      className="text-[10px] uppercase text-muted-foreground"
-                      style={{ ...mono, letterSpacing: "0.18em" }}
-                    >
-                      Total
-                    </div>
-                    <div className="mt-0.5 text-sm font-medium text-foreground" style={mono}>
-                      {formattedAmount}
-                    </div>
-                  </div>
-                </div>
+                <SummaryItem icon={<CalendarDays className="h-4 w-4" />} label="Cuándo">
+                  {formatEventDateTime(ready.event.date_start)}
+                </SummaryItem>
+                <SummaryItem icon={<MapPin className="h-4 w-4" />} label="Dónde">
+                  {ready.event.venue_name ?? ready.event.city}
+                </SummaryItem>
+                {ticketsSummary && (
+                  <SummaryItem icon={<TicketIcon className="h-4 w-4" />} label="Entradas">
+                    {ticketsSummary}
+                  </SummaryItem>
+                )}
+                <SummaryItem icon={<Receipt className="h-4 w-4" />} label="Total">
+                  <span style={mono}>
+                    {formatPriceCents(ready.order.total_cents, ready.order.currency)}
+                  </span>
+                </SummaryItem>
               </div>
 
               <div
                 className="border-t border-border pt-4 text-[10px] uppercase text-muted-foreground"
                 style={{ ...mono, letterSpacing: "0.18em" }}
               >
-                Order · {order.id.slice(0, 8)}
+                Pedido · {ready.order.id.slice(0, 8)}
               </div>
             </div>
           </article>
         )}
 
-        {/* CTAs — botones nativos con estilo Pasify premium (gradient
-            terracota primary + outline secondary, tap target >=52px para
-            móvil). Jerarquía: primary primero, secondary debajo. */}
+        {/* CTAs */}
         <div className="flex w-full max-w-md flex-col gap-3">
-          {/* Primary CTA — varía por estado */}
-          {(state === "paid" || state === "timeout") && (
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/client-dashboard${
-                    orderId || sessionId
-                      ? `?${orderId ? `order_id=${orderId}` : ""}${
-                          orderId && sessionId ? "&" : ""
-                        }${sessionId ? `session_id=${sessionId}` : ""}`
-                      : ""
-                  }`
-                )
-              }
-              className="group/btn relative inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition hover:-translate-y-0.5 md:text-base"
-              style={{
-                background:
-                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                boxShadow:
-                  "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 12px 30px -10px rgba(232,84,42,0.55), 0 24px 48px -16px rgba(184,56,26,0.45)",
-                letterSpacing: "-0.005em",
-              }}
-            >
+          {isPaid && details.kind !== "no_session" && (
+            <PrimaryButton onClick={() => navigate(walletPath)}>
               <TicketIcon className="h-5 w-5" />
-              Ver mis tickets
+              Ver en mi cartera
               <span
                 aria-hidden="true"
                 className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
               >
                 →
               </span>
-            </button>
+            </PrimaryButton>
           )}
 
-          {state === "loading" && (
-            <button
-              type="button"
-              onClick={() => navigate("/client-dashboard")}
-              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-sm font-semibold text-foreground transition hover:border-orange-500/60 hover:bg-card/80 md:text-base"
-              style={{ letterSpacing: "-0.005em" }}
-            >
-              <TicketIcon className="h-5 w-5" />
-              Ir al Wallet
-            </button>
+          {((isPaid && details.kind === "no_session") || state.phase === "unverifiable") && (
+            <PrimaryButton onClick={() => navigate("/login")}>
+              <LogIn className="h-5 w-5" />
+              Iniciar sesión
+            </PrimaryButton>
           )}
 
-          {state === "error" && (
-            <button
-              type="button"
-              onClick={() => navigate("/calendar")}
-              className="group/btn relative inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition hover:-translate-y-0.5 md:text-base"
-              style={{
-                background:
-                  "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                boxShadow:
-                  "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-                letterSpacing: "-0.005em",
-              }}
-            >
-              <TicketIcon className="h-5 w-5" />
+          {state.phase === "pending" && (
+            <SecondaryButton onClick={retry}>
+              <RotateCcw className="h-5 w-5" />
+              Comprobar de nuevo
+            </SecondaryButton>
+          )}
+
+          {state.phase === "error" && (
+            <PrimaryButton onClick={retry}>
+              <RotateCcw className="h-5 w-5" />
+              Reintentar
+            </PrimaryButton>
+          )}
+
+          {(state.phase === "expired" || state.phase === "error" || state.phase === "idle") && (
+            <SecondaryButton onClick={() => navigate("/calendar")}>
+              <CalendarDays className="h-5 w-5" />
               Volver al calendario
-              <span aria-hidden="true">→</span>
-            </button>
+            </SecondaryButton>
           )}
 
-          {/* Secondary CTA — siempre "Volver al inicio" como ghost */}
           <button
             type="button"
             onClick={() => navigate("/")}
@@ -640,8 +588,7 @@ const TicketSuccess = () => {
           </button>
         </div>
 
-        {/* Helper micro-copy bajo CTAs */}
-        {state === "paid" && tickets.length > 0 && (
+        {isPaid && ticketCount > 0 && (
           <p
             className="mt-8 text-center text-[10px] uppercase text-muted-foreground/70"
             style={{ ...mono, letterSpacing: "0.22em" }}
@@ -662,5 +609,64 @@ const TicketSuccess = () => {
     </div>
   );
 };
+
+const SummaryItem = ({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="flex items-start gap-3">
+    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
+      {icon}
+    </div>
+    <div className="min-w-0">
+      <div
+        className="text-[10px] uppercase text-muted-foreground"
+        style={{ ...mono, letterSpacing: "0.18em" }}
+      >
+        {label}
+      </div>
+      <div className="mt-0.5 text-sm font-medium text-foreground">{children}</div>
+    </div>
+  </div>
+);
+
+const PrimaryButton = ({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group/btn relative inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition hover:-translate-y-0.5 md:text-base"
+    style={{ background: gradient, boxShadow: primaryShadow, letterSpacing: "-0.005em" }}
+  >
+    {children}
+  </button>
+);
+
+const SecondaryButton = ({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-sm font-semibold text-foreground transition hover:border-orange-500/60 hover:bg-card/80 md:text-base"
+    style={{ letterSpacing: "-0.005em" }}
+  >
+    {children}
+  </button>
+);
 
 export default TicketSuccess;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -26,6 +26,14 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+import {
+  fileDateStamp,
+  formatCsvDateTime,
+  formatEurosCsv,
+  saveOrShareFile,
+  toCsv,
+  type CsvCell,
+} from "@/lib/saveOrShareFile";
 
 /**
  * PartnerReports — métricas y BI del partner con datos reales.
@@ -248,23 +256,44 @@ export const PartnerReports = () => {
     return grid;
   }, [tickets]);
 
-  const exportCsv = () => {
+  const [exporting, setExporting] = useState(false);
+
+  // CSV para Excel en español (";" y coma decimal), horas de Madrid y el
+  // título del evento en vez de su UUID. En la app se abre la hoja de
+  // compartir: el <a download> de antes no hacía nada en iOS/Android.
+  const exportCsv = async () => {
     if (tickets.length === 0) {
       toast({ title: "Nada que exportar", description: "Aún no tienes ventas en este rango." });
       return;
     }
-    const header = "id,event_id,status,amount_paid_cents,paid_at,buyer_email\n";
-    const lines = tickets.map((t) =>
-      [t.id, t.event_id, t.status, t.amount_paid_cents, t.paid_at ?? "", (t.buyer_email ?? "").replace(/,/g, ";")].join(",")
-    );
-    const csv = header + lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pasify-reports-${range}-${format(new Date(), "yyyyMMdd")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExporting(true);
+    try {
+      const statusLabel: Record<string, string> = { paid: "Pagada", used: "Usada" };
+      const rows: CsvCell[][] = [
+        ["Evento", "Estado", "Importe (€)", "Pagada el", "Usada el", "Email del comprador", "ID de la entrada"],
+        ...tickets.map((t): CsvCell[] => [
+          events.get(t.event_id)?.title ?? t.event_id,
+          statusLabel[t.status] ?? t.status,
+          formatEurosCsv(t.amount_paid_cents),
+          formatCsvDateTime(t.paid_at),
+          formatCsvDateTime(t.used_at),
+          t.buyer_email ?? "",
+          t.id,
+        ]),
+      ];
+      await saveOrShareFile({
+        filename: `pasify-ventas-${range}-${fileDateStamp()}.csv`,
+        mimeType: "text/csv;charset=utf-8",
+        data: toCsv(rows),
+        dialogTitle: "Exportar ventas",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error preparando el fichero";
+      console.error("[PartnerReports] exportCsv:", err);
+      toast({ title: "No se pudo exportar el CSV", description: msg, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -297,8 +326,16 @@ export const PartnerReports = () => {
               <SelectItem value="ytd">Año</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={exportCsv} disabled={tickets.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            onClick={() => void exportCsv()}
+            disabled={tickets.length === 0 || exporting}
+          >
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
             Exportar CSV
           </Button>
         </div>
@@ -588,9 +625,8 @@ const HoursHeatmap = ({ grid }: { grid: number[][] }) => {
           </div>
         ))}
         {grid.map((row, dow) => (
-          <>
+          <Fragment key={`row-${dow}`}>
             <div
-              key={`d-${dow}`}
               className="pr-1 text-right text-muted-foreground"
               style={mono}
             >
@@ -612,7 +648,7 @@ const HoursHeatmap = ({ grid }: { grid: number[][] }) => {
                 />
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
     </article>

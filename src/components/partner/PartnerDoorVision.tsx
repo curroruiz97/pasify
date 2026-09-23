@@ -25,6 +25,16 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 interface DetectionEvent {
   id: string;
   type: "match" | "mismatch" | "underage" | "blacklist" | "density";
@@ -166,13 +176,14 @@ export const PartnerDoorVision = () => {
                 className="mt-1 text-[12px] text-muted-foreground"
                 style={mono}
               >
-                Demo · Sin cámaras conectadas todavía · GDPR-ready en deploy real
+                Demo · Sin cámaras conectadas · Datos ficticios
               </div>
             </div>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" disabled>
             <Eye className="mr-2 h-4 w-4" />
             Ver feed
+            <DemoTag />
           </Button>
         </div>
       </section>
@@ -202,7 +213,7 @@ export const PartnerDoorVision = () => {
                 style={{ ...mono, letterSpacing: "0.2em" }}
               >
                 <Zap className="h-3 w-3" />
-                Detecciones en vivo
+                Detecciones simuladas
               </div>
               <h3 className="text-xl font-semibold tracking-tight text-foreground">
                 Stream
@@ -248,7 +259,7 @@ const CameraFeed = ({ events }: { events: DetectionEvent[] }) => {
             Cámara · Puerta principal
           </div>
           <h3 className="text-xl font-semibold tracking-tight text-foreground">
-            Stream en directo
+            Simulación de cámara
           </h3>
         </div>
         <span
@@ -270,7 +281,7 @@ const CameraFeed = ({ events }: { events: DetectionEvent[] }) => {
               style={{ background: "#FF7A4D" }}
             />
           </span>
-          REC
+          Demo
         </span>
       </header>
 
@@ -644,7 +655,7 @@ const Demographics = () => {
           <div className="flex items-start gap-2">
             <Sparkles className="mt-0.5 h-3 w-3 shrink-0" style={{ color: "#E8B04C" }} />
             <span>
-              <strong>IA · GDPR safe</strong> — La demografía se computa on-device sin guardar caras.
+              <strong>Datos ficticios</strong> — No hay cámaras ni modelo de visión conectados: estas cifras son de ejemplo.
             </span>
           </div>
         </div>

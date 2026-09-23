@@ -95,7 +95,7 @@ export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     navigate("/");
   };
 

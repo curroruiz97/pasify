@@ -4,9 +4,11 @@ import {
   Brain,
   Calendar,
   CheckCircle2,
+  History,
   Loader2,
   Sparkles,
   Target,
+  Ticket,
   TrendingUp,
   Users,
   Zap,
@@ -17,19 +19,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 /**
- * PartnerForecast — predicción real de venta para próximos eventos.
+ * PartnerForecast — previsión de venta de los próximos eventos.
  *
- * Backend: edge function `ai-forecast-event` que persiste en la tabla
- * `forecast_predictions(event_id, predicted_attendance, ci_low, ci_high,
- * confidence, factors, model_version, generated_at)` (mig 0021).
+ * Backend: edge function `ai-forecast-event`, que guarda en
+ * `forecast_predictions` (predicted_attendance, ci_low, ci_high, confidence,
+ * factors, model_version, generated_at).
  *
- * Antes este componente era mock puro (`forecastFor()` local, "142
- * eventos MAPE 11.4%" hardcoded). Ahora:
- *   1. Para cada evento próximo, hace SELECT a `forecast_predictions`
- *      pidiendo la última fila (DESC LIMIT 1).
- *   2. Si no hay predicción, botón "Generar" que invoca la edge function.
- *   3. MAPE se calcula sobre eventos pasados comparando
- *      `predicted_attendance` con `tickets_sold` real del evento.
+ * Honestidad de los números:
+ *   - La función solo predice de verdad con histórico (≥ 3 eventos pasados con
+ *     ventas del mismo local y ciudad en 6 meses): `factors.method =
+ *     "historical_mean_same_dow"`. Sin histórico devuelve un relleno
+ *     (`default_fallback`: el 60 % del aforo, o 200 si no hay aforo). Ese
+ *     relleno NO se enseña como previsión: se dice que aún no hay histórico y
+ *     se enseña el ritmo real de venta.
+ *   - La función no calcula ingresos (`predicted_revenue_cents` va vacío), así
+ *     que no se pinta ningún "0 € proyectados".
+ *   - Sin aforo no hay "% de ocupación".
+ *   - El error medio (MAPE) se mide solo con previsiones basadas en histórico.
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -43,9 +49,10 @@ export interface ForecastEvent {
   id: string;
   title: string;
   date_start: string;
+  /** Aforo del evento; null si no está definido (nunca se inventa). */
   capacity: number | null;
   tickets_sold: number;
-  price_cents: number;
+  status?: string;
 }
 
 interface PredictionRow {
@@ -56,7 +63,7 @@ interface PredictionRow {
   ci_low: number | null;
   ci_high: number | null;
   confidence: number | null;
-  factors: Record<string, unknown>;
+  factors: Record<string, unknown> | null;
   model_version: string | null;
   generated_at: string;
 }
@@ -65,13 +72,34 @@ interface Props {
   events: ForecastEvent[];
 }
 
+/** Único método de ai-forecast-event que sale de datos reales del local. */
+const HISTORY_METHOD = "historical_mean_same_dow";
+
+const isHistoryBased = (p: PredictionRow | null | undefined): boolean =>
+  !!p && (p.factors as { method?: unknown } | null)?.method === HISTORY_METHOD;
+
+const fmtInt = (n: number) => Math.round(n).toLocaleString("es-ES");
+
+/** Ritmo real de venta: vendidas y, si hay aforo, sobre cuánto. */
+const paceLabel = (event: ForecastEvent): { value: string; sub: string } => {
+  const sold = event.tickets_sold ?? 0;
+  if (event.capacity && event.capacity > 0) {
+    const pct = Math.round((sold / event.capacity) * 100);
+    return {
+      value: `${fmtInt(sold)} vendidas`,
+      sub: `de ${fmtInt(event.capacity)} de aforo · ${pct} %`,
+    };
+  }
+  return { value: `${fmtInt(sold)} vendidas`, sub: "Sin aforo definido" };
+};
+
 export const PartnerForecast = ({ events }: Props) => {
   const { toast } = useToast();
 
   const upcoming = useMemo(() => {
     const now = Date.now();
     return events
-      .filter((e) => new Date(e.date_start).getTime() > now)
+      .filter((e) => e.status !== "cancelled" && new Date(e.date_start).getTime() > now)
       .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime())
       .slice(0, 6);
   }, [events]);
@@ -83,17 +111,19 @@ export const PartnerForecast = ({ events }: Props) => {
 
   const [predictions, setPredictions] = useState<Record<string, PredictionRow | null>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<Set<string>>(new Set());
   const [mape, setMape] = useState<number | null>(null);
   const [historyCount, setHistoryCount] = useState(0);
 
-  // Carga: para cada evento próximo, última predicción
+  // Última predicción de cada evento próximo
   const loadPredictions = useCallback(async () => {
     if (upcoming.length === 0) {
       setLoading(false);
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       const ids = upcoming.map((e) => e.id);
       const { data, error } = await supabase
@@ -105,23 +135,22 @@ export const PartnerForecast = ({ events }: Props) => {
         .order("generated_at", { ascending: false });
       if (error) throw error;
 
-      // Quedarnos con la última por event_id
       const latest: Record<string, PredictionRow | null> = {};
       for (const id of ids) latest[id] = null;
-      for (const row of (data ?? []) as PredictionRow[]) {
+      for (const row of (data ?? []) as unknown as PredictionRow[]) {
         if (latest[row.event_id] === null) latest[row.event_id] = row;
       }
       setPredictions(latest);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al cargar predicciones";
+      const msg = err instanceof Error ? err.message : "Error al cargar las previsiones";
       console.error("[PartnerForecast] loadPredictions:", err);
-      toast({ title: "No se pudieron cargar predicciones", description: msg, variant: "destructive" });
+      setLoadError(msg);
     } finally {
       setLoading(false);
     }
-  }, [upcoming, toast]);
+  }, [upcoming]);
 
-  // MAPE real sobre eventos pasados con predicción
+  // Error medio (MAPE) de las previsiones con histórico de eventos ya pasados
   const loadMape = useCallback(async () => {
     if (pastEvents.length === 0) {
       setMape(null);
@@ -132,30 +161,24 @@ export const PartnerForecast = ({ events }: Props) => {
       const pastIds = pastEvents.map((e) => e.id);
       const { data } = await supabase
         .from("forecast_predictions")
-        .select("event_id, predicted_attendance, generated_at")
+        .select("event_id, predicted_attendance, generated_at, factors")
         .in("event_id", pastIds)
         .order("generated_at", { ascending: false });
-      const rows = (data ?? []) as Array<{ event_id: string; predicted_attendance: number }>;
-      // Última predicción por evento pasado
+      const rows = (data ?? []) as unknown as Array<{
+        event_id: string;
+        predicted_attendance: number;
+        factors: Record<string, unknown> | null;
+      }>;
       const seen = new Set<string>();
-      const lastPred: Array<{ event_id: string; predicted: number }> = [];
+      let total = 0;
+      let count = 0;
       for (const r of rows) {
         if (seen.has(r.event_id)) continue;
         seen.add(r.event_id);
-        lastPred.push({ event_id: r.event_id, predicted: r.predicted_attendance });
-      }
-      if (lastPred.length === 0) {
-        setMape(null);
-        setHistoryCount(0);
-        return;
-      }
-      // Cálculo MAPE
-      let total = 0;
-      let count = 0;
-      for (const p of lastPred) {
-        const real = pastEvents.find((e) => e.id === p.event_id)?.tickets_sold ?? 0;
+        if ((r.factors as { method?: unknown } | null)?.method !== HISTORY_METHOD) continue;
+        const real = pastEvents.find((e) => e.id === r.event_id)?.tickets_sold ?? 0;
         if (real === 0) continue;
-        total += Math.abs(p.predicted - real) / real;
+        total += Math.abs(r.predicted_attendance - real) / real;
         count++;
       }
       setMape(count > 0 ? (total / count) * 100 : null);
@@ -179,20 +202,24 @@ export const PartnerForecast = ({ events }: Props) => {
         body: { event_id: eventId },
       });
       if (error) throw error;
-      toast({
-        title: "Predicción generada",
-        description: "El forecast IA ha persistido en tu organización.",
-      });
-      // Re-cargar para que muestre la nueva
-      await loadPredictions();
-      // Si la edge function devuelve la predicción directamente, mergemos
-      if (data && (data as PredictionRow).id) {
-        setPredictions((prev) => ({ ...prev, [eventId]: data as PredictionRow }));
+      const prediction = (data as { prediction?: PredictionRow } | null)?.prediction ?? null;
+      if (prediction?.id) {
+        setPredictions((prev) => ({ ...prev, [eventId]: prediction }));
       }
+      if (prediction && !isHistoryBased(prediction)) {
+        toast({
+          title: "Aún no hay histórico suficiente",
+          description:
+            "Para prever la venta hacen falta al menos 3 eventos pasados con ventas en la misma ciudad.",
+        });
+      } else {
+        toast({ title: "Previsión calculada" });
+      }
+      await loadPredictions();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error generando predicción";
+      const msg = err instanceof Error ? err.message : "Error calculando la previsión";
       console.error("[PartnerForecast] generate:", err);
-      toast({ title: "Error al generar predicción", description: msg, variant: "destructive" });
+      toast({ title: "No se pudo calcular la previsión", description: msg, variant: "destructive" });
     } finally {
       setGenerating((s) => {
         const next = new Set(s);
@@ -205,20 +232,18 @@ export const PartnerForecast = ({ events }: Props) => {
   if (upcoming.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center text-sm text-muted-foreground">
-        Publica un evento futuro para activar el forecast con IA.
+        Cuando tengas un evento próximo podrás calcular aquí su previsión de venta.
       </div>
     );
   }
 
-  // Stats del hero: solo sobre eventos con predicción
-  const predicted = Object.values(predictions).filter((p): p is PredictionRow => p !== null);
+  // Cabecera: solo previsiones con histórico
+  const predicted = Object.values(predictions).filter((p): p is PredictionRow => isHistoryBased(p));
   const totalPredicted = predicted.reduce((s, p) => s + p.predicted_attendance, 0);
-  const totalRevenue = predicted.reduce(
-    (s, p) => s + (p.predicted_revenue_cents ?? 0),
-    0
-  );
   const highConf = predicted.filter((p) => (p.confidence ?? 0) >= 0.7).length;
-  const avgConfPct = predicted.length > 0 ? Math.round((highConf / predicted.length) * 100) : 0;
+  const highConfPct = predicted.length > 0 ? Math.round((highConf / predicted.length) * 100) : 0;
+  const onlyFallbacks =
+    predicted.length === 0 && Object.values(predictions).some((p) => p !== null);
 
   return (
     <div className="space-y-6">
@@ -239,67 +264,111 @@ export const PartnerForecast = ({ events }: Props) => {
           style={{ background: "rgba(232,84,42,0.24)", filter: "blur(80px)" }}
         />
 
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
+        <div className="relative flex items-start gap-3">
+          <div
+            className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-white"
+            style={{
+              background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 20px -8px rgba(232,84,42,0.6)",
+            }}
+          >
+            <Brain className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
             <div
-              className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-white"
-              style={{
-                background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                boxShadow:
-                  "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 20px -8px rgba(232,84,42,0.6)",
-              }}
+              className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+              style={{ ...mono, letterSpacing: "0.22em" }}
             >
-              <Brain className="h-6 w-6" />
+              <Sparkles className="h-3 w-3" />
+              Forecast · IA
             </div>
-            <div>
-              <div
-                className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-                style={{ ...mono, letterSpacing: "0.22em" }}
-              >
-                <Sparkles className="h-3 w-3" />
-                Forecast · IA
-              </div>
-              <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
-                {predicted.length > 0 ? (
-                  <>
-                    Predicción: <span style={serif} className="text-orange-500">{totalPredicted.toLocaleString("es-ES")}</span> entradas
-                  </>
-                ) : (
-                  <>Genera tu primera <span style={serif} className="text-orange-500">predicción</span></>
-                )}
-              </h2>
-              <div className="mt-1 text-[12px] text-muted-foreground" style={mono}>
-                {predicted.length} / {upcoming.length} eventos predichos · {(totalRevenue / 100).toFixed(0)}€ proyectados · {avgConfPct}% alta confianza
-              </div>
+            <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
+              {predicted.length > 0 ? (
+                <>
+                  Previsión:{" "}
+                  <span style={serif} className="text-orange-500">
+                    {fmtInt(totalPredicted)}
+                  </span>{" "}
+                  entradas
+                </>
+              ) : onlyFallbacks ? (
+                <>
+                  Aún no hay{" "}
+                  <span style={serif} className="text-orange-500">
+                    histórico
+                  </span>{" "}
+                  suficiente
+                </>
+              ) : (
+                <>
+                  Calcula tu primera{" "}
+                  <span style={serif} className="text-orange-500">
+                    previsión
+                  </span>
+                </>
+              )}
+            </h2>
+            <div className="mt-1 text-[12px] text-muted-foreground" style={mono}>
+              {predicted.length > 0
+                ? `${predicted.length} de ${upcoming.length} eventos con previsión · ${highConfPct} % con confianza alta`
+                : "La previsión se basa en tus eventos pasados: hacen falta al menos 3 con ventas en la misma ciudad en los últimos 6 meses."}
             </div>
           </div>
         </div>
 
         <div className="relative mt-5 grid grid-cols-3 gap-3">
-          <ModelStat label="Histórico medido" value={`${historyCount} ${historyCount === 1 ? "evento" : "eventos"}`} />
-          <ModelStat label="MAPE" value={mape === null ? "—" : `${mape.toFixed(1)}%`} />
-          <ModelStat label="Modelo" value={predicted[0]?.model_version ?? "v1"} />
+          <ModelStat
+            label="Histórico medido"
+            value={`${historyCount} ${historyCount === 1 ? "evento" : "eventos"}`}
+          />
+          <ModelStat label="Error medio" value={mape === null ? "—" : `${mape.toFixed(1)} %`} />
+          <ModelStat label="Modelo" value={predicted[0]?.model_version ?? "—"} />
         </div>
       </section>
 
       {loading && (
         <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
-          Cargando predicciones…
+          Cargando previsiones…
         </div>
       )}
 
-      <section className="space-y-4">
-        {upcoming.map((event) => (
-          <ForecastCard
-            key={event.id}
-            event={event}
-            prediction={predictions[event.id] ?? null}
-            generating={generating.has(event.id)}
-            onGenerate={() => void generate(event.id)}
-          />
-        ))}
-      </section>
+      {!loading && loadError && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+          style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground">
+              No pudimos cargar las previsiones
+            </div>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Detalle: {loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadPredictions()}
+            className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-orange-500/40"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {!loading && !loadError && (
+        <section className="space-y-4">
+          {upcoming.map((event) => (
+            <ForecastCard
+              key={event.id}
+              event={event}
+              prediction={predictions[event.id] ?? null}
+              generating={generating.has(event.id)}
+              onGenerate={() => void generate(event.id)}
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 };
@@ -312,11 +381,25 @@ const ModelStat = ({ label, value }: { label: string; value: string }) => (
     >
       {label}
     </div>
-    <div className="mt-0.5 text-sm font-bold text-foreground" style={mono}>
+    <div className="mt-0.5 truncate text-sm font-bold text-foreground" style={mono}>
       {value}
     </div>
   </div>
 );
+
+/** Factores de la previsión en lenguaje claro; lo desconocido no se enseña. */
+const describeFactors = (factors: Record<string, unknown> | null): string[] => {
+  if (!factors) return [];
+  const { sample_size: sampleSize, mean, stddev, day_of_week: dayOfWeek } = factors;
+  const out: string[] = [];
+  if (typeof sampleSize === "number") {
+    out.push(`${sampleSize} ${sampleSize === 1 ? "evento comparable" : "eventos comparables"}`);
+  }
+  if (typeof mean === "number") out.push(`media ${fmtInt(mean)} entradas`);
+  if (typeof stddev === "number") out.push(`desviación ± ${fmtInt(stddev)}`);
+  if (typeof dayOfWeek === "string") out.push(`día del evento: ${dayOfWeek}`);
+  return out;
+};
 
 const ForecastCard = ({
   event,
@@ -330,9 +413,12 @@ const ForecastCard = ({
   onGenerate: () => void;
 }) => {
   const date = new Date(event.date_start);
-  const capacity = event.capacity ?? 0;
+  const capacity = event.capacity && event.capacity > 0 ? event.capacity : null;
+  const pace = paceLabel(event);
 
-  if (!prediction) {
+  // Sin previsión o con el relleno sin histórico: nunca se enseña como previsión.
+  if (!prediction || !isHistoryBased(prediction)) {
+    const noHistory = !!prediction;
     return (
       <article className="rounded-2xl border border-border bg-card p-5">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -345,24 +431,52 @@ const ForecastCard = ({
               {format(date, "EEEE d MMM · HH:mm", { locale: es })}h
             </div>
             <h3 className="text-lg font-semibold text-foreground">{event.title}</h3>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Aforo {capacity > 0 ? capacity.toLocaleString("es-ES") : "—"} · Vendidos {event.tickets_sold}
-            </div>
           </div>
           <button
             type="button"
             onClick={onGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
-            style={{
-              background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 16px -6px rgba(232,84,42,0.5)",
-            }}
+            className={
+              noHistory
+                ? "inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-border bg-background px-3 py-1.5 text-[11px] text-foreground transition hover:border-orange-500/50 disabled:opacity-60"
+                : "inline-flex shrink-0 items-center gap-2 self-start rounded-full px-4 py-2 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+            }
+            style={
+              noHistory
+                ? undefined
+                : {
+                    background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 16px -6px rgba(232,84,42,0.5)",
+                  }
+            }
           >
-            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
-            {generating ? "Generando…" : "Generar predicción"}
+            {generating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : noHistory ? (
+              <Zap className="h-3.5 w-3.5" />
+            ) : (
+              <Brain className="h-3.5 w-3.5" />
+            )}
+            {generating ? "Calculando…" : noHistory ? "Volver a calcular" : "Calcular previsión"}
           </button>
         </header>
+
+        {noHistory && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-background/40 p-3 text-sm text-muted-foreground">
+            <History className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+            <p>
+              <span className="font-medium text-foreground">
+                Aún no hay histórico suficiente para predecir.
+              </span>{" "}
+              Hacen falta al menos 3 eventos pasados con ventas en la misma ciudad.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Stat icon={<Ticket className="h-4 w-4" />} label="Ritmo actual" value={pace.value} sub={pace.sub} />
+        </div>
       </article>
     );
   }
@@ -370,18 +484,12 @@ const ForecastCard = ({
   const conf = prediction.confidence ?? 0;
   const confCfg =
     conf >= 0.7
-      ? { color: "#4DB87A", label: "Alta", Icon: CheckCircle2 }
+      ? { color: "#4DB87A", label: "Confianza alta", Icon: CheckCircle2 }
       : conf >= 0.4
-      ? { color: "#E8B04C", label: "Media", Icon: TrendingUp }
-      : { color: "#B8381A", label: "Baja", Icon: AlertTriangle };
+      ? { color: "#E8B04C", label: "Confianza media", Icon: TrendingUp }
+      : { color: "#B8381A", label: "Confianza baja", Icon: AlertTriangle };
 
-  const occupancyPct = capacity > 0 ? (prediction.predicted_attendance / capacity) * 100 : 0;
-
-  // Factors: forecasted como JSON ({ method, sample_size, dow_match, etc. })
-  const factors = Object.entries(prediction.factors ?? {})
-    .filter(([k]) => k !== "method") // method ya se muestra como version
-    .map(([k, v]) => ({ key: k, value: String(v) }))
-    .slice(0, 6);
+  const factors = describeFactors(prediction.factors);
 
   return (
     <article
@@ -423,7 +531,7 @@ const ForecastCard = ({
             type="button"
             onClick={onGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-[11px] text-foreground transition hover:border-orange-500/50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-[11px] text-foreground transition hover:border-orange-500/50 disabled:opacity-60"
           >
             {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
             Recalcular
@@ -434,25 +542,29 @@ const ForecastCard = ({
       <div className="relative mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Stat
           icon={<Users className="h-4 w-4" />}
-          label="Predicción"
-          value={prediction.predicted_attendance.toLocaleString("es-ES")}
+          label="Previsión"
+          value={`${fmtInt(prediction.predicted_attendance)} entradas`}
           sub={
             prediction.ci_low !== null && prediction.ci_high !== null
-              ? `IC ${prediction.ci_low}–${prediction.ci_high}`
+              ? `Entre ${fmtInt(prediction.ci_low)} y ${fmtInt(prediction.ci_high)}`
               : ""
           }
         />
+        {capacity !== null ? (
+          <Stat
+            icon={<Target className="h-4 w-4" />}
+            label="Ocupación prevista"
+            value={`${Math.round((prediction.predicted_attendance / capacity) * 100)} %`}
+            sub={`Aforo ${fmtInt(capacity)}`}
+          />
+        ) : (
+          <Stat icon={<Target className="h-4 w-4" />} label="Ocupación prevista" value="—" sub="Sin aforo definido" />
+        )}
         <Stat
-          icon={<Target className="h-4 w-4" />}
-          label="Ocupación"
-          value={`${occupancyPct.toFixed(0)}%`}
-          sub={capacity > 0 ? `Aforo ${capacity.toLocaleString("es-ES")}` : ""}
-        />
-        <Stat
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Ingresos proyectados"
-          value={`${((prediction.predicted_revenue_cents ?? 0) / 100).toFixed(0)}€`}
-          sub={`Generado ${format(new Date(prediction.generated_at), "d MMM HH:mm", { locale: es })}`}
+          icon={<Ticket className="h-4 w-4" />}
+          label="Ritmo actual"
+          value={pace.value}
+          sub={`${pace.sub} · calculada ${format(new Date(prediction.generated_at), "d MMM HH:mm", { locale: es })}`}
         />
       </div>
 
@@ -462,17 +574,16 @@ const ForecastCard = ({
             className="mb-2 text-[10px] uppercase text-muted-foreground"
             style={{ ...mono, letterSpacing: "0.18em" }}
           >
-            Factores explicables
+            En qué se basa
           </div>
           <div className="flex flex-wrap gap-2">
             {factors.map((f) => (
               <span
-                key={f.key}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px]"
+                key={f}
+                className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground"
                 style={mono}
               >
-                <span className="text-muted-foreground">{f.key}</span>
-                <span className="text-foreground">· {f.value}</span>
+                {f}
               </span>
             ))}
           </div>

@@ -102,7 +102,8 @@ const RegisterPartner = () => {
       }
 
       if (authData.user) {
-        // 1) Profile básico (datos de contacto / persona).
+        // 1) Profile básico (datos de contacto / persona). El estado de la
+        //    cuenta (account_status) lo fija el servidor, no el cliente.
         const { error: profileError } = await supabase
           .from("profiles")
           .update({
@@ -112,9 +113,6 @@ const RegisterPartner = () => {
             business_city: formData.businessCity,
             business_phone: formData.businessPhone,
             business_category: formData.businessCategory,
-            // Auto-approvazione: por ahora el locale entra inmediatamente;
-            // admin puede "Rechazar" después si hace falta.
-            account_status: "approved",
           })
           .eq("id", authData.user.id);
         if (profileError) throw profileError;
@@ -175,14 +173,12 @@ const RegisterPartner = () => {
             .eq("brand_id", brandRow.id);
         }
 
-        // 6) Iniciar trial (RPC v2 en mig 20260513130000 — devuelve TABLE).
-        //    No-fatal si falla (p.ej. trial deshabilitado en app_settings):
-        //    el partner puede empezar trial manualmente desde PartnerChoosePlan.
-        const { error: trialErr } = await supabase.rpc("start_partner_trial", {
-          _org_id: orgId,
-        });
-        if (trialErr) {
-          console.warn("[RegisterPartner] start_partner_trial falló:", trialErr.message);
+        // 6) Plan gratuito (ya no hay prueba ni planes de pago). No-fatal:
+        //    si falla, PartnerGate lo manda a PartnerChoosePlan, que vuelve
+        //    a llamar a la misma RPC (es idempotente).
+        const { error: planErr } = await supabase.rpc("claim_partner_free_plan");
+        if (planErr) {
+          console.warn("[RegisterPartner] claim_partner_free_plan falló:", planErr.message);
         }
 
         toast({ title: "¡Cuenta creada!", description: "Bienvenido a Pasify." });
@@ -202,7 +198,7 @@ const RegisterPartner = () => {
           Llena tu local <span style={serif} className="text-orange-200">cada noche</span>.
         </>
       }
-      subline="Únete a Pasify y empieza a vender tickets para tus eventos. Sin papel, sin colas, sin fricción — cobras directo a tu cuenta Stripe."
+      subline="Únete a Pasify y empieza a vender tickets para tus eventos. Sin papel, sin colas, sin fricción: Pasify cobra las entradas por ti y te liquida lo vendido."
       imageUrl="/partner-hero.jpg"
     >
       <motion.div

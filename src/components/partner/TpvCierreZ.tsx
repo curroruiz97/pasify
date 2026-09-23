@@ -21,6 +21,16 @@ const serif = {
   fontWeight: 400,
 };
 
+/** Maqueta sin backend: las acciones van deshabilitadas y marcadas con esta etiqueta. */
+const DemoTag = () => (
+  <span
+    className="rounded border border-current px-1 py-px text-[9px] font-medium uppercase leading-none opacity-70"
+    style={{ ...mono, letterSpacing: "0.14em" }}
+  >
+    Demo
+  </span>
+);
+
 interface Shift {
   id: string;
   user: string;
@@ -79,7 +89,7 @@ const mockShifts: Shift[] = [
  */
 export const TpvCierreZ = () => {
   const today = new Date();
-  const [shifts, setShifts] = useState<Shift[]>(mockShifts);
+  const [shifts] = useState<Shift[]>(mockShifts);
   const [countingId, setCountingId] = useState<string | null>(null);
   const [countedCash, setCountedCash] = useState<string>("");
 
@@ -95,14 +105,6 @@ export const TpvCierreZ = () => {
   }, [shifts]);
 
   const gross = totals.cash + totals.card - totals.refund;
-
-  const closeShift = (id: string) => {
-    setShifts((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, closedAt: new Date() } : s))
-    );
-    setCountingId(null);
-    setCountedCash("");
-  };
 
   return (
     <div>
@@ -139,9 +141,10 @@ export const TpvCierreZ = () => {
             </div>
           </div>
 
-          <Button variant="outline">
+          <Button variant="outline" disabled>
             <Download className="mr-2 h-4 w-4" />
             Exportar PDF
+            <DemoTag />
           </Button>
         </div>
       </header>
@@ -309,9 +312,10 @@ export const TpvCierreZ = () => {
                           >
                             Cancelar
                           </Button>
-                          <Button size="sm" onClick={() => closeShift(s.id)}>
+                          <Button size="sm" disabled>
                             <Lock className="mr-1.5 h-3.5 w-3.5" />
                             Cerrar caja
+                            <DemoTag />
                           </Button>
                         </div>
                       </div>

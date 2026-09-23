@@ -96,15 +96,21 @@ const Calendar = () => {
     (async () => {
       // Pasify: la participación se materializa con un ticket pagado, no con
       // un row en `event_participants`. Consultamos `tickets` con status
-      // 'paid' o 'used' para saber a qué eventos ya tiene acceso el user.
+      // 'paid' o 'used' que el usuario tiene AHORA: comprados y no
+      // transferidos, o transferidos a él (misma regla que la RLS).
       const { data } = await supabase
         .from("tickets")
-        .select("event_id")
-        .eq("buyer_user_id", authedUserId)
+        .select("event_id, buyer_user_id, transferred_to_user_id")
+        .or(`buyer_user_id.eq.${authedUserId},transferred_to_user_id.eq.${authedUserId}`)
         .in("event_id", eventIds)
         .in("status", ["paid", "used"]);
       if (cancelled) return;
-      setParticipantIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)));
+      const held = (data ?? []).filter((r) =>
+        r.transferred_to_user_id
+          ? r.transferred_to_user_id === authedUserId
+          : r.buyer_user_id === authedUserId
+      );
+      setParticipantIds(new Set(held.map((r) => r.event_id)));
     })();
     return () => {
       cancelled = true;
@@ -164,10 +170,11 @@ const Calendar = () => {
     localStorage.setItem("selectedCountry", country);
   };
 
-  // Hook compartido de compra. Encapsula tier lookup, auth gate, payload a
+  // Hook compartido de compra. Encapsula auth gate, selector de tipo de
+  // entrada y cantidad (`checkoutSheet`, hay que renderizarlo), payload a
   // `stripe-create-checkout` y redirect a hosted checkout. La lógica vive
   // en `src/hooks/useTicketCheckout.ts` y la usa también `PublicPartnerPage`.
-  const { checkout: buyTicket, pendingId: buyingId } = useTicketCheckout();
+  const { checkout: buyTicket, pendingId: buyingId, checkoutSheet } = useTicketCheckout();
 
   // handleParticipate — wrapper específico del Calendar que añade dos atajos
   // antes de delegar al hook:
@@ -189,7 +196,13 @@ const Calendar = () => {
     // "loading" instantáneo (además del pendingId del hook).
     setParticipatingIds((prev) => new Set(prev).add(event.id));
     try {
-      await buyTicket({ id: event.id, title: event.title });
+      // Abre el selector de entradas (tipo, cantidad y total) del evento.
+      await buyTicket({
+        id: event.id,
+        title: event.title,
+        dateStart: event.start_date,
+        place: event.location_name ?? event.profiles?.business_name ?? event.city ?? null,
+      });
     } finally {
       setParticipatingIds((prev) => {
         const next = new Set(prev);
@@ -198,10 +211,6 @@ const Calendar = () => {
       });
     }
   };
-  // Marker para evitar unused-var warning en eslint sobre `buyingId`. Se
-  // expone aquí por si en el futuro el Calendar necesita reflejar el
-  // estado de carga del hook directamente en la UI.
-  void buyingId;
 
   const handleBack = () => {
     if (isAuthed) {
@@ -360,7 +369,7 @@ const Calendar = () => {
                 event={ev}
                 isAuthed={isAuthed}
                 isParticipant={participantIds.has(ev.id)}
-                participating={participatingIds.has(ev.id)}
+                participating={participatingIds.has(ev.id) || buyingId === ev.id}
                 highlighted={highlightedId === ev.id}
                 onParticipate={handleParticipate}
               />
@@ -377,6 +386,9 @@ const Calendar = () => {
         selectedCountry={selectedCountry}
         onCountryChange={handleCountryChange}
       />
+
+      {/* Selector de entradas del hook de compra */}
+      {checkoutSheet}
     </div>
   );
 };

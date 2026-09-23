@@ -103,7 +103,7 @@ export const ClientConcierge = () => {
       <SupportChat mode="client" />
 
       <p className="text-[11px] text-muted-foreground" style={mono}>
-        Tiempo medio respuesta · &lt; 5 min en horario de eventos
+        Te respondemos en horario laboral, de lunes a viernes
       </p>
     </div>
   );

@@ -1,5 +1,4 @@
-import { Capacitor } from "@capacitor/core";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
+  AlertTriangle,
   LogOut,
   LayoutDashboard,
   Calendar,
@@ -16,14 +16,12 @@ import {
   MessageCircle,
   Plus,
   Ticket,
-  Euro,
   Users as UsersIcon,
   Loader2,
   Radio,
   Copy,
   MoreVertical,
   Receipt,
-  FileText,
   Music,
   Trash2,
   Menu,
@@ -31,6 +29,7 @@ import {
   HelpCircle,
   MoreHorizontal,
   Pencil,
+  RefreshCcw,
 } from "lucide-react";
 import QRScanner from "@/components/partner/QRScanner";
 import Wordmark from "@/components/Wordmark";
@@ -42,7 +41,6 @@ import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
 import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
 import { usePartnerContext } from "@/hooks/usePartnerContext";
 import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
-import { downloadEventReportPdf, buildDemoEventReport } from "@/lib/eventReportPdf";
 import { FestivalBuilder } from "@/components/partner/FestivalBuilder";
 import { PartnerCRM } from "@/components/partner/PartnerCRM";
 import { PartnerSalesChannels } from "@/components/partner/PartnerSalesChannels";
@@ -57,6 +55,7 @@ import { PartnerAppMarketplace } from "@/components/partner/PartnerAppMarketplac
 import { PartnerWhiteLabel } from "@/components/partner/PartnerWhiteLabel";
 import { PartnerDoorVision } from "@/components/partner/PartnerDoorVision";
 import { PartnerAutoPilot } from "@/components/partner/PartnerAutoPilot";
+import { SectionBoundary } from "@/components/partner/SectionBoundary";
 import { IndustryBenchmarks } from "@/components/admin/IndustryBenchmarks";
 import { Megaphone, Gem, Briefcase, Wand2, Brain, Gauge, Wifi, Plug, Crown, ScanFace, Bot, BarChart3, Workflow, ChevronRight } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
@@ -85,6 +84,9 @@ import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
 import { StatusBadge } from "@/components/partner/StatusBadge";
+import { withTimeout, TimeoutError } from "@/lib/withTimeout";
+import { isNativeApp } from "@/lib/platform";
+import { listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
 
 type Section =
   | "metricas"
@@ -112,23 +114,22 @@ type Section =
 type NavNode = NavTreeNode<Section>;
 
 /**
- * SECCIONES QUE HOY SON MAQUETA — FUERA DE LA APP.
+ * SECCIONES MAQUETA — OCULTAS SALVO EN LA ORGANIZACIÓN DE DEMO.
  *
- * Estas pantallas no hablan con la base de datos: ni una sola llamada a
- * Supabase en sus ~7.500 lineas juntas. Lo que ensenan (clientes del CRM,
- * campanas, mesas VIP, liquidaciones al equipo, cierres de caja) son datos
- * inventados en el propio fichero, y sus botones no hacen nada.
+ * Estas pantallas enseñan datos inventados en el propio fichero (clientes del
+ * CRM, campañas, mesas VIP, liquidaciones al equipo, cierres de caja…) o
+ * funciones a medio construir (Pricing, Cashless), y muchos de sus botones no
+ * hacen nada.
  *
- * POR QUE SE ESCONDEN EN EL MOVIL Y NO EN LA WEB. En la web sirven de
- * escaparate para ensenar a donde va el producto en una demo comercial. Dentro
- * de la app son dos problemas. Apple acaba de rechazar la 1.0 (8) por la
- * directriz 2.1(a) —"la app tiene fallos"— y el fallo era un boton que no
- * respondia; un revisor que entre con la cuenta de local y abra "CRM" o
- * "Equipo" encuentra ese mismo fallo repetido casi sesenta veces. El segundo
- * problema no es de Apple: un local de verdad que entre desde el movil ve
- * cifras inventadas sobre su propio negocio.
+ * Regla de la Fase 0:
+ *   - En la app nativa no existen nunca. Apple rechazó la 1.0 por la
+ *     directriz 2.1(a) —un botón que no respondía— y aquí habría decenas.
+ *   - En la web solo las ve una organización de demostración: flag
+ *     `partner_showcase` (get_feature_flag con la org del local), apagado por
+ *     defecto. Un local real no ve nunca cifras inventadas sobre su negocio.
+ *   - Cuando se ven, llevan arriba la franja "DEMO · datos ficticios".
  *
- * Segun cada una tenga backend, se quita de esta lista.
+ * Según cada una tenga backend de verdad, se quita de esta lista.
  */
 const SECCIONES_SOLO_WEB = new Set<Section>([
   "autopilot",
@@ -142,12 +143,29 @@ const SECCIONES_SOLO_WEB = new Set<Section>([
   "apps",
   "whitelabel",
   "benchmarks",
+  "pricing",
+  "cashless",
 ]);
 
-/** Dentro de la app nativa esas secciones no existen. */
-const enApp = Capacitor.isNativePlatform();
-const seccionVisible = (id: Section) => !enApp || !SECCIONES_SOLO_WEB.has(id);
+/** Ninguna carga del arranque puede dejar el panel colgado en su loader. */
+const LOAD_TIMEOUT_MS = 10_000;
 
+/** Las consultas de Supabase son "thenables": withTimeout necesita una Promise. */
+function timed<T>(query: PromiseLike<T>, label: string): Promise<Awaited<T>> {
+  return withTimeout(Promise.resolve(query), LOAD_TIMEOUT_MS, label);
+}
+
+const describeError = (err: unknown): string => {
+  if (err instanceof TimeoutError) {
+    return "El servidor no responde. Revisa tu conexión y vuelve a intentarlo.";
+  }
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return "Error desconocido";
+};
 
 type EventRow = {
   id: string;
@@ -155,6 +173,7 @@ type EventRow = {
   description: string | null;
   city: string;
   date_start: string;
+  date_end: string | null;
   status: string;
   price_cents: number;
   capacity: number | null;
@@ -171,22 +190,22 @@ type Profile = {
   city: string | null;
   business_city: string | null;
   account_status: string;
-  stripe_connect_account_id: string | null;
-  stripe_connect_onboarded: boolean;
 };
+
+const PROFILE_COLUMNS = "id, business_name, business_category, city, business_city, account_status";
 
 const PartnerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [section, setSection] = useState<Section>("metricas");
-  // Si un enlace guardado apunta a una seccion que en la app no existe, se cae
-  // a Metricas en vez de pintar una pantalla que no deberia estar ahi.
-  const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
   const [userId, setUserId] = useState<string>("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
+  // Fallo de la carga de eventos (o del arranque). Mientras no es null no se
+  // pinta nada que dependa de la lista: ni "Tu primer evento" ni KPIs a cero.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [festivalOpen, setFestivalOpen] = useState(false);
   // Editor state: única fuente para create/edit/duplicate. Cuando es null
   // el modal está cerrado. Cuando hay objeto, el wizard se abre en el modo
@@ -200,85 +219,74 @@ const PartnerDashboard = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   // Permite reabrir manualmente el onboarding desde el HelpSheet.
   const [reopenOnboarding, setReopenOnboarding] = useState(false);
+  // Secciones maqueta visibles solo para la organización de demo (web).
+  const [showcase, setShowcase] = useState(false);
 
   // Contexto de partner: organización, venue, brand y estado real del
   // onboarding (server-truth, NO localStorage). Es la única fuente para
   // decidir si el wizard debe abrirse.
   const partnerCtx = usePartnerContext(userId || null);
+  const orgId = partnerCtx.org?.id ?? null;
+
+  // Dentro de la app nativa las maquetas no existen; en la web, solo con el
+  // flag partner_showcase activo para la organización.
+  const enApp = isNativeApp();
+  const seccionVisible = (id: Section) => !SECCIONES_SOLO_WEB.has(id) || (!enApp && showcase);
+  // Si un enlace guardado apunta a una seccion que no se puede ver, se cae a
+  // Metricas en vez de pintar una pantalla que no deberia estar ahi.
+  const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
 
   useEffect(() => {
+    if (enApp || !userId) {
+      setShowcase(false);
+      return;
+    }
+    let cancelled = false;
     (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id;
-      if (!uid) return;
-      setUserId(uid);
-      setUserEmail(u.user?.email ?? null);
-
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
-        .eq("id", uid)
-        .maybeSingle();
-      if (p) setProfile(p as Profile);
-
-      const { data: c } = await supabase.from("cities").select("id, name, slug").eq("active", true);
-      setCities((c ?? []) as City[]);
-
-      await loadEvents(uid);
-
-      // El estado del onboarding ahora vive en `usePartnerContext` →
-      // RPC `partner_onboarding_status`. No mas localStorage ni checks
-      // imprecisos de hasActivity. La fuente de verdad es server-side.
-
-      setLoading(false);
+      try {
+        const { data, error } = await timed(
+          supabase.rpc("get_feature_flag", { _code: "partner_showcase", _org_id: orgId }),
+          "get_feature_flag"
+        );
+        if (!cancelled) setShowcase(!error && data === true);
+      } catch {
+        if (!cancelled) setShowcase(false);
+      }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [enApp, userId, orgId]);
 
-  // Cuando el wizard finaliza, refrescamos profile + events + contexto.
-  const refreshAllPartnerData = async () => {
-    if (!userId) return;
-    await Promise.all([
-      partnerCtx.refresh(),
-      loadEvents(userId),
-      (async () => {
-        const { data: p } = await supabase
-          .from("profiles")
-          .select("id, business_name, business_category, city, business_city, account_status, stripe_connect_account_id, stripe_connect_onboarded")
-          .eq("id", userId)
-          .maybeSingle();
-        if (p) setProfile(p as Profile);
-      })(),
-    ]);
-  };
-
-  const loadEvents = async (uid: string) => {
+  const loadEvents = useCallback(async (uid: string) => {
     // Multi-tenant load: el partner ve sus eventos si es partner_id directo
     // (legacy) O si pertenece a la org que es dueña del evento. Esto resuelve
     // el caso super-admin Francisco testeando con Avenue Media: como owner
     // de la org, debe ver los eventos creados por la org aunque no estén
     // técnicamente como partner_id=su_uid.
-    //
-    // Estrategia: primero traemos el conjunto de org_ids del partner via
-    // RPC tenant_for_user (cacheada), luego un único query con `or` que
-    // une partner_id+org_id.
     let orgIds: string[] = [];
     try {
-      const { data: orgs } = await supabase
-        .from("organization_members")
-        .select("org_id")
-        .eq("user_id", uid)
-        .eq("status", "active");
-      orgIds = (orgs ?? []).map((m: any) => m.org_id).filter(Boolean);
-
-      // Fallback: organizations donde el user es owner_id directo
-      const { data: owned } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("owner_id", uid);
-      for (const o of owned ?? []) {
-        if (!orgIds.includes((o as any).id)) orgIds.push((o as any).id);
+      const [members, owned] = await Promise.all([
+        timed(
+          supabase
+            .from("organization_members")
+            .select("org_id")
+            .eq("user_id", uid)
+            .eq("status", "active"),
+          "organization_members"
+        ),
+        // Fallback: organizations donde el user es owner_id directo
+        timed(supabase.from("organizations").select("id").eq("owner_id", uid), "organizations"),
+      ]);
+      orgIds = (members.data ?? [])
+        .map((m: { org_id: string | null }) => m.org_id)
+        .filter((id): id is string => !!id);
+      for (const o of (owned.data ?? []) as Array<{ id: string }>) {
+        if (!orgIds.includes(o.id)) orgIds.push(o.id);
       }
-    } catch {
+    } catch (err) {
+      // Sin respuesta: mejor un error visible que una lista incompleta.
+      if (err instanceof TimeoutError) throw err;
       /* RLS o tabla no existente — caemos a sólo partner_id */
     }
 
@@ -287,19 +295,114 @@ const PartnerDashboard = () => {
         ? `partner_id.eq.${uid},org_id.in.(${orgIds.join(",")})`
         : `partner_id.eq.${uid}`;
 
-    const { data } = await supabase
-      .from("events")
-      .select(
-        "id, title, description, city, date_start, status, price_cents, capacity, tickets_sold, image_url"
-      )
-      .or(filter)
-      .order("date_start", { ascending: false });
+    const { data, error } = await timed(
+      supabase
+        .from("events")
+        .select(
+          "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url"
+        )
+        .or(filter)
+        .order("date_start", { ascending: false }),
+      "events"
+    );
+    if (error) throw new Error(error.message);
     setEvents((data ?? []) as EventRow[]);
+  }, []);
+
+  // Carga inicial: nada puede quedarse colgado (10 s por llamada) y el loader
+  // siempre se apaga. El estado del onboarding vive en usePartnerContext.
+  const loadInitial = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const { data: u, error: authError } = await timed(supabase.auth.getUser(), "auth.getUser");
+      if (authError) throw new Error(authError.message);
+      const uid = u.user?.id;
+      if (!uid) throw new Error("No hay ninguna sesión activa. Vuelve a iniciar sesión.");
+      setUserId(uid);
+      setUserEmail(u.user?.email ?? null);
+
+      const [profileRes, citiesRes, eventsRes] = await Promise.allSettled([
+        timed(supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(), "profiles"),
+        timed(supabase.from("cities").select("id, name, slug").eq("active", true), "cities"),
+        loadEvents(uid),
+      ]);
+      if (profileRes.status === "fulfilled") {
+        if (profileRes.value.data) setProfile(profileRes.value.data as Profile);
+      } else {
+        console.warn("[PartnerDashboard] perfil:", profileRes.reason);
+      }
+      if (citiesRes.status === "fulfilled") {
+        setCities((citiesRes.value.data ?? []) as City[]);
+      } else {
+        console.warn("[PartnerDashboard] ciudades:", citiesRes.reason);
+      }
+      if (eventsRes.status === "rejected") throw eventsRes.reason;
+    } catch (err) {
+      console.error("[PartnerDashboard] carga inicial:", err);
+      setLoadError(describeError(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [loadEvents]);
+
+  useEffect(() => {
+    void loadInitial();
+  }, [loadInitial]);
+
+  // Recarga tras crear/editar/borrar: si falla se avisa y se conserva la lista.
+  const reloadEvents = useCallback(async () => {
+    if (!userId) return;
+    try {
+      await loadEvents(userId);
+      setLoadError(null);
+    } catch (err) {
+      toast({
+        title: "No se pudo actualizar la lista de eventos",
+        description: describeError(err),
+        variant: "destructive",
+      });
+    }
+  }, [userId, loadEvents, toast]);
+
+  // Cuando el wizard finaliza, refrescamos profile + events + contexto.
+  const refreshAllPartnerData = async () => {
+    if (!userId) return;
+    await Promise.all([
+      partnerCtx.refresh(),
+      reloadEvents(),
+      (async () => {
+        try {
+          const { data: p } = await timed(
+            supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle(),
+            "profiles"
+          );
+          if (p) setProfile(p as Profile);
+        } catch (err) {
+          console.warn("[PartnerDashboard] perfil:", err);
+        }
+      })(),
+    ]);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
+    try {
+      // scope local: cierra esta sesión, no las de otros dispositivos del local.
+      const { error } = await withTimeout(
+        supabase.auth.signOut({ scope: "local" }),
+        8_000,
+        "auth.signOut"
+      );
+      if (error) throw error;
+      navigate("/");
+    } catch (err) {
+      console.error("[PartnerDashboard] signOut:", err);
+      toast({
+        title: "No se pudo cerrar sesión",
+        description: "Revisa tu conexión y vuelve a intentarlo.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Abre el wizard en modo duplicate — clona el evento via wizard (no
@@ -343,7 +446,7 @@ const PartnerDashboard = () => {
       description: `"${deleteTarget.title}" ya no aparece en tu lista.`,
     });
     setDeleteTarget(null);
-    await loadEvents(userId);
+    await reloadEvents();
   };
 
   // Mobile Settings/Help sheets — state lifted al padre para que
@@ -398,8 +501,8 @@ const PartnerDashboard = () => {
     },
     { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
-  // Fuera del arbol lo que en la app no existe; si un grupo se queda sin
-  // hijos, desaparece el grupo entero en vez de dejar una carpeta vacia.
+  // Fuera del arbol lo que no se puede ver; si un grupo se queda sin hijos,
+  // desaparece el grupo entero en vez de dejar una carpeta vacia.
   const navTree = arbol.flatMap<NavNode>((nodo) => {
     if (nodo.kind === "item") return seccionVisible(nodo.id) ? [nodo] : [];
     const hijos = nodo.children.filter((h) => seccionVisible(h.id));
@@ -414,12 +517,32 @@ const PartnerDashboard = () => {
     { id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
 
+  // "Recaudado" ya no sale de aquí: tickets_sold × price_cents del evento no
+  // es lo cobrado (price_cents es el "desde" del tipo más barato). La cifra
+  // real está en PartnerReports, justo debajo.
   const stats = {
     totalEventos: events.length,
     proximos: events.filter((e) => new Date(e.date_start) > new Date()).length,
     ticketsVendidos: events.reduce((s, e) => s + (e.tickets_sold ?? 0), 0),
-    recaudado: events.reduce((s, e) => s + (e.tickets_sold ?? 0) * e.price_cents, 0),
   };
+
+  const retryLoad = () => void loadInitial();
+
+  /** Secciones que dependen de la lista de eventos: cargando, error o contenido. */
+  const eventsGate = (content: React.ReactNode) =>
+    loading ? (
+      <PasifyEmptyState
+        icon={<Calendar className="h-7 w-7" />}
+        eyebrow="Cargando"
+        title="Sincronizando tus eventos…"
+        spin
+        compact
+      />
+    ) : loadError ? (
+      <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
+    ) : (
+      content
+    );
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -472,7 +595,7 @@ const PartnerDashboard = () => {
               <Settings className="mr-2 h-4 w-4" />
               Configuración
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => void handleLogout()}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
             </Button>
@@ -488,7 +611,7 @@ const PartnerDashboard = () => {
               navTree={navTree}
               section={seccionActiva}
               onSelect={setSection}
-              onLogout={handleLogout}
+              onLogout={() => void handleLogout()}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
               businessName={profile?.business_name ?? null}
@@ -536,12 +659,22 @@ const PartnerDashboard = () => {
             </div>
           )}
 
+          {/* Maquetas visibles (solo org de demo en web): siempre avisadas. */}
+          {SECCIONES_SOLO_WEB.has(seccionActiva) && <DemoBanner />}
+
+          {/* Cada sección en su propio boundary: si una revienta, el resto del
+              panel sigue vivo. La key lo remonta limpio al cambiar de sección. */}
+          <SectionBoundary
+            key={seccionActiva}
+            sectionId={seccionActiva}
+            onGoHome={seccionActiva === "metricas" ? undefined : () => setSection("metricas")}
+          >
           {/* MÉTRICAS — Reports & BI online */}
           {seccionActiva === "metricas" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Métricas</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Reports y BI en vivo: evolución diaria, top RRPP, heatmap, canales y retención.
+                Ventas e ingresos de tus eventos: evolución diaria, eventos que más venden y horas de compra.
               </p>
 
               {profile?.account_status === "pending" && (
@@ -552,56 +685,43 @@ const PartnerDashboard = () => {
                 </Card>
               )}
 
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard icon={<Calendar className="h-5 w-5" />} label="Eventos" value={stats.totalEventos} />
-                <StatCard icon={<Calendar className="h-5 w-5" />} label="Próximos" value={stats.proximos} />
-                <StatCard icon={<Ticket className="h-5 w-5" />} label="Tickets vendidos" value={stats.ticketsVendidos} />
-                <StatCard icon={<Euro className="h-5 w-5" />} label="Recaudado" value={`${(stats.recaudado / 100).toFixed(2)} €`} />
-              </div>
+              {loadError ? (
+                <div className="mb-6">
+                  <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
+                </div>
+              ) : (
+                <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
+                  <StatCard icon={<Calendar className="h-5 w-5" />} label="Eventos" value={loading ? "—" : stats.totalEventos} />
+                  <StatCard icon={<Calendar className="h-5 w-5" />} label="Próximos" value={loading ? "—" : stats.proximos} />
+                  <StatCard icon={<Ticket className="h-5 w-5" />} label="Tickets vendidos" value={loading ? "—" : stats.ticketsVendidos} />
+                </div>
+              )}
 
               <PartnerReports />
             </div>
           )}
 
-          {/* AUTOPILOT IA — Fase 6 */}
+          {/* AUTOPILOT IA — maqueta */}
           {seccionActiva === "autopilot" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">AutoPilot IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Tu agente Pasify ejecuta pricing, marketing, soporte y reembolsos dentro de tus políticas. Tú firmas las decisiones grandes; el agente se ocupa del resto.
+                Vista previa de un asistente que propondrá acciones de precio, marketing y soporte para que tú las apruebes.
               </p>
               <PartnerAutoPilot />
             </div>
           )}
 
-          {/* LIVE WAR ROOM */}
+          {/* EN VIVO */}
           {seccionActiva === "live" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">En vivo</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Aforo en tiempo real, velocidad de entrada y revenue del evento activo.
+                Aforo y ventas por tipo de entrada del evento en curso.
               </p>
-              <LiveWarRoom
-                event={(() => {
-                  const upcoming = events
-                    .filter((e) => new Date(e.date_start).getTime() >= Date.now() - 6 * 60 * 60 * 1000)
-                    .sort(
-                      (a, b) =>
-                        new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
-                    )[0];
-                  if (!upcoming) return null;
-                  return {
-                    id: upcoming.id,
-                    title: upcoming.title,
-                    date_start: upcoming.date_start,
-                    capacity: upcoming.capacity ?? 800,
-                    tickets_sold: upcoming.tickets_sold ?? 0,
-                    price_cents: upcoming.price_cents ?? 1500,
-                    partner_category: profile?.business_category ?? null,
-                    partner_name: profile?.business_name ?? null,
-                  };
-                })()}
-              />
+              {eventsGate(
+                <LiveSection events={events} partnerName={partnerCtx.org?.name ?? profile?.business_name ?? null} />
+              )}
             </div>
           )}
 
@@ -610,32 +730,30 @@ const PartnerDashboard = () => {
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Forecast IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Predicción de venta para cada evento futuro con intervalo de confianza y factores explicables.
+                Previsión de venta de tus próximos eventos a partir de tu histórico.
               </p>
-              <PartnerForecast
-                events={events.map((e) => ({
-                  id: e.id,
-                  title: e.title,
-                  date_start: e.date_start,
-                  capacity: e.capacity ?? 800,
-                  tickets_sold: e.tickets_sold ?? 0,
-                  price_cents: e.price_cents ?? 1500,
-                }))}
-              />
+              {eventsGate(
+                <PartnerForecast
+                  events={events.map((e) => ({
+                    id: e.id,
+                    title: e.title,
+                    date_start: e.date_start,
+                    capacity: e.capacity ?? null,
+                    tickets_sold: e.tickets_sold ?? 0,
+                    status: e.status,
+                  }))}
+                />
+              )}
             </div>
           )}
 
-          {/* DYNAMIC PRICING */}
+          {/* PRICING — maqueta hasta que haya propuestas automáticas */}
           {seccionActiva === "pricing" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Pricing IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Motor de pricing dinámico que sube y baja el precio según demanda, hora y aforo —
-                con reglas tuyas y curva de elasticidad.
+                Propuestas de subida o bajada de precio según la velocidad de venta de cada tipo de entrada. Tú decides si se aplican.
               </p>
-              {/* Cableado real con pricing_proposals · ya no necesita
-                  prop `events` (lo cargaba para mock); la UI ahora
-                  resuelve eventos via JOIN en cada proposal. */}
               <PartnerDynamicPricing />
             </div>
           )}
@@ -656,6 +774,7 @@ const PartnerDashboard = () => {
                     variant="outline"
                     className="flex-1 md:flex-initial"
                     onClick={() => setFestivalOpen(true)}
+                    disabled={!userId}
                   >
                     <Music className="mr-2 h-4 w-4" />
                     Festival multi-día
@@ -663,6 +782,7 @@ const PartnerDashboard = () => {
                 <Button
                   className="flex-1 md:flex-initial"
                   onClick={() => setEditor({ mode: "create" })}
+                  disabled={!userId}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Nuevo evento
@@ -685,9 +805,7 @@ const PartnerDashboard = () => {
                 cities={cities}
                 defaultCity={profile?.city ?? profile?.business_city ?? ""}
                 defaultVenueName={profile?.business_name ?? ""}
-                onSaved={async () => {
-                  if (userId) await loadEvents(userId);
-                }}
+                onSaved={reloadEvents}
               />
 
               <FestivalBuilder
@@ -699,7 +817,7 @@ const PartnerDashboard = () => {
                 cities={cities}
                 onCreated={async () => {
                   setFestivalOpen(false);
-                  if (userId) await loadEvents(userId);
+                  await reloadEvents();
                 }}
               />
 
@@ -711,6 +829,9 @@ const PartnerDashboard = () => {
                   spin
                   compact
                 />
+              ) : loadError ? (
+                // Nunca "Tu primer evento" si la carga ha fallado.
+                <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
               ) : events.length === 0 ? (
                 <PasifyEmptyState
                   icon={<Calendar className="h-7 w-7" />}
@@ -774,25 +895,6 @@ const PartnerDashboard = () => {
                                       <Copy className="mr-2 h-4 w-4" />
                                       Duplicar evento
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        downloadEventReportPdf(
-                                          buildDemoEventReport({
-                                            eventTitle: e.title,
-                                            eventDate: e.date_start,
-                                            venueName: profile?.business_name ?? "Local",
-                                            city: e.city,
-                                            capacity: e.capacity ?? 800,
-                                            ticketsSold: e.tickets_sold ?? 0,
-                                            revenueCents:
-                                              (e.tickets_sold ?? 0) * (e.price_cents ?? 1500),
-                                          })
-                                        )
-                                      }
-                                    >
-                                      <FileText className="mr-2 h-4 w-4" />
-                                      Report PDF post-evento
-                                    </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       onClick={() => setDeleteTarget(e)}
@@ -821,20 +923,6 @@ const PartnerDashboard = () => {
                         event={e}
                         onEdit={() => handleEditEvent(e)}
                         onDuplicate={() => handleDuplicateEvent(e)}
-                        onReportPdf={() =>
-                          downloadEventReportPdf(
-                            buildDemoEventReport({
-                              eventTitle: e.title,
-                              eventDate: e.date_start,
-                              venueName: profile?.business_name ?? "Local",
-                              city: e.city,
-                              capacity: e.capacity ?? 800,
-                              ticketsSold: e.tickets_sold ?? 0,
-                              revenueCents:
-                                (e.tickets_sold ?? 0) * (e.price_cents ?? 1500),
-                            })
-                          )
-                        }
                         onDelete={() => setDeleteTarget(e)}
                       />
                     ))}
@@ -847,21 +935,24 @@ const PartnerDashboard = () => {
           {/* ASISTENTES — control de puerta estilo Eventbrite */}
           {seccionActiva === "asistentes" && (
             <div>
-              <PartnerAttendees
-                events={events.map((e) => ({
-                  id: e.id,
-                  title: e.title,
-                  date_start: e.date_start,
-                  city: e.city,
-                  capacity: e.capacity,
-                  tickets_sold: e.tickets_sold,
-                  status: e.status,
-                }))}
-              />
+              {eventsGate(
+                <PartnerAttendees
+                  events={events.map((e) => ({
+                    id: e.id,
+                    title: e.title,
+                    date_start: e.date_start,
+                    date_end: e.date_end,
+                    city: e.city,
+                    capacity: e.capacity,
+                    tickets_sold: e.tickets_sold,
+                    status: e.status,
+                  }))}
+                />
+              )}
             </div>
           )}
 
-          {/* SCANNER */}
+          {/* ESCÁNER — no espera a la lista de eventos: la puerta no se para */}
           {seccionActiva === "scanner" && (
             <div>
               <div className="mb-6">
@@ -886,125 +977,149 @@ const PartnerDashboard = () => {
                   </span>
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  La cámara se activa automáticamente. Apunta al QR del cliente para
-                  validar su entrada. Cada escaneo se registra en Asistentes.
+                  La cámara se activa sola. Apunta al QR de la entrada: el resultado sale a pantalla
+                  completa y los accesos validados aparecen al momento en Asistentes.
                 </p>
               </div>
-              {userId && <QRScanner partnerId={userId} />}
+              {userId ? (
+                <QRScanner
+                  events={events.map((e) => ({
+                    id: e.id,
+                    title: e.title,
+                    date_start: e.date_start,
+                    date_end: e.date_end,
+                    status: e.status,
+                  }))}
+                  eventsState={loading ? "loading" : loadError ? "error" : "ready"}
+                />
+              ) : (
+                // Sin sesión resuelta todavía (o falló el arranque): nunca una pantalla vacía.
+                eventsGate(null)
+              )}
             </div>
           )}
 
-          {/* DOOR VISION — Computer Vision */}
+          {/* DOOR VISION — maqueta */}
           {seccionActiva === "door_vision" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Door Vision IA</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Cámara IA en puerta · cara ↔ DNI · detección de menores · heatmap densidad · GDPR safe.
+                Vista previa de verificación en puerta.
               </p>
               <PartnerDoorVision />
             </div>
           )}
 
-          {/* TPV — Cierre Z */}
+          {/* TPV — maqueta */}
           {seccionActiva === "tpv" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">TPV</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Cierre de caja, turnos y resumen de ventas del día.
+                Vista previa del cierre de caja y el resumen de ventas del día.
               </p>
               <TpvCierreZ />
             </div>
           )}
 
-          {/* CASHLESS */}
+          {/* CASHLESS — maqueta hasta que existan las pulseras */}
           {seccionActiva === "cashless" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Cashless</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Pulseras prepago RFID — el flujo de barra del evento en directo.
+                Vista previa del pago sin efectivo en barra, por evento.
               </p>
-              <PartnerCashless />
+              {eventsGate(
+                <PartnerCashless
+                  events={events.map((e) => ({
+                    id: e.id,
+                    title: e.title,
+                    date_start: e.date_start,
+                    date_end: e.date_end,
+                    status: e.status,
+                  }))}
+                />
+              )}
             </div>
           )}
 
-          {/* VIP & HOSPITALITY */}
+          {/* VIP & HOSPITALITY — maqueta */}
           {seccionActiva === "vip" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">VIP & Hospitality</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Mesas, reservados, bottle service y concierge desde una sola pantalla.
+                Vista previa de la gestión de mesas y reservados.
               </p>
               <PartnerVipHospitality />
             </div>
           )}
 
-          {/* CRM & AUDIENCE */}
+          {/* CRM & AUDIENCE — maqueta */}
           {seccionActiva === "crm" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">CRM & Audience</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Tu base de clientes, segmentos en tiempo real y campañas multicanal.
+                Vista previa de la base de clientes y sus segmentos.
               </p>
               <PartnerCRM />
             </div>
           )}
 
-          {/* MARKETING ENGINE */}
+          {/* MARKETING ENGINE — maqueta */}
           {seccionActiva === "marketing" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Marketing</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Campañas multicanal, automatizaciones, ads y studio con IA — todo desde una pantalla.
+                Vista previa de campañas y automatizaciones de marketing.
               </p>
               <PartnerMarketing />
             </div>
           )}
 
-          {/* SALES CHANNELS */}
+          {/* SALES CHANNELS — maqueta */}
           {seccionActiva === "channels" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Canales de venta</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Tu mix de canales: web, redes, RRPP, hoteles y afiliados — con comisiones y revenue por canal.
+                Vista previa del reparto de ventas por canal.
               </p>
               <PartnerSalesChannels />
             </div>
           )}
 
-          {/* TEAM */}
+          {/* TEAM — maqueta */}
           {seccionActiva === "team" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Equipo</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Plantilla, turnos de la semana y nómina prevista — todo en una pantalla.
+                Vista previa de plantilla y turnos.
               </p>
               <PartnerTeam />
             </div>
           )}
 
-          {/* APP MARKETPLACE */}
+          {/* APP MARKETPLACE — maqueta */}
           {seccionActiva === "apps" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">App Marketplace</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Conecta Pasify con 30+ herramientas externas en un click — OAuth y webhooks listos.
+                Integraciones con herramientas externas (próximamente).
               </p>
               <PartnerAppMarketplace />
             </div>
           )}
 
-          {/* WHITE-LABEL */}
+          {/* WHITE-LABEL — maqueta */}
           {seccionActiva === "whitelabel" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">White-label</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Tu marca, tu subdominio, tu app móvil — Pasify desaparece y tu identidad ocupa todo el espacio.
+                Vista previa de la personalización con tu marca.
               </p>
               <PartnerWhiteLabel />
             </div>
           )}
 
-          {/* INDUSTRY BENCHMARKS — Fase 6 */}
+          {/* INDUSTRY BENCHMARKS — maqueta */}
           {seccionActiva === "benchmarks" && (
             <div>
               <IndustryBenchmarks />
@@ -1012,66 +1127,33 @@ const PartnerDashboard = () => {
           )}
 
           {/* STRIPE */}
-          {seccionActiva === "stripe" && (
-            <div>
-              <h1 className="mb-1 text-3xl font-bold tracking-tight">Stripe Connect</h1>
-              <p className="mb-6 text-sm text-muted-foreground">
-                Conecta tu cuenta Stripe para cobrar los tickets directamente.
-              </p>
-
-              <Card>
-                <CardContent className="p-6">
-                  {profile?.stripe_connect_onboarded ? (
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="h-6 w-6 text-success" />
-                      <div>
-                        <div className="font-semibold text-success">Conectado</div>
-                        <div className="text-xs text-muted-foreground">
-                          Cuenta: {profile.stripe_connect_account_id}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Aún no has conectado tu cuenta Stripe. El flujo de Stripe Connect estará disponible próximamente.
-                        Mientras tanto, puedes crear eventos en modo borrador.
-                      </p>
-                      <Button disabled>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Conectar Stripe (próximamente)
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          {seccionActiva === "stripe" && <StripeSection orgId={orgId} />}
 
           {/* SOPORTE */}
           {seccionActiva === "soporte" && (
             <div>
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Chatea con el equipo Pasify. Te respondemos en menos de 5 minutos en horario laboral.
+                Escríbenos y te respondemos en horario laboral.
               </p>
-              <SupportChat mode="client" />
+              <SupportChat mode="client" kind="partner" orgId={orgId} />
             </div>
           )}
+          </SectionBoundary>
         </main>
 
         {/* Bottom tab bar mobile — primitiva compartida (MobileBottomNav).
             Labels truncadas y safe-area-inset-bottom respetado. */}
         <MobileBottomNav<Section>
           items={tabBarItems}
-          activeId={section}
+          activeId={seccionActiva}
           onSelect={setSection}
           drawerSlot={
             <PartnerDrawer
               navTree={navTree}
               section={seccionActiva}
               onSelect={setSection}
-              onLogout={handleLogout}
+              onLogout={() => void handleLogout()}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
               businessName={profile?.business_name ?? null}
@@ -1160,6 +1242,190 @@ const PartnerDashboard = () => {
 // ============================================================================
 
 const PasifyBrand = ({ size = 28 }: { size?: number }) => <Wordmark height={size} />;
+
+const monoStyle = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+
+/** Franja fija de las secciones maqueta: nadie debe confundirlas con datos reales. */
+const DemoBanner = () => (
+  <div
+    role="note"
+    className="mb-6 flex flex-col gap-1 rounded-2xl border px-4 py-3 sm:flex-row sm:items-center sm:gap-3"
+    style={{ background: "rgba(232,176,76,0.12)", borderColor: "rgba(232,176,76,0.45)" }}
+  >
+    <span
+      className="text-[11px] font-semibold uppercase"
+      style={{ ...monoStyle, letterSpacing: "0.22em", color: "#E8B04C" }}
+    >
+      DEMO · datos ficticios
+    </span>
+    <span className="text-[12px] text-muted-foreground">
+      Sección de demostración: los datos que ves son de ejemplo, no de tu local.
+    </span>
+  </div>
+);
+
+/** Error de carga de eventos con reintento (Eventos, Métricas y secciones que dependen de ellos). */
+const LoadErrorCard = ({
+  message,
+  onRetry,
+  retrying,
+}: {
+  message: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) => (
+  <div
+    role="alert"
+    className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+    style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+  >
+    <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+        style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+      >
+        <AlertTriangle className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-foreground">No pudimos cargar tus eventos</div>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{message}</p>
+      </div>
+    </div>
+    <Button size="sm" onClick={onRetry} disabled={retrying} className="shrink-0">
+      {retrying ? (
+        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+      )}
+      Reintentar
+    </Button>
+  </div>
+);
+
+/**
+ * En vivo: el evento de ahora (pickActiveEvent) y, si esta noche hay más de
+ * uno, un selector con los que tiene sentido mirar.
+ */
+const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName: string | null }) => {
+  const options = useMemo(() => listEventChoices(events), [events]);
+  const [selectedId, setSelectedId] = useState<string | null>(() => pickActiveEvent(events)?.id ?? null);
+
+  useEffect(() => {
+    if (selectedId && options.some((e) => e.id === selectedId)) return;
+    const next = pickActiveEvent(events)?.id ?? options[0]?.id ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [events, options, selectedId]);
+
+  const selected = options.find((e) => e.id === selectedId) ?? null;
+
+  return (
+    <div className="space-y-4">
+      {options.length > 1 && (
+        <select
+          value={selectedId ?? ""}
+          onChange={(ev) => setSelectedId(ev.target.value || null)}
+          className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground sm:w-auto"
+          aria-label="Evento"
+        >
+          {options.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title} ·{" "}
+              {new Date(e.date_start).toLocaleString("es-ES", {
+                weekday: "short",
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </option>
+          ))}
+        </select>
+      )}
+      <LiveWarRoom
+        event={
+          selected
+            ? {
+                id: selected.id,
+                title: selected.title,
+                date_start: selected.date_start,
+                date_end: selected.date_end,
+                capacity: selected.capacity ?? null,
+                partner_name: partnerName,
+              }
+            : null
+        }
+      />
+    </div>
+  );
+};
+
+/**
+ * Stripe: sin botones que no hacen nada. El estado "conectada" sale de la
+ * organización (lo que de verdad usa el checkout), no de profiles.
+ */
+const StripeSection = ({ orgId }: { orgId: string | null }) => {
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!orgId) {
+      setConnected(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await timed(
+          supabase
+            .from("organizations")
+            .select("stripe_connect_account_id, stripe_connect_charges_enabled")
+            .eq("id", orgId)
+            .maybeSingle(),
+          "organizations.stripe"
+        );
+        if (cancelled) return;
+        setConnected(!error && !!data?.stripe_connect_account_id && data?.stripe_connect_charges_enabled === true);
+      } catch {
+        if (!cancelled) setConnected(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
+
+  return (
+    <div>
+      <h1 className="mb-1 text-3xl font-bold tracking-tight">Stripe</h1>
+      <p className="mb-6 text-sm text-muted-foreground">Cómo cobras las entradas que vendes.</p>
+
+      <Card>
+        <CardContent className="p-6">
+          {connected === null ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando…
+            </div>
+          ) : connected ? (
+            <div className="flex items-start gap-3">
+              <CreditCard className="mt-0.5 h-6 w-6 shrink-0 text-success" />
+              <p className="text-sm text-foreground">
+                Tu cuenta de Stripe está conectada: lo que cobras por tus entradas va directamente a ella.
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3">
+              <CreditCard className="mt-0.5 h-6 w-6 shrink-0 text-muted-foreground" />
+              <p className="text-sm text-foreground">
+                Pasify cobra las entradas por ti y te liquida lo vendido. Pronto podrás conectar tu
+                propia cuenta de Stripe para cobrar directamente.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 // ============================================================================
 // PartnerDrawer — Sheet lateral con todas las secciones + extras

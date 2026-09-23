@@ -81,7 +81,7 @@ const ClientSettingsSheet = ({ open, onOpenChange }: ClientSettingsSheetProps) =
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     toast({ title: t("auth.logout"), description: t("success.loggedOut") });
     navigate("/login");
   };

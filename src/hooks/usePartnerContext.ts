@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { withTimeout } from "@/lib/withTimeout";
+import { captureError, getErrorMessage } from "@/lib/sentry";
 
 /**
  * usePartnerContext — fuente única de verdad de la organización y venue
@@ -19,7 +21,26 @@ import { supabase } from "@/integrations/supabase/client";
  * El hook NUNCA depende de localStorage. La unica fuente de verdad es
  * Supabase. Si un mismo usuario cambia de dispositivo o limpia cache,
  * el estado correcto se sincroniza.
+ *
+ * Robustez (Fase 0):
+ *  - RPC y consultas con límite de 10 s (`withTimeout`): una petición
+ *    colgada ya no deja el panel esperando para siempre.
+ *  - Todo o nada: el estado solo se actualiza cuando la RPC y las consultas
+ *    de org/brand/venues han ido bien. Si algo falla en un refresco se
+ *    CONSERVAN los datos previos y se expone `error` (banner "Reintentar"
+ *    del dashboard). Antes un fallo dejaba org/venue a null en silencio y un
+ *    asistente con `venues=[]` podía creer que no había local.
+ *  - `loading` solo es true en la primera carga de cada usuario; los
+ *    refrescos usan `refreshing`.
  */
+
+// Límite por petición.
+const CONTEXT_TIMEOUT_MS = 10_000;
+
+/** Consulta de Supabase (thenable) con límite de tiempo. */
+function conTimeout<T>(query: PromiseLike<T>, label: string): Promise<Awaited<T>> {
+  return withTimeout(Promise.resolve(query), CONTEXT_TIMEOUT_MS, label);
+}
 
 export interface OnboardingStatus {
   userId: string;
@@ -96,10 +117,12 @@ interface UsePartnerContextResult {
   /** Todos los venues activos de la organización (multi-local). */
   venues: PartnerVenue[];
   /**
-   * Mensaje de error si la RPC `partner_onboarding_status` falló. Cuando
-   * NO es null, los consumidores DEBEN mostrar un banner de error en vez
-   * de fingir éxito (status="completed" en silencio). Esto evita que un
-   * fallo de RPC en producción se enmascare como dashboard funcional.
+   * Mensaje de error si la RPC `partner_onboarding_status` (o la carga de
+   * org/brand/venues) falló o no respondió a tiempo. Cuando NO es null, los
+   * consumidores DEBEN mostrar un banner de error en vez de fingir éxito
+   * (status="completed" en silencio). Esto evita que un fallo de RPC en
+   * producción se enmascare como dashboard funcional. Los datos de la última
+   * carga buena se conservan.
    */
   error: string | null;
   refresh: () => Promise<void>;
@@ -117,6 +140,16 @@ type RpcRow = {
   should_show_wizard: boolean;
 };
 
+interface Snapshot {
+  status: OnboardingStatus | null;
+  org: PartnerOrg | null;
+  brand: PartnerBrand | null;
+  venue: PartnerVenue | null;
+  venues: PartnerVenue[];
+}
+
+const SNAPSHOT_VACIO: Snapshot = { status: null, org: null, brand: null, venue: null, venues: [] };
+
 export const usePartnerContext = (userId: string | null): UsePartnerContextResult => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,13 +160,52 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
   const [venues, setVenues] = useState<PartnerVenue[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  // Cada carga lleva un número; solo la última puede escribir estado.
+  const seqRef = useRef(0);
+  // Usuario al que pertenecen los datos en estado (null = ninguno).
+  const cargadoParaRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const aplicar = useCallback((s: Snapshot) => {
+    setStatus(s.status);
+    setOrg(s.org);
+    setBrand(s.brand);
+    setVenues(s.venues);
+    setVenue(s.venue);
+  }, []);
+
   const load = useCallback(async () => {
+    const seq = ++seqRef.current;
+
     if (!userId) {
+      if (cargadoParaRef.current !== null) {
+        cargadoParaRef.current = null;
+        aplicar(SNAPSHOT_VACIO);
+      }
+      setError(null);
+      setRefreshing(false);
       setLoading(false);
       return;
     }
 
+    const primeraCarga = cargadoParaRef.current !== userId;
+    if (primeraCarga) {
+      // Datos de otro usuario: fuera antes de cargar los del nuevo.
+      if (cargadoParaRef.current !== null) {
+        cargadoParaRef.current = null;
+        aplicar(SNAPSHOT_VACIO);
+      }
+      setLoading(true);
+    }
     setRefreshing(true);
+
     try {
       // 1) Llama a la RPC que combina todas las senales server-side.
       //    Cast hasta que regeneremos los types post-migration.
@@ -146,106 +218,114 @@ export const usePartnerContext = (userId: string | null): UsePartnerContextResul
           error: { message: string } | null;
         }>;
       };
-      const { data, error: rpcError } = await rpcAny.rpc("partner_onboarding_status");
-      if (rpcError) {
-        // No camuflamos el fallo como "completed silencioso" — eso
-        // ocultaba problemas reales en producción (mig no aplicada,
-        // RPC revocada, etc.). Devolvemos `error` explícito y el
-        // consumidor (PartnerDashboard) muestra un banner de retry.
-        console.error("[usePartnerContext] RPC error:", rpcError.message);
-        setError(rpcError.message);
-        setStatus(null);
-        setOrg(null);
-        setVenue(null);
-        setVenues([]);
-        setBrand(null);
-        return;
-      }
-      // Limpiamos error si la RPC respondió OK tras un retry.
-      setError(null);
+      const { data, error: rpcError } = await withTimeout(
+        Promise.resolve(rpcAny.rpc("partner_onboarding_status")),
+        CONTEXT_TIMEOUT_MS,
+        "rpc partner_onboarding_status",
+      );
+      // No camuflamos el fallo como "completed silencioso" — eso ocultaba
+      // problemas reales en producción (mig no aplicada, RPC revocada, etc.).
+      // Devolvemos `error` explícito y el consumidor (PartnerDashboard)
+      // muestra un banner de retry.
+      if (rpcError) throw rpcError;
+      if (!mountedRef.current || seq !== seqRef.current) return;
 
       const row: RpcRow | null = Array.isArray(data)
         ? data[0] ?? null
         : (data as RpcRow | null);
 
-      if (!row) {
-        setStatus(null);
-        setOrg(null);
-        setVenue(null);
-        setVenues([]);
-        setBrand(null);
-        return;
+      let snapshot: Snapshot = SNAPSHOT_VACIO;
+      if (row) {
+        const mapped: OnboardingStatus = {
+          userId: row.user_id,
+          hasOrg: row.has_org,
+          hasVenue: row.has_venue,
+          hasEvent: row.has_event,
+          status: (row.onboarding_status as OnboardingStatus["status"]) ?? "in_progress",
+          completedAt: row.completed_at,
+          primaryOrgId: row.primary_org_id,
+          primaryVenueId: row.primary_venue_id,
+          shouldShowWizard: row.should_show_wizard,
+        };
+        snapshot = { status: mapped, org: null, brand: null, venue: null, venues: [] };
+
+        if (mapped.primaryOrgId) {
+          // 2) Fila completa de la org, 3) brand asociado (create_organization
+          //    crea exactamente 1) y 4) TODOS los venues activos (multi-local,
+          //    ver migración 0011). Son independientes: en paralelo.
+          const [orgRes, brandRes, venuesRes] = await Promise.all([
+            conTimeout(
+              supabase
+                .from("organizations")
+                .select(
+                  "id, slug, name, legal_name, country, city, address, postal_code, billing_email, contact_email, contact_phone, vat_id, metadata"
+                )
+                .eq("id", mapped.primaryOrgId)
+                .maybeSingle(),
+              "organizations",
+            ),
+            conTimeout(
+              supabase
+                .from("brands")
+                .select(
+                  "id, org_id, slug, name, tagline, description, logo_url, cover_image_url, primary_color, accent_color, website_url, instagram_handle"
+                )
+                .eq("org_id", mapped.primaryOrgId)
+                .order("sort_order", { ascending: true })
+                .limit(1)
+                .maybeSingle(),
+              "brands",
+            ),
+            conTimeout(
+              supabase
+                .from("venues")
+                .select(
+                  "id, brand_id, org_id, slug, name, business_category, address, city, postal_code, country, timezone, capacity, cover_image_url, description, phone, email, opening_hours, status"
+                )
+                .eq("org_id", mapped.primaryOrgId)
+                .eq("status", "active")
+                .order("created_at", { ascending: true }),
+              "venues",
+            ),
+          ]);
+          const fallo = orgRes.error ?? brandRes.error ?? venuesRes.error;
+          if (fallo) throw fallo;
+
+          const list = (venuesRes.data as PartnerVenue[] | null) ?? [];
+          // Venue "primario" = el que la RPC nos dijo, o el primero activo
+          const primary =
+            (mapped.primaryVenueId
+              ? list.find((v) => v.id === mapped.primaryVenueId)
+              : null) ?? list[0] ?? null;
+          snapshot = {
+            status: mapped,
+            org: (orgRes.data as PartnerOrg | null) ?? null,
+            brand: (brandRes.data as PartnerBrand | null) ?? null,
+            venues: list,
+            venue: primary,
+          };
+        }
       }
 
-      const mapped: OnboardingStatus = {
-        userId: row.user_id,
-        hasOrg: row.has_org,
-        hasVenue: row.has_venue,
-        hasEvent: row.has_event,
-        status: (row.onboarding_status as OnboardingStatus["status"]) ?? "in_progress",
-        completedAt: row.completed_at,
-        primaryOrgId: row.primary_org_id,
-        primaryVenueId: row.primary_venue_id,
-        shouldShowWizard: row.should_show_wizard,
-      };
-      setStatus(mapped);
-
-      // 2) Si hay org, cargar la fila completa
-      if (mapped.primaryOrgId) {
-        const { data: orgRow } = await supabase
-          .from("organizations")
-          .select(
-            "id, slug, name, legal_name, country, city, address, postal_code, billing_email, contact_email, contact_phone, vat_id, metadata"
-          )
-          .eq("id", mapped.primaryOrgId)
-          .maybeSingle();
-        setOrg((orgRow as PartnerOrg | null) ?? null);
-
-        // 3) Brand asociado (el create_organization crea exactamente 1)
-        const { data: brandRow } = await supabase
-          .from("brands")
-          .select(
-            "id, org_id, slug, name, tagline, description, logo_url, cover_image_url, primary_color, accent_color, website_url, instagram_handle"
-          )
-          .eq("org_id", mapped.primaryOrgId)
-          .order("sort_order", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        setBrand((brandRow as PartnerBrand | null) ?? null);
-      } else {
-        setOrg(null);
-        setBrand(null);
-      }
-
-      // 4) Si hay org, cargar TODOS los venues activos (multi-local)
-      //    y elegir el "principal" (primer activo creado). Pasify
-      //    soporta hasta N locales por organización (ver migración 0011).
-      if (mapped.primaryOrgId) {
-        const { data: venueRows } = await supabase
-          .from("venues")
-          .select(
-            "id, brand_id, org_id, slug, name, business_category, address, city, postal_code, country, timezone, capacity, cover_image_url, description, phone, email, opening_hours, status"
-          )
-          .eq("org_id", mapped.primaryOrgId)
-          .eq("status", "active")
-          .order("created_at", { ascending: true });
-        const list = (venueRows as PartnerVenue[] | null) ?? [];
-        setVenues(list);
-        // Venue "primario" = el que la RPC nos dijo, o el primero activo
-        const primary =
-          (mapped.primaryVenueId
-            ? list.find((v) => v.id === mapped.primaryVenueId)
-            : null) ?? list[0] ?? null;
-        setVenue(primary);
-      } else {
-        setVenue(null);
-        setVenues([]);
-      }
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      aplicar(snapshot);
+      cargadoParaRef.current = userId;
+      // Limpiamos error si todo respondió OK tras un retry.
+      setError(null);
+    } catch (err) {
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      const msg = getErrorMessage(err);
+      console.error("[usePartnerContext] error:", msg);
+      // Los datos de la última carga buena se conservan.
+      setError(msg);
+      captureError(err, { where: "usePartnerContext.load" });
     } finally {
-      setRefreshing(false);
-      setLoading(false);
+      if (mountedRef.current && seq === seqRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
-  }, [userId]);
+  }, [userId, aplicar]);
 
   useEffect(() => {
     void load();
