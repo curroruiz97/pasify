@@ -37,11 +37,6 @@
     "TS2345: Argument of type '\"qr_code_id\"' is not assignable to parameter of type 'never'.": 2,
     "TS2769: No overload matches this call.": 7
   },
-  "src/components/admin/CalendarManagement.tsx": {
-    "TS2345: Argument of type '\"is_active\"' is not assignable to parameter of type '\"address\" | \"title\" | \"metadata\" | \"id\" | \"status\" | \"org_id\" | \"venue_id\" | \"brand_id\" | \"festival_parent_id\" | \"partner_id\" | \"created_at\" | \"description\" | \"updated_at\" | ... N more ... | \"venue_name\"'.": 1,
-    "TS2345: Argument of type '\"type\"' is not assignable to parameter of type '\"address\" | \"title\" | \"metadata\" | \"id\" | \"status\" | \"org_id\" | \"venue_id\" | \"brand_id\" | \"festival_parent_id\" | \"partner_id\" | \"created_at\" | \"description\" | \"updated_at\" | ... N more ... | \"venue_name\"'.": 1,
-    "TS2352: Conversion of type '{ address: string; brand_id: string; capacity: number; category: string; city: string; created_at: string; currency: string; date_end: string; date_start: string; description: string; festival_parent_id: string; ... N more ...; venue_name: string; }[]' to type 'AdminEventRow[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
-  },
   "src/components/admin/CategoriesManagement.tsx": {
     "TS2322: Type 'string' is not assignable to type 'never'.": 1,
     "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 2,
@@ -118,75 +113,6 @@
     "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
     "TS2769: No overload matches this call.": 1
   },
-  "src/components/client/CategoryCarousel.tsx": {
-    "TS2339: Property 'image_url' does not exist on type '{ id: string; name: string; display_name: string; }'.": 2
-  },
-  "src/components/client/EditProfileSheet.tsx": {
-    "TS2322: Type 'string[]' is not assignable to type 'never'.": 1
-  },
-  "src/components/client/LoyaltyCardsSheet.tsx": {
-    "TS2339: Property 'reward_description' does not exist on type 'SelectQueryError<\"column 'reward_description' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'reward_description' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"client_stamps_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2353: Object literal may only specify known properties, and 'reward_claimed' does not exist in type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 4
-  },
-  "src/components/client/PartnerDiscounts.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string | number | true | { count: number; mrr_cents: number; status: string; }[] | { out_org_id: string; out_plan_code: string; out_status: string; out_subscription_id: string; }[] | { events_count: number; ... N more ...; tiers_count: number; }[] | { ...; }[] | { ...; }[]' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 1,
-    "TS2339: Property 'link_url' does not exist on type 'Discount'.": 2,
-    "TS2339: Property 'qr_enabled' does not exist on type 'Discount'.": 1,
-    "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"discount_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"generate_qr_code\"' is not assignable to parameter of type '\"accept_invitation\" | \"accept_ticket_transfer\" | \"admin_grant_partner_access\" | \"admin_grant_partner_access_until\" | \"admin_list_users\" | \"admin_metrics_timeseries\" | ... N more ... | \"transfer_ticket\"'.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
-  "src/components/client/PartnerEvents.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string | number | true | { count: number; mrr_cents: number; status: string; }[] | { out_org_id: string; out_plan_code: string; out_status: string; out_subscription_id: string; }[] | { events_count: number; ... N more ...; tiers_count: number; }[] | { ...; }[] | { ...; }[]' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 1,
-    "TS2339: Property 'link_url' does not exist on type '{ start_date: string; end_date: string; discount_percentage: number; price: number; location_name: string; profiles: { id: string; business_name: string; first_name: string; last_name: string; profile_image_url: string; avatar_url: string; }; ... N more ...; status: string; }'.": 2,
-    "TS2339: Property 'qr_enabled' does not exist on type '{ start_date: string; end_date: string; discount_percentage: number; price: number; location_name: string; profiles: { id: string; business_name: string; first_name: string; last_name: string; profile_image_url: string; avatar_url: string; }; ... N more ...; status: string; }'.": 1,
-    "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"event_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"generate_qr_code\"' is not assignable to parameter of type '\"accept_invitation\" | \"accept_ticket_transfer\" | \"admin_grant_partner_access\" | \"admin_grant_partner_access_until\" | \"admin_list_users\" | \"admin_metrics_timeseries\" | ... N more ... | \"transfer_ticket\"'.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
-  "src/components/client/PartnerReviews.tsx": {
-    "TS2322: Type 'number' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 3,
-    "TS2769: No overload matches this call.": 1
-  },
-  "src/components/client/PhoneAllergensDialog.tsx": {
-    "TS2345: Argument of type 'Record<string, any>' is not assignable to parameter of type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, Record<...>>'.": 1
-  },
-  "src/components/client/WalletSheet.tsx": {
-    "TS2339: Property 'description' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'description' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'discount_id' does not exist on type 'ResultOne'.": 2,
-    "TS2339: Property 'discount_percentage' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'discount_percentage' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'end_date' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'end_date' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'event_id' does not exist on type 'Awaited<ResultOne & { events: any; partnerProfile: SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">; }>'.": 1,
-    "TS2339: Property 'event_id' does not exist on type 'ResultOne'.": 2,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'image_url' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'image_url' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'partner_id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 2,
-    "TS2339: Property 'partner_id' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 2,
-    "TS2339: Property 'start_date' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'start_date' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'title' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'title' does not exist on type 'SelectQueryError<\"column 'start_date' does not exist on 'events'.\">'.": 1,
-    "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2769: No overload matches this call.": 3
-  },
   "src/components/event/EventListCard.tsx": {
     "TS2353: Object literal may only specify known properties, and 'partnerName' does not exist in type '{ id: string; partnerId?: string; }'.": 1
   },
@@ -198,94 +124,19 @@
     "TS2322: Type 'string' is not assignable to type 'never'.": 4,
     "TS2769: No overload matches this call.": 1
   },
-  "src/components/partner/CreateDiscountDialog.tsx": {
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '{ title: string; description: string; discount_percentage: number; start_date: string; end_date: string; image_url: string; link_url: string; qr_enabled: boolean; daily_scan_limit: number; no_expiry: boolean; allowed_days: string[]; partner_id: string; is_active: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2345: Argument of type '{ title: string; description: string; discount_percentage: number; start_date: string; end_date: string; image_url: string; link_url: string; qr_enabled: boolean; daily_scan_limit: number; no_expiry: boolean; allowed_days: string[]; partner_id: string; is_active: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
-  "src/components/partner/CreateEventDialog.tsx": {
-    "TS2345: Argument of type '{ title: string; description: string; start_date: string; end_date: string; discount_percentage: number; image_url: string; video_url: string; media_type: \"video\" | \"image\"; partner_id: string; ... N more ...; show_in_calendar: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ address?: string; brand_id?: string; capacity?: number; category?: string; city: string; created_at?: string; currency?: string; date_end?: string; date_start: string; description?: string; festival_parent_id?: string; ... N more ...; venue_name?: string; }, { ...; }> | RejectExcessProperti...'.": 1,
-    "TS2345: Argument of type '{ title: string; description: string; start_date: string; end_date: string; discount_percentage: number; image_url: string; video_url: string; media_type: \"video\" | \"image\"; partner_id: string; ... N more ...; show_in_calendar: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ address?: string; brand_id?: string; capacity?: number; category?: string; city?: string; created_at?: string; currency?: string; date_end?: string; date_start?: string; description?: string; festival_parent_id?: string; ... N more ...; venue_name?: string; }, { ...; }>'.": 1
-  },
   "src/components/partner/EventEditorWizard.tsx": {
     "TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ capacity?: number; created_at?: string; currency?: string; description?: string; event_id?: string; id?: string; metadata?: Json; name?: string; per_user_max?: number; price_cents?: number; refundable_until_hours_before?: number; ... N more ...; updated_at?: string; }, Record<...>>'.": 1,
     "TS2345: Argument of type '{ event_id: string; name: string; description: string; price_cents: number; currency: string; capacity: number; per_user_max: number; status: string; sort_order: number; }[]' is not assignable to parameter of type 'RejectExcessProperties<{ capacity?: number; created_at?: string; currency?: string; description?: string; event_id: string; id?: string; metadata?: Json; name: string; per_user_max?: number; price_cents: number; refundable_until_hours_before?: number; ... N more ...; updated_at?: string; }, { ...; }> | RejectExcessP...'.": 1
-  },
-  "src/components/partner/EventParticipants.tsx": {
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'user_id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 3,
-    "TS2345: Argument of type '\"event_id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2698: Spread types may only be created from object types.": 1,
-    "TS2769: No overload matches this call.": 2
   },
   "src/components/partner/FestivalBuilder.tsx": {
     "TS2345: Argument of type '{ event_id: string; name: string; description: string; price_cents: number; currency: string; capacity: number; per_user_max: number; status: string; sort_order: number; metadata: { is_full_pass: boolean; }; }[]' is not assignable to parameter of type 'RejectExcessProperties<{ capacity?: number; created_at?: string; currency?: string; description?: string; event_id: string; id?: string; metadata?: Json; name: string; per_user_max?: number; price_cents: number; refundable_until_hours_before?: number; ... N more ...; updated_at?: string; }, { ...; }> | RejectExcessP...'.": 1,
     "TS2345: Argument of type '{ event_id: string; name: string; description: string; price_cents: number; currency: string; capacity: number; per_user_max: number; status: string; sort_order: number; }[]' is not assignable to parameter of type 'RejectExcessProperties<{ capacity?: number; created_at?: string; currency?: string; description?: string; event_id: string; id?: string; metadata?: Json; name: string; per_user_max?: number; price_cents: number; refundable_until_hours_before?: number; ... N more ...; updated_at?: string; }, { ...; }> | RejectExcessP...'.": 1
   },
-  "src/components/partner/LoyaltyCardConfig.tsx": {
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'is_active' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'reward_description' does not exist on type 'ResultOne'.": 1,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'is_active' does not exist in type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'reward_description' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'reward_description' does not exist in type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2769: No overload matches this call.": 4
-  },
-  "src/components/partner/PartnerEventsManager.tsx": {
-    "TS2339: Property 'deleteDiscount' does not exist on type '{ cleanupOrphanedFiles: () => Promise<void>; deleteFile: () => Promise<void>; deletePostMedia: () => Promise<void>; deleteEventMedia: () => Promise<void>; ... N more ...; deletePartnerAvatar: () => Promise<...>; }'.": 1,
-    "TS2339: Property 'deleteEvent' does not exist on type '{ cleanupOrphanedFiles: () => Promise<void>; deleteFile: () => Promise<void>; deletePostMedia: () => Promise<void>; deleteEventMedia: () => Promise<void>; ... N more ...; deletePartnerAvatar: () => Promise<...>; }'.": 1,
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 1,
-    "TS2345: Argument of type '\"discount_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"event_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"type\"' is not assignable to parameter of type '\"address\" | \"title\" | \"metadata\" | \"id\" | \"status\" | \"org_id\" | \"venue_id\" | \"brand_id\" | \"festival_parent_id\" | \"partner_id\" | \"created_at\" | \"description\" | \"updated_at\" | ... N more ... | \"venue_name\"'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'qr_enabled' does not exist in type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2769: No overload matches this call.": 4
-  },
-  "src/components/partner/PartnerGalleryManager.tsx": {
-    "TS2339: Property 'deleteGalleryItem' does not exist on type '{ cleanupOrphanedFiles: () => Promise<void>; deleteFile: () => Promise<void>; deletePostMedia: () => Promise<void>; deleteEventMedia: () => Promise<void>; ... N more ...; deletePartnerAvatar: () => Promise<...>; }'.": 1,
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'display_order' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
   "src/components/partner/PartnerOnboardingWizard.tsx": {
     "TS2322: Type 'Record<string, unknown>' is not assignable to type 'Json'.": 2
   },
-  "src/components/partner/PartnerProfileEdit.tsx": {
-    "TS2345: Argument of type '{ latitude: number; longitude: number; business_name: any; business_description: any; business_address: any; business_country: any; business_city: any; business_phone: any; business_category: any; profile_image_url: any; cover_image_url: any; }' is not assignable to parameter of type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, { ...; }>'.": 1,
-    "TS2769: No overload matches this call.": 1
-  },
   "src/components/partner/PartnerReports.tsx": {
     "TS2352: Conversion of type '{ id: string; status: \"refunded\" | \"pending\" | \"cancelled\" | \"paid\" | \"used\"; amount_paid_cents: number; paid_at: string; events: { partner_id: string; }; }[]' to type 'TicketRow[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
-  },
-  "src/components/partner/PartnerSocialProfile.tsx": {
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'likes' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'posts' does not exist on type 'SelectQueryError<\"column 'post_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'post_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2353: Object literal may only specify known properties, and 'profile_image_url' does not exist in type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, { ...; }>'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 2,
-    "TS2769: No overload matches this call.": 3
-  },
-  "src/components/partner/PartnerStats.tsx": {
-    "TS2304: Cannot find name 'Locale'.": 1,
-    "TS2339: Property 'end_date' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'end_date' does not exist on type 'SelectQueryError<\"column 'is_active' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'is_active' does not exist on 'events'.\">'.": 2,
-    "TS2339: Property 'is_active' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'is_active' does not exist on type 'SelectQueryError<\"column 'is_active' does not exist on 'events'.\">'.": 1,
-    "TS2339: Property 'rating' does not exist on type 'SelectQueryError<\"column 'rating' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'rating' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'used_at' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 2,
-    "TS2345: Argument of type '\"event_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2345: Argument of type '\"type\"' is not assignable to parameter of type '\"address\" | \"title\" | \"metadata\" | \"id\" | \"status\" | \"org_id\" | \"venue_id\" | \"brand_id\" | \"festival_parent_id\" | \"partner_id\" | \"created_at\" | \"description\" | \"updated_at\" | ... N more ... | \"venue_name\"'.": 1,
-    "TS2698: Spread types may only be created from object types.": 1,
-    "TS2769: No overload matches this call.": 5
   },
   "src/components/quiz/QuizMatch.tsx": {
     "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 2,
@@ -318,150 +169,9 @@
     "TS2322: Type 'string' is not assignable to type 'never'.": 11,
     "TS2769: No overload matches this call.": 2
   },
-  "src/components/social/CommentsSheet.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 3,
-    "TS2322: Type 'boolean' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 4,
-    "TS2345: Argument of type '\"post_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"status\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
   "src/components/social/CreatePoll.tsx": {
     "TS2322: Type 'string' is not assignable to type 'never'.": 5,
     "TS2769: No overload matches this call.": 2
-  },
-  "src/components/social/CreatePost.tsx": {
-    "TS2322: Type '\"video\" | \"image\"' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'any' is not assignable to type 'never'.": 5,
-    "TS2322: Type 'boolean' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 6,
-    "TS2769: No overload matches this call.": 1
-  },
-  "src/components/social/EventCard.tsx": {
-    "TS2322: Type 'string | number | true | { count: number; mrr_cents: number; status: string; }[] | { out_org_id: string; out_plan_code: string; out_status: string; out_subscription_id: string; }[] | { events_count: number; ... N more ...; tiers_count: number; }[] | { ...; }[] | { ...; }[]' is not assignable to type 'string'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 8,
-    "TS2339: Property 'allergens' does not exist on type 'SelectQueryError<\"column 'allergens' does not exist on 'profiles'.\">'.": 4,
-    "TS2339: Property 'catch' does not exist on type 'PromiseLike<void>'.": 1,
-    "TS2339: Property 'code' does not exist on type 'SelectQueryError<\"column 'code' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'code' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 3,
-    "TS2339: Property 'phone' does not exist on type 'SelectQueryError<\"column 'allergens' does not exist on 'profiles'.\">'.": 3,
-    "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"event_id\"' is not assignable to parameter of type 'never'.": 4,
-    "TS2345: Argument of type '\"generate_qr_code\"' is not assignable to parameter of type '\"accept_invitation\" | \"accept_ticket_transfer\" | \"admin_grant_partner_access\" | \"admin_grant_partner_access_until\" | \"admin_list_users\" | \"admin_metrics_timeseries\" | ... N more ... | \"transfer_ticket\"'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2769: No overload matches this call.": 7
-  },
-  "src/components/social/LikesSheet.tsx": {
-    "TS2339: Property 'user_id' does not exist on type 'ResultOne'.": 2,
-    "TS2345: Argument of type '\"post_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 1
-  },
-  "src/components/social/NotificationsSheet.tsx": {
-    "TS2339: Property 'client_id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'content' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'created_at' does not exist on type 'ResultOne'.": 2,
-    "TS2339: Property 'discount_id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'discounts' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'event_id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'events' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 2,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 2,
-    "TS2339: Property 'profiles' does not exist on type 'ResultOne'.": 2,
-    "TS2339: Property 'user_id' does not exist on type 'ResultOne'.": 1,
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"type\"' is not assignable to parameter of type '\"address\" | \"title\" | \"metadata\" | \"id\" | \"status\" | \"org_id\" | \"venue_id\" | \"brand_id\" | \"festival_parent_id\" | \"partner_id\" | \"created_at\" | \"description\" | \"updated_at\" | ... N more ... | \"venue_name\"'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 3,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 3,
-    "TS2698: Spread types may only be created from object types.": 2,
-    "TS2769: No overload matches this call.": 6
-  },
-  "src/components/social/PollCard.tsx": {
-    "TS2322: Type 'string' is not assignable to type 'never'.": 3,
-    "TS2339: Property 'business_name' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'first_name' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'last_name' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'option_id' does not exist on type 'SelectQueryError<\"column 'option_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'option_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'option_id' does not exist on type 'SelectQueryError<\"column 'user_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'user_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'profile_image_url' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'user_id' does not exist on type 'SelectQueryError<\"column 'user_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'user_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 3,
-    "TS2345: Argument of type '\"poll_id\"' is not assignable to parameter of type 'never'.": 3,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '(SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>)[]' is not assignable to parameter of type 'SetStateAction<PollOption[]>'.": 1,
-    "TS2769: No overload matches this call.": 4
-  },
-  "src/components/social/PostCard.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 3,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 3,
-    "TS2339: Property 'deletePost' does not exist on type '{ cleanupOrphanedFiles: () => Promise<void>; deleteFile: () => Promise<void>; deletePostMedia: () => Promise<void>; deleteEventMedia: () => Promise<void>; ... N more ...; deletePartnerAvatar: () => Promise<...>; }'.": 1,
-    "TS2345: Argument of type '\"post_id\"' is not assignable to parameter of type 'never'.": 5,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 3,
-    "TS2769: No overload matches this call.": 8
-  },
-  "src/components/social/PostDetailModal.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 3,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 4,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"post_id\"' is not assignable to parameter of type 'never'.": 6,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 3,
-    "TS2353: Object literal may only specify known properties, and 'post_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 11
-  },
-  "src/components/social/SharePostSheet.tsx": {
-    "TS2322: Type 'string' is not assignable to type 'never'.": 1,
-    "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">[]' is not assignable to parameter of type 'SetStateAction<User[]>'.": 2,
-    "TS2353: Object literal may only specify known properties, and 'content' does not exist in type '({ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } & {}) | ... N more ... | RejectExcessProperties<....'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'post_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'user1_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2769: No overload matches this call.": 7
-  },
-  "src/components/social/StoriesCarousel.tsx": {
-    "TS2339: Property 'profiles' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'story_id' does not exist on type 'SelectQueryError<\"column 'story_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'story_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'user_id' does not exist on type 'ResultOne'.": 4,
-    "TS2345: Argument of type '\"status\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"viewer_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 2
-  },
-  "src/components/social/StoryViewer.tsx": {
-    "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"story_id\"' is not assignable to parameter of type 'never'.": 2,
-    "TS2353: Object literal may only specify known properties, and 'story_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 4
-  },
-  "src/components/social/StoryViewers.tsx": {
-    "TS2345: Argument of type '\"story_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type 'ResultOne[]' is not assignable to parameter of type 'SetStateAction<Viewer[]>'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 1
-  },
-  "src/components/social/UserVideoFeed.tsx": {
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 1,
-    "TS2345: Argument of type '\"media_type\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 1
-  },
-  "src/components/social/VideoFeed.tsx": {
-    "TS2339: Property 'data' does not exist on type '{ posts: Post[]; isLoading: boolean; fetchNextPage: () => Promise<void>; hasNextPage: boolean; isFetchingNextPage: boolean; }'.": 1,
-    "TS2554: Expected 0 arguments, but got 2.": 1
-  },
-  "src/components/social/VideoViewer.tsx": {
-    "TS2322: Type 'any' is not assignable to type 'never'.": 2,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 2,
-    "TS2345: Argument of type '\"post_id\"' is not assignable to parameter of type 'never'.": 6,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 3,
-    "TS2345: Argument of type '\"viewer_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'post_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2769: No overload matches this call.": 9
   },
   "src/components/ui/loader-one.tsx": {
     "TS2353: Object literal may only specify known properties, and 'WebkitUserDrag' does not exist in type 'Properties<string | number, string & {}>'.": 1
@@ -490,28 +200,12 @@
     "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
     "TS2769: No overload matches this call.": 3
   },
-  "src/hooks/useClientOnboarding.ts": {
-    "TS2339: Property 'cover_image_url' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'profile_image_url' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1
-  },
   "src/hooks/useEvents.ts": {
     "TS2339: Property 'eq' does not exist on type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...'.": 3,
     "TS2352: Conversion of type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...' to type 'PostgrestFilterBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ......' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
   },
-  "src/hooks/useGallery.ts": {
-    "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2769: No overload matches this call.": 1
-  },
   "src/hooks/useOnlinePresence.ts": {
     "TS2353: Object literal may only specify known properties, and 'last_active_at' does not exist in type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, { ...; }>'.": 1
-  },
-  "src/hooks/usePartnerOnboarding.ts": {
-    "TS2339: Property 'business_city' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'business_name' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
-    "TS2339: Property 'profile_image_url' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1
-  },
-  "src/hooks/usePartners.ts": {
-    "TS2345: Argument of type '(c: { slug: string; label_es: string | null; label_en: string | null; }) => { id: string; name: string; display_name: string; }' is not assignable to parameter of type '(value: SelectQueryError<\"column 'slug' does not exist on 'business_categories'.\">, index: number, array: SelectQueryError<\"column 'slug' does not exist on 'business_categories'.\">[]) => { ...; }'.": 1
   },
   "src/hooks/useQuizLeaderboard.ts": {
     "TS2339: Property 'city' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 1,
@@ -620,35 +314,5 @@
     "TS2339: Property 'profile_image_url' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 2,
     "TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, Record<...>>'.": 1,
     "TS2353: Object literal may only specify known properties, and 'start_date' does not exist in type 'RejectExcessProperties<{ address?: string; brand_id?: string; capacity?: number; category?: string; city: string; created_at?: string; currency?: string; date_end?: string; date_start: string; description?: string; festival_parent_id?: string; ... N more ...; venue_name?: string; }, { ...; }> | RejectExcessProperti...'.": 1
-  },
-  "src/pages/Social.tsx": {
-    "TS2322: Type 'Poll' is not assignable to type '{ id: string; user_id: string; question: string; image_url: string; created_at: string; profiles?: { id: string; first_name: string; last_name: string; business_name: string; profile_image_url: string; }; }'.": 1,
-    "TS2339: Property 'data' does not exist on type '{ posts: Post[]; isLoading: boolean; fetchNextPage: () => Promise<void>; hasNextPage: boolean; isFetchingNextPage: boolean; refetch: () => Promise<void>; }'.": 1,
-    "TS2339: Property 'invalidatePosts' does not exist on type '{ invalidateAll: () => Promise<void>; }'.": 1,
-    "TS2349: This expression is not callable.": 2,
-    "TS2554: Expected 0 arguments, but got 2.": 2,
-    "TS2741: Property 'qr_enabled' is missing in type '{ start_date: string; end_date: string; discount_percentage: number | null; price: number; location_name: string; profiles: { id: string; business_name: string; first_name: string; last_name: string; profile_image_url: string; avatar_url: string; }; ... N more ...; status: string; }' but required in type '{ id: string; title: string; description: string; image_url: string; video_url?: string; media_type?: string; start_date: string; end_date: string; discount_percentage: number; partner_id: string; qr_enabled: boolean; event_category?: string; }'.": 1
-  },
-  "src/pages/UserProfile.tsx": {
-    "TS2322: Type 'number' is not assignable to type 'never'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 1,
-    "TS2322: Type '{ unreadCount: number; markAllAsRead: () => void; refetch: () => Promise<void>; }' is not assignable to type 'number'.": 1,
-    "TS2339: Property 'conversation_id' does not exist on type 'SelectQueryError<\"column 'conversation_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'conversation_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 2,
-    "TS2339: Property 'id' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'likes' does not exist on type 'ResultOne'.": 1,
-    "TS2339: Property 'loadUserStats' does not exist on type '{ badges: Badge[]; userBadges: Badge[]; userStats: UserStats; loading: boolean; error: Error; refetch: () => Promise<void>; }'.": 1,
-    "TS2339: Property 'newBadge' does not exist on type '{ badges: Badge[]; userBadges: Badge[]; userStats: UserStats; loading: boolean; error: Error; refetch: () => Promise<void>; }'.": 1,
-    "TS2339: Property 'posts' does not exist on type 'SelectQueryError<\"column 'post_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'post_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2339: Property 'setNewBadge' does not exist on type '{ badges: Badge[]; userBadges: Badge[]; userStats: UserStats; loading: boolean; error: Error; refetch: () => Promise<void>; }'.": 1,
-    "TS2339: Property 'total_accesses' does not exist on type 'SelectQueryError<\"column 'total_accesses' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'total_accesses' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,
-    "TS2345: Argument of type '\"conversation_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"status\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2345: Argument of type '\"user_id\"' is not assignable to parameter of type 'never'.": 7,
-    "TS2353: Object literal may only specify known properties, and 'profile_image_url' does not exist in type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, { ...; }>'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'total_accesses' does not exist in type 'RejectExcessProperties<{ capability_code?: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity?: \"high\" | ... N more ... | \"critical\"; title?: string; } | ... N more ... | { ......'.": 1,
-    "TS2353: Object literal may only specify known properties, and 'user1_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... N more ... | \"critical\"; title: string; } | ... N more ... | { ...; }...'.": 1,
-    "TS2554: Expected 0-1 arguments, but got 2.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
-    "TS2769: No overload matches this call.": 11
   }
 }
