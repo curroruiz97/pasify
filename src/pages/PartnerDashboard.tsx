@@ -549,7 +549,7 @@ const PartnerDashboard = () => {
         { id: "apps", label: "Apps", icon: <Plug className="h-4 w-4" /> },
         { id: "whitelabel", label: "White-label", icon: <Crown className="h-4 w-4" /> },
         { id: "benchmarks", label: "Benchmarks", icon: <BarChart3 className="h-4 w-4" /> },
-        { id: "stripe", label: "Stripe", icon: <CreditCard className="h-4 w-4" /> },
+        { id: "stripe", label: "Cobros", icon: <CreditCard className="h-4 w-4" /> },
       ],
     },
     { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
@@ -1447,40 +1447,94 @@ const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName:
  * Stripe: sin botones que no hacen nada. El estado "conectada" sale de la
  * organización (lo que de verdad usa el checkout), no de profiles.
  */
+type BalanceRow = {
+  paid_orders: number;
+  gross_cents: number;
+  refunded_cents: number;
+  fee_cents: number;
+  net_cents: number;
+};
+
+// partner_balance_v (security_invoker) aún no está en los types generados.
+const loadBalance = (orgId: string) =>
+  (
+    supabase as unknown as {
+      from: (t: "partner_balance_v") => {
+        select: (c: string) => {
+          eq: (
+            k: string,
+            v: string,
+          ) => { maybeSingle: () => Promise<{ data: BalanceRow | null; error: { message: string } | null }> };
+        };
+      };
+    }
+  )
+    .from("partner_balance_v")
+    .select("paid_orders, gross_cents, refunded_cents, fee_cents, net_cents")
+    .eq("org_id", orgId)
+    .maybeSingle();
+
+const euros = (cents: number) =>
+  new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format((cents ?? 0) / 100);
+
 const StripeSection = ({ orgId }: { orgId: string | null }) => {
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [balance, setBalance] = useState<BalanceRow | null>(null);
+  const [balanceState, setBalanceState] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!orgId) {
       setConnected(false);
+      setBalanceState("ready");
       return;
     }
     let cancelled = false;
+    setBalanceState("loading");
     (async () => {
       try {
-        const { data, error } = await timed(
-          supabase
-            .from("organizations")
-            .select("stripe_connect_account_id, stripe_connect_charges_enabled")
-            .eq("id", orgId)
-            .maybeSingle(),
-          "organizations.stripe"
-        );
+        const [orgRes, balRes] = await Promise.all([
+          timed(
+            supabase
+              .from("organizations")
+              .select("stripe_connect_account_id, stripe_connect_charges_enabled")
+              .eq("id", orgId)
+              .maybeSingle(),
+            "organizations.stripe"
+          ),
+          timed(loadBalance(orgId), "partner_balance_v"),
+        ]);
         if (cancelled) return;
-        setConnected(!error && !!data?.stripe_connect_account_id && data?.stripe_connect_charges_enabled === true);
+        const org = orgRes.data;
+        setConnected(!orgRes.error && !!org?.stripe_connect_account_id && org?.stripe_connect_charges_enabled === true);
+        if (balRes.error) throw new Error(balRes.error.message);
+        setBalance(balRes.data);
+        setBalanceState("ready");
       } catch {
-        if (!cancelled) setConnected(false);
+        if (!cancelled) {
+          setConnected((c) => c ?? false);
+          setBalanceState("error");
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, reloadKey]);
+
+  const rows: Array<{ label: string; value: number; sign?: "-" ; strong?: boolean }> = balance
+    ? [
+        { label: "Cobrado por tus entradas", value: balance.gross_cents },
+        { label: "Reembolsado a compradores", value: balance.refunded_cents, sign: "-" },
+        { label: "Comisión de Pasify", value: balance.fee_cents, sign: "-" },
+        { label: "Neto de tus ventas", value: balance.net_cents, strong: true },
+      ]
+    : [];
 
   return (
     <div>
-      <h1 className="mb-1 text-3xl font-bold tracking-tight">Stripe</h1>
-      <p className="mb-6 text-sm text-muted-foreground">Cómo cobras las entradas que vendes.</p>
+      <h1 className="mb-1 text-3xl font-bold tracking-tight">Cobros</h1>
+      <p className="mb-6 text-sm text-muted-foreground">Cómo cobras las entradas que vendes y cuánto llevas.</p>
 
       <Card>
         <CardContent className="p-6">
@@ -1500,10 +1554,53 @@ const StripeSection = ({ orgId }: { orgId: string | null }) => {
             <div className="flex items-start gap-3">
               <CreditCard className="mt-0.5 h-6 w-6 shrink-0 text-muted-foreground" />
               <p className="text-sm text-foreground">
-                Pasify cobra las entradas por ti y te liquida lo vendido. Pronto podrás conectar tu
-                propia cuenta de Stripe para cobrar directamente.
+                Pasify cobra las entradas por ti y te liquida lo vendido por transferencia. Pronto podrás
+                conectar tu propia cuenta de Stripe para cobrar directamente.
               </p>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardContent className="p-6">
+          <h2 className="text-sm font-semibold">Tus ventas hasta hoy</h2>
+          {balanceState === "loading" ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando…
+            </div>
+          ) : balanceState === "error" ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              No hemos podido cargar tus cobros.
+              <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+                <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                Reintentar
+              </Button>
+            </div>
+          ) : !balance || balance.paid_orders === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Aún no has vendido entradas. Cuando vendas, aquí verás lo cobrado, la comisión y tu neto.
+            </p>
+          ) : (
+            <>
+              <dl className="mt-4 divide-y divide-border">
+                {rows.map((r) => (
+                  <div key={r.label} className="flex items-center justify-between py-2.5 text-sm">
+                    <dt className={r.strong ? "font-semibold text-foreground" : "text-muted-foreground"}>{r.label}</dt>
+                    <dd className={`tabular-nums ${r.strong ? "text-base font-semibold text-foreground" : "text-foreground"}`}>
+                      {r.sign === "-" && r.value > 0 ? "−" : ""}
+                      {euros(r.value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+                {balance.paid_orders} {balance.paid_orders === 1 ? "pedido pagado" : "pedidos pagados"}. El neto es
+                lo que te corresponde antes de descontar las liquidaciones ya hechas. Si tienes dudas sobre una
+                liquidación, escríbenos desde Soporte.
+              </p>
+            </>
           )}
         </CardContent>
       </Card>
