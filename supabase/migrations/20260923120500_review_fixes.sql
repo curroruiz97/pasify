@@ -123,3 +123,22 @@ $function$;
 
 REVOKE EXECUTE ON FUNCTION public.auto_approve_if_allowed(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.auto_approve_if_allowed(text) TO authenticated, service_role;
+
+-- ============================================================================
+-- 5) Funciones de trigger: no son RPC
+-- ============================================================================
+-- Postgres solo comprueba EXECUTE al crear el trigger, no al dispararlo, así
+-- que quitarlo no afecta a los triggers y las saca de la API (A7-12).
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig
+    FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace
+      AND p.prorettype = 'trigger'::regtype
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', r.sig);
+  END LOOP;
+END $$;
