@@ -11,12 +11,17 @@
 //
 // Los efectos nunca lanzan: si falla el correo o una notificación se
 // registra en el log y la compra sigue confirmada.
+//
+// Si el evento ya está cancelado (el pago de una sesión que seguía abierta
+// llega después de cancelar), no se mandan entradas: se crean sus solicitudes
+// de reembolso por cancelación y se devuelve el dinero en el momento.
 
 import { supabaseAdmin, SUPABASE_URL } from "./supabase.ts";
 import { logger } from "./logger.ts";
 import { sendEmail } from "./resend.ts";
 import { DEFAULT_TIMEZONE, formatMoney, ticketDoorCode, ticketPurchasedEmail } from "./email-templates.ts";
 import { enqueueNotification } from "./notify.ts";
+import { executeRefund, loadRefundContext } from "./refund.ts";
 
 export interface HandleOrderPaidInput {
   sessionId: string;
@@ -61,6 +66,9 @@ export async function handleOrderPaid(input: HandleOrderPaidInput): Promise<Hand
 
   if (row.newly_paid) {
     log.info("order_newly_paid", { order_id: row.order_id });
+    if (await refundIfEventCancelled(row.order_id, row.event_id, log)) {
+      return { orderId: row.order_id, newlyPaid: true };
+    }
     await runPaidEffects(row.order_id, log);
   } else {
     log.info("order_already_paid", { order_id: row.order_id });
@@ -68,6 +76,42 @@ export async function handleOrderPaid(input: HandleOrderPaidInput): Promise<Hand
   }
 
   return { orderId: row.order_id, newlyPaid: !!row.newly_paid };
+}
+
+/* ===========================================================================
+   Pago de un evento ya cancelado
+   =========================================================================== */
+
+async function refundIfEventCancelled(orderId: string, eventId: string | null, log: Log): Promise<boolean> {
+  if (!eventId) return false;
+  const { data: ev, error } = await supabaseAdmin
+    .from("events")
+    .select("status, metadata")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (error || ev?.status !== "cancelled") return false;
+
+  log.warn("paid_order_for_cancelled_event", { order_id: orderId, event_id: eventId });
+  const note = (ev.metadata as { cancel_reason?: string } | null)?.cancel_reason ?? null;
+  const { data: ids, error: reqErr } = await supabaseAdmin.rpc("create_cancellation_refund_requests", {
+    _event_id: eventId,
+    _decided_by: null,
+    _note: note,
+    _order_id: orderId,
+  });
+  if (reqErr) {
+    // El pago queda registrado y sin entradas enviadas; el local lo verá al
+    // reintentar los reembolsos de la cancelación.
+    log.error("late_payment_refund_requests_failed", { order_id: orderId, error: reqErr.message });
+    return true;
+  }
+  for (const id of (ids ?? []) as string[]) {
+    const ctx = await loadRefundContext(id);
+    if ("missing" in ctx) continue;
+    const out = await executeRefund(ctx);
+    if (!out.ok) log.error("late_payment_refund_failed", { order_id: orderId, request_id: id, code: out.code });
+  }
+  return true;
 }
 
 /* ===========================================================================

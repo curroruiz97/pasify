@@ -132,10 +132,15 @@ async function handleChargeRefunded(stripe: Stripe, charge: Stripe.Charge): Prom
 
   for (const r of refunds) {
     if (r.status !== "succeeded") continue;
+    // Los reembolsos de Pasify llevan la solicitud en los metadatos: así se
+    // casan bien aunque un pedido tenga varias en proceso a la vez (una
+    // cancelación reembolsa cada entrada por separado).
+    const requestId = r.metadata?.pasify_refund_request_id;
     const { error } = await supabaseAdmin.rpc("mark_refund_processed", {
       _stripe_refund_id: r.id,
       _amount_refunded_cents: r.amount,
       _payment_intent_id: paymentIntentId,
+      ...(requestId && /^[0-9a-f-]{36}$/i.test(requestId) ? { _refund_request_id: requestId } : {}),
     });
     if (error) throw new Error(`mark_refund_processed_failed: ${error.message}`);
   }

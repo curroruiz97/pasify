@@ -95,6 +95,9 @@ jobs:
           psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
             -v ON_ERROR_STOP=1 \
             -f tests/db/review_fixes.sql
+          psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 \
+            -f tests/db/cancel_event.sql
 
       - name: Stop Supabase
         if: always()

@@ -24,7 +24,9 @@ import {
   Lock,
   EyeOff,
   QrCode,
+  RotateCcw,
   Send,
+  XCircle,
   Share2,
   MoreVertical,
   Receipt,
@@ -88,6 +90,7 @@ import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
 import { EventQrDialog } from "@/components/partner/EventQrDialog";
+import { CancelEventDialog, type CancelTarget } from "@/components/partner/CancelEventDialog";
 import { shareEventLink } from "@/lib/eventLinks";
 import { isDoorLocked } from "@/lib/doorLock";
 import { StatusBadge } from "@/components/partner/StatusBadge";
@@ -224,6 +227,8 @@ const PartnerDashboard = () => {
   const [unpublishTarget, setUnpublishTarget] = useState<EventRow | null>(null);
   // QR del enlace público de un evento (cartelería).
   const [qrTarget, setQrTarget] = useState<EventRow | null>(null);
+  // Cancelar con reembolso, o reintentar los reembolsos de uno cancelado.
+  const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [changingStatus, setChangingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Email del user (para autocompletar email facturación del wizard)
@@ -976,6 +981,21 @@ const PartnerDashboard = () => {
                                         Retirar de la venta
                                       </DropdownMenuItem>
                                     )}
+                                    {(e.status === "published" || e.status === "draft") && (
+                                      <DropdownMenuItem
+                                        onClick={() => setCancelTarget(e)}
+                                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                      >
+                                        <XCircle className="mr-2 h-4 w-4" />
+                                        Cancelar evento
+                                      </DropdownMenuItem>
+                                    )}
+                                    {e.status === "cancelled" && e.tickets_sold > 0 && (
+                                      <DropdownMenuItem onClick={() => setCancelTarget(e)}>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Reintentar reembolsos
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       onClick={() => setDeleteTarget(e)}
@@ -1010,6 +1030,7 @@ const PartnerDashboard = () => {
                         onShare={() => void shareEventLink(e.id, e.title)}
                         onOpenPublic={() => navigate(`/e/${e.id}`)}
                         onShowQr={() => setQrTarget(e)}
+                        onCancel={() => setCancelTarget(e)}
                       />
                     ))}
                   </div>
@@ -1287,6 +1308,11 @@ const PartnerDashboard = () => {
       />
 
       <EventQrDialog event={qrTarget} onOpenChange={(open) => !open && setQrTarget(null)} />
+      <CancelEventDialog
+        target={cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        onDone={reloadEvents}
+      />
 
       {/* Confirmación de retirar de la venta */}
       <AlertDialog

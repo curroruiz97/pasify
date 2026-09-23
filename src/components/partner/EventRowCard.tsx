@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, EyeOff, MoreVertical, Music, Pencil, QrCode, Send, Share2, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, EyeOff, MoreVertical, Music, Pencil, QrCode, RotateCcw, Send, Share2, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -51,6 +51,8 @@ export interface EventRowCardProps {
   onShare?: () => void;
   onOpenPublic?: () => void;
   onShowQr?: () => void;
+  /** Cancelar (publicado/borrador) o reintentar reembolsos (cancelado). */
+  onCancel?: () => void;
 }
 
 const formatShortDate = (iso: string) =>
@@ -85,6 +87,7 @@ export const EventRowCard = ({
   onShare,
   onOpenPublic,
   onShowQr,
+  onCancel,
 }: EventRowCardProps) => {
   return (
     <article
@@ -215,6 +218,21 @@ export const EventRowCard = ({
               <DropdownMenuItem onClick={onUnpublish}>
                 <EyeOff className="mr-2 h-4 w-4" />
                 Retirar de la venta
+              </DropdownMenuItem>
+            )}
+            {onCancel && (event.status === "published" || event.status === "draft") && (
+              <DropdownMenuItem
+                onClick={onCancel}
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Cancelar evento
+              </DropdownMenuItem>
+            )}
+            {onCancel && event.status === "cancelled" && event.tickets_sold > 0 && (
+              <DropdownMenuItem onClick={onCancel}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reintentar reembolsos
               </DropdownMenuItem>
             )}
             {onDelete && (onEdit || onDuplicate) && (
