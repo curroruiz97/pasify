@@ -106,7 +106,7 @@ BEGIN
     'support_reply',
     'Te ha respondido el equipo de Pasify',
     left(NEW.body, 140),
-    CASE WHEN v_conv.kind = 'partner_admin' THEN '/#/partner-dashboard' ELSE '/#/client-dashboard' END,
+    CASE WHEN v_conv.kind = 'partner_admin' THEN '/#/partner-dashboard/soporte' ELSE '/#/client-dashboard' END,
     jsonb_build_object('conversation_id', v_conv.id)
   );
   RETURN NEW;

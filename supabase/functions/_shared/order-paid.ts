@@ -388,7 +388,7 @@ async function notifyPurchase(ctx: OrderContext, log: Log): Promise<void> {
       kind: "ticket_sold",
       title: `Nueva venta · ${title}`,
       body: `${paidCount} ${paidCount === 1 ? "entrada" : "entradas"} · ${amount}`,
-      link: "/#/partner-dashboard",
+      link: "/#/partner-dashboard/eventos",
       payload: { order_id: order.id, event_id: order.event_id },
     }));
   }

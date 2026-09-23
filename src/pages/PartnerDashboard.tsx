@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,14 @@ type Section =
 
 type NavNode = NavTreeNode<Section>;
 
+const ALL_SECTIONS: readonly Section[] = [
+  "metricas", "live", "autopilot", "forecast", "pricing", "eventos", "asistentes", "scanner",
+  "door_vision", "tpv", "cashless", "vip", "crm", "marketing", "channels", "team", "apps",
+  "whitelabel", "benchmarks", "stripe", "soporte",
+];
+const isSection = (value: string | undefined): value is Section =>
+  !!value && (ALL_SECTIONS as readonly string[]).includes(value);
+
 /**
  * SECCIONES MAQUETA — OCULTAS SALVO EN LA ORGANIZACIÓN DE DEMO.
  *
@@ -207,7 +215,14 @@ const PROFILE_COLUMNS = "id, business_name, business_category, city, business_ci
 const PartnerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [section, setSection] = useState<Section>("metricas");
+  // La sección vive en la URL (/partner-dashboard/:section): atrás, recargar
+  // y los enlaces de las notificaciones llevan a la sección correcta.
+  const { section: sectionParam } = useParams<{ section?: string }>();
+  const section: Section = isSection(sectionParam) ? sectionParam : "metricas";
+  const setSection = useCallback(
+    (id: Section) => navigate(id === "metricas" ? "/partner-dashboard" : `/partner-dashboard/${id}`),
+    [navigate],
+  );
   const [userId, setUserId] = useState<string>("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);

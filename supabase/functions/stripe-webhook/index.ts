@@ -185,7 +185,7 @@ async function handleAccountUpdated(account: Stripe.Account): Promise<Outcome> {
       kind: "stripe_connect_ready",
       title: "Stripe Connect listo",
       body: "Tu cuenta puede recibir pagos ya mismo.",
-      link: "/#/partner-dashboard",
+      link: "/#/partner-dashboard/stripe",
     });
   }
   return "processed";
@@ -236,7 +236,7 @@ async function handlePayout(payout: Stripe.Payout, account: string | null): Prom
       kind: "payout_arrived",
       title: "Payout en camino",
       body: `${(payout.amount / 100).toFixed(2)} ${currency}`,
-      link: "/#/partner-dashboard",
+      link: "/#/partner-dashboard/stripe",
     });
 
     const { data: ownerProfile } = await supabaseAdmin.from("profiles").select("email").eq("id", org.owner_id).maybeSingle();

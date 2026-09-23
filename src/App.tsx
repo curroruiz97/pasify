@@ -276,9 +276,15 @@ const NotificationDeepLinkHandler = () => {
 // Niente AnimatePresence/exit per evitare flicker col HashRouter.
 const PageTransitions = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  // Las secciones del panel de local viven en la URL
+  // (/partner-dashboard/:section): cambiar de sección no puede remontar el
+  // panel entero (perdería estado y volvería a cargarlo todo).
+  const transitionKey = location.pathname.startsWith("/partner-dashboard")
+    ? "/partner-dashboard"
+    : location.pathname;
   return (
     <motion.div
-      key={location.pathname}
+      key={transitionKey}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
@@ -463,7 +469,7 @@ const App = () => {
                 }
               />
               <Route
-                path="/partner-dashboard"
+                path="/partner-dashboard/:section?"
                 element={
                   <ProtectedRoute requireRole="partner">
                     <PartnerGate>
