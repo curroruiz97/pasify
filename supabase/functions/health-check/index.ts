@@ -5,6 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
+import { isServiceRoleRequest } from "../_shared/internal-auth.ts";
 
 interface ServiceCheck { service: string; status: "operational" | "degraded" | "partial_outage" | "major_outage" | "maintenance"; latency_ms?: number; message?: string }
 
@@ -74,6 +75,18 @@ async function checkStorage(): Promise<ServiceCheck> {
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
+
+  // Público (smoke de CI, monitorización): solo la BD. Las comprobaciones
+  // que llaman a Stripe y Resend y guardan snapshot, solo desde el servidor:
+  // cada visita anónima gastaba límite de la API de Stripe y llenaba la tabla.
+  if (!isServiceRoleRequest(req)) {
+    const db = await checkDb();
+    return jsonResponse({
+      overall: db.status === "operational" ? "operational" : "major_outage",
+      checks: [db],
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   const [db, stripe, resend, fcm, storage] = await Promise.all([
     checkDb(), checkStripe(), checkResend(), checkFcm(), checkStorage(),

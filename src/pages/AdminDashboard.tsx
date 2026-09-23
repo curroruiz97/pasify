@@ -877,7 +877,9 @@ const StatusBadge = ({ status }: { status: string }) => {
 const refundsMono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
 const RefundsQueue = () => {
-  const { requests, setStatus } = useRefundRequests();
+  // decideRefund aprueba o rechaza (RPC decide_refund) y, si aprueba, lanza
+  // el reembolso en Stripe (process-refund). `setStatus` no existía.
+  const { requests, decideRefund } = useRefundRequests();
   const pending = requests.filter((r) => r.status === "pending");
   const decided = requests.filter((r) => r.status !== "pending");
 
@@ -919,8 +921,8 @@ const RefundsQueue = () => {
                   <RefundRow
                     key={r.id}
                     request={r}
-                    onApprove={() => setStatus(r.id, "approved")}
-                    onReject={() => setStatus(r.id, "rejected")}
+                    onApprove={() => void decideRefund(r.id, "approve").catch(() => {})}
+                    onReject={() => void decideRefund(r.id, "reject").catch(() => {})}
                   />
                 ))}
               </div>

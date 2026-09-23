@@ -5,11 +5,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { sendEmail } from "../_shared/resend.ts";
-import { ticketTransferEmail } from "../_shared/email-templates.ts";
+import { APP_URL, ticketTransferEmail } from "../_shared/email-templates.ts";
 import { logger } from "../_shared/logger.ts";
 import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://pasify.es";
+// Mismo origen que el resto de enlaces de los emails (pasify.es aún no resuelve).
+const APP_BASE_URL = APP_URL;
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);

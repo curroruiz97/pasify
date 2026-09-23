@@ -126,9 +126,33 @@ export const useRefundRequests = (_mode: "mine" | "org" | "admin" = "mine") => {
       toast({ title: "No se pudo crear la solicitud", description: error.message, variant: "destructive" });
       throw error;
     }
-    toast({ title: "Solicitud enviada", description: "Te avisamos cuando se decida." });
+    const requestId = data as string;
+    // Dentro del plazo del tipo de entrada la solicitud nace aprobada: el
+    // reembolso en Stripe lo lanza el propio comprador (process-refund lo
+    // permite solo para las aprobadas automáticamente).
+    const { data: created } = await supabase
+      .from("refund_requests")
+      .select("status, auto_approved")
+      .eq("id", requestId)
+      .maybeSingle();
+    if (created?.status === "approved" && created.auto_approved) {
+      const { error: procErr } = await supabase.functions.invoke("process-refund", { body: { request_id: requestId } });
+      toast(
+        procErr
+          ? {
+              title: "Reembolso aprobado",
+              description: "Lo estamos tramitando; si no lo ves en unos días, escríbenos desde Soporte.",
+            }
+          : {
+              title: "Reembolso aprobado",
+              description: "Verás el dinero en tu método de pago en 5-10 días laborables.",
+            },
+      );
+    } else {
+      toast({ title: "Solicitud enviada", description: "Te avisamos cuando se decida." });
+    }
     await fetchAll();
-    return data as string;
+    return requestId;
   }, [fetchAll, toast]);
 
   const decideRefund = useCallback(async (requestId: string, decision: "approve" | "reject", note?: string) => {

@@ -11,7 +11,8 @@ import { esc } from "./resend.ts";
  * enlaces "Ver entrada" de los correos no llevarían a ninguna parte.
  */
 export const APP_URL = (Deno.env.get("APP_BASE_URL") || "https://pasifyy.vercel.app").trim().replace(/\/+$/, "");
-const SUPPORT_EMAIL = Deno.env.get("SUPPORT_EMAIL") ?? "hola@pasify.es";
+// El mismo que la Ayuda de la app (pasify.es aún no tiene correo).
+const SUPPORT_EMAIL = Deno.env.get("SUPPORT_EMAIL") ?? "comunicacion@avenuemedia.io";
 const PLATFORM_NAME = "Pasify";
 
 /* ===========================================================================

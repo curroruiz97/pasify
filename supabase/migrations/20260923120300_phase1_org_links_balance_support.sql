@@ -160,7 +160,7 @@ BEGIN
 
   SELECT * INTO v_event FROM public.events e WHERE e.id = _event_id;
   IF v_event.id IS NULL OR NOT (
-    v_event.partner_id = v_uid
+    v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager','door_staff']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role)

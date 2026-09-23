@@ -35,8 +35,18 @@ export const STRIPE_TEST_MODE = /^(sk|rk)_test_/.test(STRIPE_SECRET_KEY);
 export const stripeCryptoProvider = Stripe.createSubtleCryptoProvider();
 
 /** Secretos de firma aceptados por `stripe-webhook`, en el orden en que se prueban. */
-export function stripeWebhookSecrets(): string[] {
-  return [STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET].map((s) => s.trim()).filter(Boolean);
+/** Secretos de firma del webhook, con el endpoint al que pertenece cada uno. */
+export function stripeWebhookSecrets(): Array<{ kind: "platform" | "connect"; secret: string }> {
+  const out: Array<{ kind: "platform" | "connect"; secret: string }> = [];
+  if (STRIPE_WEBHOOK_SECRET.trim()) out.push({ kind: "platform", secret: STRIPE_WEBHOOK_SECRET.trim() });
+  if (STRIPE_CONNECT_WEBHOOK_SECRET.trim()) out.push({ kind: "connect", secret: STRIPE_CONNECT_WEBHOOK_SECRET.trim() });
+  return out;
+}
+
+/** true si la clave secreta configurada es de producción (sk_live_ / rk_live_). */
+export function stripeKeyIsLive(): boolean {
+  const key = (Deno.env.get("STRIPE_SECRET_KEY") ?? "").trim();
+  return key.startsWith("sk_live_") || key.startsWith("rk_live_");
 }
 
 export { STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET, STRIPE_CONNECT_CLIENT_ID };

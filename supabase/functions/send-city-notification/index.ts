@@ -3,10 +3,10 @@
 // La llama CreateEventDialog (panel admin → CalendarManagement, actuando en
 // nombre de un local) y CreateDiscountDialog. Antes era pública: cualquiera
 // mandaba un push con texto libre a toda una ciudad (o a toda la base,
-// inyectando el filtro). Ahora: usuario autenticado que sea admin de
-// plataforma, o local (rol partner) notificando en su propio nombre.
+// inyectando el filtro). Ahora solo un admin de plataforma: un local
+// cualquiera podía mandar texto libre a todos los usuarios de una ciudad.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { supabaseAdmin, requireUser, isPlatformAdmin, hasPlatformRole } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireUser, isPlatformAdmin } from "../_shared/supabase.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { knownError } from "../_shared/internal-auth.ts";
 
@@ -126,9 +126,9 @@ serve(async (req) => {
     const payload: NotificationPayload = await req.json();
     const { partnerName, partnerId, type, title, discountPercentage, language = 'es' } = payload;
 
-    // Admin: puede notificar en nombre de cualquier local. Local: solo en el suyo.
+    // Push masivo a una ciudad: solo admin de plataforma.
     const isAdmin = await isPlatformAdmin(user.id);
-    if (!isAdmin && (partnerId !== user.id || !(await hasPlatformRole(user.id, 'partner')))) {
+    if (!isAdmin) {
       return new Response(
         JSON.stringify({ error: 'forbidden' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

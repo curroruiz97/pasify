@@ -55,29 +55,11 @@ CREATE POLICY "tickets_buyer_read_own" ON public.tickets FOR SELECT TO authentic
     OR transferred_to_user_id = (SELECT auth.uid())
   );
 
+-- Solicitudes de reembolso y transferencias solo por RPC (request_refund,
+-- transfer_ticket): un INSERT directo dejaba elegir pedido, organización,
+-- importe y estado, que process-refund usaba para devolver el dinero.
 DROP POLICY IF EXISTS "refund_requests_requester_insert" ON public.refund_requests;
-CREATE POLICY "refund_requests_requester_insert" ON public.refund_requests FOR INSERT TO authenticated
-  WITH CHECK (
-    requester_user_id = (SELECT auth.uid())
-    AND EXISTS (
-      SELECT 1 FROM public.tickets t
-      WHERE t.id = refund_requests.ticket_id
-        AND t.status = 'paid'
-        AND COALESCE(t.transferred_to_user_id, t.buyer_user_id) = (SELECT auth.uid())
-    )
-  );
-
 DROP POLICY IF EXISTS "ticket_transfers_from_insert" ON public.ticket_transfers;
-CREATE POLICY "ticket_transfers_from_insert" ON public.ticket_transfers FOR INSERT TO authenticated
-  WITH CHECK (
-    from_user_id = (SELECT auth.uid())
-    AND EXISTS (
-      SELECT 1 FROM public.tickets t
-      WHERE t.id = ticket_transfers.ticket_id
-        AND t.status = 'paid'
-        AND COALESCE(t.transferred_to_user_id, t.buyer_user_id) = (SELECT auth.uid())
-    )
-  );
 
 CREATE OR REPLACE FUNCTION public.transfer_ticket(_ticket_id UUID, _to_email TEXT, _message TEXT DEFAULT NULL)
 RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -97,6 +79,10 @@ BEGIN
   END IF;
   IF v_ticket.status <> 'paid' THEN RAISE EXCEPTION 'El ticket no está disponible para transferir (status=%)', v_ticket.status; END IF;
   IF v_ticket.used_at IS NOT NULL THEN RAISE EXCEPTION 'Ticket ya escaneado'; END IF;
+  IF EXISTS (SELECT 1 FROM public.refund_requests r
+             WHERE r.ticket_id = _ticket_id AND r.status IN ('pending', 'approved', 'processing')) THEN
+    RAISE EXCEPTION 'Hay un reembolso en curso para esta entrada';
+  END IF;
   IF v_ticket.tier_id IS NOT NULL THEN
     SELECT transfer_allowed INTO v_tier_allowed FROM public.ticket_tiers WHERE id = v_ticket.tier_id;
     IF NOT COALESCE(v_tier_allowed, TRUE) THEN RAISE EXCEPTION 'Este tipo de entrada no permite transferencia'; END IF;
@@ -132,6 +118,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.refund_requests WHERE ticket_id = _ticket_id AND status NOT IN ('rejected','failed')) THEN
     RAISE EXCEPTION 'Ya existe solicitud';
   END IF;
+  -- Con una transferencia pendiente, el reembolso anularía la entrada que
+  -- acaba de recibir otra persona.
+  IF EXISTS (SELECT 1 FROM public.ticket_transfers tr
+             WHERE tr.ticket_id = _ticket_id AND tr.status = 'pending' AND tr.expires_at > now()) THEN
+    RAISE EXCEPTION 'Cancela antes la transferencia pendiente de esta entrada';
+  END IF;
+  IF COALESCE(v_ticket.amount_paid_cents, 0) <= 0 THEN
+    RAISE EXCEPTION 'Esta entrada no tiene importe que devolver';
+  END IF;
   SELECT * INTO v_event FROM public.events WHERE id = v_ticket.event_id;
   IF v_ticket.tier_id IS NOT NULL THEN
     SELECT * INTO v_tier FROM public.ticket_tiers WHERE id = v_ticket.tier_id;
@@ -142,6 +137,23 @@ BEGIN
     END IF;
   END IF;
   SELECT email INTO v_email FROM auth.users WHERE id = v_uid;
+  -- ticket_id es UNIQUE: una solicitud rechazada o fallida se reabre.
+  SELECT id INTO v_request_id FROM public.refund_requests WHERE ticket_id = _ticket_id;
+  IF v_request_id IS NOT NULL THEN
+    UPDATE public.refund_requests
+       SET order_id = v_ticket.order_id, event_id = v_ticket.event_id, org_id = v_event.org_id,
+           requester_user_id = v_uid, requester_email = v_email,
+           amount_cents = v_ticket.amount_paid_cents, currency = v_ticket.currency,
+           reason = _reason, reason_code = _reason_code,
+           status = CASE WHEN v_auto_approve THEN 'approved'::public.refund_request_status_t ELSE 'pending'::public.refund_request_status_t END,
+           auto_approved = v_auto_approve, auto_approve_reason = v_auto_reason,
+           decided_at = CASE WHEN v_auto_approve THEN now() ELSE NULL END,
+           decided_by = CASE WHEN v_auto_approve THEN v_uid ELSE NULL END,
+           decision_note = NULL, stripe_refund_id = NULL, stripe_refund_status = NULL,
+           stripe_failure_reason = NULL, processed_at = NULL, created_at = now()
+     WHERE id = v_request_id;
+    RETURN v_request_id;
+  END IF;
   INSERT INTO public.refund_requests (ticket_id, order_id, event_id, org_id, requester_user_id, requester_email, amount_cents, currency, reason, reason_code, status, auto_approved, auto_approve_reason, decided_at, decided_by)
   VALUES (_ticket_id, v_ticket.order_id, v_ticket.event_id, v_event.org_id, v_uid, v_email, v_ticket.amount_paid_cents, v_ticket.currency, _reason, _reason_code,
     CASE WHEN v_auto_approve THEN 'approved'::public.refund_request_status_t ELSE 'pending'::public.refund_request_status_t END,
@@ -177,7 +189,9 @@ BEGIN
 
   SELECT * INTO v_ticket FROM public.tickets WHERE id = v_transfer.ticket_id FOR UPDATE;
   IF v_ticket.status <> 'paid' OR v_ticket.used_at IS NOT NULL
-     OR COALESCE(v_ticket.transferred_to_user_id, v_ticket.buyer_user_id) IS DISTINCT FROM v_transfer.from_user_id THEN
+     OR COALESCE(v_ticket.transferred_to_user_id, v_ticket.buyer_user_id) IS DISTINCT FROM v_transfer.from_user_id
+     OR EXISTS (SELECT 1 FROM public.refund_requests r
+                WHERE r.ticket_id = v_ticket.id AND r.status IN ('pending', 'approved', 'processing')) THEN
     UPDATE public.ticket_transfers SET status = 'cancelled', responded_at = now() WHERE id = v_transfer.id;
     RAISE EXCEPTION 'Esta entrada ya no se puede transferir';
   END IF;
@@ -323,9 +337,16 @@ BEGIN
         RAISE EXCEPTION 'No puedes mover el evento a esa organización' USING ERRCODE = '42501';
       END IF;
     END IF;
-  ELSIF NEW.org_id IS NOT NULL
-        AND NOT public.has_org_role(NEW.org_id, ARRAY['owner','admin','manager','rrpp']::public.org_member_role_t[]) THEN
-    RAISE EXCEPTION 'No perteneces a esa organización' USING ERRCODE = '42501';
+  ELSE
+    -- Un evento nuevo va a nombre de quien lo crea: si no, se podía publicar
+    -- con el nombre de otro local y cobrar en la organización propia.
+    IF NEW.partner_id IS DISTINCT FROM v_uid THEN
+      RAISE EXCEPTION 'El evento tiene que crearse a tu nombre' USING ERRCODE = '42501';
+    END IF;
+    IF NEW.org_id IS NOT NULL
+       AND NOT public.has_org_role(NEW.org_id, ARRAY['owner','admin','manager','rrpp']::public.org_member_role_t[]) THEN
+      RAISE EXCEPTION 'No perteneces a esa organización' USING ERRCODE = '42501';
+    END IF;
   END IF;
 
   IF v_publishing THEN
@@ -333,7 +354,8 @@ BEGIN
        AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = NEW.org_id AND o.status <> 'active') THEN
       RAISE EXCEPTION 'La organización del evento no está activa' USING ERRCODE = '42501';
     END IF;
-    IF NOT (
+    IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = v_uid AND p.account_status = 'rejected')
+       OR NOT (
       (public.has_role(v_uid, 'partner'::public.app_role)
         AND EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = v_uid AND p.account_status = 'approved'))
       OR (NEW.org_id IS NOT NULL
@@ -453,7 +475,7 @@ BEGIN
   SELECT * INTO v_event FROM public.events e WHERE e.id = v_proposal.event_id;
   IF v_event.id IS NULL THEN RAISE EXCEPTION 'Linked event not found'; END IF;
   IF NOT (
-    v_event.partner_id = v_uid
+    v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role)
@@ -495,7 +517,7 @@ BEGIN
   IF v_proposal.status <> 'pending' THEN RETURN; END IF;
   SELECT * INTO v_event FROM public.events e WHERE e.id = v_proposal.event_id;
   IF NOT (
-    v_event.partner_id = v_uid
+    v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role)
@@ -582,7 +604,7 @@ BEGIN
     RETURN;
   END IF;
 
-  v_is_manager := v_event.partner_id = v_uid
+  v_is_manager := v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role);
@@ -709,7 +731,7 @@ BEGIN
     RAISE EXCEPTION 'Event not found';
   END IF;
 
-  v_is_manager := v_event.partner_id = v_uid
+  v_is_manager := v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL
         AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role);
@@ -782,7 +804,7 @@ BEGIN
     RAISE EXCEPTION 'Event not found';
   END IF;
   IF NOT (
-    v_event.partner_id = v_uid
+    v_event.partner_id IS NOT DISTINCT FROM v_uid
     OR (v_event.org_id IS NOT NULL AND public.has_org_role(v_event.org_id, ARRAY['owner','admin','manager','door_staff']::public.org_member_role_t[]))
     OR public.has_role(v_uid, 'admin'::public.app_role)
   ) THEN
@@ -907,6 +929,9 @@ BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF NOT (public.has_role(v_uid, 'partner'::public.app_role) OR public.has_role(v_uid, 'admin'::public.app_role)) THEN
     RAISE EXCEPTION 'Solo las cuentas de local pueden crear una organización' USING ERRCODE = '42501';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = v_uid AND p.account_status = 'rejected') THEN
+    RAISE EXCEPTION 'Tu cuenta de local no está activa' USING ERRCODE = '42501';
   END IF;
 
   v_slug := COALESCE(_slug, lower(regexp_replace(_name, '[^a-zA-Z0-9]+', '-', 'g')));

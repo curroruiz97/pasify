@@ -64,8 +64,12 @@ Deno.serve(async (req) => {
     let valid = false;
 
     if (is_backup_code) {
-      const codeHash = await hashCode(code.replace(/\s/g, "").toLowerCase());
-      const idx = (rec.backup_codes_hashed ?? []).indexOf(codeHash);
+      // enable-2fa guarda el hash de "ABCD-EFGH" (base32 en mayúsculas con
+      // guion); antes se comparaba en minúsculas y ningún código valía.
+      const raw = String(code).toUpperCase().replace(/[^A-Z2-7]/g, "");
+      const hashes = await Promise.all([raw, raw.match(/.{1,4}/g)?.join("-") ?? raw].map(hashCode));
+      const stored: string[] = rec.backup_codes_hashed ?? [];
+      const idx = stored.findIndex((h) => hashes.includes(h));
       if (idx >= 0) {
         valid = true;
         const remaining = [...rec.backup_codes_hashed];

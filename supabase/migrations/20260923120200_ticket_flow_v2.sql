@@ -87,13 +87,16 @@ BEGIN
   IF _qty > v_tier.per_user_max THEN RAISE EXCEPTION 'qty_exceeds_per_user_max'; END IF;
 
   -- Ocupan plaza: pagadas, usadas y las pendientes de pedidos aún vigentes.
+  -- La reserva dura 15 minutos más que la sesión de Stripe: un pago hecho en
+  -- el último segundo puede confirmarse después y no debe encontrarse su
+  -- plaza vendida a otro.
   SELECT count(*) INTO v_tier_held
   FROM public.tickets t
   LEFT JOIN public.ticket_orders o ON o.id = t.order_id
   WHERE t.tier_id = v_tier.id
     AND (t.status IN ('paid', 'used')
          OR (t.status = 'pending' AND o.status = 'pending'
-             AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') > v_now));
+             AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') + INTERVAL '15 minutes' > v_now));
   IF v_tier.capacity IS NOT NULL AND v_tier_held + _qty > v_tier.capacity THEN
     RAISE EXCEPTION 'tier_sold_out';
   END IF;
@@ -105,7 +108,7 @@ BEGIN
     WHERE t.event_id = v_event.id
       AND (t.status IN ('paid', 'used')
            OR (t.status = 'pending' AND o.status = 'pending'
-               AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') > v_now));
+               AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') + INTERVAL '15 minutes' > v_now));
     IF v_event_held + _qty > v_event.capacity THEN
       RAISE EXCEPTION 'event_sold_out';
     END IF;
@@ -120,7 +123,7 @@ BEGIN
       AND t.buyer_user_id = _buyer_user_id
       AND (t.status IN ('paid', 'used')
            OR (t.status = 'pending' AND o.status = 'pending'
-               AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') > v_now));
+               AND COALESCE(o.expires_at, o.created_at + INTERVAL '30 minutes') + INTERVAL '15 minutes' > v_now));
     IF v_buyer_held + _qty > v_tier.per_user_max THEN
       RAISE EXCEPTION 'qty_exceeds_per_user_max';
     END IF;

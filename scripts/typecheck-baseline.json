@@ -566,7 +566,6 @@
     "TS2769: No overload matches this call.": 2
   },
   "src/pages/AdminDashboard.tsx": {
-    "TS2339: Property 'setStatus' does not exist on type '{ requests: RefundRequest[]; loading: boolean; error: string; refetch: () => Promise<void>; requestRefund: (ticketId: string, reason: string, reasonCode?: string) => Promise<...>; ... N more ...; rejected: RefundRequest[]; }'.": 1,
     "TS2739: Type '{ pending: string; approved: string; rejected: string; }' is missing the following properties from type 'Record<RefundStatus, string>': failed, refunded, processing": 2
   },
   "src/pages/Badges.tsx": {

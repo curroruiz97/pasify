@@ -50,11 +50,49 @@ async function collectUserData(userId: string) {
     };
     const col = columnsByTable[t];
     if (!col) continue;
+    const special = SPECIAL_EXPORTS[t];
+    if (special) {
+      data[t] = await special(userId);
+      continue;
+    }
     const { data: rows } = await supabaseAdmin.from(t).select("*").eq(col, userId);
     data[t] = rows ?? [];
   }
   return data;
 }
+
+// Tablas con credenciales: se exportan sin ellas.
+//  - tickets: las compradas por el usuario y las que tiene por transferencia,
+//    sin qr_token ni access_url_token. Una entrada transferida lleva el QR
+//    nuevo del receptor, y con él quien la vendió podía entrar antes.
+//  - user_2fa: sin el secreto TOTP ni los códigos de respaldo.
+//  - user_fcm_tokens: sin el token del dispositivo.
+const TICKET_EXPORT_COLUMNS =
+  "id, event_id, order_id, tier_id, status, amount_paid_cents, currency, buyer_user_id, buyer_email, buyer_first_name, buyer_last_name, buyer_phone, holder_first_name, holder_last_name, holder_email, transferred_to_user_id, transferred_at, paid_at, used_at, created_at";
+
+const SPECIAL_EXPORTS: Record<string, (userId: string) => Promise<unknown[]>> = {
+  tickets: async (userId) => {
+    const { data } = await supabaseAdmin
+      .from("tickets")
+      .select(TICKET_EXPORT_COLUMNS)
+      .or(`buyer_user_id.eq.${userId},transferred_to_user_id.eq.${userId}`);
+    return data ?? [];
+  },
+  user_2fa: async (userId) => {
+    const { data } = await supabaseAdmin
+      .from("user_2fa")
+      .select("user_id, method, phone, enabled, enabled_at, disabled_at, last_used_at, created_at, updated_at")
+      .eq("user_id", userId);
+    return data ?? [];
+  },
+  user_fcm_tokens: async (userId) => {
+    const { data } = await supabaseAdmin
+      .from("user_fcm_tokens")
+      .select("id, user_id, platform, created_at, updated_at")
+      .eq("user_id", userId);
+    return data ?? [];
+  },
+};
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);

@@ -6,6 +6,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { chatComplete } from "../_shared/openai.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { logger } from "../_shared/logger.ts";
 import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
@@ -34,7 +35,10 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
     const user = await requireUser(req);
     const { conversation_id, message } = await req.json();
-    if (!conversation_id || !message) return errorResponse("invalid_payload", 400);
+    if (!conversation_id || !message || typeof message !== "string") return errorResponse("invalid_payload", 400);
+    if (message.length > 2000) return errorResponse("message_too_long", 400);
+    // Cada llamada cuesta OpenAI: como mucho 30 por usuario y hora.
+    await enforceRateLimit({ key: `concierge:${user.id}`, max: 30, windowSec: 3600 });
 
     // Kill-switch check
     const { data: killSwitch } = await supabaseAdmin.from("ai_kill_switches").select("killed").eq("capability_code", "concierge").maybeSingle();

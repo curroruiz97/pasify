@@ -33,6 +33,7 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import {
   requireStripe,
   stripeWebhookSecrets,
+  stripeKeyIsLive,
   stripeCryptoProvider,
   stripeId,
   isCheckoutSessionPaid,
@@ -259,14 +260,12 @@ async function handlePayout(payout: Stripe.Payout, account: string | null): Prom
 async function handleSubscriptionEvent(stripe: Stripe, sub: Stripe.Subscription): Promise<Outcome> {
   // Stripe no garantiza el orden de entrega: leemos el estado actual para no
   // pisar un 'active' con un 'past_due' que llega tarde.
-  let current: Stripe.Subscription = sub;
-  try {
-    current = await stripe.subscriptions.retrieve(sub.id);
-  } catch (err) {
-    log.warn("subscription_retrieve_failed_using_payload", { sub_id: sub.id, error: String(err) });
-  }
+  // Tampoco nos fiamos del payload: si no se puede leer de Stripe, error y
+  // Stripe reintenta (un evento de una cuenta conectada podía traer metadata
+  // con la organización de otro local).
+  const current: Stripe.Subscription = await stripe.subscriptions.retrieve(sub.id);
 
-  const orgId = current.metadata?.pasify_org_id ?? sub.metadata?.pasify_org_id;
+  const orgId = current.metadata?.pasify_org_id;
   if (!orgId) {
     log.warn("subscription_event_no_org_id", { sub_id: sub.id });
     return "ignored";
@@ -513,21 +512,39 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
 
   let event: Stripe.Event | null = null;
+  let endpoint: "platform" | "connect" | null = null;
   let lastError = "";
-  for (const secret of secrets) {
+  for (const { kind, secret } of secrets) {
     try {
       event = await stripe.webhooks.constructEventAsync(rawBody, sig, secret, undefined, stripeCryptoProvider);
+      endpoint = kind;
       break;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
-  if (!event) {
+  if (!event || !endpoint) {
     log.error("signature_verification_failed", { error: lastError, secrets_tried: secrets.length });
     return new Response("Invalid signature", { status: 400 });
   }
 
-  log.info("webhook_received", { event_id: event.id, type: event.type, livemode: event.livemode, account: event.account ?? null });
+  log.info("webhook_received", { event_id: event.id, type: event.type, livemode: event.livemode, account: event.account ?? null, endpoint });
+
+  // Un evento de modo test con clave live (o al revés) no es nuestro: el
+  // endpoint de Connect en live también recibe eventos de test de las
+  // cuentas conectadas.
+  if (event.livemode !== stripeKeyIsLive()) {
+    log.warn("webhook_livemode_mismatch", { event_id: event.id, livemode: event.livemode });
+    return json({ received: true, ignored: "livemode_mismatch" });
+  }
+  // Lo que llega de una cuenta conectada solo puede tocar esa cuenta: estado
+  // de la cuenta y sus pagos. Pedidos, reembolsos y suscripciones se cobran
+  // en la plataforma y llegan por el endpoint de plataforma.
+  const CONNECT_EVENT_TYPES = new Set(["account.updated", "payout.paid", "payout.failed"]);
+  if ((endpoint === "connect" || event.account) && !CONNECT_EVENT_TYPES.has(event.type)) {
+    log.warn("webhook_connect_event_out_of_scope", { event_id: event.id, type: event.type, account: event.account ?? null });
+    return json({ received: true, ignored: "connect_scope" });
+  }
 
   let claim: "new" | "retry" | "duplicate";
   try {
