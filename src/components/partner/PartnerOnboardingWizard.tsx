@@ -20,6 +20,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -250,10 +251,10 @@ interface Props {
   email?: string | null;
   /** Refrescar contexto desde el dashboard tras completar. */
   onContextRefresh: () => void | Promise<void>;
-  /** Forzar abrir el wizard (sólo se usa para re-editar cuando ya está completado). */
+  /** Abre el asistente (desde la lista de primeros pasos o desde Ayuda). */
   forceOpen?: boolean;
-  /** Notifica al padre cuando el wizard se cierra (sólo se llama tras
-   *  finalize() exitoso, NUNCA por escape de usuario). */
+  /** Notifica al padre cuando el asistente se cierra: al terminar o al
+   *  cerrarlo el usuario ("Seguir más tarde"). */
   onClose?: () => void;
 }
 
@@ -290,18 +291,28 @@ export const PartnerOnboardingWizard = ({
     setData(buildInitial(org, venue, ctxVenues ?? [], brand, email ?? null));
   }, [org, venue, ctxVenues, brand, email]);
 
-  // Auto-open: server-truth manda. forceOpen permite re-editar tras completado.
+  // Ya no se abre solo ni bloquea el panel (WP2.9): el panel enseña una lista
+  // de primeros pasos y el asistente se abre desde ahí o desde Ayuda.
   useEffect(() => {
     if (forceOpen) {
       setOpen(true);
       setStep(0);
-      return;
     }
-    if (!status) return; // todavía loading
-    if (status.shouldShowWizard) {
-      setOpen(true);
-    }
-  }, [forceOpen, status]);
+  }, [forceOpen]);
+
+  const closeForLater = useCallback(() => {
+    setOpen(false);
+    onClose?.();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) closeForLater();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, submitting, closeForLater]);
 
   // Auto-slug
   useEffect(() => {
@@ -604,7 +615,7 @@ export const PartnerOnboardingWizard = ({
 
       {/* Contenedor: 80vw en desktop, full-width en mobile */}
       <div className="relative flex w-full flex-col md:w-[80vw] md:max-w-[1280px]">
-        {/* Header — sin botón X, sin "Continuar más tarde". Onboarding obligatorio. */}
+        {/* Header — se puede cerrar y seguir más tarde: el panel no se bloquea. */}
         <header className="shrink-0 flex items-start justify-between gap-3 px-5 pt-6 md:px-10 md:pt-10">
           <div className="min-w-0">
             <div
@@ -634,6 +645,16 @@ export const PartnerOnboardingWizard = ({
             <Clock className="h-3 w-3" />
             Paso {step + 1} / {STEPS.length}
           </div>
+          <button
+            type="button"
+            onClick={closeForLater}
+            disabled={submitting}
+            className="shrink-0 rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Cerrar y seguir más tarde"
+            title="Seguir más tarde"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </header>
 
         {/* Stepper: full labels en md+, sólo números en mobile */}

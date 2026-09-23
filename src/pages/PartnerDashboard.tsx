@@ -44,6 +44,7 @@ import SupportChat from "@/components/support/SupportChat";
 import { LiveWarRoom } from "@/components/partner/LiveWarRoom";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
+import { OnboardingChecklist } from "@/components/partner/OnboardingChecklist";
 import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
 import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
 import { usePartnerContext } from "@/hooks/usePartnerContext";
@@ -250,6 +251,8 @@ const PartnerDashboard = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   // Permite reabrir manualmente el onboarding desde el HelpSheet.
   const [reopenOnboarding, setReopenOnboarding] = useState(false);
+  // Lista de primeros pasos ocultada en esta visita.
+  const [checklistHidden, setChecklistHidden] = useState(false);
   // Secciones maqueta visibles solo para la organización de demo (web).
   const [showcase, setShowcase] = useState(false);
 
@@ -759,6 +762,40 @@ const PartnerDashboard = () => {
           {/* MÉTRICAS — Reports & BI online */}
           {seccionActiva === "metricas" && (
             <div>
+              {!checklistHidden && partnerCtx.status && (
+                <OnboardingChecklist
+                  onDismiss={() => setChecklistHidden(true)}
+                  steps={[
+                    {
+                      id: "local",
+                      title: "Completa los datos de tu local",
+                      description: "Nombre, dirección y cómo te encuentran los clientes.",
+                      done: !partnerCtx.status.shouldShowWizard,
+                      actionLabel: "Completar",
+                      onAction: () => setReopenOnboarding(true),
+                    },
+                    {
+                      id: "evento",
+                      title: "Crea tu primer evento",
+                      description: "Con sus tipos de entrada y precios.",
+                      done: events.length > 0 || partnerCtx.status.hasEvent,
+                      actionLabel: "Crear evento",
+                      onAction: () => {
+                        setSection("eventos");
+                        setEditor({ mode: "create" });
+                      },
+                    },
+                    {
+                      id: "publicar",
+                      title: "Publícalo y compártelo",
+                      description: "Sale a la venta y tienes un enlace y un QR para redes y carteles.",
+                      done: events.some((e) => e.status === "published" || e.status === "past"),
+                      actionLabel: "Ir a Mis eventos",
+                      onAction: () => setSection("eventos"),
+                    },
+                  ]}
+                />
+              )}
               <h1 className="mb-1 text-3xl font-bold tracking-tight">Métricas</h1>
               <p className="mb-6 text-sm text-muted-foreground">
                 Ventas e ingresos de tus eventos: evolución diaria, eventos que más venden y horas de compra.
