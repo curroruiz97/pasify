@@ -1,4 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Pasify · delete-user
+// Borra la cuenta de otro usuario. Solo admins de plataforma (has_role admin);
+// la llama components/admin/UsersManagement.tsx, que lee `error` como string.
+
+import { supabaseAdmin, requireUser, isPlatformAdmin } from "../_shared/supabase.ts";
+import { HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,106 +11,53 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-
-    // Admin client con service role per operazioni privilegiate
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
-    // Prova a ottenere l'Authorization header (case-insensitive)
-    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization')
-
-    console.log('[delete-user] Auth header present:', !!authHeader)
-    console.log('[delete-user] All headers:', JSON.stringify([...req.headers.entries()]))
-
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header found' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-
-    // Verifica l'utente con il token
-    const { data: { user }, error: authError } = await adminClient.auth.getUser(token)
-
-    if (authError || !user) {
-      console.error('[delete-user] Auth error:', authError?.message)
-      return new Response(
-        JSON.stringify({ error: 'Auth failed: ' + (authError?.message || 'no user') }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log('[delete-user] Caller:', user.id)
-
-    // Verifica ruolo admin
-    const { data: roleData } = await adminClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .single()
-
-    if (!roleData) {
-      return new Response(
-        JSON.stringify({ error: 'Admin role required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // OJO: antes se volcaban aquí todas las cabeceras al log, token incluido.
+    const user = await requireUser(req)
+    if (!(await isPlatformAdmin(user.id))) {
+      return json({ error: 'Solo un administrador puede eliminar usuarios' }, 403)
     }
 
     const { userId } = await req.json()
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'userId is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // UUID estricto: el id también acaba dentro de un filtro .or() de PostgREST.
+    if (!userId || typeof userId !== 'string' || !UUID_RE.test(userId)) {
+      return json({ error: 'userId no válido' }, 400)
     }
 
     if (userId === user.id) {
-      return new Response(
-        JSON.stringify({ error: 'Cannot delete yourself' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return json({ error: 'No puedes eliminar tu propia cuenta desde aquí' }, 400)
     }
 
-    console.log('[delete-user] Deleting:', userId)
+    console.log('[delete-user] admin', user.id, 'deleting', userId)
 
-    // Pulisci dati collegati
-    await adminClient.from('typing_indicators').delete().eq('user_id', userId)
-    await adminClient.from('favorites').delete().or(`user_id.eq.${userId},favorite_user_id.eq.${userId}`)
+    // Pulisci dati collegati (tablas legacy; si no existen, PostgREST devuelve error y seguimos)
+    await supabaseAdmin.from('typing_indicators').delete().eq('user_id', userId)
+    await supabaseAdmin.from('favorites').delete().or(`user_id.eq.${userId},favorite_user_id.eq.${userId}`)
 
     // Elimina l'utente
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
     if (deleteError) {
       console.error('[delete-user] Delete failed:', deleteError.message)
-      return new Response(
-        JSON.stringify({ error: deleteError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return json({ error: 'No se pudo eliminar el usuario' }, 500)
     }
 
-    console.log('[delete-user] Success')
-    return new Response(
-      JSON.stringify({ message: 'User deleted successfully' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-
+    return json({ message: 'User deleted successfully' })
   } catch (error) {
+    if (error instanceof HttpError) {
+      return json({ error: error.status === 401 ? 'Sesión no válida' : error.code }, error.status)
+    }
     console.error('[delete-user] Error:', error)
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json({ error: 'internal_error' }, 500)
   }
 })

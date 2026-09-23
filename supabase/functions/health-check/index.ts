@@ -8,14 +8,21 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 
 interface ServiceCheck { service: string; status: "operational" | "degraded" | "partial_outage" | "major_outage" | "maintenance"; latency_ms?: number; message?: string }
 
+// Endpoint público: el detalle de los errores (Postgres, Storage…) va al log,
+// nunca a la respuesta.
+function unavailable(service: string, detail: unknown): string {
+  console.error(`health-check ${service}:`, detail);
+  return "unavailable";
+}
+
 async function checkDb(): Promise<ServiceCheck> {
   const start = Date.now();
   try {
     const { error } = await supabaseAdmin.from("cities").select("id", { count: "exact", head: true });
-    if (error) return { service: "database", status: "major_outage", message: error.message };
+    if (error) return { service: "database", status: "major_outage", message: unavailable("database", error.message) };
     return { service: "database", status: "operational", latency_ms: Date.now() - start };
   } catch (e) {
-    return { service: "database", status: "major_outage", message: String(e), latency_ms: Date.now() - start };
+    return { service: "database", status: "major_outage", message: unavailable("database", e), latency_ms: Date.now() - start };
   }
 }
 
@@ -30,7 +37,7 @@ async function checkStripe(): Promise<ServiceCheck> {
     if (!res.ok) return { service: "stripe", status: "degraded", latency_ms: Date.now() - start, message: `status_${res.status}` };
     return { service: "stripe", status: "operational", latency_ms: Date.now() - start };
   } catch (e) {
-    return { service: "stripe", status: "major_outage", message: String(e) };
+    return { service: "stripe", status: "major_outage", message: unavailable("stripe", e) };
   }
 }
 
@@ -43,7 +50,7 @@ async function checkResend(): Promise<ServiceCheck> {
     if (!res.ok) return { service: "email", status: "degraded", latency_ms: Date.now() - start };
     return { service: "email", status: "operational", latency_ms: Date.now() - start };
   } catch (e) {
-    return { service: "email", status: "major_outage", message: String(e) };
+    return { service: "email", status: "major_outage", message: unavailable("email", e) };
   }
 }
 
@@ -57,10 +64,10 @@ async function checkStorage(): Promise<ServiceCheck> {
   try {
     const start = Date.now();
     const { data, error } = await supabaseAdmin.storage.listBuckets();
-    if (error || !data) return { service: "storage", status: "degraded", message: error?.message };
+    if (error || !data) return { service: "storage", status: "degraded", message: unavailable("storage", error?.message) };
     return { service: "storage", status: "operational", latency_ms: Date.now() - start };
   } catch (e) {
-    return { service: "storage", status: "major_outage", message: String(e) };
+    return { service: "storage", status: "major_outage", message: unavailable("storage", e) };
   }
 }
 

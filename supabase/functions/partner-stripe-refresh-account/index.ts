@@ -4,18 +4,23 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireUser, callerHasOrgRole } from "../_shared/supabase.ts";
 import { requireStripe } from "../_shared/stripe.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   try {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
-    const user = await requireUser(req);
+    await requireUser(req);
     const { org_id } = await req.json();
     if (!org_id) return errorResponse("invalid_payload", 400);
+
+    // Permiso antes de leer nada del org. has_org_role usa auth.uid(): con el
+    // cliente admin devolvía siempre false (403 para todos); va con el JWT del usuario.
+    if (!(await callerHasOrgRole(req, org_id, ["owner", "admin"]))) return errorResponse("forbidden", 403);
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
@@ -23,12 +28,6 @@ Deno.serve(async (req) => {
       .eq("id", org_id)
       .maybeSingle();
     if (!org?.stripe_connect_account_id) return errorResponse("no_connect_account", 404);
-
-    const { data: hasRole } = await supabaseAdmin.rpc("has_org_role", {
-      _org_id: org_id,
-      _roles: ["owner", "admin"],
-    });
-    if (!hasRole) return errorResponse("forbidden", 403);
 
     const stripe = requireStripe();
     const account = await stripe.accounts.retrieve(org.stripe_connect_account_id);
@@ -52,6 +51,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     logger.error("partner-stripe-refresh-account failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

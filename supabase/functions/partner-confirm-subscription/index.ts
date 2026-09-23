@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
 
     if (upErr) {
       log.error("upsert_partner_subscription_failed", { error: upErr.message });
-      return errorResponse("upsert_failed", 500, upErr.message);
+      return errorResponse("upsert_failed", 500, "upsert_failed");
     }
 
     log.info("partner_subscription_confirmed", { org_id: orgId, plan: "premium", status: subStatus });
@@ -147,8 +147,8 @@ Deno.serve(async (req) => {
       plan_code: upserted.plan_code,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "unknown_error";
+    // Sin err.message: un session_id inválido devolvía el texto crudo de Stripe.
     console.error("[partner-confirm-subscription] error:", err);
-    return errorResponse(msg, 500, "server_error");
+    return errorResponse("server_error", 500, "server_error");
   }
 });

@@ -57,7 +57,10 @@ serve(async (req) => {
       _user_id: userData.user.id,
       _role: "admin",
     });
-    if (roleErr) return json({ error: "Role check failed: " + roleErr.message }, 500);
+    if (roleErr) {
+      console.error("admin-resync-stripe-subs role check failed:", roleErr.message);
+      return json({ error: "Role check failed" }, 500);
+    }
     if (isAdmin !== true) return json({ error: "Admin only" }, 403);
 
     // --- Walk every relevant Stripe subscription ---
@@ -142,12 +145,14 @@ serve(async (req) => {
         .select("id");
 
       if (upErr) {
+        // El detalle de Postgres va al log, no a la respuesta.
+        console.error("admin-resync-stripe-subs update error:", sub.id, upErr.message);
         synced.push({
           partner_id: partnerId,
           stripe_subscription_id: sub.id,
           status: sub.status,
           action: "skipped",
-          reason: "update error: " + upErr.message,
+          reason: "update_failed",
         });
         skipped++;
         continue;
@@ -158,12 +163,13 @@ serve(async (req) => {
           .from("partner_subscriptions")
           .insert(payload);
         if (insErr) {
+          console.error("admin-resync-stripe-subs insert error:", sub.id, insErr.message);
           synced.push({
             partner_id: partnerId,
             stripe_subscription_id: sub.id,
             status: sub.status,
             action: "skipped",
-            reason: "insert error: " + insErr.message,
+            reason: "insert_failed",
           });
           skipped++;
         } else {
@@ -196,6 +202,6 @@ serve(async (req) => {
     });
   } catch (err: any) {
     console.error("admin-resync-stripe-subs error:", err);
-    return json({ error: err?.message ?? "Unexpected error" }, 500);
+    return json({ error: "internal_error" }, 500);
   }
 });

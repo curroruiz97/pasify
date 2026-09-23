@@ -4,10 +4,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireUser, callerHasOrgRole } from "../_shared/supabase.ts";
 import { requireStripe } from "../_shared/stripe.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 interface Payload {
   org_id: string;
@@ -34,11 +35,10 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!org) return errorResponse("org_not_found", 404);
 
-    const { data: isOwner } = await supabaseAdmin.rpc("has_org_role", {
-      _org_id: body.org_id,
-      _roles: ["owner", "admin"],
-    });
-    if (org.owner_id !== user.id && !isOwner) return errorResponse("forbidden", 403);
+    // has_org_role usa auth.uid(): con el cliente admin devolvía siempre false y
+    // solo pasaba el owner_id. Va con el JWT del usuario para que entren los admins del org.
+    const allowed = org.owner_id === user.id || (await callerHasOrgRole(req, body.org_id, ["owner", "admin"]));
+    if (!allowed) return errorResponse("forbidden", 403);
 
     const stripe = requireStripe();
 
@@ -71,6 +71,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ url: link.url, account_id: accountId });
   } catch (err) {
     logger.error("partner-onboard-stripe-connect failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

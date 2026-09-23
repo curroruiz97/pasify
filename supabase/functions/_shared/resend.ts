@@ -1,6 +1,7 @@
 // Pasify · Email transaccional vía Resend
 // Reemplaza completamente _shared/gmail.ts (Pasify legacy).
-// Fallback opcional a Gmail SMTP si RESEND_API_KEY no está configurado.
+// Sin RESEND_API_KEY no se envía nada: se registra un warn y se devuelve un
+// id simulado, para que los flujos que mandan correo no revienten.
 
 import { logger } from "./logger.ts";
 
@@ -30,17 +31,27 @@ export interface SendEmailResult {
   provider: "resend" | "fallback";
 }
 
+/** Tiempo máximo por intento: un Resend colgado no debe bloquear un webhook. */
+const REQUEST_TIMEOUT_MS = 10_000;
+/** Esperas entre reintentos (solo con idempotencyKey, ver sendEmail). */
+const RETRY_DELAYS_MS = [500, 1500];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Envía un email transaccional vía Resend. Retorna `id` (mensaje_id).
- * Lanza si la API key no está o la petición falla.
+ *
+ * - Sin `RESEND_API_KEY`: registra un warn, no envía nada y devuelve un id
+ *   simulado (provider "fallback"). No lanza.
+ * - Con `idempotencyKey`: reintenta errores transitorios (red, timeout, 429,
+ *   5xx) hasta 2 veces. Es seguro porque Resend deduplica por esa clave.
+ * - Lanza si Resend rechaza el envío o se agotan los reintentos.
  */
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
   if (!RESEND_API_KEY) {
-    logger.warn("resend_api_key_missing — falling back to log-only");
-    logger.info("email_simulated", {
-      to: Array.isArray(opts.to) ? opts.to.join(",") : opts.to,
+    logger.warn("resend_api_key_missing — email no enviado (solo log)", {
+      to_count: Array.isArray(opts.to) ? opts.to.length : 1,
       subject: opts.subject,
-      preview: opts.html.slice(0, 200),
     });
     return { id: `simulated-${crypto.randomUUID()}`, provider: "fallback" };
   }
@@ -64,20 +75,44 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
   };
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const maxAttempts = opts.idempotencyKey ? RETRY_DELAYS_MS.length + 1 : 1;
+  let lastError: Error | null = null;
 
-  if (!res.ok) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) await sleep(RETRY_DELAYS_MS[attempt - 2]);
+
+    let res: Response;
+    try {
+      res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      // Red caída o timeout: transitorio.
+      lastError = new Error(`Resend request failed: ${err instanceof Error ? err.message : String(err)}`);
+      logger.warn("resend_request_failed", { attempt, error: lastError.message });
+      continue;
+    }
+
+    if (res.ok) {
+      const json = await res.json();
+      return { id: json.id as string, provider: "resend" };
+    }
+
     const errText = await res.text();
-    logger.error("resend_send_failed", { status: res.status, body: errText });
-    throw new Error(`Resend send failed: ${res.status} ${errText.slice(0, 200)}`);
+    lastError = new Error(`Resend send failed: ${res.status} ${errText.slice(0, 200)}`);
+    const transient = res.status === 429 || res.status >= 500;
+    if (!transient || attempt === maxAttempts) {
+      logger.error("resend_send_failed", { status: res.status, attempt, body: errText.slice(0, 500) });
+      throw lastError;
+    }
+    logger.warn("resend_send_retry", { status: res.status, attempt });
   }
 
-  const json = await res.json();
-  return { id: json.id as string, provider: "resend" };
+  logger.error("resend_send_failed", { error: lastError?.message });
+  throw lastError ?? new Error("Resend send failed");
 }
 
 /** Util: HTML escape para interpolaciones seguras. */

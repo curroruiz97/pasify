@@ -1,5 +1,9 @@
+// Pasify · send-inactive-notification (cron, legacy Students Life)
+// Solo servidor→servidor: push masivo a usuarios inactivos. Ningún cliente la
+// llama; abierta, cualquiera podía dispararla contra toda la base.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -130,6 +134,7 @@ serve(async (req) => {
   }
 
   try {
+    requireServiceRole(req);
     console.log('🔔 send-inactive-notification function called');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -179,7 +184,7 @@ serve(async (req) => {
     if (fetchError) {
       console.error('❌ Error fetching users:', fetchError.message);
       return new Response(
-        JSON.stringify({ error: 'Error fetching users', details: fetchError.message }),
+        JSON.stringify({ error: 'Error fetching users' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -336,11 +341,11 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Edge Function error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error('❌ Edge Function error:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error instanceof HttpError ? error.code : 'internal_error' }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

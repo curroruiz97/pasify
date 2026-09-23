@@ -5,6 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { clientIp } from "../_shared/rate-limit.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
@@ -38,6 +39,6 @@ Deno.serve(async (req) => {
     }
     return jsonResponse({ success: true });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

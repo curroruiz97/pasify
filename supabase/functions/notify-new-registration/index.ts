@@ -1,6 +1,16 @@
+// Pasify · notify-new-registration
+// Avisa a los admins (push + email) de un registro nuevo. La llama
+// RegisterClient.tsx justo después del alta, con la sesión ya abierta.
+// Antes era pública: cualquiera mandaba al admin emails HTML con texto libre.
+// Ahora exige el JWT del usuario recién registrado, usa SU email verificado
+// (no el del body), escapa lo que va al HTML y limita a 3 avisos por hora.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendEmail } from "../_shared/gmail.ts";
+import { esc } from "../_shared/resend.ts";
+import { requireUser } from "../_shared/supabase.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
+import { knownError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -237,9 +247,34 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
+  // Auth fuera del try de abajo: ese try responde 200 pase lo que pase.
+  let verifiedEmail: string;
   try {
-    const body: RegistrationNotification = await req.json();
-    console.log("notify-new-registration: Processing notification for:", body.userEmail, "Type:", body.userType);
+    const user = await requireUser(req);
+    if (!user.email) throw new Error("user_without_email");
+    verifiedEmail = user.email;
+    await enforceRateLimit({ key: `notify_registration:${user.id}`, max: 3, windowSec: 3600 });
+  } catch (authError) {
+    const known = knownError(authError);
+    return new Response(
+      JSON.stringify({ error: known?.code ?? "unauthorized" }),
+      { status: known?.status ?? 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  try {
+    const raw: RegistrationNotification = await req.json();
+    // El email sale del JWT, no del body. Longitudes acotadas; lo que va al
+    // HTML del email se escapa más abajo con esc().
+    const body: RegistrationNotification = {
+      userEmail: verifiedEmail,
+      userType: raw.userType === 'partner' ? 'partner' : 'client',
+      firstName: raw.firstName ? String(raw.firstName).slice(0, 80) : undefined,
+      lastName: raw.lastName ? String(raw.lastName).slice(0, 80) : undefined,
+      university: raw.university ? String(raw.university).slice(0, 120) : undefined,
+      businessName: raw.businessName ? String(raw.businessName).slice(0, 120) : undefined,
+    };
+    console.log("notify-new-registration: Processing notification, type:", body.userType);
 
     const isPartner = body.userType === 'partner';
     const userName = isPartner
@@ -278,17 +313,17 @@ const handler = async (req: Request): Promise<Response> => {
 
             <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
               <p style="margin: 0 0 12px; color: #6b7280; font-size: 14px;">
-                <strong style="color: #374151;">Nombre:</strong> ${userName || 'No especificado'}
+                <strong style="color: #374151;">Nombre:</strong> ${userName ? esc(userName) : 'No especificado'}
               </p>
               <p style="margin: 0 0 12px; color: #6b7280; font-size: 14px;">
-                <strong style="color: #374151;">Email:</strong> ${body.userEmail}
+                <strong style="color: #374151;">Email:</strong> ${esc(body.userEmail)}
               </p>
               <p style="margin: 0 0 12px; color: #6b7280; font-size: 14px;">
                 <strong style="color: #374151;">Tipo:</strong> ${isPartner ? 'Partner' : 'Cliente'}
               </p>
               ${body.university ? `
               <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                <strong style="color: #374151;">Universidad:</strong> ${body.university}
+                <strong style="color: #374151;">Universidad:</strong> ${esc(body.university)}
               </p>
               ` : ''}
             </div>
@@ -326,7 +361,7 @@ const handler = async (req: Request): Promise<Response> => {
     } catch (emailError: any) {
       console.error("notify-new-registration: Gmail SMTP error:", emailError);
       return new Response(
-        JSON.stringify({ success: true, message: "Push sent, email failed", error: emailError.message }),
+        JSON.stringify({ success: true, message: "Push sent, email failed" }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -335,7 +370,7 @@ const handler = async (req: Request): Promise<Response> => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error("notify-new-registration: Error:", errorMessage);
     return new Response(
-      JSON.stringify({ success: true, message: "Registration successful, notification error", error: errorMessage }),
+      JSON.stringify({ success: true, message: "Registration successful, notification error" }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }

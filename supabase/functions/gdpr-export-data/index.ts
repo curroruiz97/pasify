@@ -11,6 +11,7 @@ import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { sendEmail } from "../_shared/resend.ts";
 import { renderBaseEmail } from "../_shared/email-templates.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 async function collectUserData(userId: string) {
   const tables = [
@@ -100,7 +101,10 @@ Deno.serve(async (req) => {
         contentType: "application/json",
         upsert: true,
       });
-    if (uploadErr) return errorResponse(`upload_failed: ${uploadErr.message}`, 500);
+    if (uploadErr) {
+      log.error("gdpr_export_upload_failed", { error: uploadErr.message });
+      return errorResponse("upload_failed", 500, "upload_failed");
+    }
 
     // Signed URL TTL 30 días
     const { data: signed } = await supabaseAdmin.storage
@@ -145,6 +149,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     logger.error("gdpr-export-data failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

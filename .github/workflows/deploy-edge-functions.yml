@@ -31,6 +31,12 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase link --project-ref ${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}
+      # --no-verify-jwt a propósito: la app usa la publishable key nueva
+      # (sb_publishable_…), que no es un JWT, así que el gateway rechazaría
+      # toda llamada sin sesión. La autorización la hace cada función en su
+      # código: requireUser, requireAdmin o requireServiceRole de
+      # supabase/functions/_shared. Una función nueva sin una de esas llamadas
+      # queda abierta: revísalo en cada PR.
       - name: Deploy all functions
         if: github.event.inputs.function_name == ''
         env:

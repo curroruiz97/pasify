@@ -2,24 +2,18 @@
 // Detecta drift en métricas AI por capability y crea ai_anomalies si fuera de tolerancia.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin } from "../_shared/supabase.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { supabaseAdmin, requireAdmin } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
 import { enqueueNotification } from "../_shared/notify.ts";
-
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+import { isServiceRoleRequest, safeErrorResponse } from "../_shared/internal-auth.ts";
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   try {
-    const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.includes(SERVICE_KEY)) {
-      const { data: userData } = await supabaseAdmin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
-      if (!userData.user) return errorResponse("forbidden", 403);
-      const isAdmin = (await supabaseAdmin.rpc("has_role", { _user_id: userData.user.id, _role: "admin" })).data;
-      if (!isAdmin) return errorResponse("forbidden", 403);
-    }
+    // Auth: cron (service role / x-pasify-internal) o admin de plataforma.
+    if (!isServiceRoleRequest(req)) await requireAdmin(req);
 
     const { data: capabilities } = await supabaseAdmin
       .from("ai_capabilities")
@@ -89,6 +83,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ anomalies_created: anomaliesCreated });
   } catch (err) {
     logger.error("ai-anomaly-detector failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

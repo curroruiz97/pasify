@@ -1,5 +1,10 @@
+// Pasify · send-chat-notification (legacy chat de Students Life)
+// Solo servidor→servidor: su único llamador era pages/ChatConversation.tsx, que
+// ya no tiene ruta. Abierta, cualquiera mandaba pushes con texto libre a
+// cualquier usuario (spam/phishing).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
 'Access-Control-Allow-Origin': '*',
@@ -122,6 +127,7 @@ serve(async (req) => {
   }
 
   try {
+    requireServiceRole(req);
     console.log('🔔 send-chat-notification function called');
 
     // Initialize Supabase client
@@ -175,7 +181,7 @@ serve(async (req) => {
     if (fetchError) {
       console.error('❌ Error fetching FCM tokens:', fetchError.message);
       return new Response(
-        JSON.stringify({ error: 'Error fetching FCM tokens', details: fetchError.message }),
+        JSON.stringify({ error: 'Error fetching FCM tokens' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -285,11 +291,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    if (error instanceof HttpError) {
+      return new Response(
+        JSON.stringify({ error: error.code }),
+        { status: error.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     console.error('❌ Edge Function error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorStack = error instanceof Error ? error.stack : undefined;
     return new Response(
-      JSON.stringify({ error: errorMessage, stack: errorStack }),
+      JSON.stringify({ error: 'internal_error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

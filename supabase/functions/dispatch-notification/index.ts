@@ -7,13 +7,16 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, SUPABASE_URL } from "../_shared/supabase.ts";
+import { supabaseAdmin } from "../_shared/supabase.ts";
 import { sendPushMulticast } from "../_shared/firebase.ts";
-import { sendEmail } from "../_shared/resend.ts";
+import { sendEmail, esc } from "../_shared/resend.ts";
 import { sendSms } from "../_shared/twilio.ts";
 import { logger } from "../_shared/logger.ts";
+import { requireServiceRole, safeErrorResponse } from "../_shared/internal-auth.ts";
+import { APP_URL } from "../_shared/email-templates.ts";
 
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+/** Tipos que ya tienen un email propio y más completo. */
+const KINDS_WITH_OWN_EMAIL = new Set(["ticket_paid"]);
 
 interface NotifRow {
   id: string;
@@ -55,9 +58,8 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
 
-    // Auth: solo service_role (este endpoint NO se llama directamente desde cliente)
-    const auth = req.headers.get("Authorization");
-    if (!auth || !auth.includes(SERVICE_KEY)) return errorResponse("forbidden", 403);
+    // Auth: solo servidor→servidor (lo invoca _shared/notify.ts con la service role).
+    requireServiceRole(req);
 
     const { notification_id } = await req.json();
     if (!notification_id) return errorResponse("invalid_payload", 400);
@@ -112,16 +114,21 @@ Deno.serve(async (req) => {
     }
 
     // === EMAIL ===
+    // Los tipos con email propio no mandan además este aviso genérico: la
+    // compra ya lleva el correo con las entradas y sus QR (order-paid.ts).
     const emailPref = prefByChannel.get("email");
-    if (emailPref?.enabled ?? true) {
+    if (KINDS_WITH_OWN_EMAIL.has(n.kind)) {
+      await trackDispatch(n.id, "email", "skipped", undefined, "own_email");
+    } else if (emailPref?.enabled ?? true) {
       const { data: profile } = await supabaseAdmin.from("profiles").select("email, first_name").eq("id", n.user_id).maybeSingle();
       if (profile?.email) {
         try {
-          const linkAbs = n.link?.startsWith("http") ? n.link : `${Deno.env.get("APP_BASE_URL") ?? "https://pasify.es"}${n.link ?? "/"}`;
+          const linkAbs = n.link?.startsWith("http") ? n.link : `${APP_URL}${n.link ?? "/"}`;
           const r = await sendEmail({
             to: profile.email,
             subject: n.title,
-            html: `<h2>${n.title}</h2>${n.body ? `<p>${n.body}</p>` : ""}${n.link ? `<p><a href="${linkAbs}" style="color:#E8542A">Ver detalles →</a></p>` : ""}`,
+            // Título/cuerpo pueden llevar texto de terceros (p. ej. el título de un evento): se escapan.
+            html: `<h2>${esc(n.title)}</h2>${n.body ? `<p>${esc(n.body)}</p>` : ""}${n.link ? `<p><a href="${esc(linkAbs)}" style="color:#E8542A">Ver detalles →</a></p>` : ""}`,
             idempotencyKey: `notif-${n.id}-email`,
             tags: [{ name: "category", value: n.category }, { name: "kind", value: n.kind }],
           });
@@ -152,6 +159,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true });
   } catch (err) {
     logger.error("dispatch-notification failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

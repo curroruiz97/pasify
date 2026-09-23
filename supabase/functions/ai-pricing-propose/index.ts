@@ -5,10 +5,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireAdmin } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
-
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+import { isServiceRoleRequest, safeErrorResponse } from "../_shared/internal-auth.ts";
 
 interface TierRow {
   id: string;
@@ -24,14 +23,9 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   try {
-    // Auth: service_role (cron) o admin
-    const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.includes(SERVICE_KEY)) {
-      const { data: { user } } = await supabaseAdmin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
-      if (!user) return errorResponse("forbidden", 403);
-      const isAdmin = (await supabaseAdmin.rpc("has_role", { _user_id: user.id, _role: "admin" })).data;
-      if (!isAdmin) return errorResponse("forbidden", 403);
-    }
+    // Auth: cron (service role / x-pasify-internal) o admin de plataforma.
+    // Los locales reciben 403: PartnerDynamicPricing ya lo explica en la UI.
+    if (!isServiceRoleRequest(req)) await requireAdmin(req);
 
     const { data: killSwitch } = await supabaseAdmin.from("ai_kill_switches").select("killed").eq("capability_code", "pricing").maybeSingle();
     if (killSwitch?.killed) return errorResponse("capability_killed", 503);
@@ -118,6 +112,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ events_processed: events.length, proposals_created: proposals });
   } catch (err) {
     logger.error("ai-pricing-propose failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

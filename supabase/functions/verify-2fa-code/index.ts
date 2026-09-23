@@ -7,6 +7,7 @@ import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 function base32Decode(s: string): Uint8Array {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -104,6 +105,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true });
   } catch (err) {
     logger.error("verify-2fa-code failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

@@ -7,6 +7,7 @@ import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { chatComplete } from "../_shared/openai.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 const SYSTEM_PROMPT = `Eres un agente de soporte de Pasify, plataforma SaaS de eventos y ticketing en España.
 
@@ -112,6 +113,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     logger.error("ai-concierge-reply failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

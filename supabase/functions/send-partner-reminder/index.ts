@@ -1,6 +1,10 @@
+// Pasify · send-partner-reminder (cron/manual, legacy Students Life)
+// Solo servidor→servidor: email masivo a locales con perfil incompleto (y un
+// modo test_email que manda a cualquier dirección). Ningún cliente la llama.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { sendEmail } from "../_shared/gmail.ts";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +28,7 @@ serve(async (req: Request) => {
   }
 
   try {
+    requireServiceRole(req);
     console.log("Starting partner reminder email job...");
 
     let testEmail: string | null = null;
@@ -147,7 +152,7 @@ serve(async (req: Request) => {
       } catch (e: any) {
         console.error("Exception sending test email:", e);
         return new Response(
-          JSON.stringify({ success: false, error: e.message }),
+          JSON.stringify({ success: false, error: "email_failed" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -192,10 +197,11 @@ serve(async (req: Request) => {
     );
 
   } catch (error: any) {
-    console.error("Error in send-partner-reminder:", error);
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error("Error in send-partner-reminder:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof HttpError ? error.code : "internal_error" }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

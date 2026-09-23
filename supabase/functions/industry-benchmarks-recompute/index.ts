@@ -3,11 +3,11 @@
 // Persiste en industry_benchmarks_snapshots.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin } from "../_shared/supabase.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { supabaseAdmin, requireAdmin } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
+import { isServiceRoleRequest, safeErrorResponse } from "../_shared/internal-auth.ts";
 
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const K_ANONYMITY_MIN = 15;
 
 const SEGMENTS = ["discoteca", "club", "bar-musica", "festival", "sala-concierto"];
@@ -24,13 +24,8 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   try {
-    const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.includes(SERVICE_KEY)) {
-      const { data: userData } = await supabaseAdmin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
-      if (!userData.user) return errorResponse("forbidden", 403);
-      const isAdmin = (await supabaseAdmin.rpc("has_role", { _user_id: userData.user.id, _role: "admin" })).data;
-      if (!isAdmin) return errorResponse("forbidden", 403);
-    }
+    // Auth: cron (service role / x-pasify-internal) o admin de plataforma.
+    if (!isServiceRoleRequest(req)) await requireAdmin(req);
 
     let snapshotsCreated = 0;
 
@@ -85,6 +80,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ snapshots_created: snapshotsCreated });
   } catch (err) {
     logger.error("industry-benchmarks-recompute failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

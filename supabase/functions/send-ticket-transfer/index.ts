@@ -7,6 +7,7 @@ import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { sendEmail } from "../_shared/resend.ts";
 import { ticketTransferEmail } from "../_shared/email-templates.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://pasify.es";
 
@@ -51,6 +52,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true });
   } catch (err) {
     logger.error("send-ticket-transfer failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

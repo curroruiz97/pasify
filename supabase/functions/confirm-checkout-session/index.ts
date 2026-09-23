@@ -1,175 +1,148 @@
 // Pasify · confirm-checkout-session
 //
-// Fallback robusto cuando el webhook `stripe-webhook` no llega (test mode con
-// cuentas Stripe desalineadas, Stripe Dashboard en modo distinto, fallos de
-// red entre Stripe → Supabase, etc.).
+// Red de seguridad cuando el webhook `stripe-webhook` no llega (o llega
+// tarde): la página de vuelta de Stripe pregunta aquí y esta función consulta
+// a Stripe directamente.
 //
-// La página `/ticket/success` lo llama tras volver de Stripe Checkout:
-//   1) Consulta Stripe API directamente con el session_id que vino en la URL.
-//   2) Si la session está en `paid` y aún no hemos marcado la order como
-//      `paid` en nuestra BD, invoca la misma RPC `mark_order_paid` que el
-//      webhook normal — atomico, idempotente, dispara el mismo trigger
-//      `tickets_update_counters` que incrementa events.tickets_sold.
-//   3) Devuelve { status, order_id, payment_intent_id } al frontend.
+//   1) Busca el pedido por session_id y comprueba que quien pregunta puede:
+//        - sin sesión: el body trae session_id Y order_id y ambos casan con
+//          el pedido (es la URL de vuelta de Stripe; así funciona desde
+//          /ticket/gracias en Safari, donde la app nativa paga sin sesión);
+//        - con sesión: el comprador o un admin.
+//   2) Si Stripe dice que está cobrada → `handleOrderPaid` (el mismo camino
+//      que el webhook: mark_order_paid_v2 + email con QR, puntos y avisos,
+//      solo la primera vez). Si la sesión caducó → `expire_ticket_order`.
 //
-// Como `mark_order_paid` tiene early-return `IF v_order.status='paid'`, es
-// safe llamarla aunque el webhook ya haya procesado la session. Ambos
-// caminos convergen al mismo estado final.
+// verify_jwt = false (config.toml): la autorización la hace esta función.
+// Rate limit por IP.
 //
-// Body: { session_id: string }
-// Returns: { status: 'paid'|'pending'|'expired', order_id?: string, payment_intent_id?: string }
+// Body: { session_id: string, order_id?: string }
+// Returns: { status: 'paid'|'pending'|'expired', order_id }  (sin datos personales)
+// Errores: { error: <código>, message }
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
-import { requireStripe } from "../_shared/stripe.ts";
+import type Stripe from "npm:stripe@14";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { supabaseAdmin, requireUser, isPlatformAdmin } from "../_shared/supabase.ts";
+import { requireStripe, stripeId, isCheckoutSessionPaid } from "../_shared/stripe.ts";
+import { enforceRateLimit, clientIp, RateLimitError } from "../_shared/rate-limit.ts";
+import { handleOrderPaid } from "../_shared/order-paid.ts";
 import { logger } from "../_shared/logger.ts";
 
-interface Payload {
-  session_id: string;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_ID_RE = /^cs_[A-Za-z0-9_]{10,255}$/;
+/** Estados de pedido que ya implican cobro (no hace falta preguntar a Stripe). */
+const PAID_ORDER_STATUSES = new Set(["paid", "partial_refund", "refunded"]);
+
+function fail(status: number, code: string, message: string): Response {
+  return jsonResponse({ error: code, message }, { status });
 }
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
+  if (req.method !== "POST") return fail(405, "method_not_allowed", "Método no permitido.");
+
+  const log = logger.child({ function: "confirm-checkout-session" });
 
   try {
-    if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
+    try {
+      // La página de vuelta reintenta ~10 veces por compra; margen para redes
+      // compartidas (universidad, CGNAT). Stripe solo se consulta con un par
+      // session_id/order_id válido, así que esto protege sobre todo la BD.
+      await enforceRateLimit({ key: `confirm-checkout:${clientIp(req)}`, max: 120, windowSec: 600 });
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        return fail(429, "rate_limit_exceeded", "Demasiadas comprobaciones seguidas. Espera un momento y vuelve a intentarlo.");
+      }
+      throw err;
+    }
 
-    // Auth requerida — sólo el comprador o un admin pueden consultar.
+    let body: { session_id?: unknown; order_id?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return fail(400, "invalid_payload", "La petición no es válida.");
+    }
+    const sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
+    const orderIdParam = typeof body?.order_id === "string" ? body.order_id.trim() : "";
+    if (!SESSION_ID_RE.test(sessionId)) return fail(400, "session_id_required", "Falta la referencia del pago.");
+    if (orderIdParam && !UUID_RE.test(orderIdParam)) return fail(400, "invalid_order_id", "La referencia del pedido no es válida.");
+
     const user = await requireUser(req).catch(() => null);
-    if (!user) return errorResponse("unauthorized", 401);
+    if (!user && !orderIdParam) {
+      return fail(401, "auth_required", "Inicia sesión o abre el enlace de vuelta del pago para confirmar tu compra.");
+    }
 
-    const body = (await req.json()) as Payload;
-    if (!body.session_id) return errorResponse("session_id_required", 400);
-
-    const log = logger.child({
-      function: "confirm-checkout-session",
-      user_id: user.id,
-      session_id: body.session_id,
-    });
-
-    // 1) Buscar el order asociado al session_id (RLS bypass con admin client)
+    // 1) Pedido + autorización
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("ticket_orders")
-      .select("id, status, buyer_user_id, total_cents, stripe_session_id, stripe_payment_intent_id, paid_at")
-      .eq("stripe_session_id", body.session_id)
+      .select("id, status, buyer_user_id")
+      .eq("stripe_session_id", sessionId)
       .maybeSingle();
     if (orderErr) {
       log.error("order_query_failed", { error: orderErr.message });
-      return errorResponse("order_query_failed", 500);
+      return fail(500, "order_query_failed", "No hemos podido consultar tu pedido. Inténtalo de nuevo.");
     }
-    if (!order) {
-      log.warn("order_not_found", { session_id: body.session_id });
-      return errorResponse("order_not_found", 404);
-    }
+    const notFound = () => fail(404, "order_not_found", "No encontramos ese pedido.");
+    if (!order) return notFound();
 
-    // Autorización: sólo el buyer o un admin pueden forzar la confirmación.
-    if (order.buyer_user_id && order.buyer_user_id !== user.id) {
-      // Verificar si el usuario es admin
-      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin",
-      });
-      if (!isAdmin) {
-        log.warn("forbidden_not_buyer_or_admin", { actual_buyer: order.buyer_user_id });
-        return errorResponse("forbidden", 403);
+    const pairMatches = !!orderIdParam && order.id === orderIdParam;
+    let allowed = pairMatches || (!!user && !!order.buyer_user_id && order.buyer_user_id === user.id);
+    if (!allowed && user) allowed = await isPlatformAdmin(user.id);
+    if (!allowed) {
+      // Con order_id que no casa respondemos 404 (no confirmamos que exista).
+      if (user && !orderIdParam) {
+        log.warn("forbidden_not_buyer_or_admin", { user_id: user.id, order_id: order.id });
+        return fail(403, "forbidden", "Este pedido no es tuyo.");
       }
+      return notFound();
     }
 
-    // 2) Si ya está paid, devolvemos directamente — no hace falta consultar Stripe.
-    if (order.status === "paid") {
-      log.info("already_paid", { order_id: order.id });
-      return jsonResponse({
-        status: "paid",
-        order_id: order.id,
-        payment_intent_id: order.stripe_payment_intent_id,
-        source: "cache",
-      });
+    const olog = logger.child({ function: "confirm-checkout-session", order_id: order.id, session_id: sessionId });
+
+    // 2) Ya pagado: no hace falta molestar a Stripe.
+    if (PAID_ORDER_STATUSES.has(order.status)) {
+      return jsonResponse({ status: "paid", order_id: order.id });
     }
 
-    // 3) Consultar a Stripe el estado real de la session
+    // 3) Estado real en Stripe (incluso si el pedido figura como caducado:
+    //    si Stripe cobró, mark_order_paid_v2 recupera las entradas).
     const stripe = requireStripe();
-    let session;
+    let session: Stripe.Checkout.Session;
     try {
-      session = await stripe.checkout.sessions.retrieve(body.session_id, {
-        expand: ["payment_intent"],
-      });
+      session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent"] });
     } catch (err) {
-      log.error("stripe_session_retrieve_failed", { error: (err as Error).message });
-      return errorResponse("stripe_session_retrieve_failed", 502);
+      olog.error("stripe_session_retrieve_failed", { error: err instanceof Error ? err.message : String(err) });
+      return fail(502, "payment_provider_error", "No hemos podido consultar el pago. Inténtalo de nuevo en unos segundos.");
+    }
+    if (session.metadata?.order_id && session.metadata.order_id !== order.id) {
+      olog.error("session_order_mismatch", { session_order_id: session.metadata.order_id });
+      return notFound();
     }
 
-    const paymentStatus = session.payment_status; // 'paid' | 'unpaid' | 'no_payment_required'
-    const sessionStatus = session.status; // 'open' | 'complete' | 'expired'
-    const paymentIntent =
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : session.payment_intent?.id ?? null;
-    const amountTotal = session.amount_total ?? order.total_cents ?? 0;
-    const applicationFee =
-      typeof session.payment_intent === "object" && session.payment_intent
-        ? session.payment_intent.application_fee_amount ?? 0
-        : 0;
-
-    log.info("stripe_session_state", {
-      payment_status: paymentStatus,
-      session_status: sessionStatus,
-      payment_intent: paymentIntent,
-      amount_total: amountTotal,
-    });
-
-    // 4) Si Stripe dice que está pagada → invocamos mark_order_paid (mismo
-    //    código path que el webhook). Idempotente por su early-return.
-    if (paymentStatus === "paid" || sessionStatus === "complete") {
-      if (!paymentIntent) {
-        log.error("paid_but_no_payment_intent");
-        return errorResponse("paid_but_no_payment_intent", 500);
-      }
-      const { data: markResult, error: markErr } = await supabaseAdmin.rpc("mark_order_paid", {
-        _session_id: body.session_id,
-        _payment_intent_id: paymentIntent,
-        _amount_total_cents: amountTotal,
-        _application_fee_cents: applicationFee,
+    if (isCheckoutSessionPaid(session)) {
+      const pi = session.payment_intent;
+      const res = await handleOrderPaid({
+        sessionId,
+        paymentIntentId: stripeId(pi),
+        amountTotal: session.amount_total ?? 0,
+        applicationFee: pi && typeof pi === "object" ? pi.application_fee_amount ?? 0 : 0,
+        source: "confirm-checkout-session",
       });
-      if (markErr) {
-        log.error("mark_order_paid_failed", { error: markErr.message });
-        return errorResponse("mark_order_paid_failed", 500);
-      }
-      log.info("order_marked_paid_via_polling", { order_id: markResult });
-      return jsonResponse({
-        status: "paid",
-        order_id: markResult,
-        payment_intent_id: paymentIntent,
-        source: "stripe_polling",
-      });
+      olog.info("order_confirmed_via_stripe", { newly_paid: res.newlyPaid });
+      return jsonResponse({ status: "paid", order_id: res.orderId });
     }
 
-    // 5) Session expirada — marcar order como expired
-    if (sessionStatus === "expired") {
-      await supabaseAdmin
-        .from("ticket_orders")
-        .update({ status: "expired" })
-        .eq("stripe_session_id", body.session_id);
-      return jsonResponse({
-        status: "expired",
-        order_id: order.id,
-        source: "stripe_polling",
-      });
+    if (session.status === "expired") {
+      const { error: expErr } = await supabaseAdmin.rpc("expire_ticket_order", { _session_id: sessionId });
+      if (expErr) olog.warn("expire_ticket_order_failed", { error: expErr.message });
+      return jsonResponse({ status: "expired", order_id: order.id });
     }
 
-    // 6) Aún pendiente
-    return jsonResponse({
-      status: "pending",
-      order_id: order.id,
-      payment_intent_id: paymentIntent,
-      source: "stripe_polling",
-    });
+    return jsonResponse({ status: "pending", order_id: order.id });
   } catch (err) {
-    logger.error("confirm-checkout-session failed", { error: String(err) });
-    return errorResponse(
-      err instanceof Error ? err.message : "internal_error",
-      500
-    );
+    log.error("confirm-checkout-session failed", { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, "internal_error", "Ha ocurrido un error inesperado. Inténtalo de nuevo.");
   }
 });

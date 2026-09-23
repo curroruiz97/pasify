@@ -1,9 +1,11 @@
 project_id = "ixkyfwzkknehvsqpopof"
 
 # Edge functions del nuevo Pasify (post-refactor)
-# `verify_jwt = false` solo para webhooks (Stripe firma), magic links públicos
-# y endpoints públicos de salud/captcha. El resto valida JWT en el código
-# mediante supabaseAdmin.auth.getUser(token).
+# `verify_jwt = false` solo para webhooks (Stripe firma), magic links y enlaces
+# de entrada públicos (token propio en la URL), la confirmación de pago sin
+# sesión y endpoints públicos de salud/captcha. Todas ellas validan por su
+# cuenta. El resto valida JWT en el código mediante
+# supabaseAdmin.auth.getUser(token).
 
 # -------- Stripe webhooks (firma Stripe, no JWT) --------
 [functions.stripe-webhook]
@@ -16,11 +18,26 @@ verify_jwt = false
 [functions.verify-captcha]
 verify_jwt = false
 
+# Vuelta de Stripe Checkout. En la app nativa se paga en Safari, sin sesión:
+# la función acepta session_id + order_id que casen con el pedido (o el JWT
+# del comprador/admin) y limita por IP.
+[functions.confirm-checkout-session]
+verify_jwt = false
+
 # -------- Magic links (token propio) --------
 [functions.accept-ticket-transfer]
 verify_jwt = false
 
 [functions.accept-team-invitation]
+verify_jwt = false
+
+# -------- Entradas públicas (?id=<ticket_id>&k=<access_url_token>) --------
+# ticket-qr: PNG del QR (lo cargan los clientes de correo, sin cabeceras).
+# ticket-public: datos de la página /#/entrada/:id.
+[functions.ticket-qr]
+verify_jwt = false
+
+[functions.ticket-public]
 verify_jwt = false
 
 # -------- Authenticated edge functions (JWT requerido) --------

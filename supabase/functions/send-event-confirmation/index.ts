@@ -1,5 +1,11 @@
+// Pasify · send-event-confirmation (legacy Students Life)
+// Solo servidor→servidor: su único llamador era components/social/EventCard.tsx,
+// que ya no tiene ruta. Abierta, cualquiera mandaba emails HTML con nuestra
+// marca a cualquier dirección.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { sendEmail } from "../_shared/gmail.ts";
+import { esc } from "../_shared/resend.ts";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,17 +29,14 @@ serve(async (req) => {
   }
 
   try {
-    const {
-      user_email,
-      user_name,
-      event_title,
-      event_date,
-      partner_name,
-      discount_percentage,
-      qr_code,
-    }: EventConfirmationRequest = await req.json();
-
-    console.log('📨 Sending event confirmation email to:', user_email, 'for event:', event_title);
+    requireServiceRole(req);
+    const payload: EventConfirmationRequest = await req.json();
+    const { user_email, event_date, discount_percentage } = payload;
+    // Lo que va al HTML, escapado.
+    const user_name = esc(payload.user_name);
+    const event_title = esc(payload.event_title);
+    const partner_name = esc(payload.partner_name);
+    const qr_code = payload.qr_code ? esc(payload.qr_code) : null;
 
     const formattedDate = new Date(event_date).toLocaleDateString('es-ES', {
       weekday: 'long',
@@ -44,18 +47,18 @@ serve(async (req) => {
       minute: '2-digit',
     });
 
-    const discountSection = discount_percentage && discount_percentage > 0
+    const discountSection = discount_percentage && Number(discount_percentage) > 0
       ? `
         <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border-radius: 12px; padding: 20px; margin-top: 20px; text-align: center; border: 1px solid #93C5FD;">
           <p style="margin: 0 0 4px 0; color: #1E40AF; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Descuento incluido</p>
-          <p style="margin: 0; color: #2563EB; font-size: 32px; font-weight: 700;">${discount_percentage}% OFF</p>
+          <p style="margin: 0; color: #2563EB; font-size: 32px; font-weight: 700;">${Number(discount_percentage)}% OFF</p>
         </div>
       `
       : '';
 
     await sendEmail({
       to: [user_email],
-      subject: `Iscrizione confermata: ${event_title}`,
+      subject: `Inscripción confirmada: ${payload.event_title ?? ''}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -107,7 +110,7 @@ serve(async (req) => {
                   <div style="margin-top: 32px; text-align: center;">
                     <p style="margin: 0 0 12px 0; color: #1E293B; font-size: 16px; font-weight: 600;">Tu código QR</p>
                     <div style="display: inline-block; background: white; padding: 16px; border-radius: 16px; border: 2px solid #E2E8F0;">
-                      <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qr_code)}" alt="QR Code" style="width: 200px; height: 200px;" />
+                      <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload.qr_code ?? '')}" alt="QR Code" style="width: 200px; height: 200px;" />
                     </div>
                     <p style="margin: 12px 0 0 0; color: #64748B; font-size: 14px; font-family: monospace; letter-spacing: 1px;">${qr_code}</p>
                     <p style="margin: 8px 0 0 0; color: #94A3B8; font-size: 12px;">Muestra este código en la entrada del evento</p>
@@ -146,13 +149,13 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('❌ Error in send-event-confirmation:', error);
-    const err = error as any;
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error('❌ Error in send-event-confirmation:', error);
 
     return new Response(JSON.stringify({
-      error: err?.message || String(err),
+      error: error instanceof HttpError ? error.code : 'internal_error',
     }), {
-      status: 500,
+      status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

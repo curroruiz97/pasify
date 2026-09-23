@@ -1,6 +1,12 @@
+// Pasify · send-password-reset
+// Solo servidor→servidor. El front recupera contraseñas con
+// supabase.auth.resetPasswordForEmail (ResetPassword.tsx) y no llama a esta
+// función. Abierta, generaba enlaces de recuperación para cualquier email
+// (bombardeo de emails) y su error revelaba si el email existía.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendEmail } from "../_shared/gmail.ts";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,9 +25,9 @@ serve(async (req) => {
   }
 
   try {
-    const { email, redirect_to }: PasswordResetRequest = await req.json();
-
-    console.log('📨 Richiesta invio email reset password:', { email, redirect_to });
+    requireServiceRole(req);
+    const { email }: PasswordResetRequest = await req.json();
+    if (!email) throw new HttpError(400, 'email_required');
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -122,19 +128,18 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Email inviata con successo via Gmail SMTP',
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('❌ Errore completo in send-password-reset function:', error);
-    const err = error as any;
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error('send-password-reset failed:', error);
 
     return new Response(JSON.stringify({
-      error: err?.message || String(err),
+      error: error instanceof HttpError ? error.code : 'internal_error',
     }), {
-      status: 500,
+      status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

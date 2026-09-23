@@ -55,8 +55,9 @@ serve(async (req) => {
 
     return json({ url: session.url });
   } catch (err) {
+    // PartnerManage enseña `error` en un toast: nada de mensajes crudos de Stripe.
     console.error("create-portal error:", err);
-    return json({ error: (err as Error).message }, 500);
+    return json({ error: "No hemos podido abrir el portal de facturación. Inténtalo de nuevo." }, 500);
   }
 });
 

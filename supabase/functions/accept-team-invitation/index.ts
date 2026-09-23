@@ -8,6 +8,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
@@ -74,6 +75,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     logger.error("accept-team-invitation failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

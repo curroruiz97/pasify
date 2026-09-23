@@ -1,10 +1,27 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+// Pasify · delete-own-account
+// Borra la cuenta del usuario que llama (guía 5.1.1(v) de Apple). La invocan
+// los paneles de ajustes (shared/SettingsSheet, client y partner).
+//
+// Si es local (rol partner), antes de borrar nada cierra su actividad con la
+// RPC partner_close_account, llamada con SU JWT porque usa auth.uid(): cancela
+// sus eventos futuros sin ventas, cierra sus organizaciones y desactiva a los
+// miembros. Si tiene eventos futuros con entradas vendidas la RPC se niega
+// (partner_has_upcoming_sales) y respondemos 409 sin tocar la cuenta.
+// Los clientes siguen como siempre: se borra el usuario de auth y listo.
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { supabaseAdmin, requireUser, userClientFrom } from "../_shared/supabase.ts";
+import { HttpError } from "../_shared/internal-auth.ts";
+import { logger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -13,76 +30,56 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
+    const user = await requireUser(req)
+    const log = logger.child({ function: 'delete-own-account', user_id: user.id })
+
+    // Rol partner: consulta con el cliente admin (un usuario puede tener varias filas).
+    const { data: roles, error: rolesError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+    if (rolesError) {
+      log.error('user_roles_lookup_failed', { error: rolesError.message })
+      return json({ error: 'internal_error' }, 500)
+    }
+    const isPartner = (roles ?? []).some((r: { role: string }) => r.role === 'partner')
+
+    if (isPartner) {
+      const { data: closed, error: closeError } = await userClientFrom(req).rpc('partner_close_account')
+      if (closeError) {
+        const detail = `${closeError.message ?? ''} ${closeError.details ?? ''} ${closeError.hint ?? ''}`
+        if (detail.includes('partner_has_upcoming_sales')) {
+          log.info('delete_blocked_upcoming_sales')
+          return json({
+            error: 'partner_has_upcoming_sales',
+            message: 'Tienes eventos con entradas vendidas. Cancélalos y reembolsa antes de borrar la cuenta, o escríbenos a soporte.',
+          }, 409)
         }
+        log.error('partner_close_account_failed', { error: closeError.message, code: closeError.code })
+        return json({
+          error: 'partner_close_failed',
+          message: 'No hemos podido cerrar tu cuenta de local. Inténtalo de nuevo o escríbenos a soporte.',
+        }, 500)
       }
-    )
-
-    // Get the authorization header
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
+      log.info('partner_account_closed', { result: closed })
     }
-
-    // Verify the user is authenticated
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    console.log(`User ${user.id} requesting account deletion`)
 
     // Delete the user's own account using service role
-    const { error: deleteError } = await supabaseClient.auth.admin.deleteUser(user.id)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id)
 
     if (deleteError) {
-      console.error('Delete account error:', deleteError)
-      return new Response(
-        JSON.stringify({ error: deleteError.message }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
+      log.error('delete_user_failed', { error: deleteError.message })
+      return json({
+        error: 'delete_failed',
+        message: 'No hemos podido borrar la cuenta. Inténtalo de nuevo o escríbenos a soporte.',
+      }, 500)
     }
 
-    console.log(`User ${user.id} account deleted successfully`)
-
-    return new Response(
-      JSON.stringify({ message: 'Account deleted successfully' }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
-
+    log.info('account_deleted', { was_partner: isPartner })
+    return json({ message: 'Account deleted successfully' })
   } catch (error) {
-    console.error('Error:', error)
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
+    if (error instanceof HttpError) return json({ error: error.code }, error.status)
+    logger.error('delete-own-account failed', { error: String(error) })
+    return json({ error: 'internal_error' }, 500)
   }
 })

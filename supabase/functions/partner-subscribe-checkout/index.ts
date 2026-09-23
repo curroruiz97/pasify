@@ -27,6 +27,7 @@ import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { requireStripe } from "../_shared/stripe.ts";
 import { enforceRateLimit, clientIp } from "../_shared/rate-limit.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 interface Payload {
   interval?: "monthly" | "yearly";
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
       });
       if (createErr || !newOrgId) {
         log.error("create_organization_failed", { error: createErr?.message });
-        return errorResponse("create_organization_failed", 500, createErr?.message ?? undefined);
+        return errorResponse("create_organization_failed", 500, "create_organization_failed");
       }
       orgId = newOrgId as string;
     }
@@ -203,8 +204,8 @@ Deno.serve(async (req) => {
     log.info("checkout_session_created", { session_id: session.id, org_id: org.id });
     return jsonResponse({ url: session.url, session_id: session.id, org_id: org.id });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "unknown_error";
     console.error("[partner-subscribe-checkout] error:", err);
-    return errorResponse(msg, 500, "server_error");
+    // Rate limit (429) sí se devuelve; lo demás (Stripe, Postgres) sin detalle.
+    return safeErrorResponse(err, "server_error");
   }
 });

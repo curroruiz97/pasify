@@ -1,5 +1,20 @@
+// Pasify · send-city-notification
+// Push a los usuarios de una ciudad cuando se publica un evento/descuento.
+// La llama CreateEventDialog (panel admin → CalendarManagement, actuando en
+// nombre de un local) y CreateDiscountDialog. Antes era pública: cualquiera
+// mandaba un push con texto libre a toda una ciudad (o a toda la base,
+// inyectando el filtro). Ahora: usuario autenticado que sea admin de
+// plataforma, o local (rol partner) notificando en su propio nombre.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { supabaseAdmin, requireUser, isPlatformAdmin, hasPlatformRole } from "../_shared/supabase.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
+import { knownError } from "../_shared/internal-auth.ts";
+
+// city/country acaban dentro de un filtro .or() de PostgREST: fuera comas,
+// paréntesis, comodines (*, %) y dos puntos, o se podía ampliar el filtro.
+function cleanFilterValue(value: unknown): string {
+  return String(value ?? "").replace(/[^\p{L}\p{M}\p{N} .'-]/gu, "").trim().slice(0, 80);
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,17 +122,32 @@ serve(async (req) => {
   try {
     console.log('🔔 send-city-notification function called');
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const user = await requireUser(req);
+    const payload: NotificationPayload = await req.json();
+    const { partnerName, partnerId, type, title, discountPercentage, language = 'es' } = payload;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    // Admin: puede notificar en nombre de cualquier local. Local: solo en el suyo.
+    const isAdmin = await isPlatformAdmin(user.id);
+    if (!isAdmin && (partnerId !== user.id || !(await hasPlatformRole(user.id, 'partner')))) {
       return new Response(
-        JSON.stringify({ error: 'Missing Supabase configuration' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (typeof partnerId !== 'string' || !/^[0-9a-f-]{36}$/i.test(partnerId) || (type !== 'event' && type !== 'discount')) {
+      return new Response(
+        JSON.stringify({ error: 'invalid_payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Es un push masivo: como mucho 10 por local y hora.
+    await enforceRateLimit({ key: `city_notif:${partnerId}`, max: 10, windowSec: 3600 });
+
+    const city = cleanFilterValue(payload.city);
+    const country = payload.country ? cleanFilterValue(payload.country) : '';
+
+    const supabase = supabaseAdmin;
 
     const firebaseServiceAccountJson = Deno.env.get('FIREBASE_ADMIN_SERVICE_ACCOUNT');
     if (!firebaseServiceAccountJson) {
@@ -129,11 +159,6 @@ serve(async (req) => {
 
     const firebaseConfig = JSON.parse(firebaseServiceAccountJson);
     const projectId = firebaseConfig.project_id;
-
-    const payload: NotificationPayload = await req.json();
-    console.log('📨 City notification payload:', payload);
-
-    const { city, country, partnerName, partnerId, type, title, discountPercentage, language = 'es' } = payload;
 
     if (!city) {
       console.log('⚠️ No city provided');
@@ -159,7 +184,7 @@ serve(async (req) => {
     if (profilesError) {
       console.error('❌ Error fetching profiles:', profilesError.message);
       return new Response(
-        JSON.stringify({ error: 'Error fetching profiles', details: profilesError.message }),
+        JSON.stringify({ error: 'Error fetching profiles' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -184,7 +209,7 @@ serve(async (req) => {
     if (fetchError) {
       console.error('❌ Error fetching FCM tokens:', fetchError.message);
       return new Response(
-        JSON.stringify({ error: 'Error fetching FCM tokens', details: fetchError.message }),
+        JSON.stringify({ error: 'Error fetching FCM tokens' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -335,11 +360,11 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Edge Function error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const known = knownError(error);
+    if (!known) console.error('❌ Edge Function error:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: known?.code ?? 'internal_error' }),
+      { status: known?.status ?? 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

@@ -1,5 +1,12 @@
+// Pasify · notify-admin-message
+// Email al admin cuando llega un mensaje nuevo. Solo servidor→servidor: ningún
+// cliente la llama. Abierta, cualquiera podía mandar emails HTML arbitrarios.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { sendEmail } from "../_shared/gmail.ts";
+import { sendEmail, esc } from "../_shared/resend.ts";
+import { requireServiceRole, HttpError } from "../_shared/internal-auth.ts";
+
+// Antes iba a un Gmail heredado de Students Life: los mensajes salían de Pasify.
+const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "admin@pasify.es";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,13 +26,16 @@ serve(async (req) => {
   }
 
   try {
-    const { sender_name, sender_type, message_preview }: NotifyAdminRequest = await req.json();
-
-    console.log('📨 Richiesta notifica admin:', { sender_name, sender_type, message_preview });
+    requireServiceRole(req);
+    const payload: NotifyAdminRequest = await req.json();
+    // Todo lo que llega en el body se escapa antes de ir al HTML.
+    const sender_name = esc(payload.sender_name);
+    const sender_type = esc(payload.sender_type);
+    const message_preview = esc(payload.message_preview);
 
     await sendEmail({
-      to: ['stud3nts1ife.info@gmail.com'],
-      subject: `💬 Nuovo mensaje de ${sender_type}`,
+      to: [ADMIN_EMAIL],
+      subject: `💬 Nuevo mensaje de ${payload.sender_type ?? ''}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -87,19 +97,18 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Email inviata con successo via Gmail SMTP',
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('❌ Errore completo in notify-admin-message function:', error);
-    const err = error as any;
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error('notify-admin-message failed:', error);
 
     return new Response(JSON.stringify({
-      error: err?.message || String(err),
+      error: error instanceof HttpError ? error.code : 'internal_error',
     }), {
-      status: 500,
+      status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

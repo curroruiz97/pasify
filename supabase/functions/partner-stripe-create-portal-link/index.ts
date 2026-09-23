@@ -4,9 +4,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireUser, callerHasOrgRole } from "../_shared/supabase.ts";
 import { requireStripe } from "../_shared/stripe.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 interface Payload {
   org_id: string;
@@ -21,15 +22,13 @@ Deno.serve(async (req) => {
   if (preflight) return preflight;
   try {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
-    const user = await requireUser(req);
+    await requireUser(req);
     const body = (await req.json()) as Payload;
     if (!body.org_id || !body.return_url || !body.kind) return errorResponse("invalid_payload", 400);
 
-    const { data: hasRole } = await supabaseAdmin.rpc("has_org_role", {
-      _org_id: body.org_id,
-      _roles: ["owner", "admin"],
-    });
-    if (!hasRole) return errorResponse("forbidden", 403);
+    // has_org_role usa auth.uid(): con el cliente admin devolvía siempre false
+    // (403 para todos). Va con el JWT del usuario.
+    if (!(await callerHasOrgRole(req, body.org_id, ["owner", "admin"]))) return errorResponse("forbidden", 403);
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
@@ -57,6 +56,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ url });
   } catch (err) {
     logger.error("partner-stripe-create-portal-link failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

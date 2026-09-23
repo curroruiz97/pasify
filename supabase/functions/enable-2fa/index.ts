@@ -7,6 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 const ISSUER = "Pasify";
 
@@ -77,6 +78,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ secret, otpauth_url: otpauthUrl, backup_codes: backupCodes });
   } catch (err) {
     logger.error("enable-2fa failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });

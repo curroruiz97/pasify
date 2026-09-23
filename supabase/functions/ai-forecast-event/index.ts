@@ -6,8 +6,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
+import { supabaseAdmin, requireUser, isPlatformAdmin, callerIsOrgMember } from "../_shared/supabase.ts";
 import { logger } from "../_shared/logger.ts";
+import { safeErrorResponse } from "../_shared/internal-auth.ts";
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
@@ -29,9 +30,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!ev) return errorResponse("event_not_found", 404);
 
-    const isAdmin = (await supabaseAdmin.rpc("has_role", { _user_id: user.id, _role: "admin" })).data;
-    const isMember = ev.org_id ? (await supabaseAdmin.rpc("is_member_of_org", { _org_id: ev.org_id })).data : false;
-    if (!isAdmin && !isMember && ev.partner_id !== user.id) return errorResponse("forbidden", 403);
+    // is_member_of_org usa auth.uid(): con el cliente admin daba siempre false
+    // y solo pasaban el dueño del evento y los admins. Va con el JWT del usuario.
+    const allowed =
+      ev.partner_id === user.id ||
+      (await isPlatformAdmin(user.id)) ||
+      (!!ev.org_id && (await callerIsOrgMember(req, ev.org_id)));
+    if (!allowed) return errorResponse("forbidden", 403);
 
     const log = logger.child({ function: "ai-forecast-event", event_id });
 
@@ -98,6 +103,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ prediction });
   } catch (err) {
     logger.error("ai-forecast-event failed", { error: String(err) });
-    return errorResponse(err instanceof Error ? err.message : "internal_error", 500);
+    return safeErrorResponse(err);
   }
 });
