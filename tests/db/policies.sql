@@ -31,12 +31,12 @@ BEGIN;
 SELECT gen_random_uuid() AS test_user_id \gset
 INSERT INTO auth.users (id, email, encrypted_password, role, aud, instance_id, created_at, updated_at)
 VALUES (:'test_user_id', 'test1@pasify.test', crypt('test123', gen_salt('bf')), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
-INSERT INTO public.profiles (id, email) VALUES (:'test_user_id', 'test1@pasify.test');
-INSERT INTO public.user_roles (user_id, role) VALUES (:'test_user_id', 'client');
+INSERT INTO public.profiles (id, email) VALUES (:'test_user_id', 'test1@pasify.test') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) VALUES (:'test_user_id', 'client') ON CONFLICT DO NOTHING;
 
 -- Switch a sesión del user (authenticated role, JWT con sub = test_user_id)
 SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claim.sub TO 'TEST_USER_ID_PLACEHOLDER';
+SELECT set_config('request.jwt.claim.sub', :'test_user_id', true);
 
 -- Intentar añadir rol partner DEBE FALLAR (policy user_roles_self_insert
 -- exige "no tiene rol previo")
@@ -70,7 +70,10 @@ BEGIN;
 SELECT gen_random_uuid() AS test_user_id \gset
 INSERT INTO auth.users (id, email, encrypted_password, role, aud, instance_id, created_at, updated_at)
 VALUES (:'test_user_id', 'test2@pasify.test', crypt('test123', gen_salt('bf')), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
-INSERT INTO public.profiles (id, email) VALUES (:'test_user_id', 'test2@pasify.test');
+INSERT INTO public.profiles (id, email) VALUES (:'test_user_id', 'test2@pasify.test') ON CONFLICT (id) DO NOTHING;
+-- El trigger de alta ya da rol 'client': se quita para probar el reclamo.
+DELETE FROM public.user_roles WHERE user_id = :'test_user_id';
+SELECT set_config('test.uid', :'test_user_id', true);
 
 SET LOCAL ROLE authenticated;
 
@@ -128,14 +131,15 @@ INSERT INTO auth.users (id, email, encrypted_password, role, aud, instance_id, c
 VALUES (:'owner_id', 'owner@pasify.test', crypt('x', gen_salt('bf')), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now()),
        (:'attacker_id', 'attacker@pasify.test', crypt('x', gen_salt('bf')), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
 
-INSERT INTO public.profiles (id, email) VALUES (:'owner_id', 'owner@pasify.test'), (:'attacker_id', 'attacker@pasify.test');
-INSERT INTO public.user_roles (user_id, role) VALUES (:'owner_id', 'partner'), (:'attacker_id', 'partner');
+INSERT INTO public.profiles (id, email) VALUES (:'owner_id', 'owner@pasify.test'), (:'attacker_id', 'attacker@pasify.test') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) VALUES (:'owner_id', 'partner'), (:'attacker_id', 'partner') ON CONFLICT DO NOTHING;
 
 SELECT gen_random_uuid() AS org_id \gset
 INSERT INTO public.organizations (id, slug, name, owner_id) VALUES (:'org_id', 'test-org-' || substring(gen_random_uuid()::text, 1, 8), 'Test Org', :'owner_id');
-INSERT INTO public.partner_subscriptions (org_id, status, billing_interval) VALUES (:'org_id', 'active', 'monthly');
+INSERT INTO public.partner_subscriptions (org_id, status, billing_interval) VALUES (:'org_id', 'active', 'monthly') ON CONFLICT (org_id) DO NOTHING;
 
 -- Switch to attacker (otro partner, no miembro de la org)
+SELECT set_config('test.attacker', :'attacker_id', true);
 SET LOCAL ROLE authenticated;
 
 DO $$
