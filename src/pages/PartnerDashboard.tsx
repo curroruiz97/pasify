@@ -1229,7 +1229,7 @@ const PartnerDrawer = ({
           </div>
           <NavTree
             tree={navTree}
-            section={seccionActiva}
+            section={section}
             onSelect={(id) => {
               onSelect(id);
               setOpen(false);
