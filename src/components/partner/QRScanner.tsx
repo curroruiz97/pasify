@@ -11,6 +11,8 @@ import {
   CameraOff,
   CheckCircle2,
   ChevronDown,
+  Flashlight,
+  FlashlightOff,
   Keyboard,
   Loader2,
   RefreshCcw,
@@ -20,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { haptic } from "@/lib/haptics";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { appPlatform } from "@/lib/platform";
@@ -43,19 +46,29 @@ import {
  *     "Dar entrada igualmente" con un motivo (queda auditado en servidor).
  *   - Resultado a pantalla completa: verde (se cierra solo a ~1,5 s) o rojo
  *     (hay que tocar para seguir), con el tipo de entrada, pitido y vibración.
- *   - Entre lecturas se usa pause()/start() de qr-scanner, sin destruir el
- *     escáner (ojo: pause() suelta el stream a los 300 ms y start() lo vuelve
- *     a pedir; así la cámara no queda encendida con un resultado rojo en
- *     pantalla). destroy() solo al apagar la cámara o salir.
- *   - Timeout de 6 s en la RPC: "Sin conexión, reintenta", nunca un verde.
+ *     Si lo leído por la cámara no es un qr_token (UUID) no se llama al
+ *     servidor: "Código no válido" al momento, y se cierra solo.
+ *   - Entre lecturas se congela el <video>: el bucle de qr-scanner se para con
+ *     el vídeo en pausa, pero la cámara sigue abierta y seguir es instantáneo
+ *     (sin volver a pedir la cámara ni a enfocar; la linterna no se apaga).
+ *     scanner.pause() no vale para esto: suelta el stream a los 300 ms y cada
+ *     lectura obligaba a reabrir la cámara. destroy() al apagar la cámara o
+ *     salir: no queda ninguna cámara encendida.
+ *   - Timeout de 5 s en la RPC: sin respuesta o sin red, pantalla roja "Sin
+ *     conexión: no se ha validado. Reintenta" (reintenta el mismo código),
+ *     nunca un verde. Sin red, además, aviso fijo arriba.
+ *   - Con la cámara abierta la pantalla no se apaga (Screen Wake Lock, si el
+ *     navegador lo tiene) y, si la cámara tiene linterna, botón "Linterna".
  *   - Permiso de cámara: en la app se pide con @capacitor/camera y, si está
  *     denegado, se explica dónde activarlo en Ajustes.
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-const SCAN_TIMEOUT_MS = 6_000;
+const SCAN_TIMEOUT_MS = 5_000;
 const OK_AUTO_CLOSE_MS = 1_500;
+/** "Código no válido" no deja nada que decidir: también se cierra solo. */
+const INVALID_AUTO_CLOSE_MS = 2_000;
 /** Tras cerrar un resultado, el mismo QR delante de la cámara se ignora este rato. */
 const SAME_CODE_COOLDOWN_MS = 2_500;
 /** already_used tan reciente que puede ser el propio reintento tras un corte. */
@@ -289,6 +302,53 @@ const playBeep = (ok: boolean) => {
 };
 
 // ----------------------------------------------------------------------------
+// Pantalla encendida (Screen Wake Lock)
+// ----------------------------------------------------------------------------
+
+/**
+ * Mientras `active` (cámara abierta) la pantalla no se apaga. Screen Wake Lock
+ * API de la web, sin plugin nativo: donde no existe (algún WebView) no hace
+ * nada. El navegador suelta el bloqueo al ocultarse la página, así que se
+ * vuelve a pedir al volver a primer plano. Se suelta al apagar la cámara o salir.
+ */
+const useScreenWakeLock = (active: boolean) => {
+  useEffect(() => {
+    if (!active || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let disposed = false;
+    let requesting = false;
+    let sentinel: WakeLockSentinel | null = null;
+
+    const acquire = async () => {
+      if (disposed || requesting || document.visibilityState !== "visible") return;
+      if (sentinel && !sentinel.released) return;
+      requesting = true;
+      try {
+        const next = await navigator.wakeLock.request("screen");
+        if (disposed) void next.release().catch(() => undefined);
+        else sentinel = next;
+      } catch {
+        /* denegado (ahorro de batería, política del navegador…): se apagará como siempre */
+      } finally {
+        requesting = false;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void acquire();
+    };
+
+    void acquire();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (sentinel && !sentinel.released) void sentinel.release().catch(() => undefined);
+      sentinel = null;
+    };
+  }, [active]);
+};
+
+// ----------------------------------------------------------------------------
 // Componente
 // ----------------------------------------------------------------------------
 
@@ -315,6 +375,14 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
   const scannerRef = useRef<QrScanner | null>(null);
   const startAttemptRef = useRef(0);
   const mountedRef = useRef(false);
+  /** Linterna: null si la cámara no tiene (o aún no se sabe); si no, si está encendida. */
+  const [torchOn, setTorchOn] = useState<boolean | null>(null);
+  const [torchBusy, setTorchBusy] = useState(false);
+
+  useScreenWakeLock(cameraState === "live");
+
+  /** Sin red no se puede validar nada: aviso fijo arriba mientras dure. */
+  const { isOnline } = useNetworkStatus();
 
   // ---- Lecturas --------------------------------------------------------------
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -357,6 +425,9 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
       if (stream instanceof MediaStream) stream.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
     }
+    // Con los tracks parados la linterna ya está apagada.
+    setTorchOn(null);
+    setTorchBusy(false);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -426,8 +497,15 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
       await scanner.start();
       if (stale()) return;
       setCameraState("live");
-      // Si hay un resultado en pantalla, el escáner espera en pausa.
-      if (busyRef.current) void scanner.pause().catch(() => undefined);
+      // Si hay un resultado en pantalla, el escáner espera en pausa (sin soltar la cámara).
+      if (busyRef.current) video.pause();
+      // Linterna: el botón solo sale si la cámara abierta la ofrece. Con el
+      // stream ya puesto, hasFlash() no abre uno temporal.
+      if (video.srcObject instanceof MediaStream) {
+        void scanner.hasFlash().then((has) => {
+          if (has && !stale() && scannerRef.current === scanner) setTorchOn(scanner.isFlashOn());
+        });
+      }
     } catch (err) {
       if (stale()) return;
       console.warn("[QRScanner] scanner.start:", err);
@@ -449,19 +527,44 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
     setCameraError(null);
   }, [cancelPendingStart, releaseCamera]);
 
+  /**
+   * Pausa entre lecturas SIN soltar la cámara: se congela el <video> y el bucle
+   * de qr-scanner se detiene solo (no escanea con el vídeo en pausa).
+   * scanner.pause() no sirve: suelta el stream a los 300 ms y al seguir había
+   * que volver a pedir la cámara y a enfocar en cada lectura.
+   */
   const pauseScanner = useCallback(() => {
-    const scanner = scannerRef.current;
-    if (scanner) void scanner.pause().catch(() => undefined);
+    const video = videoRef.current;
+    if (scannerRef.current && video && !video.paused) video.pause();
   }, []);
 
   const resumeScanner = useCallback(() => {
     const scanner = scannerRef.current;
-    if (!scanner) return;
-    scanner.start().catch((err: unknown) => {
+    const video = videoRef.current;
+    if (!scanner || !video) return;
+    const fail = (err: unknown) => {
       if (!mountedRef.current || scannerRef.current !== scanner) return;
       releaseCamera();
       setCameraState(isPermissionError(err) ? "denied" : "error");
       setCameraError(describeCameraError(err));
+    };
+    // Sin stream vivo (se cortó la cámara mientras había un resultado): se reabre.
+    const reopen = () => {
+      scanner
+        .pause(true)
+        .then(() => scanner.start())
+        .catch(fail);
+    };
+    const stream = video.srcObject;
+    if (!(stream instanceof MediaStream && stream.active)) {
+      reopen();
+      return;
+    }
+    // Con el stream vivo basta play(): qr-scanner reanuda el escaneo al oír "play".
+    video.play().catch((err: unknown) => {
+      // AbortError: una lectura nueva ya ha vuelto a pausar el vídeo, que es lo que toca.
+      if (cameraErrorName(err) === "AbortError" || busyRef.current) return;
+      if (scannerRef.current === scanner) reopen();
     });
   }, [releaseCamera]);
 
@@ -492,7 +595,8 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
       else void haptic.error();
       playBeep(ok);
       clearAutoClose();
-      if (ok) autoCloseRef.current = window.setTimeout(dismissOutcome, OK_AUTO_CLOSE_MS);
+      const autoCloseMs = ok ? OK_AUTO_CLOSE_MS : next.kind === "not_pasify" ? INVALID_AUTO_CLOSE_MS : null;
+      if (autoCloseMs !== null) autoCloseRef.current = window.setTimeout(dismissOutcome, autoCloseMs);
     },
     [clearAutoClose, dismissOutcome]
   );
@@ -500,6 +604,11 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
   // `token` es el qr_token leído o, si se tecleó el código corto, "code:<hex>".
   const runScan = async (token: string, force?: ForceRequest) => {
     const byCode = token.startsWith(CODE_PREFIX);
+    // A scan_ticket solo llega un UUID: cualquier otra cosa ni sale del móvil.
+    if (!byCode && !UUID_RE.test(token)) {
+      presentOutcome({ kind: "not_pasify" });
+      return;
+    }
     if (byCode && !selectedEventId) {
       presentOutcome({ kind: "error", token, message: "Elige arriba el evento para validar por código.", force });
       return;
@@ -564,6 +673,7 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
     pauseScanner();
     const token = extractTicketToken(raw);
     if (!token) {
+      // No es un qr_token: "Código no válido" al momento, sin llamar al servidor.
       presentOutcome({ kind: "not_pasify" });
       return;
     }
@@ -630,6 +740,31 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
     }
   };
 
+  const toggleTorch = async () => {
+    const scanner = scannerRef.current;
+    if (!scanner || torchBusy) return;
+    setTorchBusy(true);
+    try {
+      await scanner.toggleFlash();
+    } catch (err) {
+      if (!mountedRef.current || scannerRef.current !== scanner) return;
+      const stream = videoRef.current?.srcObject;
+      if (!(stream instanceof MediaStream && stream.active)) {
+        // Para apagarla qr-scanner reabre la cámara; si eso falla, la cámara ha caído.
+        releaseCamera();
+        setCameraState(isPermissionError(err) ? "denied" : "error");
+        setCameraError(describeCameraError(err));
+        return;
+      }
+      console.warn("[QRScanner] linterna:", err);
+    } finally {
+      if (mountedRef.current && scannerRef.current === scanner) {
+        setTorchOn(scanner.isFlashOn());
+        setTorchBusy(false);
+      }
+    }
+  };
+
   const isLive = cameraState === "live";
   const isStarting = cameraState === "starting";
   const platform = appPlatform();
@@ -642,6 +777,24 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
 
   return (
     <div className="space-y-6" onPointerDown={unlockAudio}>
+      {/* Sin red: ningún escaneo puede validarse hasta que vuelva. */}
+      {!isOnline && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-2xl border p-3 sm:p-4"
+          style={{ background: "rgba(220,38,38,0.10)", borderColor: "rgba(220,38,38,0.45)" }}
+        >
+          <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">Sin conexión: no se puede validar</div>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+              Los escaneos necesitan internet. Hasta que vuelva la conexión ninguna entrada saldrá en
+              verde: no dejes pasar a nadie sin verlo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Evento en puerta */}
       <div className="rounded-2xl border border-border bg-card p-3 sm:p-4">
         <div
@@ -873,6 +1026,30 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
               {isStarting ? "Activando…" : "Abrir cámara"}
             </Button>
           )}
+          {isLive && torchOn !== null && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void toggleTorch()}
+              disabled={torchBusy}
+              aria-pressed={torchOn}
+              className="h-10"
+              style={
+                torchOn
+                  ? { background: "rgba(232,84,42,0.12)", borderColor: "rgba(232,84,42,0.55)", color: "#FF7A4D" }
+                  : undefined
+              }
+            >
+              {torchBusy ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : torchOn ? (
+                <Flashlight className="mr-1.5 h-4 w-4" />
+              ) : (
+                <FlashlightOff className="mr-1.5 h-4 w-4" />
+              )}
+              Linterna
+            </Button>
+          )}
         </div>
 
         <button
@@ -970,7 +1147,7 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
   if (outcome.kind === "not_pasify") {
     return {
       tone: "bad",
-      title: "QR no válido",
+      title: "Código no válido",
       tier: null,
       person: null,
       lines: ["Este código no es una entrada de Pasify."],
@@ -981,7 +1158,7 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
   if (outcome.kind === "offline") {
     return {
       tone: "offline",
-      title: "Sin conexión, reintenta",
+      title: "Sin conexión: no se ha validado. Reintenta",
       tier: null,
       person: null,
       lines: ["No sabemos si la entrada es válida: no dejes pasar hasta confirmarlo."],
@@ -1149,8 +1326,9 @@ const ResultOverlay = ({
   const view = describeOutcome(outcome, selectedEvent);
   const ok = view.tone === "ok";
   const Icon = ok ? CheckCircle2 : view.tone === "offline" ? WifiOff : view.canForce ? AlertTriangle : XCircle;
-  const background = ok ? "bg-emerald-600" : view.tone === "offline" ? "bg-amber-600" : "bg-red-700";
-  const accentText = ok ? "text-emerald-700" : view.tone === "offline" ? "text-amber-700" : "text-red-700";
+  // Sin conexión también va en rojo: no se ha validado nada y nadie pasa.
+  const background = ok ? "bg-emerald-600" : "bg-red-700";
+  const accentText = ok ? "text-emerald-700" : "text-red-700";
 
   if (typeof document === "undefined") return null;
 
@@ -1169,7 +1347,7 @@ const ResultOverlay = ({
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         <Icon className="h-24 w-24 shrink-0" strokeWidth={2.2} aria-hidden="true" />
-        <h2 id="scan-result-title" className="text-4xl font-extrabold leading-tight tracking-tight">
+        <h2 id="scan-result-title" className="text-balance text-4xl font-extrabold leading-tight tracking-tight">
           {view.title}
         </h2>
         {view.tier && (

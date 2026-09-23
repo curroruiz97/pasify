@@ -39,7 +39,8 @@ import {
  * PartnerAttendees — asistentes y entradas validadas de un evento.
  *   - selector de evento (por defecto el de ahora, vía pickActiveEvent)
  *   - KPIs (vendidas / han entrado / por entrar / reembolsadas)
- *   - filtros por estado y tipo de entrada, búsqueda sin tildes
+ *   - filtros por estado y tipo de entrada; búsqueda sin tildes ni mayúsculas
+ *     por nombre, email, tipo de entrada o teléfono
  *   - exportación a CSV (también en la app, vía hoja de compartir)
  *
  * Datos por RPC SECURITY DEFINER, que comprueban permisos:
@@ -129,14 +130,29 @@ const STATUS_META: Record<string, { label: string; cls: string; icon: typeof Che
   },
 };
 
-/** Minúsculas y sin tildes: "José" encuentra "jose" y al revés. */
+/**
+ * Minúsculas, sin tildes (NFD y fuera las marcas combinantes) y con los
+ * espacios colapsados: "José" encuentra "jose" y al revés; "Peña" → "pena".
+ */
 const normalizeText = (s: string | null | undefined) =>
   (s ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 
 const digitsOnly = (s: string | null | undefined) => (s ?? "").replace(/\D+/g, "");
+
+/**
+ * `q` ya normalizada: nombre, email o tipo de entrada, sin tildes ni
+ * mayúsculas en ningún lado; con 3+ cifras, también el teléfono.
+ */
+const matchesSearch = (a: Attendee, q: string, qDigits: string) =>
+  normalizeText(`${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`).includes(q) ||
+  normalizeText(a.buyer_email).includes(q) ||
+  normalizeText(a.tier_name).includes(q) ||
+  (qDigits.length >= 3 && digitsOnly(a.buyer_phone).includes(qDigits));
 
 const formatEur = (cents: number | null | undefined) =>
   `${((cents ?? 0) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -274,17 +290,10 @@ export const PartnerAttendees = ({ events }: Props) => {
     if (tierFilter !== "all") {
       list = list.filter((a) => (a.tier_name ?? "__none__") === tierFilter);
     }
-    const q = normalizeText(search.trim());
+    const q = normalizeText(search);
     if (q) {
       const qDigits = digitsOnly(q);
-      list = list.filter((a) => {
-        const name = normalizeText(`${a.buyer_first_name ?? ""} ${a.buyer_last_name ?? ""}`);
-        return (
-          name.includes(q) ||
-          normalizeText(a.buyer_email).includes(q) ||
-          (qDigits.length >= 3 && digitsOnly(a.buyer_phone).includes(qDigits))
-        );
-      });
+      list = list.filter((a) => matchesSearch(a, q, qDigits));
     }
     return list;
   }, [attendees, statusFilter, tierFilter, search]);
@@ -495,7 +504,7 @@ export const PartnerAttendees = ({ events }: Props) => {
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre, email o teléfono..."
+                placeholder="Buscar por nombre, email, teléfono o tipo de entrada…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
