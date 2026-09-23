@@ -52,7 +52,11 @@ const ERROR_RE = /^(?:(.+?)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/;
 // CI de Linux generan las mismas claves.
 const ROOT_RE = new RegExp(ROOT.replace(/\\/g, "/").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
 const NODE_MODULES_RE = /[^\s"'`(]*\/node_modules\//g;
-const normalize = (s) => s.replace(ROOT_RE, ".").replace(NODE_MODULES_RE, "node_modules/");
+// tsc resume las uniones largas con "... 80 more ...": cada RPC o tabla nueva
+// cambiaria el numero y con el la clave de errores ya conocidos.
+const MORE_RE = /\.\.\. \d+ more \.\.\./g;
+const normalize = (s) =>
+  s.replace(ROOT_RE, ".").replace(NODE_MODULES_RE, "node_modules/").replace(MORE_RE, "... N more ...");
 
 function runTsc(config) {
   console.log(`tsc --noEmit -p ${config} ...`);
@@ -100,6 +104,19 @@ function tally(errors) {
   return sorted;
 }
 
+/** Aplica `normalize` a las claves de un baseline guardado con una version anterior del script. */
+function normalizeBaseline(raw) {
+  const out = {};
+  for (const [file, keys] of Object.entries(raw)) {
+    out[file] = {};
+    for (const [key, count] of Object.entries(keys)) {
+      const k = key.replace(MORE_RE, "... N more ...");
+      out[file][k] = (out[file][k] ?? 0) + count;
+    }
+  }
+  return out;
+}
+
 /** Entradas de `a` que aparecen mas veces que en `b` (`from` = veces en b, `to` = veces en a). */
 function excess(a, b) {
   const out = [];
@@ -118,7 +135,7 @@ function main() {
   const errors = CONFIGS.flatMap(runTsc);
   const current = tally(errors);
   const hasBaseline = existsSync(BASELINE);
-  const baseline = hasBaseline ? JSON.parse(readFileSync(BASELINE, "utf8")) : {};
+  const baseline = hasBaseline ? normalizeBaseline(JSON.parse(readFileSync(BASELINE, "utf8"))) : {};
 
   const added = excess(current, baseline);
   const fixedCount = sum(excess(baseline, current));
