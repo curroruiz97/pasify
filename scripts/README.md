@@ -137,7 +137,7 @@ Elimina:
 - 3 componentes: UploadSheet, AdminChats, PartnerSocialProfile
 - 11 hooks: useQuiz*, useChat, useTypingIndicator, useOnlinePresence, useGlobalTyping, useUnreadMessages, useUnreadNotifications, useNotificationSound
 
-Después: `npx tsc --noEmit` para verificar que sigue compilando, y `git status` antes del commit.
+Después: `npm run typecheck` para verificar que no aparecen errores TypeScript nuevos, `npm run typecheck:baseline` para sacar del baseline los errores de los ficheros borrados, y `git status` antes del commit.
 
 ## CI/CD (automático)
 

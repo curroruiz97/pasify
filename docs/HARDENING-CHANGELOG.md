@@ -122,8 +122,8 @@ cb6eeb3 feat(honesty): cablear features mock + badges Beta honestos
 Cualquiera puede verificar el estado actual del proyecto:
 
 ```bash
-# Type + lint
-npx tsc --noEmit
+# Type + lint (`npx tsc --noEmit` a secas no comprueba nada: tsconfig.json es un solution config)
+npm run typecheck
 npm run lint
 
 # Build
@@ -136,7 +136,7 @@ npm run test:e2e
 # (vía MCP get_advisors o Supabase Dashboard → Database → Advisors)
 ```
 
-Resultado esperado: 0 errores TypeScript, 0 errores ESLint, build verde,
+Resultado esperado: 0 errores TypeScript nuevos respecto a `scripts/typecheck-baseline.json`, 0 errores ESLint, build verde,
 e2e smoke tests verdes, advisor security con solo whitelist + deuda
 documentada.
 

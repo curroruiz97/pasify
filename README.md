@@ -33,11 +33,19 @@ Scripts útiles:
 |--------------------|--------|
 | `npm run dev`      | Vite dev server (HMR) |
 | `npm run build`    | Build producción + PWA service worker |
-| `npm run typecheck`| `tsc --noEmit` |
+| `npm run typecheck`| `tsc` real sobre `tsconfig.app.json` + `tsconfig.node.json`; falla solo con errores **nuevos** respecto a `scripts/typecheck-baseline.json` (es lo que corre CI) |
+| `npm run typecheck:baseline` | Regenera el baseline tras arreglar errores, para bajar el listón |
+| `npm run typecheck:full` | Lista todos los errores TS, incluida la deuda legacy del baseline |
 | `npm run lint`     | ESLint sobre `src/` |
 | `npm run i18n:check` | Detecta mojibake (UTF-8 doble encoding) en `src/i18n/locales/*.json` |
 | `npm run i18n:fix`   | Arregla mojibake en sitio |
 | `npm run test:e2e`   | Playwright (smoke + login + role-hardening) |
+
+> **Typecheck.** `tsconfig.json` es un solution config (`"files": []` + `references`),
+> así que `tsc --noEmit` a secas no comprueba ningún fichero y siempre sale verde: así
+> llegó a producción el `ReferenceError` de 2b3b079. Usa `npm run typecheck` (tarda
+> ~4 min). El baseline congela la deuda legacy (~900 errores, sobre todo Students
+> Life); un error nuevo se arregla, no se mete en el baseline.
 
 ---
 
@@ -65,7 +73,7 @@ Scripts útiles:
 
 | Workflow | Trigger | Función |
 |----------|---------|---------|
-| `ci.yml` | push/PR → main | Lint + typecheck + security scan + i18n:check |
+| `ci.yml` | push/PR → main | Lint + typecheck (sin errores TS nuevos vs baseline) + security scan + i18n:check |
 | `deploy-edge-functions.yml` | push main, paths `supabase/functions/**` | Deploy 39 edge functions (skip `_legacy`, `_shared`, `_tests`) |
 | `db-migrate-production.yml` | push main, paths `supabase/migrations/**` | Aplica migrations vía environment `production` (approval gate) |
 | `db-policy-tests.yml` | push main · PR con label `db-test` · manual | pgTAP-style RLS tests via `supabase start` local |

@@ -353,7 +353,9 @@ const PartnerDashboard = () => {
 
   // Arbol de navegación — agrupa secciones por dominio para reducir scroll.
   // Cada grupo se auto-expande cuando su sección activa está dentro.
-  const navTree: NavNode[] = [
+  // Va en su propia constante tipada: con `.flatMap` encadenado al literal,
+  // TypeScript deja de tiparlo como NavNode[] y los `id` pasan a ser string.
+  const arbol: NavNode[] = [
     { kind: "item", id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
     { kind: "item", id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
     { kind: "item", id: "eventos", label: "Mis eventos", icon: <Calendar className="h-5 w-5" /> },
@@ -395,14 +397,14 @@ const PartnerDashboard = () => {
       ],
     },
     { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
-  ]
-    // Fuera del arbol lo que en la app no existe; si un grupo se queda sin
-    // hijos, desaparece el grupo entero en vez de dejar una carpeta vacia.
-    .flatMap<NavNode>((nodo) => {
-      if (nodo.kind === "item") return seccionVisible(nodo.id) ? [nodo] : [];
-      const hijos = nodo.children.filter((h) => seccionVisible(h.id));
-      return hijos.length ? [{ ...nodo, children: hijos }] : [];
-    });
+  ];
+  // Fuera del arbol lo que en la app no existe; si un grupo se queda sin
+  // hijos, desaparece el grupo entero en vez de dejar una carpeta vacia.
+  const navTree = arbol.flatMap<NavNode>((nodo) => {
+    if (nodo.kind === "item") return seccionVisible(nodo.id) ? [nodo] : [];
+    const hijos = nodo.children.filter((h) => seccionVisible(h.id));
+    return hijos.length ? [{ ...nodo, children: hijos }] : [];
+  });
 
   // Bottom tab bar mobile — 4 entradas más usadas; el resto en el drawer "Más".
   const tabBarItems: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -458,7 +460,7 @@ const PartnerDashboard = () => {
             )}
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
-            <NavTree tree={navTree} section={seccionActiva} onSelect={setSection} />
+            <NavTree<Section> tree={navTree} section={seccionActiva} onSelect={setSection} />
           </nav>
           <div className="space-y-1 border-t border-border p-3">
             <Button

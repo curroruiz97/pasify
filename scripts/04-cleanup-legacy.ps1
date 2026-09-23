@@ -5,7 +5,7 @@
 # eliminados), pero que aún viven como código muerto en src/.
 #
 # Antes de ejecutar:
-#   1. Asegúrate de que `npx tsc --noEmit` pasa sin errores
+#   1. Asegúrate de que `npm run typecheck` pasa (sin errores TS nuevos)
 #   2. Asegúrate de tener commit limpio (`git status`) por si quieres
 #      revertir.
 #
@@ -119,7 +119,8 @@ Write-Host ""
 
 if (-not $DryRun) {
     Write-Host "Siguiente paso recomendado:" -ForegroundColor Cyan
-    Write-Host "  npx tsc --noEmit          # verificar que el build sigue ok" -ForegroundColor White
-    Write-Host "  git status                # revisar la diff antes de commit" -ForegroundColor White
+    Write-Host "  npm run typecheck          # verificar que no hay errores TS nuevos" -ForegroundColor White
+    Write-Host "  npm run typecheck:baseline # sacar del baseline los errores ya borrados" -ForegroundColor White
+    Write-Host "  git status                 # revisar la diff antes de commit" -ForegroundColor White
     Write-Host ""
 }
