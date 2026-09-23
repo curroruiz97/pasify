@@ -13,6 +13,7 @@
     "TS2345: Argument of type '\"is_read\"' is not assignable to parameter of type 'never'.": 1,
     "TS2345: Argument of type '\"sender_id\"' is not assignable to parameter of type 'never'.": 1,
     "TS2353: Object literal may only specify known properties, and 'user1_id' does not exist in type 'RejectExcessProperties<{ capability_code: string; created_at?: string; detail?: string; id?: string; org_id?: string; payload?: Json; resolution_note?: string; resolved?: boolean; resolved_at?: string; resolved_by?: string; severity: \"high\" | ... 2 more ... | \"critical\"; title: string; } | ... 94 more ... | { ...; }...'.": 1,
+    "TS2589: Type instantiation is excessively deep and possibly infinite.": 3,
     "TS2769: No overload matches this call.": 6
   },
   "src/components/admin/AdminProfile.tsx": {
@@ -141,7 +142,6 @@
     "TS2345: Argument of type '\"client_id\"' is not assignable to parameter of type 'never'.": 1,
     "TS2345: Argument of type '\"discount_id\"' is not assignable to parameter of type 'never'.": 1,
     "TS2345: Argument of type '\"generate_qr_code\"' is not assignable to parameter of type '\"accept_invitation\" | \"accept_ticket_transfer\" | \"admin_grant_partner_access\" | \"admin_grant_partner_access_until\" | \"admin_list_users\" | \"admin_metrics_timeseries\" | ... 69 more ... | \"transfer_ticket\"'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 2,
     "TS2769: No overload matches this call.": 2
   },
   "src/components/client/PartnerEvents.tsx": {
@@ -194,7 +194,7 @@
     "TS2353: Object literal may only specify known properties, and 'blocker_user_id' does not exist in type 'RejectExcessProperties<{ blocked_id: string; blocker_id: string; created_at?: string; id?: string; reason?: string; }, { blocked_id: string; blocker_id: string; created_at?: string; id?: string; reason?: string; }> | RejectExcessProperties<...>[]'.": 1
   },
   "src/components/moderation/ReportContentDialog.tsx": {
-    "TS2322: Type '\"video\" | \"message\" | \"comment\" | \"post\"' is not assignable to type 'never'.": 1,
+    "TS2322: Type '\"video\" | \"message\" | \"post\" | \"comment\"' is not assignable to type 'never'.": 1,
     "TS2322: Type 'string' is not assignable to type 'never'.": 4,
     "TS2769: No overload matches this call.": 1
   },
@@ -500,7 +500,6 @@
   },
   "src/hooks/useGallery.ts": {
     "TS2345: Argument of type '\"partner_id\"' is not assignable to parameter of type 'never'.": 1,
-    "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
     "TS2769: No overload matches this call.": 1
   },
   "src/hooks/useOnlinePresence.ts": {
@@ -619,14 +618,6 @@
     "TS2300: Duplicate identifier 'Ticket'.": 2,
     "TS2367: This comparison appears to be unintentional because the types 'RefundRequest' and 'string' have no overlap.": 3,
     "TS2749: 'Ticket' refers to a value, but is being used as a type here. Did you mean 'typeof Ticket'?": 3
-  },
-  "src/pages/PartnerDetails.tsx": {
-    "TS2304: Cannot find name 'CalendarEvent'.": 1,
-    "TS2304: Cannot find name 'MonthCalendarView'.": 1,
-    "TS2304: Cannot find name 'handleEventClick'.": 1,
-    "TS2322: Type 'string' is not assignable to type 'never'.": 2,
-    "TS2552: Cannot find name 'partnerEvents'. Did you mean 'PartnerReviews'?": 2,
-    "TS2769: No overload matches this call.": 1
   },
   "src/pages/PartnerOnboarding.tsx": {
     "TS2339: Property 'business_description' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 2,
