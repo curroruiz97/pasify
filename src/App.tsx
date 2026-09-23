@@ -5,7 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { get, set, del } from "idb-keyval";
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -27,7 +27,6 @@ const RegisterPartner = lazy(() => import("./pages/RegisterPartner"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
-const PartnerDetails = lazy(() => import("./pages/PartnerDetails"));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
@@ -136,6 +135,14 @@ const RootRoute = ({ session }: { session: any }) => {
   return <Index />;
 };
 
+// `/partner/:id` era la ficha de local heredada (PartnerDetails), rota desde
+// el snapshot; la vigente es `/p/:id`. La ruta se conserva solo para que los
+// enlaces guardados y las notificaciones antiguas lleguen a la ficha buena.
+const LegacyPartnerRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/p/${encodeURIComponent(id ?? "")}`} replace />;
+};
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -186,7 +193,7 @@ const NotificationDeepLinkHandler = () => {
       }
       if (type === "event" || type === "ticket_paid" || type === "discount") return "/client-dashboard";
       if (type === "refund_decided" && data.refundId) return `/client-dashboard?refund=${data.refundId}`;
-      if (type === "partner" && data.partnerId) return `/partner/${data.partnerId}`;
+      if (type === "partner" && data.partnerId) return `/p/${data.partnerId}`;
       if (type === "participant" || type === "participation" || type === "payout_arrived") return "/partner-dashboard";
       if (type === "ai_recommendation" || type === "compliance_alert") return "/partner-dashboard";
       return "/client-dashboard";
@@ -416,6 +423,7 @@ const App = () => {
                   cadono sul catch-all SPA e finiscono su /calendar. */}
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/p/:id" element={<PublicPartnerPage />} />
+              <Route path="/partner/:id" element={<LegacyPartnerRedirect />} />
 
               {/* Rotte protette */}
               <Route
@@ -423,14 +431,6 @@ const App = () => {
                 element={
                   <ProtectedRoute requireRole="client">
                     <ClientDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/partner/:id"
-                element={
-                  <ProtectedRoute>
-                    <PartnerDetails />
                   </ProtectedRoute>
                 }
               />

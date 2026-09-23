@@ -81,11 +81,11 @@ export const GlobalSearchSheet = ({ open, onOpenChange, city }: GlobalSearchShee
   const handleClick = (r: SearchResult) => {
     onOpenChange(false);
     if (r.result_type === "partner") {
-      navigate(`/partner/${r.partner_id}`);
+      navigate(`/p/${r.partner_id}`);
     } else {
       // Per gli eventi navighiamo al partner, l'evento sarà visibile
       // tra le sue card. (Non c'è una pagina dedicata evento.)
-      navigate(`/partner/${r.partner_id}`);
+      navigate(`/p/${r.partner_id}`);
     }
   };
 

@@ -38,7 +38,7 @@ const RecentPartners = ({ userId }: RecentPartnersProps) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.05 }}
-          onClick={() => navigate(`/partner/${partner.id}`)}
+          onClick={() => navigate(`/p/${partner.id}`)}
           className="min-w-[90px]"
         >
           <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 hover:bg-white/25 transition-all duration-200 active:scale-95">

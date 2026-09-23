@@ -31,7 +31,7 @@ const PartnerCard = ({ partner, compact = false, listMode = false }: PartnerCard
   if (compact) {
     return (
       <motion.div
-        onClick={() => navigate(`/partner/${partner.id}`)}
+        onClick={() => navigate(`/p/${partner.id}`)}
         whileHover={{ scale: 1.02, y: -2 }}
         whileTap={{ scale: 0.98 }}
         className="bg-white rounded-[24px] overflow-hidden cursor-pointer min-w-[140px] shadow-lg hover:shadow-xl transition-shadow duration-300"
@@ -77,7 +77,7 @@ const PartnerCard = ({ partner, compact = false, listMode = false }: PartnerCard
   if (listMode) {
     return (
       <motion.div
-        onClick={() => navigate(`/partner/${partner.id}`)}
+        onClick={() => navigate(`/p/${partner.id}`)}
         whileTap={{ scale: 0.98 }}
         className="bg-white rounded-2xl overflow-hidden cursor-pointer shadow-md hover:shadow-lg active:shadow-md transition-all duration-200 flex h-28"
       >
@@ -157,7 +157,7 @@ const PartnerCard = ({ partner, compact = false, listMode = false }: PartnerCard
   // Default - full card (used elsewhere)
   return (
     <motion.div
-      onClick={() => navigate(`/partner/${partner.id}`)}
+      onClick={() => navigate(`/p/${partner.id}`)}
       whileHover={{ scale: 1.02, y: -4 }}
       whileTap={{ scale: 0.98 }}
       className="bg-white rounded-[28px] overflow-hidden cursor-pointer min-w-[280px] shadow-xl hover:shadow-2xl transition-all duration-300"

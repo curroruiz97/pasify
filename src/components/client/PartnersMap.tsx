@@ -235,7 +235,7 @@ const PartnersMap = ({ city, country }: PartnersMapProps) => {
 
         // Add click handler
         el.addEventListener("click", () => {
-          navigate(`/partner/${partner.id}`);
+          navigate(`/p/${partner.id}`);
         });
 
         // Create popup

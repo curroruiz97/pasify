@@ -35,3 +35,12 @@ test("navigation to /login does not crash", async ({ page }) => {
   // La pagina deve renderizzare almeno un input (email o password)
   await expect(page.locator("input").first()).toBeVisible({ timeout: 10000 });
 });
+
+// La ficha heredada /partner/:id reventaba con un ReferenceError; ahora es
+// solo una redirección a la ficha vigente /p/:id.
+test("/partner/:id heredada redirige a /p/:id sin romper", async ({ page }) => {
+  await page.goto("/#/partner/demo-1");
+  await expect(page).toHaveURL(/#\/p\/demo-1$/);
+  await expect(page.getByText("Local no encontrado.")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("Algo no ha ido bien")).toHaveCount(0);
+});

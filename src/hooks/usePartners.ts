@@ -7,8 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
  * Antes (Pasify) consultaba `reviews`, `gallery`, `partner_views`,
  * `categories`, `profile_image_url`, `latitude/longitude` (en profiles).
  * En Pasify esas tablas/columnas no existen — devolvemos defaults seguros
- * para no romper los consumers (PartnerDetails, PartnersList, RecentPartners,
- * PartnersMap, CategoryCarousel).
+ * para no romper los consumers (PartnersList, RecentPartners, PartnersMap,
+ * CategoryCarousel).
  *
  * Mantenemos la misma firma pública. `avatar_url` se expone también como
  * `profile_image_url` para compat con los componentes legacy.
