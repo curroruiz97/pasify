@@ -11,6 +11,8 @@
 //   checkout.session.expired / async_payment_failed
 //                                  → expire_ticket_order (libera el stock)
 //   charge.refunded                → mark_refund_processed por cada reembolso completado
+//   refund.updated                 → reembolso que se completa más tarde (cierra la
+//                                    solicitud) o que Stripe rechaza (vuelve a 'failed')
 //   customer.subscription.*        → upsert partner_subscriptions (estado mapeado)
 //   invoice.paid                   → último cobro de la suscripción
 //   invoice.payment_failed         → past_due + aviso al owner
@@ -145,6 +147,42 @@ async function handleChargeRefunded(stripe: Stripe, charge: Stripe.Charge): Prom
     if (error) throw new Error(`mark_refund_processed_failed: ${error.message}`);
   }
   return "processed";
+}
+
+/**
+ * Un reembolso cambia de estado después de crearse (los que quedan
+ * 'pending'): al completarse se cierra la solicitud; si Stripe lo rechaza o
+ * se cancela, la solicitud vuelve a 'failed' para poder reintentarla.
+ */
+async function handleRefundUpdated(refund: Stripe.Refund): Promise<Outcome> {
+  const requestId = refund.metadata?.pasify_refund_request_id;
+  if (!requestId || !/^[0-9a-f-]{36}$/i.test(requestId)) return "ignored";
+  if (refund.status === "succeeded") {
+    const { error } = await supabaseAdmin.rpc("mark_refund_processed", {
+      _stripe_refund_id: refund.id,
+      _amount_refunded_cents: refund.amount,
+      _payment_intent_id: stripeId(refund.payment_intent) ?? "",
+      _refund_request_id: requestId,
+    });
+    if (error) throw new Error(`mark_refund_processed_failed: ${error.message}`);
+    return "processed";
+  }
+  if (refund.status === "failed" || refund.status === "canceled") {
+    const { error } = await supabaseAdmin
+      .from("refund_requests")
+      .update({
+        status: "failed",
+        stripe_refund_status: refund.status,
+        stripe_failure_reason: refund.failure_reason ?? refund.status,
+      })
+      .eq("id", requestId)
+      .eq("stripe_refund_id", refund.id)
+      .neq("status", "refunded");
+    if (error) throw new Error(`refund_failed_update_failed: ${error.message}`);
+    log.warn("refund_failed_in_stripe", { request_id: requestId, stripe_refund_id: refund.id, reason: refund.failure_reason });
+    return "processed";
+  }
+  return "ignored";
 }
 
 /* ===========================================================================
@@ -472,6 +510,8 @@ function route(stripe: Stripe, event: Stripe.Event): Promise<Outcome> {
       return handleCheckoutExpired(event, event.data.object as Stripe.Checkout.Session);
     case "charge.refunded":
       return handleChargeRefunded(stripe, event.data.object as Stripe.Charge);
+    case "refund.updated":
+      return handleRefundUpdated(event.data.object as Stripe.Refund);
     case "account.updated":
       return handleAccountUpdated(event.data.object as Stripe.Account);
     case "payout.paid":
