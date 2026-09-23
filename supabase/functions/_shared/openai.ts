@@ -1,5 +1,6 @@
 // Pasify · OpenAI client compartido para AI features (concierge, marketing copy, etc.)
 import { logger } from "./logger.ts";
+import { HttpError } from "./internal-auth.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const OPENAI_MODEL_DEFAULT = Deno.env.get("OPENAI_MODEL_DEFAULT") ?? "gpt-4o-mini";
@@ -28,17 +29,14 @@ export interface OpenAIChatResponse {
 
 /**
  * Chat completion vía OpenAI Chat Completions API.
- * Si OPENAI_API_KEY no está configurada, devuelve un stub útil para dev.
+ * Sin OPENAI_API_KEY lanza un 503 (ai_not_configured): nunca se inventa una
+ * respuesta (antes devolvía un texto "simulado" que podía acabar sugerido
+ * como réplica real).
  */
 export async function chatComplete(opts: OpenAIChatOptions): Promise<OpenAIChatResponse> {
   if (!OPENAI_API_KEY) {
     logger.warn("openai_not_configured", { capability: opts.capability });
-    return {
-      content: opts.jsonMode ? '{"stub":true,"message":"OpenAI not configured"}' : "(OpenAI no configurado — respuesta simulada)",
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      model: "stub",
-      latency_ms: 0,
-    };
+    throw new HttpError(503, "ai_not_configured");
   }
 
   const start = Date.now();

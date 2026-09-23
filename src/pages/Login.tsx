@@ -79,11 +79,11 @@ const Login = () => {
         // Auto-promote a partner SOLO se il profilo ha già dati business
         // (niente default "client" — quello era un bug che marchiava partner
         // come student quando profile update era ancora in volo).
+        // Usuarios antiguos sin rol: se reclama con claim_initial_role (el
+        // INSERT directo en user_roles ya no está permitido por RLS).
         if (!roleError && !role && (profile?.business_category || profile?.business_name)) {
-          const { error: insertRoleError } = await supabase
-            .from("user_roles")
-            .insert({ user_id: data.user.id, role: "partner" });
-          if (!insertRoleError) effectiveRole = "partner";
+          const { error: claimError } = await supabase.rpc("claim_initial_role", { _role: "partner" });
+          if (!claimError) effectiveRole = "partner";
         }
 
         toast({
@@ -100,9 +100,7 @@ const Login = () => {
         } else if (effectiveRole === "client") {
           navigate(nextPath ?? "/client-dashboard");
         } else {
-          await supabase
-            .from("user_roles")
-            .insert({ user_id: data.user.id, role: "client" });
+          await supabase.rpc("claim_initial_role", { _role: "client" });
           navigate(nextPath ?? "/client-dashboard");
         }
       }
