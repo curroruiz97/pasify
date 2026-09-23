@@ -29,6 +29,7 @@ const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard"));
 const PublicEvent = lazy(() => import("./pages/PublicEvent"));
+const DoorMode = lazy(() => import("./pages/DoorMode"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
@@ -449,6 +450,15 @@ const App = () => {
                 element={
                   <ProtectedRoute requireRole="client">
                     <ClientDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Modo puerta: sin PartnerGate, la puerta no se cierra por el plan. */}
+              <Route
+                path="/door"
+                element={
+                  <ProtectedRoute requireRole="partner">
+                    <DoorMode />
                   </ProtectedRoute>
                 }
               />

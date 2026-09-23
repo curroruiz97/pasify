@@ -21,6 +21,7 @@ import {
   Radio,
   Copy,
   ExternalLink,
+  Lock,
   EyeOff,
   QrCode,
   Send,
@@ -88,6 +89,7 @@ import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
 import { EventQrDialog } from "@/components/partner/EventQrDialog";
 import { shareEventLink } from "@/lib/eventLinks";
+import { isDoorLocked } from "@/lib/doorLock";
 import { StatusBadge } from "@/components/partner/StatusBadge";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { isNativeApp } from "@/lib/platform";
@@ -328,6 +330,11 @@ const PartnerDashboard = () => {
       if (authError) throw new Error(authError.message);
       const uid = u.user?.id;
       if (!uid) throw new Error("No hay ninguna sesión activa. Vuelve a iniciar sesión.");
+      // Modo puerta activo en este dispositivo: el panel no se abre.
+      if (isDoorLocked(uid)) {
+        navigate("/door", { replace: true });
+        return;
+      }
       setUserId(uid);
       setUserEmail(u.user?.email ?? null);
 
@@ -1059,6 +1066,10 @@ const PartnerDashboard = () => {
                   La cámara se activa sola. Apunta al QR de la entrada: el resultado sale a pantalla
                   completa y los accesos validados aparecen al momento en Asistentes.
                 </p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/door")}>
+                  <Lock className="mr-2 h-4 w-4" />
+                  Modo puerta con PIN
+                </Button>
               </div>
               {userId ? (
                 <QRScanner

@@ -90,6 +90,12 @@ interface QRScannerProps {
    * (la puerta no se para): sin eventos valida cada entrada contra el suyo.
    */
   eventsState?: "loading" | "error" | "ready";
+  /**
+   * Modo puerta (/door): el móvil lo lleva el portero con la sesión del
+   * dueño. No se enseña el email del comprador ni "dar entrada igualmente";
+   * para forzar una entrada el encargado sale del modo puerta con el PIN.
+   */
+  doorMode?: boolean;
 }
 
 type ScanResultCode =
@@ -352,7 +358,7 @@ const useScreenWakeLock = (active: boolean) => {
 // Componente
 // ----------------------------------------------------------------------------
 
-const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
+const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScannerProps) => {
   // ---- Evento en puerta ------------------------------------------------------
   const selectable = useMemo(() => listEventChoices(events), [events]);
 
@@ -1111,6 +1117,7 @@ const QRScanner = ({ events, eventsState = "ready" }: QRScannerProps) => {
         <ResultOverlay
           outcome={outcome}
           selectedEvent={selectedEvent}
+          doorMode={doorMode}
           validating={validating}
           forceOpen={forceOpen}
           forceReason={forceReason}
@@ -1222,7 +1229,12 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
         title: "Entrada no encontrada",
         tier: null,
         person: null,
-        lines: ["Este QR no corresponde a ninguna entrada de Pasify."],
+        // El código manual solo se busca en el evento en puerta.
+        lines: [
+          outcome.kind === "ticket" && outcome.token.startsWith(CODE_PREFIX)
+            ? "Ninguna entrada de este evento tiene ese código. Revisa los 8 caracteres o escanea el QR."
+            : "Este QR no corresponde a ninguna entrada de Pasify.",
+        ],
         canForce: false,
         canRetry: false,
       };
@@ -1300,6 +1312,7 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
 
 const ResultOverlay = ({
   outcome,
+  doorMode,
   selectedEvent,
   validating,
   forceOpen,
@@ -1313,6 +1326,7 @@ const ResultOverlay = ({
 }: {
   outcome: Outcome;
   selectedEvent: ScannerEvent | null;
+  doorMode: boolean;
   validating: boolean;
   forceOpen: boolean;
   forceReason: string;
@@ -1323,7 +1337,15 @@ const ResultOverlay = ({
   onRetry: () => void;
   onDismiss: () => void;
 }) => {
-  const view = describeOutcome(outcome, selectedEvent);
+  const described = describeOutcome(outcome, selectedEvent);
+  const view: OutcomeView = doorMode
+    ? {
+        ...described,
+        canForce: false,
+        // Sin nombre, buyerName cae al email: en la puerta no se enseña.
+        person: described.person && described.person.includes("@") ? null : described.person,
+      }
+    : described;
   const ok = view.tone === "ok";
   const Icon = ok ? CheckCircle2 : view.tone === "offline" ? WifiOff : view.canForce ? AlertTriangle : XCircle;
   // Sin conexión también va en rojo: no se ha validado nada y nadie pasa.
