@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   graphql_public: {
     Tables: {
@@ -102,13 +102,6 @@ export type Database = {
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_anomalies_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -320,13 +313,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ai_decisions_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ai_decisions_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -396,13 +382,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "ai_kill_switches_killed_by_fkey"
-            columns: ["killed_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
         ]
       }
       ai_policies: {
@@ -456,13 +435,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_policies_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -546,13 +518,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "app_settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -725,13 +690,6 @@ export type Database = {
             columns: ["actor_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_logs_actor_user_id_fkey"
-            columns: ["actor_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -925,24 +883,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bug_reports_triaged_by_fkey"
-            columns: ["triaged_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "bug_reports_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bug_reports_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -1058,13 +1002,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cashless_topups_partner_user_id_fkey"
-            columns: ["partner_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "cashless_topups_wallet_id_fkey"
             columns: ["wallet_id"]
             isOneToOne: false
@@ -1123,13 +1060,6 @@ export type Database = {
             columns: ["partner_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cashless_transactions_partner_user_id_fkey"
-            columns: ["partner_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -1218,13 +1148,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cashless_wallets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -1373,13 +1296,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "compliance_consents_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
         ]
       }
       compliance_dsar_requests: {
@@ -1440,24 +1356,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "compliance_dsar_requests_completed_by_fkey"
-            columns: ["completed_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "compliance_dsar_requests_requester_user_id_fkey"
             columns: ["requester_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "compliance_dsar_requests_requester_user_id_fkey"
-            columns: ["requester_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -1856,13 +1758,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "door_scans_scanner_user_id_fkey"
-            columns: ["scanner_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "door_scans_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
@@ -1950,24 +1845,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "door_vision_events_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "door_vision_events_scanner_user_id_fkey"
             columns: ["scanner_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "door_vision_events_scanner_user_id_fkey"
-            columns: ["scanner_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -2058,7 +1939,7 @@ export type Database = {
           is_festival: boolean
           metadata: Json
           org_id: string | null
-          partner_id: string
+          partner_id: string | null
           price_cents: number
           status: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id: string | null
@@ -2085,7 +1966,7 @@ export type Database = {
           is_festival?: boolean
           metadata?: Json
           org_id?: string | null
-          partner_id: string
+          partner_id?: string | null
           price_cents?: number
           status?: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id?: string | null
@@ -2112,7 +1993,7 @@ export type Database = {
           is_festival?: boolean
           metadata?: Json
           org_id?: string | null
-          partner_id?: string
+          partner_id?: string | null
           price_cents?: number
           status?: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id?: string | null
@@ -2156,13 +2037,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_partner_id_fkey"
-            columns: ["partner_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -2226,13 +2100,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "favorites_v2_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -2462,13 +2329,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "installed_apps_installed_by_fkey"
-            columns: ["installed_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "installed_apps_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -2581,13 +2441,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "loyalty_points_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -2721,13 +2574,6 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "marketing_campaigns_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -2916,24 +2762,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "moderation_flags_reporter_id_fkey"
-            columns: ["reporter_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "moderation_flags_resolved_by_fkey"
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "moderation_flags_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -3146,13 +2978,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
         ]
       }
       organization_members: {
@@ -3226,13 +3051,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "organization_members_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "organization_members_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -3244,13 +3062,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_members_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -3275,7 +3086,7 @@ export type Database = {
           legal_name: string | null
           metadata: Json
           name: string
-          owner_id: string
+          owner_id: string | null
           postal_code: string | null
           slug: string
           status: string
@@ -3304,7 +3115,7 @@ export type Database = {
           legal_name?: string | null
           metadata?: Json
           name: string
-          owner_id: string
+          owner_id?: string | null
           postal_code?: string | null
           slug: string
           status?: string
@@ -3333,7 +3144,7 @@ export type Database = {
           legal_name?: string | null
           metadata?: Json
           name?: string
-          owner_id?: string
+          owner_id?: string | null
           postal_code?: string | null
           slug?: string
           status?: string
@@ -3356,13 +3167,6 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organizations_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -3399,13 +3203,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "partner_favorites_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -3508,13 +3305,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "partner_onboarding_state_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "partner_onboarding_state_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
@@ -3611,13 +3401,6 @@ export type Database = {
             columns: ["admin_granted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "partner_subscriptions_admin_granted_by_fkey"
-            columns: ["admin_granted_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -3749,13 +3532,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pos_cash_closures_partner_user_id_fkey"
-            columns: ["partner_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pos_cash_closures_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
@@ -3841,13 +3617,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pos_sales_cashier_user_id_fkey"
-            columns: ["cashier_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pos_sales_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -3880,13 +3649,6 @@ export type Database = {
             columns: ["voided_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pos_sales_voided_by_fkey"
-            columns: ["voided_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -3952,13 +3714,6 @@ export type Database = {
             columns: ["decided_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_proposals_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -4197,13 +3952,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "referral_claims_referee_user_id_fkey"
-            columns: ["referee_user_id"]
-            isOneToOne: true
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "referral_claims_referral_code_fkey"
             columns: ["referral_code"]
             isOneToOne: false
@@ -4215,13 +3963,6 @@ export type Database = {
             columns: ["referrer_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "referral_claims_referrer_user_id_fkey"
-            columns: ["referrer_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -4248,13 +3989,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "referral_codes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -4299,13 +4033,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "refund_request_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
         ]
       }
       refund_requests: {
@@ -4327,7 +4054,7 @@ export type Database = {
           reason: string
           reason_code: string | null
           requester_email: string
-          requester_user_id: string
+          requester_user_id: string | null
           status: Database["public"]["Enums"]["refund_request_status_t"]
           stripe_failure_reason: string | null
           stripe_refund_id: string | null
@@ -4353,7 +4080,7 @@ export type Database = {
           reason: string
           reason_code?: string | null
           requester_email: string
-          requester_user_id: string
+          requester_user_id?: string | null
           status?: Database["public"]["Enums"]["refund_request_status_t"]
           stripe_failure_reason?: string | null
           stripe_refund_id?: string | null
@@ -4379,7 +4106,7 @@ export type Database = {
           reason?: string
           reason_code?: string | null
           requester_email?: string
-          requester_user_id?: string
+          requester_user_id?: string | null
           status?: Database["public"]["Enums"]["refund_request_status_t"]
           stripe_failure_reason?: string | null
           stripe_refund_id?: string | null
@@ -4393,13 +4120,6 @@ export type Database = {
             columns: ["decided_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refund_requests_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -4435,13 +4155,6 @@ export type Database = {
             columns: ["requester_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refund_requests_requester_user_id_fkey"
-            columns: ["requester_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -4918,24 +4631,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "support_conversations_assigned_admin_id_fkey"
-            columns: ["assigned_admin_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "support_conversations_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "support_conversations_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -4964,13 +4663,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "support_conversations_partner_id_fkey"
-            columns: ["partner_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5016,13 +4708,6 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "support_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5085,13 +4770,6 @@ export type Database = {
             columns: ["filed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tax_filings_filed_by_fkey"
-            columns: ["filed_by"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -5263,6 +4941,7 @@ export type Database = {
           stripe_payment_intent_id: string | null
           stripe_session_id: string | null
           subtotal_cents: number
+          tickets_email_sent_at: string | null
           total_cents: number
         }
         Insert: {
@@ -5287,6 +4966,7 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           subtotal_cents?: number
+          tickets_email_sent_at?: string | null
           total_cents?: number
         }
         Update: {
@@ -5311,6 +4991,7 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           subtotal_cents?: number
+          tickets_email_sent_at?: string | null
           total_cents?: number
         }
         Relationships: [
@@ -5319,13 +5000,6 @@ export type Database = {
             columns: ["buyer_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_orders_buyer_user_id_fkey"
-            columns: ["buyer_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -5421,13 +5095,6 @@ export type Database = {
             columns: ["scanned_by_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_scan_logs_scanned_by_user_id_fkey"
-            columns: ["scanned_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -5576,13 +5243,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ticket_transfers_from_user_id_fkey"
-            columns: ["from_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ticket_transfers_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
@@ -5594,13 +5254,6 @@ export type Database = {
             columns: ["to_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_transfers_to_user_id_fkey"
-            columns: ["to_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5696,13 +5349,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tickets_buyer_user_id_fkey"
-            columns: ["buyer_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tickets_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -5738,24 +5384,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tickets_transferred_to_user_id_fkey"
-            columns: ["transferred_to_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tickets_used_by_partner_id_fkey"
             columns: ["used_by_partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tickets_used_by_partner_id_fkey"
-            columns: ["used_by_partner_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5808,13 +5440,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "user_2fa_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
         ]
       }
       user_blocks: {
@@ -5848,24 +5473,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_blocks_blocked_id_fkey"
-            columns: ["blocked_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "user_blocks_blocker_id_fkey"
             columns: ["blocker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_blocks_blocker_id_fkey"
-            columns: ["blocker_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5901,13 +5512,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_fcm_tokens_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5952,13 +5556,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_notification_prefs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -6214,24 +5811,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "vip_bookings_holder_user_id_fkey"
-            columns: ["holder_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "vip_bookings_rrpp_user_id_fkey"
             columns: ["rrpp_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vip_bookings_rrpp_user_id_fkey"
-            columns: ["rrpp_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
           {
@@ -6362,6 +5945,25 @@ export type Database = {
       }
     }
     Views: {
+      partner_balance_v: {
+        Row: {
+          fee_cents: number | null
+          gross_cents: number | null
+          net_cents: number | null
+          org_id: string | null
+          paid_orders: number | null
+          refunded_cents: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_orders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_partners: {
         Row: {
           avatar_url: string | null
@@ -6371,24 +5973,6 @@ export type Database = {
           city: string | null
           cover_image_url: string | null
           id: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          business_category?: string | null
-          business_description?: string | null
-          business_name?: string | null
-          city?: string | null
-          cover_image_url?: string | null
-          id?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          business_category?: string | null
-          business_description?: string | null
-          business_name?: string | null
-          city?: string | null
-          cover_image_url?: string | null
-          id?: string | null
         }
         Relationships: []
       }
@@ -6439,13 +6023,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_partner_id_fkey"
-            columns: ["partner_id"]
-            isOneToOne: false
-            referencedRelation: "public_partners"
             referencedColumns: ["id"]
           },
         ]
@@ -6556,6 +6133,7 @@ export type Database = {
         Returns: undefined
       }
       auto_approve_if_allowed: { Args: { _role: string }; Returns: boolean }
+      cancel_ticket_order: { Args: { _order_id: string }; Returns: undefined }
       cashless_pay: {
         Args: {
           _amount_cents: number
@@ -6612,9 +6190,51 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_cancellation_refund_requests: {
+        Args: {
+          _decided_by: string
+          _event_id: string
+          _note?: string
+          _order_id?: string
+        }
+        Returns: string[]
+      }
       create_organization: {
         Args: { _country?: string; _name: string; _slug?: string }
         Returns: string
+      }
+      create_ticket_order: {
+        Args: {
+          _buyer_email: string
+          _buyer_first_name?: string
+          _buyer_last_name?: string
+          _buyer_phone?: string
+          _buyer_user_id: string
+          _event_id: string
+          _fee_pct?: number
+          _qty: number
+          _tier_id: string
+          _ttl_minutes?: number
+        }
+        Returns: {
+          city: string
+          currency: string
+          event_date_start: string
+          event_image_url: string
+          event_title: string
+          expires_at: string
+          fee_cents: number
+          order_id: string
+          org_id: string
+          qty: number
+          request_id: string
+          stripe_destination_account: string
+          subtotal_cents: number
+          tier_name: string
+          timezone: string
+          unit_price_cents: number
+          venue_name: string
+        }[]
       }
       crm_contact_purchases: {
         Args: { p_email: string; p_org_id: string }
@@ -6670,6 +6290,7 @@ export type Database = {
         Returns: string
       }
       event_has_sales: { Args: { _event_id: string }; Returns: boolean }
+      expire_ticket_order: { Args: { _session_id: string }; Returns: string }
       get_app_setting_bool: { Args: { _key: string }; Returns: boolean }
       get_app_setting_int: { Args: { _key: string }; Returns: number }
       get_app_setting_text: { Args: { _key: string }; Returns: string }
@@ -6704,6 +6325,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      holds_ticket_for_event: { Args: { _event_id: string }; Returns: boolean }
+      holds_ticket_for_tier: { Args: { _tier_id: string }; Returns: boolean }
       industry_price_benchmarks: {
         Args: never
         Returns: {
@@ -6756,10 +6379,27 @@ export type Database = {
         }
         Returns: string
       }
+      mark_order_paid_v2: {
+        Args: {
+          _amount_total_cents: number
+          _application_fee_cents?: number
+          _payment_intent_id: string
+          _session_id: string
+        }
+        Returns: {
+          buyer_email: string
+          buyer_user_id: string
+          event_id: string
+          newly_paid: boolean
+          order_id: string
+          org_id: string
+        }[]
+      }
       mark_refund_processed: {
         Args: {
           _amount_refunded_cents: number
           _payment_intent_id: string
+          _refund_request_id?: string
           _stripe_refund_id: string
         }
         Returns: string
@@ -6787,6 +6427,11 @@ export type Database = {
         }
         Returns: string
       }
+      partner_cancel_event: {
+        Args: { _event_id: string; _reason: string }
+        Returns: Json
+      }
+      partner_close_account: { Args: never; Returns: Json }
       partner_event_attendees: {
         Args: { _event_id: string }
         Returns: {
@@ -6798,7 +6443,6 @@ export type Database = {
           currency: string
           order_id: string
           paid_at: string
-          qr_token: string
           scanned_by_name: string
           status: string
           ticket_id: string
@@ -6850,12 +6494,28 @@ export type Database = {
           user_id: string
         }[]
       }
+      public_partner_rows: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          business_category: string
+          business_description: string
+          business_name: string
+          city: string
+          cover_image_url: string
+          id: string
+        }[]
+      }
       redeem_referral_code: {
         Args: { _code: string }
         Returns: {
           claim_id: string
           reward_points: number
         }[]
+      }
+      reject_pricing_proposal: {
+        Args: { _proposal_id: string; _reason?: string }
+        Returns: undefined
       }
       request_refund: {
         Args: { _reason: string; _reason_code?: string; _ticket_id: string }
@@ -6903,14 +6563,46 @@ export type Database = {
         }
       }
       scan_ticket: {
-        Args: { _device_info?: string; _qr_token: string }
+        Args: {
+          _device_info?: string
+          _event_id?: string
+          _force?: boolean
+          _force_reason?: string
+          _qr_token: string
+        }
         Returns: {
           already_used_at: string
           buyer_email: string
           buyer_first_name: string
           buyer_last_name: string
+          event_date_start: string
           event_id: string
           event_title: string
+          forced: boolean
+          result: Database["public"]["Enums"]["scan_result_t"]
+          scanned_at: string
+          success: boolean
+          ticket_id: string
+          tier_name: string
+        }[]
+      }
+      scan_ticket_by_code: {
+        Args: {
+          _code: string
+          _device_info?: string
+          _event_id: string
+          _force?: boolean
+          _force_reason?: string
+        }
+        Returns: {
+          already_used_at: string
+          buyer_email: string
+          buyer_first_name: string
+          buyer_last_name: string
+          event_date_start: string
+          event_id: string
+          event_title: string
+          forced: boolean
           result: Database["public"]["Enums"]["scan_result_t"]
           scanned_at: string
           success: boolean
@@ -6921,6 +6613,10 @@ export type Database = {
       set_admin_by_email: { Args: { _email: string }; Returns: string }
       set_app_setting: {
         Args: { _key: string; _value: Json }
+        Returns: undefined
+      }
+      set_order_stripe_session: {
+        Args: { _order_id: string; _session_id: string }
         Returns: undefined
       }
       start_partner_trial: {
@@ -7111,6 +6807,8 @@ export type Database = {
         | "wrong_event"
         | "not_paid"
         | "forbidden"
+        | "outside_window"
+        | "event_cancelled"
       stripe_payout_status_t:
         | "pending"
         | "in_transit"
@@ -7173,12 +6871,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -7202,11 +6900,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -7227,11 +6925,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -7252,11 +6950,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -7269,11 +6967,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -7456,6 +7154,8 @@ export const Constants = {
         "wrong_event",
         "not_paid",
         "forbidden",
+        "outside_window",
+        "event_cancelled",
       ],
       stripe_payout_status_t: [
         "pending",
