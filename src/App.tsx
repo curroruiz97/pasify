@@ -28,6 +28,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard"));
+const PublicEvent = lazy(() => import("./pages/PublicEvent"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
@@ -438,6 +439,8 @@ const App = () => {
                   cadono sul catch-all SPA e finiscono su /calendar. */}
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/p/:id" element={<PublicPartnerPage />} />
+              {/* Página pública y compartible de un evento (enlace del local). */}
+              <Route path="/e/:eventId" element={<PublicEvent />} />
               <Route path="/partner/:id" element={<LegacyPartnerRedirect />} />
 
               {/* Rotte protette */}

@@ -20,8 +20,11 @@ import {
   Loader2,
   Radio,
   Copy,
+  ExternalLink,
   EyeOff,
+  QrCode,
   Send,
+  Share2,
   MoreVertical,
   Receipt,
   Trash2,
@@ -83,6 +86,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { EventRowCard } from "@/components/partner/EventRowCard";
+import { EventQrDialog } from "@/components/partner/EventQrDialog";
+import { shareEventLink } from "@/lib/eventLinks";
 import { StatusBadge } from "@/components/partner/StatusBadge";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { isNativeApp } from "@/lib/platform";
@@ -215,6 +220,8 @@ const PartnerDashboard = () => {
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
   // Retirar de la venta (publicado → borrador), con confirmación.
   const [unpublishTarget, setUnpublishTarget] = useState<EventRow | null>(null);
+  // QR del enlace público de un evento (cartelería).
+  const [qrTarget, setQrTarget] = useState<EventRow | null>(null);
   const [changingStatus, setChangingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Email del user (para autocompletar email facturación del wizard)
@@ -941,6 +948,22 @@ const PartnerDashboard = () => {
                                       </DropdownMenuItem>
                                     )}
                                     {e.status === "published" && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => void shareEventLink(e.id, e.title)}>
+                                          <Share2 className="mr-2 h-4 w-4" />
+                                          Compartir enlace
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => navigate(`/e/${e.id}`)}>
+                                          <ExternalLink className="mr-2 h-4 w-4" />
+                                          Ver página del evento
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setQrTarget(e)}>
+                                          <QrCode className="mr-2 h-4 w-4" />
+                                          QR para cartel
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    {e.status === "published" && (
                                       <DropdownMenuItem onClick={() => setUnpublishTarget(e)}>
                                         <EyeOff className="mr-2 h-4 w-4" />
                                         Retirar de la venta
@@ -977,6 +1000,9 @@ const PartnerDashboard = () => {
                         onDelete={() => setDeleteTarget(e)}
                         onPublish={() => void changeEventStatus(e, "published")}
                         onUnpublish={() => setUnpublishTarget(e)}
+                        onShare={() => void shareEventLink(e.id, e.title)}
+                        onOpenPublic={() => navigate(`/e/${e.id}`)}
+                        onShowQr={() => setQrTarget(e)}
                       />
                     ))}
                   </div>
@@ -1248,6 +1274,8 @@ const PartnerDashboard = () => {
         onOpenSupport={() => setSection("soporte")}
         onReopenOnboarding={() => setReopenOnboarding(true)}
       />
+
+      <EventQrDialog event={qrTarget} onOpenChange={(open) => !open && setQrTarget(null)} />
 
       {/* Confirmación de retirar de la venta */}
       <AlertDialog

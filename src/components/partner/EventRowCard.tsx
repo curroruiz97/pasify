@@ -1,4 +1,4 @@
-import { Copy, EyeOff, MoreVertical, Music, Pencil, Send, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, EyeOff, MoreVertical, Music, Pencil, QrCode, Send, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -47,6 +47,10 @@ export interface EventRowCardProps {
   onUnpublish?: () => void;
   /** Borrador → publicado. */
   onPublish?: () => void;
+  /** Solo publicados: enlace público, página del evento y QR para cartel. */
+  onShare?: () => void;
+  onOpenPublic?: () => void;
+  onShowQr?: () => void;
 }
 
 const formatShortDate = (iso: string) =>
@@ -78,6 +82,9 @@ export const EventRowCard = ({
   onDelete,
   onUnpublish,
   onPublish,
+  onShare,
+  onOpenPublic,
+  onShowQr,
 }: EventRowCardProps) => {
   return (
     <article
@@ -184,6 +191,24 @@ export const EventRowCard = ({
               <DropdownMenuItem onClick={onPublish}>
                 <Send className="mr-2 h-4 w-4" />
                 Publicar
+              </DropdownMenuItem>
+            )}
+            {event.status === "published" && onShare && (
+              <DropdownMenuItem onClick={onShare}>
+                <Share2 className="mr-2 h-4 w-4" />
+                Compartir enlace
+              </DropdownMenuItem>
+            )}
+            {event.status === "published" && onOpenPublic && (
+              <DropdownMenuItem onClick={onOpenPublic}>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Ver página del evento
+              </DropdownMenuItem>
+            )}
+            {event.status === "published" && onShowQr && (
+              <DropdownMenuItem onClick={onShowQr}>
+                <QrCode className="mr-2 h-4 w-4" />
+                QR para cartel
               </DropdownMenuItem>
             )}
             {onUnpublish && event.status === "published" && (
