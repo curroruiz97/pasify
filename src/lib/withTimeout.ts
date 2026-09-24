@@ -19,7 +19,8 @@ export class TimeoutError extends Error {
   }
 }
 
-export function withTimeout<T>(promise: Promise<T>, ms: number, label = "operation"): Promise<T> {
+// PromiseLike: las consultas de Supabase son thenables, no Promise.
+export function withTimeout<T>(promise: PromiseLike<T>, ms: number, label = "operation"): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new TimeoutError(label, ms));

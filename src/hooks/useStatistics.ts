@@ -54,10 +54,13 @@ export interface Stats {
   allClients: UserData[];
 }
 
-const countRows = async (table: string, mod?: (q: ReturnType<typeof supabase.from>) => unknown) => {
-  let q = supabase.from(table).select("*", { count: "exact", head: true });
-  if (mod) q = mod(q as unknown as ReturnType<typeof supabase.from>) as typeof q;
-  const { count, error } = await q;
+const HEAD_COUNT = { count: "exact", head: true } as const;
+
+const countRows = async (
+  table: string,
+  query: PromiseLike<{ count: number | null; error: { message: string } | null }>
+) => {
+  const { count, error } = await query;
   if (error) {
     console.warn(`[useStatistics] count(${table}) failed:`, error.message);
     return 0;
@@ -80,13 +83,13 @@ export const useStatistics = () => {
         partnerProfilesRes,
         clientProfilesRes,
       ] = await Promise.all([
-        countRows("profiles", (q) => q.not("business_name", "is", null)),
-        countRows("user_roles", (q) => q.eq("role", "client")),
-        countRows("events"),
-        countRows("events", (q) => q.eq("status", "published")),
-        countRows("tickets"),
-        countRows("tickets", (q) => q.eq("status", "paid")),
-        countRows("tickets", (q) => q.not("used_at", "is", null)),
+        countRows("profiles", supabase.from("profiles").select("*", HEAD_COUNT).not("business_name", "is", null)),
+        countRows("user_roles", supabase.from("user_roles").select("*", HEAD_COUNT).eq("role", "client")),
+        countRows("events", supabase.from("events").select("*", HEAD_COUNT)),
+        countRows("events", supabase.from("events").select("*", HEAD_COUNT).eq("status", "published")),
+        countRows("tickets", supabase.from("tickets").select("*", HEAD_COUNT)),
+        countRows("tickets", supabase.from("tickets").select("*", HEAD_COUNT).eq("status", "paid")),
+        countRows("tickets", supabase.from("tickets").select("*", HEAD_COUNT).not("used_at", "is", null)),
         supabase
           .from("profiles")
           .select("id, business_name, business_city, first_name, last_name, avatar_url")

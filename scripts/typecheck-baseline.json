@@ -150,12 +150,6 @@
     "TS2698: Spread types may only be created from object types.": 1,
     "TS2769: No overload matches this call.": 1
   },
-  "src/components/shared/EditPersonalInfoSheet.tsx": {
-    "TS2339: Property 'data' does not exist on type '{}'.": 1,
-    "TS2339: Property 'error' does not exist on type '{}'.": 2,
-    "TS2345: Argument of type 'PostgrestBuilder<{ PostgrestVersion: \"14.17\"; }, { first_name: string; last_name: string; phone: string; }, false>' is not assignable to parameter of type 'Promise<unknown>'.": 1,
-    "TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ......' is not assignable to parameter of type 'Promise<unknown>'.": 1
-  },
   "src/components/shared/GlobalSearchSheet.tsx": {
     "TS2352: Conversion of type '{ id: string; kind: string; link: string; subtitle: string; title: string; }[]' to type 'SearchResult[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1,
     "TS2353: Object literal may only specify known properties, and '_query' does not exist in type '{ _limit?: number; _q: string; }'.": 1
@@ -200,10 +194,6 @@
     "TS2589: Type instantiation is excessively deep and possibly infinite.": 1,
     "TS2769: No overload matches this call.": 3
   },
-  "src/hooks/useEvents.ts": {
-    "TS2339: Property 'eq' does not exist on type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...'.": 3,
-    "TS2352: Conversion of type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...' to type 'PostgrestFilterBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ......' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
-  },
   "src/hooks/useOnlinePresence.ts": {
     "TS2353: Object literal may only specify known properties, and 'last_active_at' does not exist in type 'RejectExcessProperties<{ account_status?: \"approved\" | \"rejected\" | \"pending\"; avatar_url?: string; business_address?: string; business_category?: string; business_city?: string; business_country?: string; business_description?: string; ... N more ...; updated_at?: string; }, { ...; }>'.": 1
   },
@@ -247,11 +237,6 @@
     "TS2339: Property 'player2_id' does not exist on type 'SelectQueryError<\"column 'player1_id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'player1_id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 2,
     "TS2345: Argument of type '\"id\"' is not assignable to parameter of type 'never'.": 5,
     "TS2769: No overload matches this call.": 6
-  },
-  "src/hooks/useStatistics.ts": {
-    "TS2339: Property 'eq' does not exist on type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...'.": 3,
-    "TS2339: Property 'not' does not exist on type 'PostgrestQueryBuilder<{ PostgrestVersion: \"14.17\"; }, { Tables: { ai_anomalies: { Row: { capability_code: string; created_at: string; detail: string; id: string; org_id: string; payload: Json; resolution_note: string; ... N more ...; title: string; }; Insert: { ...; }; Update: { ...; }; Relationships: [...]; }; ... ...'.": 2,
-    "TS2769: No overload matches this call.": 1
   },
   "src/hooks/useUnreadMessages.ts": {
     "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'id' does not exist on 'ai_capabilities'.\"> | SelectQueryError<\"column 'id' does not exist on 'organizations'.\"> | ... N more ... | SelectQueryError<...>'.": 1,

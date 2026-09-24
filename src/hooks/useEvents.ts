@@ -80,18 +80,17 @@ const decorate = (e: EventRow, p: Profile | null) => {
   };
 };
 
-const fetchEventsWithProfiles = async (
-  applyFilters: (q: ReturnType<typeof supabase.from>) => ReturnType<typeof supabase.from>
-) => {
-  // Step 1: events
-  let query = supabase
+const eventsQuery = () =>
+  supabase
     .from("events")
     .select(
       "id, partner_id, title, description, date_start, date_end, city, venue_name, address, price_cents, currency, capacity, tickets_sold, image_url, category, status"
     );
-  query = applyFilters(query as unknown as ReturnType<typeof supabase.from>) as typeof query;
+type EventsQuery = ReturnType<typeof eventsQuery>;
 
-  const { data: eventsData, error: eventsError } = await query.order("date_start", {
+const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQuery) => {
+  // Step 1: events
+  const { data: eventsData, error: eventsError } = await applyFilters(eventsQuery()).order("date_start", {
     ascending: true,
   });
   if (eventsError) throw eventsError;
