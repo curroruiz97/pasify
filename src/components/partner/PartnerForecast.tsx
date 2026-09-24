@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Brain,
@@ -17,6 +18,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { getErrorMessage } from "@/lib/sentry";
 
 /**
  * PartnerForecast — previsión de venta de los próximos eventos.
@@ -93,6 +97,8 @@ const paceLabel = (event: ForecastEvent): { value: string; sub: string } => {
   return { value: `${fmtInt(sold)} vendidas`, sub: "Sin aforo definido" };
 };
 
+const SIN_PREDICCIONES: Record<string, PredictionRow | null> = {};
+
 export const PartnerForecast = ({ events }: Props) => {
   const { toast } = useToast();
 
@@ -109,91 +115,76 @@ export const PartnerForecast = ({ events }: Props) => {
     return events.filter((e) => new Date(e.date_start).getTime() <= now);
   }, [events]);
 
-  const [predictions, setPredictions] = useState<Record<string, PredictionRow | null>>({});
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const uid = useCurrentUserId();
+  const queryClient = useQueryClient();
   const [generating, setGenerating] = useState<Set<string>>(new Set());
-  const [mape, setMape] = useState<number | null>(null);
-  const [historyCount, setHistoryCount] = useState(0);
 
-  // Última predicción de cada evento próximo
-  const loadPredictions = useCallback(async () => {
-    if (upcoming.length === 0) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const ids = upcoming.map((e) => e.id);
+  // Última predicción de cada evento próximo, en la caché (solo memoria):
+  // volver a la sección no la vuelve a pedir.
+  const upcomingIds = useMemo(() => upcoming.map((e) => e.id), [upcoming]);
+  const predictionsKey = [...qk.partner.forecast(uid ?? ""), "predictions", upcomingIds.join(",")] as const;
+  const predictionsQuery = useQuery({
+    queryKey: predictionsKey,
+    queryFn: async (): Promise<Record<string, PredictionRow | null>> => {
       const { data, error } = await supabase
         .from("forecast_predictions")
         .select(
           "id, event_id, predicted_attendance, predicted_revenue_cents, ci_low, ci_high, confidence, factors, model_version, generated_at"
         )
-        .in("event_id", ids)
+        .in("event_id", upcomingIds)
         .order("generated_at", { ascending: false });
       if (error) throw error;
-
       const latest: Record<string, PredictionRow | null> = {};
-      for (const id of ids) latest[id] = null;
+      for (const id of upcomingIds) latest[id] = null;
       for (const row of (data ?? []) as unknown as PredictionRow[]) {
         if (latest[row.event_id] === null) latest[row.event_id] = row;
       }
-      setPredictions(latest);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al cargar las previsiones";
-      console.error("[PartnerForecast] loadPredictions:", err);
-      setLoadError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [upcoming]);
+      return latest;
+    },
+    enabled: !!uid && upcomingIds.length > 0,
+  });
+  const predictions = predictionsQuery.data ?? SIN_PREDICCIONES;
+  const loading = upcomingIds.length > 0 && predictionsQuery.isPending && !predictionsQuery.isError;
+  const loadError = predictionsQuery.error && !predictionsQuery.data ? getErrorMessage(predictionsQuery.error) : null;
+  const { refetch: refetchPredictions } = predictionsQuery;
+  const loadPredictions = () => refetchPredictions();
 
-  // Error medio (MAPE) de las previsiones con histórico de eventos ya pasados
-  const loadMape = useCallback(async () => {
-    if (pastEvents.length === 0) {
-      setMape(null);
-      setHistoryCount(0);
-      return;
-    }
-    try {
-      const pastIds = pastEvents.map((e) => e.id);
-      const { data } = await supabase
+  // Error medio (MAPE) de las previsiones con histórico de eventos ya pasados:
+  // se leen las predicciones de esos eventos y se compara con lo vendido.
+  const pastIds = useMemo(() => pastEvents.map((e) => e.id), [pastEvents]);
+  const pastQuery = useQuery({
+    queryKey: [...qk.partner.forecast(uid ?? ""), "past", pastIds.join(",")] as const,
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("forecast_predictions")
         .select("event_id, predicted_attendance, generated_at, factors")
         .in("event_id", pastIds)
         .order("generated_at", { ascending: false });
-      const rows = (data ?? []) as unknown as Array<{
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{
         event_id: string;
         predicted_attendance: number;
         factors: Record<string, unknown> | null;
       }>;
-      const seen = new Set<string>();
-      let total = 0;
-      let count = 0;
-      for (const r of rows) {
-        if (seen.has(r.event_id)) continue;
-        seen.add(r.event_id);
-        if ((r.factors as { method?: unknown } | null)?.method !== HISTORY_METHOD) continue;
-        const real = pastEvents.find((e) => e.id === r.event_id)?.tickets_sold ?? 0;
-        if (real === 0) continue;
-        total += Math.abs(r.predicted_attendance - real) / real;
-        count++;
-      }
-      setMape(count > 0 ? (total / count) * 100 : null);
-      setHistoryCount(count);
-    } catch (err) {
-      console.warn("[PartnerForecast] mape calc failed", err);
+    },
+    enabled: !!uid && pastIds.length > 0,
+  });
+  const { mape, historyCount } = useMemo(() => {
+    const rows = pastQuery.data ?? [];
+    const seen = new Set<string>();
+    let total = 0;
+    let count = 0;
+    for (const r of rows) {
+      if (seen.has(r.event_id)) continue;
+      seen.add(r.event_id);
+      if ((r.factors as { method?: unknown } | null)?.method !== HISTORY_METHOD) continue;
+      const real = pastEvents.find((e) => e.id === r.event_id)?.tickets_sold ?? 0;
+      if (real === 0) continue;
+      total += Math.abs(r.predicted_attendance - real) / real;
+      count++;
     }
-  }, [pastEvents]);
-
-  useEffect(() => {
-    void loadPredictions();
-  }, [loadPredictions]);
-  useEffect(() => {
-    void loadMape();
-  }, [loadMape]);
+    return { mape: count > 0 ? (total / count) * 100 : null, historyCount: count };
+  }, [pastQuery.data, pastEvents]);
 
   const generate = async (eventId: string) => {
     setGenerating((s) => new Set(s).add(eventId));
@@ -204,7 +195,10 @@ export const PartnerForecast = ({ events }: Props) => {
       if (error) throw error;
       const prediction = (data as { prediction?: PredictionRow } | null)?.prediction ?? null;
       if (prediction?.id) {
-        setPredictions((prev) => ({ ...prev, [eventId]: prediction }));
+        queryClient.setQueryData<Record<string, PredictionRow | null>>(predictionsKey, (prev) => ({
+          ...(prev ?? {}),
+          [eventId]: prediction,
+        }));
       }
       if (prediction && !isHistoryBased(prediction)) {
         toast({
@@ -215,7 +209,7 @@ export const PartnerForecast = ({ events }: Props) => {
       } else {
         toast({ title: "Previsión calculada" });
       }
-      await loadPredictions();
+      await queryClient.invalidateQueries({ queryKey: qk.partner.forecast(uid ?? "") });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error calculando la previsión";
       console.error("[PartnerForecast] generate:", err);

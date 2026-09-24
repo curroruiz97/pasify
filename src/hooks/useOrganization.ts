@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/withTimeout";
-import { captureError, getErrorMessage, setSentryTag } from "@/lib/sentry";
+import { getErrorMessage, setSentryTag } from "@/lib/sentry";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId, useSessionReady } from "@/lib/cache/session";
 
 export interface TenantContext {
   org_id: string;
@@ -17,169 +20,56 @@ export interface TenantContext {
 // loader para siempre: a los 10 s se trata como error con "Reintentar".
 const TENANT_TIMEOUT_MS = 10_000;
 
-const mismoTenant = (a: TenantContext | null, b: TenantContext | null) =>
-  a === b ||
-  (!!a &&
-    !!b &&
-    a.org_id === b.org_id &&
-    a.org_name === b.org_name &&
-    a.brand_id === b.brand_id &&
-    a.brand_name === b.brand_name &&
-    a.venue_id === b.venue_id &&
-    a.venue_name === b.venue_name &&
-    a.role === b.role);
+async function leerTenant(): Promise<TenantContext | null> {
+  const { data, error } = await withTimeout(
+    Promise.resolve(supabase.rpc("tenant_for_user")),
+    TENANT_TIMEOUT_MS,
+    "rpc tenant_for_user",
+  );
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? (row as TenantContext) : null;
+}
 
 /**
  * useOrganization · resuelve el tenant activo del partner
- * (org + brand + venue + rol).
+ * (org + brand + venue + rol) con la RPC `tenant_for_user`.
  *
- * Usa la RPC `tenant_for_user`. Se carga una vez por usuario y se recarga
- * solo si CAMBIA el usuario (login/logout/cambio de cuenta) — NO escucha
- * realtime sobre `last_active_venue_id`. Para forzar refresh tras
- * `switchVenue` u otra acción que mueva el last_active_venue_id, usa el
- * `refetch` que devuelve este hook.
+ * Vive en la caché (qk.partner.tenant): todas las pantallas comparten una
+ * sola lectura, al recargar sale al instante de lo guardado y se revalida
+ * detrás. Para forzar refresh tras `switchVenue` u otra acción que mueva el
+ * last_active_venue_id, usa el `refetch` que devuelve este hook.
  *
  * Estabilidad (Fase 0 del panel de local):
  *  - `loading` solo es true en la PRIMERA carga (todavía no hay tenant).
- *    Los refrescos (refetch, switchVenue) van en segundo plano con
- *    `refreshing`, sin volver a `loading`: antes el SIGNED_IN de volver a la
- *    pestaña y el TOKEN_REFRESHED horario ponían `loading=true` y PartnerGate
- *    desmontaba el panel.
+ *    Los refrescos van en segundo plano con `refreshing`.
  *  - Un refresco fallido deja `error` pero NO borra el tenant previo.
  *  - `refetch()` resuelve con el tenant más reciente (el nuevo si la carga
  *    fue bien, el anterior si falló). Nunca rechaza.
  */
 export const useOrganization = () => {
-  const [tenant, setTenant] = useState<TenantContext | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const sesionLista = useSessionReady();
+  const uid = useCurrentUserId();
 
-  const mountedRef = useRef(true);
-  // Usuario de la sesión: undefined = todavía no lo sabemos.
-  const userIdRef = useRef<string | null | undefined>(undefined);
-  // Hay un tenant resuelto (aunque sea null = sin organización) para el usuario actual.
-  const hayDatosRef = useRef(false);
-  const tenantRef = useRef<TenantContext | null>(null);
-  // Cada carga lleva un número; solo la última puede escribir estado.
-  const seqRef = useRef(0);
-  const enVueloRef = useRef(false);
+  const query = useQuery({
+    queryKey: qk.partner.tenant(uid ?? ""),
+    queryFn: leerTenant,
+    enabled: !!uid,
+    staleTime: 2 * 60_000,
+  });
 
-  const fetchTenant = useCallback(async (): Promise<TenantContext | null> => {
-    const seq = ++seqRef.current;
-    const enSegundoPlano = hayDatosRef.current;
-    enVueloRef.current = true;
-    if (enSegundoPlano) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-      setError(null);
-    }
-
-    try {
-      const { data, error: rpcError } = await withTimeout(
-        Promise.resolve(supabase.rpc("tenant_for_user")),
-        TENANT_TIMEOUT_MS,
-        "rpc tenant_for_user",
-      );
-      if (rpcError) throw rpcError;
-      if (!mountedRef.current || seq !== seqRef.current) return tenantRef.current;
-
-      const row = Array.isArray(data) ? data[0] : data;
-      const next = row ? (row as TenantContext) : null;
-      if (!mismoTenant(tenantRef.current, next)) {
-        tenantRef.current = next;
-        setTenant(next);
-      }
-      hayDatosRef.current = true;
-      setError(null);
-      setSentryTag("org_id", next?.org_id ?? null);
-      return tenantRef.current;
-    } catch (e) {
-      if (!mountedRef.current || seq !== seqRef.current) return tenantRef.current;
-      const msg = getErrorMessage(e);
-      console.error("[useOrganization] tenant_for_user:", msg);
-      // Un refresco fallido NO borra el tenant que ya teníamos.
-      setError(msg);
-      if (!enSegundoPlano) captureError(e, { where: "useOrganization.fetchTenant" });
-      return tenantRef.current;
-    } finally {
-      if (mountedRef.current && seq === seqRef.current) {
-        enVueloRef.current = false;
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, []);
-
-  /**
-   * Aplica el usuario de un evento de auth. Idempotente: TOKEN_REFRESHED o el
-   * SIGNED_IN de volver a la pestaña traen el mismo usuario y no recargan.
-   */
-  const aplicarUsuario = useCallback(
-    (uid: string | null) => {
-      if (uid === userIdRef.current) {
-        // Mismo usuario. Solo si la primera carga falló (no hay tenant) y no
-        // hay otra en curso, aprovechamos el evento para reintentar.
-        if (uid && !hayDatosRef.current && !enVueloRef.current) void fetchTenant();
-        return;
-      }
-
-      // Usuario nuevo (primera vez, login, logout o cambio de cuenta): fuera
-      // lo del anterior e invalidamos cualquier carga suya en vuelo.
-      userIdRef.current = uid;
-      seqRef.current++;
-      enVueloRef.current = false;
-      hayDatosRef.current = false;
-      tenantRef.current = null;
-      setTenant(null);
-      setError(null);
-      setRefreshing(false);
-      if (!uid) {
-        setLoading(false);
-        return;
-      }
-      void fetchTenant();
-    },
-    [fetchTenant],
-  );
+  const tenant = uid ? query.data ?? null : null;
 
   useEffect(() => {
-    mountedRef.current = true;
-    let vivo = true;
-    let eventoRecibido = false;
+    if (query.isSuccess) setSentryTag("org_id", query.data?.org_id ?? null);
+  }, [query.isSuccess, query.data?.org_id]);
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      eventoRecibido = true;
-      const uid = session?.user?.id ?? null;
-      // Diferido: llamar a Supabase dentro del callback puede bloquear el lock
-      // de auth-js.
-      setTimeout(() => {
-        if (vivo) aplicarUsuario(uid);
-      }, 0);
-    });
-
-    // Red de seguridad por si INITIAL_SESSION no llega: sin esto `loading`
-    // se quedaría en true para siempre. Si ya llegó algún evento, se ignora.
-    withTimeout(supabase.auth.getSession(), TENANT_TIMEOUT_MS, "auth.getSession")
-      .then(({ data, error: sessionError }) => {
-        if (!vivo || eventoRecibido) return;
-        if (sessionError) throw sessionError;
-        aplicarUsuario(data.session?.user?.id ?? null);
-      })
-      .catch((e) => {
-        if (!vivo || eventoRecibido) return;
-        // No sabemos si hay sesión: error recuperable, no "sin organización".
-        setError(getErrorMessage(e));
-        setLoading(false);
-      });
-
-    return () => {
-      vivo = false;
-      mountedRef.current = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [aplicarUsuario]);
+  const { refetch: refetchQuery } = query;
+  const refetch = useCallback(async (): Promise<TenantContext | null> => {
+    if (!uid) return null;
+    const r = await refetchQuery();
+    return r.data ?? null;
+  }, [uid, refetchQuery]);
 
   const switchVenue = useCallback(
     async (venue_id: string) => {
@@ -189,15 +79,28 @@ export const useOrganization = () => {
         "rpc switch_active_venue",
       );
       if (error) throw error;
-      await fetchTenant();
+      await refetch();
     },
-    [fetchTenant],
+    [refetch],
   );
 
   const can = useCallback(
     (allowedRoles: TenantContext["role"][]): boolean => !!tenant && allowedRoles.includes(tenant.role),
-    [tenant]
+    [tenant],
   );
 
-  return { tenant, loading, refreshing, error, refetch: fetchTenant, switchVenue, can };
+  // Sin sesión conocida todavía no se sabe nada: cargando. Sin usuario: nada
+  // que cargar. Con usuario: solo la primera carga (ni datos ni error).
+  const loading = !sesionLista || (!!uid && query.isPending && !query.isError);
+  const error = uid && query.error ? getErrorMessage(query.error) : null;
+
+  return {
+    tenant,
+    loading,
+    refreshing: !!uid && query.isFetching && !query.isPending,
+    error,
+    refetch,
+    switchVenue,
+    can,
+  };
 };

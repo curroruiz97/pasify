@@ -135,9 +135,6 @@
   "src/components/partner/PartnerOnboardingWizard.tsx": {
     "TS2322: Type 'Record<string, unknown>' is not assignable to type 'Json'.": 2
   },
-  "src/components/partner/PartnerReports.tsx": {
-    "TS2352: Conversion of type '{ id: string; status: \"refunded\" | \"pending\" | \"cancelled\" | \"paid\" | \"used\"; amount_paid_cents: number; paid_at: string; events: { partner_id: string; }; }[]' to type 'TicketRow[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
-  },
   "src/components/quiz/QuizMatch.tsx": {
     "TS2339: Property 'id' does not exist on type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">'.": 2,
     "TS2345: Argument of type 'SelectQueryError<\"column 'profile_image_url' does not exist on 'profiles'.\">' is not assignable to parameter of type 'SetStateAction<PlayerProfile>'.": 2

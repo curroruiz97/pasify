@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Loader2, Lock, LogOut, ScanLine } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
@@ -15,6 +15,7 @@ import {
 import { Wordmark } from "@/components/Wordmark";
 import QRScanner from "@/components/partner/QRScanner";
 import { supabase } from "@/integrations/supabase/client";
+import { usePartnerEvents, type PartnerEventRow } from "@/hooks/queries/partnerData";
 import { useAuth, signOutLocal } from "@/hooks/useAuth";
 import { clearDoorLock, isDoorLocked, isValidDoorPin, lockDoor, unlockDoor } from "@/lib/doorLock";
 
@@ -39,30 +40,23 @@ interface DoorEvent {
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 30_000;
 
-async function loadDoorEvents(uid: string): Promise<DoorEvent[]> {
-  const [members, owned] = await Promise.all([
-    supabase.from("organization_members").select("org_id").eq("user_id", uid).eq("status", "active"),
-    supabase.from("organizations").select("id").eq("owner_id", uid),
-  ]);
-  const orgIds = new Set<string>();
-  for (const m of (members.data ?? []) as Array<{ org_id: string | null }>) if (m.org_id) orgIds.add(m.org_id);
-  for (const o of (owned.data ?? []) as Array<{ id: string }>) orgIds.add(o.id);
-  const filter =
-    orgIds.size > 0 ? `partner_id.eq.${uid},org_id.in.(${[...orgIds].join(",")})` : `partner_id.eq.${uid}`;
-
-  // La puerta solo necesita lo de estos días: de hace 3 días a dentro de 7.
-  const from = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();
-  const to = new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, title, date_start, date_end, status")
-    .or(filter)
-    .in("status", ["published", "past"])
-    .gte("date_start", from)
-    .lte("date_start", to)
-    .order("date_start", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as DoorEvent[];
+/**
+ * La puerta solo necesita lo de estos días (de hace 3 días a dentro de 7) y
+ * lo que se vende o se ha vendido. Sale de la lista de eventos del panel, que
+ * está en la caché y guardada en el dispositivo: el dueño activa el modo
+ * desde el panel, así que la puerta abre al instante aunque no haya
+ * cobertura.
+ */
+function eventosDePuerta(eventos: PartnerEventRow[], ahora = Date.now()): DoorEvent[] {
+  const desde = ahora - 3 * 24 * 3600_000;
+  const hasta = ahora + 7 * 24 * 3600_000;
+  return eventos
+    .filter((e) => {
+      const t = new Date(e.date_start).getTime();
+      return (e.status === "published" || e.status === "past") && t >= desde && t <= hasta;
+    })
+    .map((e) => ({ id: e.id, title: e.title, date_start: e.date_start, date_end: e.date_end, status: e.status }))
+    .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
 }
 
 const DoorMode = () => {
@@ -70,31 +64,21 @@ const DoorMode = () => {
   const { user, loading: authLoading } = useAuth();
   const uid = user?.id ?? null;
 
-  const [locked, setLocked] = useState(false);
-  const [events, setEvents] = useState<DoorEvent[]>([]);
-  const [eventsState, setEventsState] = useState<"loading" | "error" | "ready">("loading");
+  // Desde el primer render: antes arrancaba en false y se veía un instante la
+  // pantalla de configurar el PIN antes del escáner.
+  const [locked, setLocked] = useState(() => isDoorLocked(uid));
 
   useEffect(() => {
     setLocked(isDoorLocked(uid));
   }, [uid]);
 
-  useEffect(() => {
-    if (!uid) return;
-    let cancelled = false;
-    setEventsState("loading");
-    loadDoorEvents(uid)
-      .then((list) => {
-        if (cancelled) return;
-        setEvents(list);
-        setEventsState("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setEventsState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [uid]);
+  const eventsQuery = usePartnerEvents(uid);
+  const events = useMemo(() => eventosDePuerta(eventsQuery.data ?? []), [eventsQuery.data]);
+  const eventsState: "loading" | "error" | "ready" = eventsQuery.data
+    ? "ready"
+    : eventsQuery.isError
+      ? "error"
+      : "loading";
 
   // Android: el botón atrás no saca del modo puerta.
   useEffect(() => {

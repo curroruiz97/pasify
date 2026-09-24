@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { useSessionState } from "@/lib/useSessionState";
+import { RefreshIndicator } from "@/components/ui/refresh-indicator";
+import { useMyCity, useMyTickets, usePublicPartners, type WalletTicketRow } from "@/hooks/queries/clientData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +59,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { useRefundRequests, type RefundRequest } from "@/hooks/useRefundRequests";
-import { Sentry } from "@/lib/sentry";
+import { Sentry, getErrorMessage } from "@/lib/sentry";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import {
@@ -112,9 +118,19 @@ const CATEGORIES = [
   { id: "otro", label: "Otros", Icon: StoreIcon },
 ];
 
+const VIEWS: readonly View[] = ["home", "support", "wallet", "favorites", "loyalty", "live", "concierge"];
+const isView = (value: string | undefined): value is View =>
+  !!value && (VIEWS as readonly string[]).includes(value);
+
+// Referencias estables mientras no hay datos.
+const SIN_ENTRADAS: WalletTicketRow[] = [];
+const SIN_LOCALES: Partner[] = [];
+
 const ClientDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: 'local' });
     navigate("/");
@@ -127,28 +143,68 @@ const ClientDashboard = () => {
   const postCheckoutOrderId = searchParams.get("order_id");
   // `?wallet=<event_id|1>`: abre la cartera (lo usan el botón "Mi entrada"
   // del calendario, TicketSuccess, la vuelta a la app tras pagar en nativo…).
+  // `?refund=` y `?support=` llegan desde las notificaciones.
   const walletParam = searchParams.get("wallet");
+  const refundParam = searchParams.get("refund");
+  const supportParam = searchParams.get("support");
 
-  // Vista inicial: si venimos de Stripe Checkout con ?session_id=..., abrimos
-  // directamente el Wallet (en vez de "home") para que el cliente vea su
-  // ticket recién comprado sin tener que navegar.
-  const [view, setView] = useState<View>(
-    postCheckoutSessionId || postCheckoutOrderId || walletParam ? "wallet" : "home"
+  // La vista vive en la URL (/client-dashboard/:view): atrás, recargar y los
+  // enlaces llevan a la pestaña correcta. Antes era estado local: recargar (o
+  // que el navegador descartara la pestaña) te devolvía a Inicio.
+  const { view: viewParam } = useParams<{ view?: string }>();
+  const vistaPorParametros: View | null =
+    postCheckoutSessionId || postCheckoutOrderId || walletParam || refundParam
+      ? "wallet"
+      : supportParam
+        ? "support"
+        : null;
+  const view: View = isView(viewParam) ? viewParam : vistaPorParametros ?? "home";
+  const setView = useCallback(
+    (v: View) => navigate(v === "home" ? "/client-dashboard" : `/client-dashboard/${v}`),
+    [navigate],
   );
-  const [userCity, setUserCity] = useState<string>("");
-  const [userId, setUserId] = useState<string>("");
+
+  // Los enlaces con parámetros fijan la vista en la ruta y se limpian los de
+  // un solo uso (?wallet=, ?refund=). Todo en una navegación: dos seguidas se
+  // pisan. La vuelta de Stripe (?session_id=) la limpia su propio efecto.
+  useEffect(() => {
+    if (!vistaPorParametros && !walletParam && !refundParam) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("wallet");
+    next.delete("refund");
+    const destino = isView(viewParam) ? viewParam : vistaPorParametros ?? "home";
+    const pathname = destino === "home" ? "/client-dashboard" : `/client-dashboard/${destino}`;
+    const search = next.toString();
+    if (pathname === location.pathname && search === searchParams.toString()) return;
+    navigate({ pathname, search: search ? `?${search}` : "" }, { replace: true });
+  }, [viewParam, vistaPorParametros, walletParam, refundParam, searchParams, location.pathname, navigate]);
+
+  const uid = useCurrentUserId();
+  const userId = uid ?? "";
+  const userCity = useMyCity(uid).data?.city ?? "";
   const { events: favEvents, ids: favIds, toggle: toggleFav } = useFavorites();
-  const [favTab, setFavTab] = useState<"list" | "calendar">("list");
-  const [tickets, setTickets] = useState<Array<WalletTicket & { event: TicketEventInfo | null }>>([]);
-  const [ticketsLoading, setTicketsLoading] = useState(false);
-  /**
-   * Error explícito del loader de tickets. NO usamos catch silencioso a
-   * empty array porque eso enmascara fallos de RLS / network / queries
-   * malformadas como "el usuario no tiene tickets" — exactamente el
-   * antipatrón que P1.2 del plan de hardening corrige en usePartnerContext.
-   * Si esto es NOT null, el wallet renderiza banner con Reintentar.
-   */
-  const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [favTab, setFavTab] = useSessionState<"list" | "calendar">("cliente.favoritos.vista", "list");
+
+  // Entradas en la caché y guardadas en el dispositivo: la cartera se abre al
+  // instante (también sin conexión) y se refresca detrás. Antes cada vez que
+  // se entraba en Tickets salía "Sincronizando tu wallet…" y se pedía todo.
+  //
+  // Error explícito: NO se camufla un fallo (RLS / red / query mal formada)
+  // como "el usuario no tiene tickets"; el wallet enseña un aviso con
+  // Reintentar y, si había entradas guardadas, las sigue enseñando.
+  const ticketsQuery = useMyTickets(uid);
+  const tickets = ticketsQuery.data ?? SIN_ENTRADAS;
+  const ticketsLoading = !!uid && ticketsQuery.isPending && !ticketsQuery.isError;
+  const ticketsError = ticketsQuery.error ? getErrorMessage(ticketsQuery.error) : null;
+  const refrescandoEntradas = ticketsQuery.isFetching && !ticketsQuery.isPending;
+  const { refetch: refetchTickets } = ticketsQuery;
+  const loadTickets = useCallback(() => refetchTickets(), [refetchTickets]);
+  const invalidarEntradas = useCallback(() => {
+    if (uid) void queryClient.invalidateQueries({ queryKey: qk.me.tickets(uid) });
+  }, [uid, queryClient]);
+  // Compra recién pagada que se está confirmando (vuelta de Stripe).
+  const [confirmandoCompra, setConfirmandoCompra] = useState(false);
+
   const [openTicket, setOpenTicket] = useState<{ ticket: WalletTicket; event: TicketEventInfo | null } | null>(null);
   const [favMonthCursor, setFavMonthCursor] = useState<Date>(new Date());
   const [favSelectedDay, setFavSelectedDay] = useState<Date | null>(null);
@@ -167,10 +223,15 @@ const ClientDashboard = () => {
     });
     return map;
   }, [favEvents]);
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [activeCat, setActiveCat] = useState<string>("all");
+
+  // Locales de la home en la caché (y en el dispositivo). Sin fallback a
+  // demo: si no hay locales aprobados, empty state explícito más abajo.
+  const partnersQuery = usePublicPartners();
+  const partners = (partnersQuery.data as Partner[] | undefined) ?? SIN_LOCALES;
+  const loading = partnersQuery.isPending && !partnersQuery.isError;
+  // Búsqueda y categoría sobreviven a cambiar de pestaña y a recargar.
+  const [search, setSearch] = useSessionState("cliente.busqueda", "");
+  const [activeCat, setActiveCat] = useSessionState("cliente.categoria", "all");
 
   // Hook compartido entre TODOS los TicketCard del wallet. Antes cada card
   // invocaba useRefundRequests por su cuenta y se duplicaban los realtime
@@ -180,214 +241,18 @@ const ClientDashboard = () => {
   const { statusForTicket: refundStatusForTicket, requestRefund: refundRequestRefund } =
     useRefundRequests();
 
+  // Compra confirmada en segundo plano (usePendingCheckoutResume): refresca.
   useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (u.user) {
-        setUserId(u.user.id);
-        const { data: p } = await supabase
-          .from("profiles")
-          .select("city")
-          .eq("id", u.user.id)
-          .maybeSingle();
-        setUserCity(p?.city ?? "");
-      }
-
-      // Leemos de la view `public_partners` (mig 0045) que ya aplica
-      // el filtro account_status='approved' AND business_name NOT NULL.
-      // Cuando migremos `profiles.business_*` → `organizations` solo
-      // cambia la definición de la view.
-      const { data, error: partnersErr } = await supabase
-        .from("public_partners")
-        .select("id, business_name, business_category, city, avatar_url, cover_image_url")
-        .order("business_name");
-      if (partnersErr) {
-        // Surface el error en consola (Sentry-friendly). El empty state
-        // del listado abajo se sigue mostrando, pero ahora QA puede ver
-        // por qué — antes el catch silencioso lo enmascaraba como
-        // "no hay locales aprobados" sin distinguir de "RLS rompió".
-        console.error("[ClientDashboard] public_partners query failed", partnersErr);
-      }
-      const real = (data ?? []) as Partner[];
-      // Sin fallback a demo: si no hay partners aprobados, mostramos
-      // empty state explícito (PasifyEmptyState) en la UI más abajo.
-      setPartners(real);
-      setLoading(false);
-    })();
-  }, []);
-
-  // Loader extraído a useCallback para poder re-invocarlo desde el effect
-  // del post-checkout (poll/realtime) sin duplicar lógica.
-  //
-  // BLINDADO con try/catch: cualquier fallo de red, RLS, o data malformada
-  // se loguea y cae en empty state en vez de tumbar el ErrorBoundary global.
-  // El bug previo fue partner_id=null en eventos multi-tenant (creados con
-  // org_id en lugar de partner_id legacy), que rompía el `.in("id", [null])`
-  // del SELECT profiles.
-  const loadTickets = useCallback(async () => {
-    if (!userId) return;
-    setTicketsLoading(true);
-    setTicketsError(null);
-    try {
-      // Entradas que tienes AHORA: compradas por ti y no transferidas, o
-      // transferidas a ti. RLS ya filtra las que dejaste de tener; el filtro
-      // de abajo aplica la misma regla por si la política cambia.
-      const { data: rows, error: tixErr } = await supabase
-        .from("tickets")
-        .select(
-          "id, event_id, tier_id, qr_token, status, buyer_user_id, transferred_to_user_id, buyer_first_name, buyer_last_name, buyer_email, holder_first_name, holder_last_name, holder_email, amount_paid_cents, used_at, paid_at"
-        )
-        .or(`buyer_user_id.eq.${userId},transferred_to_user_id.eq.${userId}`)
-        .in("status", ["paid", "used"])
-        .order("paid_at", { ascending: false });
-
-      if (tixErr) {
-        console.error("[ClientDashboard] tickets query failed", tixErr);
-        // Surface el error: banner Reintentar en lugar de empty silencioso.
-        setTicketsError(tixErr.message);
-        setTickets([]);
-        return;
-      }
-
-      const ticks = (rows ?? []).filter((t) =>
-        t.transferred_to_user_id ? t.transferred_to_user_id === userId : t.buyer_user_id === userId
-      );
-      if (ticks.length === 0) {
-        setTickets([]);
-        return;
-      }
-
-      // Nombre del tipo de entrada (General, VIP…). Si RLS no deja leerlo
-      // (tipo ya no activo), la entrada se enseña como "Entrada".
-      const tierIds = Array.from(
-        new Set(ticks.map((t) => t.tier_id).filter((id): id is string => !!id))
-      );
-      const tierNames = new Map<string, string>();
-      if (tierIds.length > 0) {
-        const { data: tierData, error: tierErr } = await supabase
-          .from("ticket_tiers")
-          .select("id, name")
-          .in("id", tierIds);
-        if (tierErr) console.warn("[ClientDashboard] ticket_tiers query failed", tierErr);
-        (tierData ?? []).forEach((tr) => tierNames.set(tr.id, tr.name));
-      }
-
-      const eventIds = Array.from(
-        new Set(ticks.map((t) => t.event_id).filter((id): id is string => !!id))
-      );
-
-      type WalletEventRow = {
-        id: string;
-        title: string | null;
-        date_start: string | null;
-        city: string | null;
-        venue_name: string | null;
-        image_url: string | null;
-        partner_id: string | null;
-      };
-      let evs: WalletEventRow[] = [];
-      if (eventIds.length > 0) {
-        const { data: evData, error: evErr } = await supabase
-          .from("events")
-          .select("id, title, date_start, city, venue_name, image_url, partner_id")
-          .in("id", eventIds);
-        if (evErr) {
-          console.warn("[ClientDashboard] events query failed", evErr);
-        } else {
-          evs = (evData ?? []) as WalletEventRow[];
-        }
-      }
-
-      // Filtrar partner_ids null. Sin esto el .in() rompía la query.
-      const partnerIds = Array.from(
-        new Set(
-          evs
-            .map((e) => e.partner_id)
-            .filter((pid): pid is string => typeof pid === "string" && pid.length > 0)
-        )
-      );
-
-      // Nombres de locales desde la vista pública `public_partners`: la
-      // lectura directa de `profiles` de otros usuarios ya no está permitida.
-      const partnerNames = new Map<string, string>();
-      if (partnerIds.length > 0) {
-        const { data: prData, error: prErr } = await supabase
-          .from("public_partners")
-          .select("id, business_name")
-          .in("id", partnerIds);
-        if (prErr) {
-          console.warn("[ClientDashboard] public_partners query failed", prErr);
-        } else {
-          (prData ?? []).forEach((p) => {
-            if (p.id && p.business_name) partnerNames.set(p.id, p.business_name);
-          });
-        }
-      }
-
-      const eventMap = new Map<string, TicketEventInfo>();
-      evs.forEach((e) => {
-        eventMap.set(e.id, {
-          title: e.title ?? "Evento",
-          date_start: e.date_start ?? new Date().toISOString(),
-          city: e.city ?? "",
-          venue_name: e.venue_name ?? null,
-          image_url: e.image_url ?? null,
-          partner_name: (e.partner_id && partnerNames.get(e.partner_id)) || undefined,
-        });
-      });
-
-      setTickets(
-        ticks.map((t) => ({
-          ...t,
-          tier_name: t.tier_id ? tierNames.get(t.tier_id) ?? null : null,
-          event: eventMap.get(t.event_id) ?? null,
-        }))
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error inesperado";
-      console.error("[ClientDashboard] loadTickets crashed", err);
-      // No fingimos éxito: banner explícito en el wallet con Reintentar.
-      setTicketsError(msg);
-      setTickets([]);
-    } finally {
-      setTicketsLoading(false);
-    }
-  }, [userId]);
-
-  // Carica i tickets dell'utente quando entra in wallet
-  useEffect(() => {
-    if (view !== "wallet" || !userId) return;
-    loadTickets();
-  }, [view, userId, loadTickets]);
-
-  // `?wallet=` con la pantalla ya montada (p. ej. al volver a la app tras
-  // pagar en el navegador): abre la cartera y limpia el parámetro de la URL.
-  useEffect(() => {
-    if (!walletParam) return;
-    setView("wallet");
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("wallet");
-        return next;
-      },
-      { replace: true }
-    );
-  }, [walletParam, setSearchParams]);
-
-  // Compra confirmada en segundo plano (usePendingCheckoutResume): recarga.
-  useEffect(() => {
-    const onTicketsUpdated = () => void loadTickets();
-    window.addEventListener(TICKETS_UPDATED_EVENT, onTicketsUpdated);
-    return () => window.removeEventListener(TICKETS_UPDATED_EVENT, onTicketsUpdated);
-  }, [loadTickets]);
+    window.addEventListener(TICKETS_UPDATED_EVENT, invalidarEntradas);
+    return () => window.removeEventListener(TICKETS_UPDATED_EVENT, invalidarEntradas);
+  }, [invalidarEntradas]);
 
   // Post-checkout: cuando el cliente vuelve de Stripe con ?session_id=... /
   // ?order_id=..., el webhook `stripe-webhook` puede tardar 1-5s en procesar
   // el evento checkout.session.completed (que es lo que dispara
   // `mark_order_paid` → tickets.status = 'paid'). Hacemos:
   //   1) Poll: cada 2s comprobamos `ticket_orders.status` del order. Cuando
-  //      pase a 'paid', recargamos tickets + toast.
+  //      pase a 'paid', refrescamos las entradas + toast.
   //   2) Realtime: nos suscribimos a UPDATEs sobre ticket_orders del usuario
   //      para enterarnos al instante si el webhook entra antes del poll.
   //   3) Max 30s — si no llega, mostramos un toast informativo (puede que el
@@ -397,14 +262,15 @@ const ClientDashboard = () => {
     if (!userId) return;
     if (!postCheckoutSessionId && !postCheckoutOrderId) return;
 
-    // Mientras polleamos, mostramos el spinner del wallet en vez del empty
-    // state. El usuario debe sentir que la app está confirmando su compra.
-    setTicketsLoading(true);
+    // Mientras confirmamos, aviso encima de las entradas (las que ya tenía
+    // siguen visibles). El usuario debe sentir que la app está en ello.
+    setConfirmandoCompra(true);
 
     let finished = false;
     const finish = (kind: "ok" | "timeout") => {
       if (finished) return;
       finished = true;
+      setConfirmandoCompra(false);
       if (kind === "ok") {
         toast({
           title: "Compra confirmada",
@@ -417,7 +283,7 @@ const ClientDashboard = () => {
             "El pago está siendo confirmado. Recibirás un email con tu ticket en breve.",
         });
       }
-      void loadTickets();
+      invalidarEntradas();
       // Quita los params de la URL para que F5 no re-dispare el flujo
       setSearchParams({}, { replace: true });
     };
@@ -809,14 +675,34 @@ const ClientDashboard = () => {
             )}
           >
           <div>
-            <h1 className="mb-1 text-3xl font-bold tracking-tight">Mis entradas</h1>
+            <div className="mb-1 flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">Mis entradas</h1>
+              <RefreshIndicator active={refrescandoEntradas && !confirmandoCompra} />
+            </div>
             <p className="mb-6 text-sm text-muted-foreground">
               Tus entradas con código QR aparecen aquí después de la compra. Pulsa cualquiera para mostrar el código en la puerta.
             </p>
 
+            {/* Vuelta de Stripe: se confirma la compra encima de las entradas
+                que ya tenía, sin taparlas. */}
+            {confirmandoCompra && (
+              <div
+                role="status"
+                className="mb-6 flex items-center gap-3 rounded-2xl border p-4 text-sm"
+                style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+              >
+                <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                <div>
+                  <div className="font-semibold text-foreground">Confirmando tu compra…</div>
+                  <p className="text-[12px] text-muted-foreground">Tu entrada aparecerá aquí en unos segundos.</p>
+                </div>
+              </div>
+            )}
+
             {/* Banner error explícito si falló el loader (RLS, network, etc.).
                 No camufla a "wallet vacío" — el usuario sabe que hubo un fallo
-                y puede reintentar. Patrón paralelo al de PartnerDashboard. */}
+                y puede reintentar. Si había entradas guardadas se siguen
+                viendo (y funcionan en la puerta). */}
             {ticketsError && !ticketsLoading && (
               <div
                 className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
@@ -833,9 +719,10 @@ const ClientDashboard = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-foreground">
-                    No pudimos cargar tu wallet
+                    {tickets.length > 0 ? "No pudimos actualizar tus entradas" : "No pudimos cargar tu wallet"}
                   </div>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                    {tickets.length > 0 ? "Ves las últimas guardadas en este dispositivo; siguen valiendo en la puerta. " : ""}
                     Detalles: <code className="font-mono text-[11px] text-orange-400">{ticketsError}</code>
                   </p>
                 </div>

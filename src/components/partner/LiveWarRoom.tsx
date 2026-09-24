@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -18,6 +19,10 @@ import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { eventPhase } from "@/lib/pickActiveEvent";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { useRealtimeInvalidate } from "@/lib/cache/useRealtimeInvalidate";
+import { getErrorMessage } from "@/lib/sentry";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -94,6 +99,21 @@ type TierLiveStat = {
   sort_order: number;
 };
 
+const SIN_TIERS: TierLiveStat[] = [];
+
+async function leerEstadisticasEnVivo(eventId: string): Promise<TierLiveStat[]> {
+  // Cast hasta que se regeneren los types post-migration.
+  const rpcAny = supabase as unknown as {
+    rpc: (
+      name: string,
+      args: Record<string, unknown>
+    ) => Promise<{ data: TierLiveStat[] | null; error: { message: string } | null }>;
+  };
+  const { data, error } = await rpcAny.rpc("partner_event_tier_live_stats", { _event_id: eventId });
+  if (error) throw error;
+  return data ?? [];
+}
+
 // =============================================================
 // LiveWarRoomContent
 // =============================================================
@@ -106,86 +126,34 @@ const LiveWarRoomContent = ({ event }: { event: LiveWarRoomEvent }) => {
   const status = phase === "live" ? "live" : phase === "upcoming" ? "upcoming" : "past";
   const isLive = status === "live";
 
-  const [tiers, setTiers] = useState<TierLiveStat[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const realtimeId = useId();
-  // Descarta respuestas de un evento anterior si se cambia rápido de evento.
-  const requestRef = useRef(0);
+  // Estadísticas por tipo de entrada en la caché (guardadas unas horas en el
+  // dispositivo, sin datos personales): al volver a En vivo o recargar salen
+  // al instante y se refrescan detrás. Otro evento, otra clave.
+  const uid = useCurrentUserId();
+  const query = useQuery({
+    queryKey: qk.partner.live(uid ?? "", event.id),
+    queryFn: () => leerEstadisticasEnVivo(event.id),
+    enabled: !!uid,
+    staleTime: 10_000,
+    // Red de seguridad durante el evento por si el tiempo real se corta.
+    refetchInterval: isLive ? 60_000 : false,
+  });
+  const tiers = query.data ?? SIN_TIERS;
+  const loading = query.isPending && !query.isError;
+  const refreshing = query.isFetching;
+  // Antes el error se tragaba y se pintaba "sin tipos de ticket".
+  const loadError = query.error ? getErrorMessage(query.error) : null;
+  const { refetch } = query;
+  const loadStats = () => refetch();
 
-  // Carga inicial + reload
-  const loadStats = useCallback(async () => {
-    const requestId = ++requestRef.current;
-    setRefreshing(true);
-    try {
-      // Cast hasta que se regeneren los types post-migration.
-      const rpcAny = supabase as unknown as {
-        rpc: (
-          name: string,
-          args: Record<string, unknown>
-        ) => Promise<{ data: TierLiveStat[] | null; error: { message: string } | null }>;
-      };
-      const { data, error } = await rpcAny.rpc("partner_event_tier_live_stats", {
-        _event_id: event.id,
-      });
-      if (requestId !== requestRef.current) return;
-      if (error) {
-        // Antes el error se tragaba y se pintaba "sin tipos de ticket".
-        setLoadError(error.message);
-        return;
-      }
-      setLoadError(null);
-      setTiers(data ?? []);
-    } catch (err) {
-      if (requestId !== requestRef.current) return;
-      setLoadError(err instanceof Error ? err.message : "Error de conexión");
-    } finally {
-      if (requestId === requestRef.current) {
-        setRefreshing(false);
-        setLoading(false);
-      }
-    }
-  }, [event.id]);
-
-  useEffect(() => {
-    setTiers([]);
-    setLoadError(null);
-    setLoading(true);
-    void loadStats();
-  }, [loadStats]);
-
-  // Realtime: refresca cuando un ticket de este evento cambia. Cada
-  // consumidor obtiene un canal con id único (useId) para evitar colisiones.
-  useEffect(() => {
-    if (!event.id) return;
-    const channel = supabase
-      .channel(`live-warroom-${event.id}-${realtimeId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "tickets",
-          filter: `event_id=eq.${event.id}`,
-        },
-        () => void loadStats()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "tickets",
-          filter: `event_id=eq.${event.id}`,
-        },
-        () => void loadStats()
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [event.id, realtimeId, loadStats]);
+  // Realtime: un ticket de este evento cambia (compra, escaneo en puerta)
+  // → la caché se refresca sola.
+  useRealtimeInvalidate({
+    canal: `live-warroom-${event.id}`,
+    tabla: "tickets",
+    filtro: `event_id=eq.${event.id}`,
+    queryKey: uid ? qk.partner.live(uid, event.id) : null,
+  });
 
   // Totales agregados
   const totals = useMemo(() => {

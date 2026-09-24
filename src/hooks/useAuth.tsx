@@ -3,6 +3,9 @@ import type { AuthChangeEvent, User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { withTimeout } from '@/lib/withTimeout';
 import { captureError, getErrorMessage, setSentryTag, setSentryUser } from '@/lib/sentry';
+import { queryClient } from '@/lib/cache/queryClient';
+import { qk } from '@/lib/cache/keys';
+import { getSessionSnapshot, noteSession } from '@/lib/cache/session';
 
 /**
  * Pasify auth hook · super-admin/dev mode.
@@ -48,6 +51,18 @@ import { captureError, getErrorMessage, setSentryTag, setSentryUser } from '@/li
  *    `rolesLoaded` indica que ya se conocen; `roleError` que la primera
  *    carga falló (red/timeout) → ProtectedRoute ofrece "Reintentar" en vez de
  *    redirigir al usuario a un panel que no es el suyo.
+ *
+ * Caché (src/lib/cache):
+ *
+ *  - Los roles se guardan en la caché del usuario (`qk.me.roles`). Al abrir o
+ *    recargar la app se usan los guardados al instante y se revalidan UNA vez
+ *    por ejecución en segundo plano: sin loader entre el splash y el panel, y
+ *    sin conexión la app sigue abriendo. Los roles solo deciden qué pantalla
+ *    se pinta; los permisos reales los aplica el servidor (RLS/RPC).
+ *
+ *  - Una instancia que se monta cuando la sesión ya se conoce (todas menos la
+ *    de App en el arranque) empieza ya con sesión y roles: sin un render en
+ *    "cargando".
  */
 
 const ACTIVE_ROLE_KEY = 'pasify.activeRole';
@@ -151,9 +166,34 @@ const mismaSesion = (a: Session | null, b: Session | null) =>
 
 // Peticiones de roles en vuelo, compartidas entre instancias del hook: App,
 // ProtectedRoute, PanelSwitcher, MobileTopBar… montan a la vez y cada una
-// lanzaría las mismas dos RPC. Solo se comparte lo que está en vuelo; no hay
-// caché de resultados.
+// lanzaría las mismas dos RPC. Los resultados van a la caché (qk.me.roles).
 const rolesEnVuelo = new Map<string, Promise<RolesResult>>();
+
+// Usuarios cuyos roles ya se han comprobado contra el servidor en esta
+// ejecución de la app. Los que vienen de la caché se revalidan una vez.
+const rolesRevalidados = new Set<string>();
+
+/** Roles guardados en la caché para `userId`, si tienen buena forma. */
+const leerRolesGuardados = (userId: string): RolesResult | null => {
+  const d = queryClient.getQueryData<RolesResult>(qk.me.roles(userId));
+  if (
+    !d ||
+    !Array.isArray(d.roles) ||
+    d.roles.length === 0 ||
+    !d.roles.every((r) => typeof r === 'string') ||
+    typeof d.isSuperAdmin !== 'boolean'
+  ) {
+    return null;
+  }
+  return { roles: sortRolesByPrivilege(d.roles), isSuperAdmin: d.isSuperAdmin };
+};
+
+/** Rol activo para unos roles (sin efectos: no toca localStorage). */
+const rolActivoPara = ({ roles, isSuperAdmin }: RolesResult): string | null => {
+  const canPersist = isSuperAdmin && SUPER_ADMIN_ENV_ENABLED && roles.length >= 2;
+  const stored = readStoredRole();
+  return canPersist && stored && roles.includes(stored) ? stored : roles[0] ?? null;
+};
 
 const fetchRoles = (userId: string): Promise<RolesResult> => {
   const existente = rolesEnVuelo.get(userId);
@@ -170,10 +210,15 @@ const fetchRoles = (userId: string): Promise<RolesResult> => {
         .catch(() => false),
     ]);
     if (rolesRes.error) throw rolesRes.error;
-    return {
+    const resultado: RolesResult = {
       roles: sortRolesByPrivilege((rolesRes.data as string[] | null) ?? []),
       isSuperAdmin,
     };
+    rolesRevalidados.add(userId);
+    // Sin roles no se guarda nada: la próxima apertura vuelve a preguntar.
+    if (resultado.roles.length > 0) queryClient.setQueryData(qk.me.roles(userId), resultado);
+    else queryClient.removeQueries({ queryKey: qk.me.roles(userId), exact: true });
+    return resultado;
   })();
 
   rolesEnVuelo.set(userId, peticion);
@@ -211,20 +256,35 @@ export const signOutLocal = async (): Promise<{ error: Error | null }> => {
 };
 
 export const useAuth = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [rolesState, setRolesState] = useState<RolesState>(ROLES_VACIOS);
-  const [activeRole, setActiveRoleState] = useState<string | null>(null);
+  // Si la sesión ya se conoce (cualquier instancia salvo la de App al
+  // arrancar), se empieza con ella y con los roles de la caché: sin render en
+  // "cargando" ni loader entre pantallas.
+  const [inicial] = useState(() => {
+    const snap = getSessionSnapshot();
+    if (!snap.ready) return null;
+    const u = snap.session?.user ?? null;
+    const roles = u ? leerRolesGuardados(u.id) : null;
+    return {
+      session: snap.session,
+      user: u,
+      roles: u && roles ? ({ userId: u.id, ...roles } as RolesState) : ROLES_VACIOS,
+      activeRole: roles ? rolActivoPara(roles) : null,
+    };
+  });
+  const [user, setUser] = useState<User | null>(inicial?.user ?? null);
+  const [session, setSession] = useState<Session | null>(inicial?.session ?? null);
+  const [loading, setLoading] = useState(!inicial);
+  const [rolesState, setRolesState] = useState<RolesState>(inicial?.roles ?? ROLES_VACIOS);
+  const [activeRole, setActiveRoleState] = useState<string | null>(inicial?.activeRole ?? null);
   const [roleErrorState, setRoleErrorState] = useState<{ userId: string; message: string } | null>(null);
 
   // Estado de control en refs (no provoca renders y el callback de auth lo
   // lee siempre actualizado).
   const mountedRef = useRef(true);
   // Usuario de la última sesión aplicada.
-  const userIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(inicial?.user?.id ?? null);
   // Espejo de `rolesState`: qué usuario tiene los roles ya cargados.
-  const rolesRef = useRef<RolesState>(ROLES_VACIOS);
+  const rolesRef = useRef<RolesState>(inicial?.roles ?? ROLES_VACIOS);
   // Carga de roles en curso en esta instancia (evita la doble llamada
   // INITIAL_SESSION + getSession, o SIGNED_IN + INITIAL_SESSION al arrancar).
   const cargaRolesRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
@@ -310,6 +370,7 @@ export const useAuth = () => {
    */
   const aplicarSesion = useCallback(
     (event: AuthChangeEvent, nextSession: Session | null) => {
+      noteSession(nextSession);
       const nextUser = nextSession?.user ?? null;
       const uid = nextUser?.id ?? null;
       const uidAnterior = userIdRef.current;
@@ -346,9 +407,11 @@ export const useAuth = () => {
         // Roles ya cargados para este usuario: TOKEN_REFRESHED (~cada hora),
         // SIGNED_IN (cada vez que la pestaña vuelve a ser visible) o
         // USER_UPDATED no los recargan — refrescar el token no cambia los roles.
-        // Única excepción: si no tenía ningún rol (p.ej. aún no lo había
-        // reclamado), un SIGNED_IN reintenta en segundo plano, sin loader.
+        // Excepciones, siempre en segundo plano y sin loader: si no tenía
+        // ningún rol (p.ej. aún no lo había reclamado) un SIGNED_IN reintenta,
+        // y los que salieron de la caché se comprueban una vez con el servidor.
         if (event === 'SIGNED_IN' && rolesRef.current.roles.length === 0) programarCarga();
+        else if (!rolesRevalidados.has(uid)) programarCarga();
       } else {
         // Primera carga para este usuario (arranque, login o cambio de cuenta)
         // o reintento tras un fallo. Nunca dejamos los roles de otro usuario.
@@ -357,12 +420,16 @@ export const useAuth = () => {
           setActiveRoleState(null);
         }
         setRoleErrorState(null);
+        // Con roles guardados se pinta ya; la carga los revalida detrás (y si
+        // falla, p.ej. sin conexión, se conservan los guardados).
+        const guardados = leerRolesGuardados(uid);
+        if (guardados) aplicarRoles(uid, guardados);
         programarCarga();
       }
 
       setLoading(false);
     },
-    [cargarRoles, guardarRoles],
+    [aplicarRoles, cargarRoles, guardarRoles],
   );
 
   useEffect(() => {

@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { useRealtimeInvalidate } from "@/lib/cache/useRealtimeInvalidate";
+import { getErrorMessage } from "@/lib/sentry";
 
 export type RefundStatus = "pending" | "approved" | "rejected" | "processing" | "refunded" | "failed";
 
@@ -62,6 +67,19 @@ const toRefund = (r: DbRow): RefundRequest => ({
   autoApproved: r.auto_approved,
 });
 
+const SIN_SOLICITUDES: RefundRequest[] = [];
+
+async function leerSolicitudes(): Promise<RefundRequest[]> {
+  const { data, error } = await supabase
+    .from("refund_requests")
+    .select(
+      "id, ticket_id, order_id, event_id, requester_user_id, amount_cents, currency, reason, reason_code, status, decided_at, decision_note, auto_approved, created_at, events(title, date_start, venue_name)"
+    )
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as unknown as DbRow[]).map(toRefund);
+}
+
 /**
  * useRefundRequests · backend-backed
  * Realtime sobre `refund_requests` · RPC para crear y decidir.
@@ -70,51 +88,40 @@ const toRefund = (r: DbRow): RefundRequest => ({
  *  - "mine"  → solo las del user (RLS filtra)
  *  - "org"   → todas las del org/partner (RLS por membership)
  *  - "admin" → todas (RLS admin)
+ *
+ * Caché: "mine" vive en qk.me.refunds (guardada en el dispositivo, son las
+ * del propio usuario). "org"/"admin" traen solicitudes de otras personas:
+ * solo en memoria. Un cambio en tiempo real refresca la lista sin vaciarla
+ * (antes cada cambio volvía a poner `loading` y parpadeaba el wallet).
  */
-export const useRefundRequests = (_mode: "mine" | "org" | "admin" = "mine") => {
+export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
   const { toast } = useToast();
-  const [requests, setRequests] = useState<RefundRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  // Unique id por instancia del hook. Necesario porque Supabase Realtime
-  // no admite dos channels con el mismo nombre activos a la vez: si dos
-  // componentes (p.ej. dos TicketCard en wallet) llamaban al hook con un
-  // nombre literal "refund_requests_changes" la segunda subscription
-  // fallaba silenciosamente y a veces tiraba un throw en render que
-  // disparaba el ErrorBoundary global y dejaba el dashboard en negro.
-  const instanceId = useId();
+  const queryClient = useQueryClient();
+  const uid = useCurrentUserId();
+  const queryKey = useMemo<QueryKey>(
+    () => (mode === "mine" ? qk.me.refunds(uid ?? "") : ["admin", uid ?? "", "refunds", mode]),
+    [mode, uid],
+  );
+
+  const query = useQuery({
+    queryKey,
+    queryFn: leerSolicitudes,
+    enabled: !!uid,
+  });
+  const requests = query.data ?? SIN_SOLICITUDES;
+  const loading = !!uid && query.isPending && !query.isError;
+  const error = query.error ? getErrorMessage(query.error) : null;
+
+  useRealtimeInvalidate({
+    canal: uid ? "refund_requests_changes" : null,
+    tabla: "refund_requests",
+    eventos: ["*"],
+    queryKey: uid ? queryKey : null,
+  });
 
   const fetchAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error } = await supabase
-        .from("refund_requests")
-        .select(
-          "id, ticket_id, order_id, event_id, requester_user_id, amount_cents, currency, reason, reason_code, status, decided_at, decision_note, auto_approved, created_at, events(title, date_start, venue_name)"
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setRequests(((data ?? []) as unknown as DbRow[]).map(toRefund));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAll();
-    const channel = supabase
-      .channel(`refund_requests_changes_${instanceId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "refund_requests" }, () => {
-        fetchAll();
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchAll, instanceId]);
+    await queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
   const requestRefund = useCallback(async (ticketId: string, reason: string, reasonCode?: string) => {
     const { data, error } = await supabase.rpc("request_refund", {

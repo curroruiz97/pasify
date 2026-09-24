@@ -879,7 +879,9 @@ const refundsMono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const RefundsQueue = () => {
   // decideRefund aprueba o rechaza (RPC decide_refund) y, si aprueba, lanza
   // el reembolso en Stripe (process-refund). `setStatus` no existía.
-  const { requests, decideRefund } = useRefundRequests();
+  // Modo admin: solicitudes de otras personas, solo en memoria (nunca en el
+  // dispositivo del admin).
+  const { requests, decideRefund } = useRefundRequests("admin");
   const pending = requests.filter((r) => r.status === "pending");
   const decided = requests.filter((r) => r.status !== "pending");
 

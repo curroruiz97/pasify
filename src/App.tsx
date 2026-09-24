@@ -1,10 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { toast as sonnerToast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { get, set, del } from "idb-keyval";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -13,6 +10,8 @@ import { Capacitor } from "@capacitor/core";
 import { usePendingCheckoutResume } from "@/hooks/usePendingCheckoutResume";
 import { supabase } from "@/integrations/supabase/client";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { queryClient } from "@/lib/cache/queryClient";
+import { useCacheLifecycle } from "@/lib/cache/lifecycle";
 import { useTranslation } from "react-i18next";
 import logo from "./assets/logo.webp";
 
@@ -61,40 +60,9 @@ import { useAuth, resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth"
 import AuthErrorScreen from "@/components/auth/AuthErrorScreen";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 
-// React Query persister: usa la libreria ufficiale TanStack +
-// IndexedDB (idb-keyval) come storage asincrono. Sostituisce il
-// vecchio setupCachePersistence custom (fragile + race condition).
-//
-// `dehydrateOptions` esclude le query "live" (eventi/sconti)
-// che devono essere sempre rifetchate per non mostrare item scaduti.
-const idbStorage = {
-  getItem: (key: string) => get<string>(key).then((v) => v ?? null),
-  setItem: (key: string, value: string) => set(key, value),
-  removeItem: (key: string) => del(key),
-};
-
-const persister = createAsyncStoragePersister({
-  storage: idbStorage,
-  key: "react-query-cache-v3",
-  throttleTime: 5_000, // throttle scritture su IDB (max ogni 5s)
-});
-
-const SKIP_PERSIST_KEYS = new Set(["all-events", "events", "calendar-events", "all-discounts"]);
-const persistOptions = {
-  persister,
-  maxAge: 24 * 60 * 60 * 1000, // 24h: dati più vecchi vengono droppati
-  buster: import.meta.env.MODE === "production" ? "prod-v1" : "dev-v1",
-  dehydrateOptions: {
-    shouldDehydrateQuery: (query: { queryKey: readonly unknown[]; state: { data: unknown } }) => {
-      const key = query.queryKey[0] as string;
-      if (SKIP_PERSIST_KEYS.has(key)) return false;
-      // Non persistere array vuoti: meglio rifetchare che mostrare empty stale
-      if (Array.isArray(query.state.data) && query.state.data.length === 0) return false;
-      return query.state.data !== undefined;
-    },
-  },
-};
-
+// Caché de datos: src/lib/cache (memoria + dispositivo por usuario). La de
+// antes (PersistQueryClientProvider) guardaba en una única entrada los datos
+// de cualquier usuario y no los borraba al cerrar sesión.
 
 // Wrapper per la pagina Login. Resuelve el dashboard inicial según el rol
 // efectivo del usuario (post-Fase 1 hardening) en lugar de empujar a todos
@@ -159,24 +127,6 @@ const LegacyPartnerRedirect = () => {
   const { id } = useParams();
   return <Navigate to={`/p/${encodeURIComponent(id ?? "")}`} replace />;
 };
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // 60s default: bilancia freschezza e numero di refetch.
-      // Override per query specifiche dove serve (es. chat realtime).
-      staleTime: 60 * 1000,
-      gcTime: 10 * 60 * 1000,
-      retry: 1,
-      // Su mobile native non c'è "window focus" → su web mantenere il refetch
-      // ha senso, ma il default true causa spreco. Lo lasciamo on solo
-      // su web e disabilitato su native.
-      refetchOnWindowFocus: !Capacitor.isNativePlatform(),
-    },
-  },
-});
-
-// Persistenza ora gestita da PersistQueryClientProvider (vedi return).
 
 // Loading state for Suspense fallback — full-screen Pasify dark splash that
 // matches the inline boot splash in index.html so the chain is seamless and
@@ -276,12 +226,15 @@ const NotificationDeepLinkHandler = () => {
 // Niente AnimatePresence/exit per evitare flicker col HashRouter.
 const PageTransitions = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  // Las secciones del panel de local viven en la URL
-  // (/partner-dashboard/:section): cambiar de sección no puede remontar el
-  // panel entero (perdería estado y volvería a cargarlo todo).
+  // Las secciones del panel de local y las vistas del de cliente viven en la
+  // URL (/partner-dashboard/:section, /client-dashboard/:view): cambiar de
+  // sección no puede remontar el panel entero (perdería estado y volvería a
+  // cargarlo todo).
   const transitionKey = location.pathname.startsWith("/partner-dashboard")
     ? "/partner-dashboard"
-    : location.pathname;
+    : location.pathname.startsWith("/client-dashboard")
+      ? "/client-dashboard"
+      : location.pathname;
   return (
     <motion.div
       key={transitionKey}
@@ -321,6 +274,8 @@ const OfflineBanner = () => {
 
 const App = () => {
   const { session, loading } = useAuth();
+  // Restaura la caché guardada del usuario antes de pintar (ver lifecycle.ts).
+  const cacheLista = useCacheLifecycle();
 
   // Confirma la compra al volver de Stripe Checkout en la app nativa. Sin
   // esto, si el webhook de Stripe no llega, la entrada pagada nunca aparece.
@@ -404,11 +359,12 @@ const App = () => {
   // Mentre useAuth carica la session (< 50ms da localStorage), ritorniamo
   // null così #root resta vuoto e lo splash resta visibile → no flash di
   // login prima del redirect alla dashboard, transizione perfetta.
-  if (loading) return null;
-
+  // Igual mientras se restaura la caché guardada (IndexedDB, ~decenas de ms,
+  // máximo 1,5 s): así la primera pantalla ya sale con sus datos.
+  if (loading || !cacheLista) return null;
 
   return (
-    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+    <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
         <OfflineBanner />
@@ -452,7 +408,7 @@ const App = () => {
 
               {/* Rotte protette */}
               <Route
-                path="/client-dashboard"
+                path="/client-dashboard/:view?"
                 element={
                   <ProtectedRoute requireRole="client">
                     <ClientDashboard />
@@ -536,7 +492,7 @@ const App = () => {
           </Suspense>
         </HashRouter>
       </TooltipProvider>
-    </PersistQueryClientProvider>
+    </QueryClientProvider>
   );
 };
 

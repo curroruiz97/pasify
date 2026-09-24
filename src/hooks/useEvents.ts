@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { qk } from "@/lib/cache/keys";
 
 /**
  * Pasify · hooks de eventos.
@@ -21,8 +22,9 @@ import { supabase } from "@/integrations/supabase/client";
  * EventPosterCard, MonthCalendarView) que aún usan los nombres viejos.
  */
 
-const CACHE_TIME = 10 * 60 * 1000; // 10 min
 const STALE_TIME = 60 * 1000;
+/** El calendario enseña lo de las últimas 12 h en adelante (noches en curso). */
+const VENTANA_PASADO_MS = 12 * 60 * 60 * 1000;
 
 type Profile = {
   id: string;
@@ -127,56 +129,33 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
   return events.map((e) => decorate(e, (e.partner_id && profilesMap.get(e.partner_id)) || null));
 };
 
-/* ============ usePartnerEvents (dashboard del partner) ============ */
-export const usePartnerEvents = (partnerId: string | undefined) => {
-  return useQuery({
-    queryKey: ["events", partnerId],
-    queryFn: async () => {
-      if (!partnerId) return [];
-      // Partner ve todos sus eventos (draft, published, cancelled, past)
-      return fetchEventsWithProfiles((q) => q.eq("partner_id", partnerId));
-    },
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-    enabled: !!partnerId,
-  });
-};
+type CalendarEvent = ReturnType<typeof decorate>;
 
-/* ============ useAllEvents (feed cliente) ============ */
-// Solo events 'published'. Filtra por city si llega. `country` se ignora
-// (el schema Pasify no tiene country en events; se mapea por city).
-export const useAllEvents = (city?: string, _country?: string) => {
-  return useQuery({
-    queryKey: ["all-events", city],
-    queryFn: async () => {
-      return fetchEventsWithProfiles((q) => {
-        let r = q.eq("status", "published");
-        if (city) r = r.ilike("city", city);
-        return r;
-      });
-    },
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-    refetchOnReconnect: "always",
-  });
+// Lo guardado en el dispositivo puede ser de ayer: nunca se pinta un evento
+// que ya pasó, aunque venga de la caché (el refresco lo quita del todo).
+const sinPasados = (eventos: CalendarEvent[]): CalendarEvent[] => {
+  const corte = Date.now() - VENTANA_PASADO_MS;
+  return eventos.filter((e) => new Date(e.date_start).getTime() >= corte);
 };
 
 /* ============ useCalendarEvents (página /calendar pública) ============ */
 // Events 'published' + futuros (date_start >= ahora-12h para cubrir noches
 // que ya empezaron pero siguen activas). Filtra por city si llega.
+// Caché pública (qk.public.calendarEvents), guardada un día en el
+// dispositivo: al volver al calendario o recargar sale al instante.
 export const useCalendarEvents = (city?: string, _country?: string) => {
   return useQuery({
-    queryKey: ["calendar-events", city],
+    queryKey: qk.public.calendarEvents(city ?? null),
     queryFn: async () => {
-      const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - VENTANA_PASADO_MS).toISOString();
       return fetchEventsWithProfiles((q) => {
         let r = q.eq("status", "published").gte("date_start", cutoff);
         if (city) r = r.ilike("city", city);
         return r;
       });
     },
+    select: sinPasados,
     staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
     refetchOnReconnect: "always",
   });
 };
@@ -186,20 +165,8 @@ export const useInvalidateEvents = () => {
   const queryClient = useQueryClient();
 
   const invalidateAll = useCallback(() => {
-    console.log("[useInvalidateEvents] Invalidating all event caches");
-    queryClient.invalidateQueries({ queryKey: ["events"], refetchType: "all" });
-    queryClient.invalidateQueries({
-      predicate: (query) =>
-        query.queryKey[0] === "all-events" || query.queryKey[0] === "calendar-events",
-      refetchType: "all",
-    });
+    void queryClient.invalidateQueries({ queryKey: ["public", "calendar-events"], refetchType: "all" });
   }, [queryClient]);
 
-  const invalidatePartnerEvents = useCallback(
-    (partnerId: string) =>
-      queryClient.invalidateQueries({ queryKey: ["events", partnerId], refetchType: "all" }),
-    [queryClient]
-  );
-
-  return { invalidateAll, invalidatePartnerEvents };
+  return { invalidateAll };
 };

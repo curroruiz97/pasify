@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -26,6 +27,10 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+import { RefreshIndicator } from "@/components/ui/refresh-indicator";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { getErrorMessage } from "@/lib/sentry";
 import {
   fileDateStamp,
   formatCsvDateTime,
@@ -96,87 +101,97 @@ const rangeToDays = (range: Range): number => {
   }
 };
 
+/** Rango anterior (solo para el delta): menos columnas. */
+type PrevTicketRow = Pick<TicketRow, "id" | "status" | "amount_paid_cents" | "paid_at">;
+
+interface ReportsData {
+  tickets: TicketRow[];
+  prevTickets: PrevTicketRow[];
+  /** Títulos de los eventos del rango (objeto plano: la caché no guarda Map). */
+  eventTitles: Record<string, string>;
+}
+
+const SIN_TICKETS: TicketRow[] = [];
+const SIN_TICKETS_PREVIOS: PrevTicketRow[] = [];
+
+async function leerInformes(uid: string, days: number): Promise<ReportsData> {
+  const now = new Date();
+  const start = startOfDay(subDays(now, days)).toISOString();
+  const prevStart = startOfDay(subDays(now, days * 2)).toISOString();
+  const prevEnd = startOfDay(subDays(now, days)).toISOString();
+
+  // Tickets del rango actual
+  const { data: curRows, error: curErr } = await supabase
+    .from("tickets")
+    .select(
+      // tickets NO tiene partner_id: el vinculo con el partner va por
+      // tickets.event_id -> events.partner_id. El !inner fuerza el join
+      // para poder filtrar por la columna de la tabla relacionada.
+      "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email, events!inner(partner_id)"
+    )
+    .eq("events.partner_id", uid)
+    .in("status", ["paid", "used"])
+    .gte("paid_at", start);
+  if (curErr) throw curErr;
+
+  // Tickets del rango anterior (para delta)
+  const { data: prevRows } = await supabase
+    .from("tickets")
+    .select("id, status, amount_paid_cents, paid_at, events!inner(partner_id)")
+    .eq("events.partner_id", uid)
+    .in("status", ["paid", "used"])
+    .gte("paid_at", prevStart)
+    .lt("paid_at", prevEnd);
+
+  // Eventos referenciados para top events / titulares
+  const eventTitles: Record<string, string> = {};
+  const eventIds = Array.from(new Set((curRows ?? []).map((t) => t.event_id).filter(Boolean)));
+  if (eventIds.length > 0) {
+    const { data: evData } = await supabase.from("events").select("id, title").in("id", eventIds);
+    for (const e of (evData ?? []) as EventRow[]) eventTitles[e.id] = e.title;
+  }
+
+  return {
+    tickets: (curRows ?? []) as TicketRow[],
+    prevTickets: (prevRows ?? []) as PrevTicketRow[],
+    eventTitles,
+  };
+}
+
 export const PartnerReports = () => {
   const { toast } = useToast();
+  const uid = useCurrentUserId();
   const [range, setRange] = useState<Range>("30d");
   const days = rangeToDays(range);
 
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [prevTickets, setPrevTickets] = useState<TicketRow[]>([]);
-  const [events, setEvents] = useState<Map<string, EventRow>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id;
-      if (!uid) {
-        setTickets([]);
-        setPrevTickets([]);
-        setLoading(false);
-        return;
-      }
-
-      const now = new Date();
-      const start = startOfDay(subDays(now, days)).toISOString();
-      const prevStart = startOfDay(subDays(now, days * 2)).toISOString();
-      const prevEnd = startOfDay(subDays(now, days)).toISOString();
-
-      // Tickets del rango actual
-      const { data: curRows, error: curErr } = await supabase
-        .from("tickets")
-        .select(
-          // tickets NO tiene partner_id: el vinculo con el partner va por
-          // tickets.event_id -> events.partner_id. El !inner fuerza el join
-          // para poder filtrar por la columna de la tabla relacionada.
-          "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email, events!inner(partner_id)"
-        )
-        .eq("events.partner_id", uid)
-        .in("status", ["paid", "used"])
-        .gte("paid_at", start);
-      if (curErr) throw curErr;
-
-      // Tickets del rango anterior (para delta)
-      const { data: prevRows } = await supabase
-        .from("tickets")
-        .select("id, status, amount_paid_cents, paid_at, events!inner(partner_id)")
-        .eq("events.partner_id", uid)
-        .in("status", ["paid", "used"])
-        .gte("paid_at", prevStart)
-        .lt("paid_at", prevEnd);
-
-      setTickets((curRows ?? []) as TicketRow[]);
-      setPrevTickets((prevRows ?? []) as TicketRow[]);
-
-      // Eventos referenciados para top events / titulares
-      const eventIds = Array.from(new Set((curRows ?? []).map((t) => t.event_id).filter(Boolean)));
-      if (eventIds.length > 0) {
-        const { data: evData } = await supabase
-          .from("events")
-          .select("id, title")
-          .in("id", eventIds);
-        const m = new Map<string, EventRow>();
-        for (const e of (evData ?? []) as EventRow[]) m.set(e.id, e);
-        setEvents(m);
-      } else {
-        setEvents(new Map());
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error cargando reports";
-      console.error("[PartnerReports] load:", err);
-      setError(msg);
-      toast({ title: "Error al cargar reports", description: msg, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }, [days, toast]);
+  // Informes en la caché, por rango. Llevan emails de compradores: solo en
+  // memoria (nunca en el dispositivo) y fuera a la media hora sin verse. Al
+  // cambiar de rango se siguen viendo los del anterior hasta que llegan.
+  const query = useQuery({
+    queryKey: qk.partner.reports(uid ?? "", range),
+    queryFn: () => leerInformes(uid as string, days),
+    enabled: !!uid,
+    placeholderData: keepPreviousData,
+    gcTime: 30 * 60_000,
+  });
+  const tickets = query.data?.tickets ?? SIN_TICKETS;
+  const prevTickets = query.data?.prevTickets ?? SIN_TICKETS_PREVIOS;
+  const events = useMemo(() => {
+    const m = new Map<string, EventRow>();
+    for (const [id, title] of Object.entries(query.data?.eventTitles ?? {})) m.set(id, { id, title });
+    return m;
+  }, [query.data?.eventTitles]);
+  // Solo la primera vez (sin nada que enseñar) hay "Cargando métricas…".
+  const loading = !!uid && query.isPending;
+  const error = query.error && !query.data ? getErrorMessage(query.error) : null;
+  const refrescando = query.isFetching && !!query.data;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!query.error) return;
+    const msg = getErrorMessage(query.error);
+    console.error("[PartnerReports] load:", query.error);
+    toast({ title: "Error al cargar reports", description: msg, variant: "destructive" });
+  }, [query.error, toast]);
 
   // Agregados
   const stats = useMemo(() => {
@@ -307,9 +322,12 @@ export const PartnerReports = () => {
             <BarChart3 className="h-3 w-3" />
             Reports
           </div>
-          <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
-            {RANGE_LABEL[range]}
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
+              {RANGE_LABEL[range]}
+            </h2>
+            <RefreshIndicator active={refrescando} />
+          </div>
           <p className="mt-1 text-xs text-muted-foreground" style={mono}>
             Datos reales · {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} en el rango
           </p>

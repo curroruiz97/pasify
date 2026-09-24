@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Clock,
@@ -25,6 +26,12 @@ import { Badge } from "@/components/ui/badge";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { pickActiveEvent } from "@/lib/pickActiveEvent";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { useRealtimeInvalidate } from "@/lib/cache/useRealtimeInvalidate";
+import { useEventoEnUrl } from "@/hooks/useEventoEnUrl";
+import { useSessionState } from "@/lib/useSessionState";
+import { getErrorMessage } from "@/lib/sentry";
 import {
   fileDateStamp,
   formatCsvDateTime,
@@ -157,8 +164,27 @@ const matchesSearch = (a: Attendee, q: string, qDigits: string) =>
 const formatEur = (cents: number | null | undefined) =>
   `${((cents ?? 0) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
+const SIN_ASISTENTES: Attendee[] = [];
+
+type AsistentesData = { attendees: Attendee[]; stats: Stats | null };
+
+async function leerAsistentes(eventId: string): Promise<AsistentesData> {
+  const [att, st] = await Promise.all([
+    supabase.rpc("partner_event_attendees", { _event_id: eventId }),
+    supabase.rpc("partner_event_checkin_stats", { _event_id: eventId }),
+  ]);
+  if (att.error) throw att.error;
+  if (st.error) throw st.error;
+  const statsRow = Array.isArray(st.data) ? st.data[0] : st.data;
+  return {
+    attendees: (att.data ?? []) as unknown as Attendee[],
+    stats: (statsRow ?? null) as Stats | null,
+  };
+}
+
 export const PartnerAttendees = ({ events }: Props) => {
   const { toast } = useToast();
+  const uid = useCurrentUserId();
 
   // Selector: próximos primero (el más cercano delante), después los pasados
   // (el más reciente delante).
@@ -183,92 +209,55 @@ export const PartnerAttendees = ({ events }: Props) => {
     [events, upcomingFirst]
   );
 
-  const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [tierFilter, setTierFilter] = useState<string>("all");
-  const requestRef = useRef(0);
+  // El evento elegido va en la URL (?evento=), compartido con En vivo: se
+  // conserva al cambiar de sección y al recargar. Si ya no existe, el de por
+  // defecto.
+  const [eventoUrl, setEventoUrl] = useEventoEnUrl();
+  const selectedEventId = eventoUrl && events.some((e) => e.id === eventoUrl) ? eventoUrl : defaultEventId;
+  const setSelectedEventId = (id: string) => setEventoUrl(id || null);
 
-  // Si aún no hay evento elegido o el elegido desaparece, vuelta al de por defecto.
+  // Asistentes en la caché, por evento: al volver a la sección salen al
+  // instante. Datos personales de compradores: solo en memoria (nunca se
+  // guardan en el dispositivo, ver cache/policy.ts) y fuera a la media hora
+  // sin verse. Otro evento es otra clave: nunca se ven los del anterior.
+  const query = useQuery({
+    queryKey: qk.partner.attendees(uid ?? "", selectedEventId),
+    queryFn: () => leerAsistentes(selectedEventId),
+    enabled: !!uid && !!selectedEventId,
+    staleTime: 15_000,
+    gcTime: 30 * 60_000,
+  });
+  const attendees = query.data?.attendees ?? SIN_ASISTENTES;
+  const stats = query.data?.stats ?? null;
+  const loading = query.isFetching;
+  const loadError = query.error ? getErrorMessage(query.error) : null;
+  const { refetch } = query;
+  const loadData = () => refetch();
+
+  const [exporting, setExporting] = useState(false);
+  // Búsqueda y estado sobreviven a salir de la sección (sessionStorage).
+  const [search, setSearch] = useSessionState("asistentes.busqueda", "");
+  const [statusFilter, setStatusFilter] = useSessionState<StatusFilter>("asistentes.estado", "all");
+  const [tierFilter, setTierFilter] = useState<string>("all");
+
+  // Los tipos de entrada son de cada evento: al cambiar, filtro limpio.
   useEffect(() => {
-    if (selectedEventId && events.some((e) => e.id === selectedEventId)) return;
-    if (defaultEventId !== selectedEventId) setSelectedEventId(defaultEventId);
-  }, [events, selectedEventId, defaultEventId]);
+    setTierFilter("all");
+  }, [selectedEventId]);
 
   const selectedEvent = useMemo(
     () => events.find((e) => e.id === selectedEventId) ?? null,
     [events, selectedEventId]
   );
 
-  const loadData = useCallback(async () => {
-    const requestId = ++requestRef.current;
-    if (!selectedEventId) return;
-    setLoading(true);
-    try {
-      const [att, st] = await Promise.all([
-        supabase.rpc("partner_event_attendees", { _event_id: selectedEventId }),
-        supabase.rpc("partner_event_checkin_stats", { _event_id: selectedEventId }),
-      ]);
-      if (att.error) throw new Error(att.error.message);
-      if (st.error) throw new Error(st.error.message);
-      if (requestId !== requestRef.current) return;
-      setAttendees((att.data ?? []) as unknown as Attendee[]);
-      const statsRow = Array.isArray(st.data) ? st.data[0] : st.data;
-      setStats((statsRow ?? null) as Stats | null);
-      setLoadError(null);
-    } catch (e: unknown) {
-      if (requestId !== requestRef.current) return;
-      const msg = e instanceof Error ? e.message : "Error cargando asistentes";
-      setLoadError(msg);
-    } finally {
-      if (requestId === requestRef.current) setLoading(false);
-    }
-  }, [selectedEventId]);
-
-  // Al cambiar de evento no se enseñan los asistentes del anterior.
-  useEffect(() => {
-    setAttendees([]);
-    setStats(null);
-    setLoadError(null);
-    setTierFilter("all");
-    void loadData();
-  }, [loadData]);
-
-  // Realtime: refresca cuando un ticket de ESTE evento cambia.
-  useEffect(() => {
-    if (!selectedEventId) return;
-    const channel = supabase
-      .channel(`attendees-${selectedEventId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "tickets",
-          filter: `event_id=eq.${selectedEventId}`,
-        },
-        () => void loadData()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "tickets",
-          filter: `event_id=eq.${selectedEventId}`,
-        },
-        () => void loadData()
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [selectedEventId, loadData]);
+  // Realtime: un ticket de ESTE evento cambia (compra, escaneo en puerta…)
+  // → la caché se refresca sola, sin vaciar la lista.
+  useRealtimeInvalidate({
+    canal: selectedEventId ? `attendees-${selectedEventId}` : null,
+    tabla: "tickets",
+    filtro: selectedEventId ? `event_id=eq.${selectedEventId}` : undefined,
+    queryKey: uid && selectedEventId ? qk.partner.attendees(uid, selectedEventId) : null,
+  });
 
   // Tipos de entrada presentes para el filtro. "Sin tipo" agrupa las entradas
   // sin tier (legacy / pase de festival sin asignar).

@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { getErrorMessage } from "@/lib/sentry";
 
 /**
  * Pasify · useLoyalty
@@ -15,6 +18,9 @@ import { supabase } from "@/integrations/supabase/client";
  * El UI legacy de ClientLoyalty usaba 5 niveles (newbie/regular/vip/insider/icon).
  * Usamos el catálogo de la DB como fuente de verdad para que el admin pueda
  * modificarlo desde un solo lugar.
+ *
+ * Caché: niveles, saldo y movimientos en qk.me.loyalty (compartido y
+ * guardado en el dispositivo): la pantalla de puntos sale al instante.
  */
 
 export interface LoyaltyLevel {
@@ -83,69 +89,53 @@ const normalizeMovement = (r: PointsDbRow): LoyaltyMovement => ({
   event_title: r.events?.title ?? null,
 });
 
+interface LoyaltyData {
+  levels: LoyaltyLevel[];
+  balance: number;
+  movements: LoyaltyMovement[];
+}
+
+async function leerPuntos(uid: string): Promise<LoyaltyData> {
+  // Levels (público, no requiere user_id)
+  const { data: levelData, error: levelErr } = await supabase
+    .from("loyalty_levels")
+    .select("id, code, name, min_points, color, sort_order, perks")
+    .order("min_points", { ascending: true });
+  if (levelErr) throw levelErr;
+
+  // Balance (RPC SECURITY DEFINER)
+  const { data: balData, error: balErr } = await supabase.rpc("loyalty_balance", { _user_id: uid });
+  if (balErr) throw balErr;
+
+  // Movements (RLS por user_id; JOIN a events para título)
+  const { data: pointData, error: pointErr } = await supabase
+    .from("loyalty_points")
+    .select("id, change_amount, reason, reason_code, balance_after, expires_at, created_at, event_id, events(title)")
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (pointErr) throw pointErr;
+
+  return {
+    levels: ((levelData ?? []) as LevelDbRow[]).map(normalizeLevel),
+    balance: typeof balData === "number" ? balData : 0,
+    movements: ((pointData ?? []) as unknown as PointsDbRow[]).map(normalizeMovement),
+  };
+}
+
+const SIN_PUNTOS: LoyaltyData = { levels: [], balance: 0, movements: [] };
+
 export const useLoyalty = () => {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [balance, setBalance] = useState<number>(0);
-  const [levels, setLevels] = useState<LoyaltyLevel[]>([]);
-  const [movements, setMovements] = useState<LoyaltyMovement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadAll = useCallback(async (uid: string | null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Levels (público, no requiere user_id)
-      const { data: levelData, error: levelErr } = await supabase
-        .from("loyalty_levels")
-        .select("id, code, name, min_points, color, sort_order, perks")
-        .order("min_points", { ascending: true });
-      if (levelErr) throw levelErr;
-      setLevels(((levelData ?? []) as LevelDbRow[]).map(normalizeLevel));
-
-      if (!uid) {
-        setBalance(0);
-        setMovements([]);
-        return;
-      }
-
-      // Balance (RPC SECURITY DEFINER)
-      const { data: balData, error: balErr } = await supabase.rpc("loyalty_balance", {
-        _user_id: uid,
-      });
-      if (balErr) throw balErr;
-      setBalance(typeof balData === "number" ? balData : 0);
-
-      // Movements (RLS por user_id; JOIN a events para título)
-      const { data: pointData, error: pointErr } = await supabase
-        .from("loyalty_points")
-        .select("id, change_amount, reason, reason_code, balance_after, expires_at, created_at, event_id, events(title)")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (pointErr) throw pointErr;
-      setMovements(((pointData ?? []) as unknown as PointsDbRow[]).map(normalizeMovement));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      const uid = data.user?.id ?? null;
-      setUserId(uid);
-      await loadAll(uid);
-    })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
-      const uid = session?.user?.id ?? null;
-      setUserId(uid);
-      loadAll(uid);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [loadAll]);
+  const userId = useCurrentUserId();
+  const query = useQuery({
+    queryKey: qk.me.loyalty(userId ?? ""),
+    queryFn: () => leerPuntos(userId as string),
+    enabled: !!userId,
+  });
+  const { levels, balance, movements } = query.data ?? SIN_PUNTOS;
+  const loading = !!userId && query.isPending && !query.isError;
+  const error = query.error ? getErrorMessage(query.error) : null;
+  const { refetch: refetchQuery } = query;
 
   // Derivados
   const sortedLevels = [...levels].sort((a, b) => a.min_points - b.min_points);
@@ -184,6 +174,6 @@ export const useLoyalty = () => {
     progressPct,
     loading,
     error,
-    refetch: () => loadAll(userId),
+    refetch: () => refetchQuery(),
   };
 };

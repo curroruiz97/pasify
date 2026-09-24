@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/imageUtils";
+import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTiersBuilder,
@@ -95,6 +96,38 @@ import {
  *   - Si la BD rechaza un UPDATE/DELETE por trigger, mostramos el error
  *     legible en un toast sin romper el resto de la transacción manual.
  */
+
+/**
+ * Borrador de "Nuevo evento" en el dispositivo (lib/drafts): si mientras se
+ * rellena el navegador descarta la pestaña o iOS cierra la app, al volver se
+ * recupera tal cual. Se borra al guardar el evento o con "Empezar de cero".
+ * Solo en "create": editar y duplicar cargan del servidor.
+ */
+interface BorradorEvento {
+  v: 1;
+  step: number;
+  title: string;
+  description: string;
+  dateTime: DateTimeValue;
+  location: LocationValue;
+  tiers: TierDraft[];
+  imageUrl: string;
+  willPublish: boolean;
+  venueId: string | null;
+}
+
+const esBorradorValido = (b: unknown): b is BorradorEvento => {
+  const d = b as BorradorEvento | null;
+  return (
+    !!d &&
+    d.v === 1 &&
+    typeof d.title === "string" &&
+    typeof d.description === "string" &&
+    !!d.dateTime &&
+    !!d.location &&
+    Array.isArray(d.tiers)
+  );
+};
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -203,10 +236,82 @@ export const EventEditorWizard = ({
   // Estado del evento al abrirlo en "edit": guardar no lo cambia.
   const [originalStatus, setOriginalStatus] = useState<string | null>(null);
 
+  // "Nuevo evento" recuperado de un borrador: cuándo se guardó (null = no).
+  const [borradorDe, setBorradorDe] = useState<number | null>(null);
+  const claveBorrador = partnerId ? `evento.${partnerId}` : null;
+
   // Edit-mode: ventas reales por tier para bloqueos UI + tiers eliminados
   const [tierSalesMap, setTierSalesMap] = useState<Record<string, TierSales>>({});
   const [removedTierDbIds, setRemovedTierDbIds] = useState<Set<string>>(new Set());
   const [eventHasSales, setEventHasSales] = useState(false);
+
+  /** Formulario vacío de "Nuevo evento" (con el local por defecto). */
+  const aplicarValoresDeNuevo = () => {
+    const defaultVenue = venues.find((v) => v.id === defaultVenueId) ?? null;
+    setTitle("");
+    setDescription("");
+    setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
+    setLocation({
+      city: defaultVenue?.city || defaultCity,
+      venueName: defaultVenue?.name || defaultVenueName,
+      address: defaultVenue?.address ?? "",
+    });
+    setVenueId(defaultVenue?.id ?? null);
+    setOriginalStatus(null);
+    setTiers([createEmptyTier("Entrada General", "15.00")]);
+    setImageUrl("");
+    setWillPublish(true);
+    setTierSalesMap({});
+    setEventHasSales(false);
+  };
+
+  /** "Empezar de cero": fuera el borrador recuperado. */
+  const descartarBorrador = () => {
+    if (claveBorrador) removeDraft(claveBorrador);
+    setBorradorDe(null);
+    setStep(0);
+    aplicarValoresDeNuevo();
+  };
+
+  // Guarda el borrador de "Nuevo evento" mientras se rellena (con una pausa
+  // para no escribir en cada tecla). Un formulario sin tocar no deja borrador.
+  useEffect(() => {
+    if (!open || mode !== "create" || !claveBorrador) return;
+    const t = setTimeout(() => {
+      const [primero] = tiers;
+      const porDefecto = createEmptyTier("Entrada General", "15.00");
+      const tocado =
+        !!title.trim() ||
+        !!description.trim() ||
+        !!dateTime.date ||
+        !!imageUrl ||
+        tiers.length !== 1 ||
+        primero?.name !== porDefecto.name ||
+        primero?.description !== porDefecto.description ||
+        primero?.priceEur !== porDefecto.priceEur ||
+        primero?.capacity !== porDefecto.capacity ||
+        primero?.perUserMax !== porDefecto.perUserMax ||
+        primero?.active !== porDefecto.active;
+      if (!tocado) {
+        removeDraft(claveBorrador);
+        return;
+      }
+      const borrador: BorradorEvento = {
+        v: 1,
+        step,
+        title,
+        description,
+        dateTime,
+        location,
+        tiers,
+        imageUrl,
+        willPublish,
+        venueId,
+      };
+      writeDraft(claveBorrador, borrador);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [open, mode, claveBorrador, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId]);
 
   // -----------------------------------------------------------------
   // Reset / load según mode al abrir
@@ -217,22 +322,26 @@ export const EventEditorWizard = ({
     setRemovedTierDbIds(new Set());
 
     if (mode === "create") {
-      const defaultVenue = venues.find((v) => v.id === defaultVenueId) ?? null;
-      setTitle("");
-      setDescription("");
-      setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
-      setLocation({
-        city: defaultVenue?.city || defaultCity,
-        venueName: defaultVenue?.name || defaultVenueName,
-        address: defaultVenue?.address ?? "",
-      });
-      setVenueId(defaultVenue?.id ?? null);
-      setOriginalStatus(null);
-      setTiers([createEmptyTier("Entrada General", "15.00")]);
-      setImageUrl("");
-      setWillPublish(true);
-      setTierSalesMap({});
-      setEventHasSales(false);
+      const guardado = claveBorrador ? readDraft<unknown>(claveBorrador) : null;
+      if (guardado && esBorradorValido(guardado.data)) {
+        const b = guardado.data;
+        setStep(Math.min(Math.max(b.step ?? 0, 0), STEPS.length - 1));
+        setTitle(b.title);
+        setDescription(b.description);
+        setDateTime(b.dateTime);
+        setLocation(b.location);
+        setVenueId(b.venueId ?? null);
+        setOriginalStatus(null);
+        setTiers(b.tiers.length > 0 ? b.tiers : [createEmptyTier("Entrada General", "15.00")]);
+        setImageUrl(b.imageUrl ?? "");
+        setWillPublish(b.willPublish ?? true);
+        setTierSalesMap({});
+        setEventHasSales(false);
+        setBorradorDe(guardado.savedAt);
+        return;
+      }
+      setBorradorDe(null);
+      aplicarValoresDeNuevo();
       return;
     }
 
@@ -567,6 +676,9 @@ export const EventEditorWizard = ({
             ? "Ya aparece en el calendario público y se puede comprar."
             : "Lo encontrarás en Mis eventos.",
       });
+      // Guardado: el borrador ya no hace falta.
+      if (mode === "create" && claveBorrador) removeDraft(claveBorrador);
+      setBorradorDe(null);
       await onSaved();
       onOpenChange(false);
     } catch (e: unknown) {
@@ -814,6 +926,26 @@ export const EventEditorWizard = ({
                     </>
                   )}
                 </h2>
+                {mode === "create" && borradorDe !== null && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/40 bg-orange-500/10 px-2.5 py-0.5 text-orange-500">
+                      Borrador recuperado ·{" "}
+                      {new Date(borradorDe).toLocaleString("es-ES", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={descartarBorrador}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Empezar de cero
+                    </button>
+                  </div>
+                )}
                 {eventHasSales && (
                   <div
                     className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-orange-500/40 bg-orange-500/10 px-2.5 py-0.5 text-[10px] uppercase text-orange-500"

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId, useSessionReady } from "@/lib/cache/session";
 import {
   AlertTriangle,
   Check,
@@ -109,6 +112,93 @@ const mergeMessages = (prev: Message[], incoming: Message[]) => {
   );
 };
 
+interface ChatData {
+  /** null: admin sin conversación con ese usuario. */
+  convId: string | null;
+  messages: Message[];
+}
+
+const SIN_MENSAJES: Message[] = [];
+
+/** Abre (o crea) la conversación y carga sus mensajes. */
+async function abrirConversacion(p: {
+  uid: string;
+  mode: Props["mode"];
+  kind: NonNullable<Props["kind"]>;
+  orgId?: string | null;
+  selectedClientId?: string | null;
+  conversationId?: string | null;
+}): Promise<ChatData> {
+  try {
+    let id: string | null = null;
+
+    if (p.mode === "admin") {
+      if (p.conversationId) {
+        id = p.conversationId;
+      } else if (p.selectedClientId) {
+        const { data, error } = await supabase
+          .from("support_conversations")
+          .select("id")
+          .eq("client_id", p.selectedClientId)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .limit(1);
+        if (error) throw error;
+        id = data?.[0]?.id ?? null;
+      }
+      if (!id) return { convId: null, messages: [] };
+    } else if (p.kind === "partner") {
+      // Si el panel aún no ha cargado la organización se resuelve aquí,
+      // para no abrir una conversación sin org y otra con org después.
+      let org = p.orgId ?? null;
+      if (!org) {
+        const { data: tenant, error: tenantError } = await supabase.rpc("tenant_for_user");
+        if (tenantError) throw tenantError;
+        org = (Array.isArray(tenant) ? tenant[0]?.org_id : null) ?? null;
+      }
+      const { data, error } = await supabase.rpc("open_conversation", {
+        _kind: "partner_admin",
+        ...(org ? { _org_id: org } : {}),
+      });
+      if (error) throw error;
+      if (!data) throw new Error("open_conversation no devolvió conversación");
+      id = data;
+    } else {
+      // Un mismo usuario puede tener varias conversaciones (por tipo o ya
+      // cerradas), así que nada de maybeSingle(): la abierta más reciente.
+      const { data: existing, error } = await supabase
+        .from("support_conversations")
+        .select("id")
+        .eq("client_id", p.uid)
+        .eq("kind", "client_admin")
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      id = existing?.[0]?.id ?? null;
+      if (!id) {
+        const { data: created, error: insertError } = await supabase
+          .from("support_conversations")
+          .insert({ client_id: p.uid, kind: "client_admin" })
+          .select("id")
+          .single();
+        if (insertError) throw insertError;
+        id = created.id;
+      }
+    }
+
+    const { data: rows, error: messagesError } = await supabase
+      .from("support_messages")
+      .select(MESSAGE_COLUMNS)
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: true });
+    if (messagesError) throw messagesError;
+    return { convId: id, messages: (rows ?? []) as Message[] };
+  } catch (err) {
+    console.error("[SupportChat] no se pudo abrir la conversación:", err);
+    throw err;
+  }
+}
+
 /* ------------------------------------------------------------------
    Chat de soporte real contra support_conversations/support_messages.
    Hasta ahora, si no habia sesion o conversacion, el componente pasaba a
@@ -125,11 +215,9 @@ export const SupportChat = ({
   conversationId,
 }: Props) => {
   const { toast } = useToast();
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [reloadKey, setReloadKey] = useState(0);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [convId, setConvId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
+  const sesionLista = useSessionReady();
+  const userId = useCurrentUserId();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -152,109 +240,54 @@ export const SupportChat = ({
     [readerKind]
   );
 
-  // Abre (o crea) la conversación y carga sus mensajes.
+  // Conversación y mensajes en la caché (solo en memoria: es una
+  // conversación privada). Volver a Soporte los enseña al instante; al volver
+  // a la pestaña o a la app se refrescan solos (Realtime no reenvía lo que
+  // llegó en segundo plano).
+  const chatKey = useMemo<QueryKey>(
+    () =>
+      mode === "admin"
+        ? ["admin", userId ?? "", "support", conversationId ?? `cliente:${selectedClientId ?? ""}`]
+        : qk.me.support(userId ?? "", kind, orgId ?? null),
+    [mode, userId, conversationId, selectedClientId, kind, orgId]
+  );
+  const query = useQuery({
+    queryKey: chatKey,
+    queryFn: () =>
+      abrirConversacion({ uid: userId as string, mode, kind, orgId, selectedClientId, conversationId }),
+    enabled: !!userId,
+    staleTime: 15_000,
+    gcTime: 30 * 60_000,
+  });
+  const convId = query.data?.convId ?? null;
+  const messages = query.data?.messages ?? SIN_MENSAJES;
+  const loadState: LoadState = !sesionLista
+    ? "loading"
+    : !userId
+      ? "signed_out"
+      : query.data
+        ? query.data.convId
+          ? "ready"
+          : "empty"
+        : query.isError
+          ? "error"
+          : "loading";
+
+  // Leída al abrirla y cada vez que llegan mensajes del servidor.
   useEffect(() => {
-    let cancelled = false;
-    setLoadState("loading");
-    setConvId(null);
-    setMessages([]);
+    if (convId && query.dataUpdatedAt) markRead(convId);
+  }, [convId, query.dataUpdatedAt, markRead]);
 
-    (async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const uid = session?.user?.id ?? null;
-        if (cancelled) return;
-        setUserId(uid);
-        if (!uid) {
-          setLoadState("signed_out");
-          return;
-        }
+  const anadirMensajes = useCallback(
+    (nuevos: Message[]) => {
+      queryClient.setQueryData<ChatData>(chatKey, (prev) =>
+        prev ? { ...prev, messages: mergeMessages(prev.messages, nuevos) } : prev
+      );
+    },
+    [queryClient, chatKey]
+  );
 
-        let id: string | null = null;
-
-        if (mode === "admin") {
-          if (conversationId) {
-            id = conversationId;
-          } else if (selectedClientId) {
-            const { data, error } = await supabase
-              .from("support_conversations")
-              .select("id")
-              .eq("client_id", selectedClientId)
-              .order("last_message_at", { ascending: false, nullsFirst: false })
-              .limit(1);
-            if (error) throw error;
-            id = data?.[0]?.id ?? null;
-          }
-          if (!id) {
-            if (!cancelled) setLoadState("empty");
-            return;
-          }
-        } else if (kind === "partner") {
-          // Si el panel aún no ha cargado la organización se resuelve aquí,
-          // para no abrir una conversación sin org y otra con org después.
-          let org = orgId ?? null;
-          if (!org) {
-            const { data: tenant, error: tenantError } = await supabase.rpc("tenant_for_user");
-            if (tenantError) throw tenantError;
-            org = (Array.isArray(tenant) ? tenant[0]?.org_id : null) ?? null;
-          }
-          const { data, error } = await supabase.rpc("open_conversation", {
-            _kind: "partner_admin",
-            ...(org ? { _org_id: org } : {}),
-          });
-          if (error) throw error;
-          if (!data) throw new Error("open_conversation no devolvió conversación");
-          id = data;
-        } else {
-          // Un mismo usuario puede tener varias conversaciones (por tipo o ya
-          // cerradas), así que nada de maybeSingle(): la abierta más reciente.
-          const { data: existing, error } = await supabase
-            .from("support_conversations")
-            .select("id")
-            .eq("client_id", uid)
-            .eq("kind", "client_admin")
-            .eq("status", "open")
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (error) throw error;
-          id = existing?.[0]?.id ?? null;
-          if (!id) {
-            const { data: created, error: insertError } = await supabase
-              .from("support_conversations")
-              .insert({ client_id: uid, kind: "client_admin" })
-              .select("id")
-              .single();
-            if (insertError) throw insertError;
-            id = created.id;
-          }
-        }
-
-        const { data: rows, error: messagesError } = await supabase
-          .from("support_messages")
-          .select(MESSAGE_COLUMNS)
-          .eq("conversation_id", id)
-          .order("created_at", { ascending: true });
-        if (messagesError) throw messagesError;
-        if (cancelled) return;
-
-        setConvId(id);
-        setMessages((rows ?? []) as Message[]);
-        setLoadState("ready");
-        markRead(id);
-      } catch (err) {
-        console.error("[SupportChat] no se pudo abrir la conversación:", err);
-        if (!cancelled) setLoadState("error");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, kind, orgId, selectedClientId, conversationId, reloadKey, markRead]);
-
-  // Mensajes nuevos en tiempo real.
+  // Mensajes nuevos en tiempo real: directos a la caché.
   useEffect(() => {
     if (!convId) return;
     const channel = supabase
@@ -264,7 +297,7 @@ export const SupportChat = ({
         { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${convId}` },
         (payload) => {
           const next = payload.new as Message;
-          setMessages((prev) => mergeMessages(prev, [next]));
+          anadirMensajes([next]);
           if (!isMine(next)) markRead(convId);
         }
       )
@@ -273,26 +306,7 @@ export const SupportChat = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [convId, isMine, markRead]);
-
-  // Realtime no reenvía lo que llegó con la app en segundo plano: al volver
-  // a primer plano se recargan los mensajes.
-  useEffect(() => {
-    if (!convId) return;
-    const onVisible = async () => {
-      if (document.visibilityState !== "visible") return;
-      const { data, error } = await supabase
-        .from("support_messages")
-        .select(MESSAGE_COLUMNS)
-        .eq("conversation_id", convId)
-        .order("created_at", { ascending: true });
-      if (error || !data) return;
-      setMessages((prev) => mergeMessages(prev, data as Message[]));
-      markRead(convId);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [convId, markRead]);
+  }, [convId, isMine, markRead, anadirMensajes]);
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -339,11 +353,11 @@ export const SupportChat = ({
         });
       } else {
         if (!overrideBody) setInput("");
-        if (data) setMessages((prev) => mergeMessages(prev, [data as Message]));
+        if (data) anadirMensajes([data as Message]);
       }
       setSending(false);
     },
-    [convId, userId, mode, input, sending, toast]
+    [convId, userId, mode, input, sending, toast, anadirMensajes]
   );
 
   const otherName = useMemo(() => {
@@ -492,7 +506,7 @@ export const SupportChat = ({
             </p>
             <button
               type="button"
-              onClick={() => setReloadKey((k) => k + 1)}
+              onClick={() => void query.refetch()}
               className="mt-5 inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground transition hover:border-orange-500/50 hover:text-orange-500"
             >
               <RotateCcw className="h-4 w-4" />

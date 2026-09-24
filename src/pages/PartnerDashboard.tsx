@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,20 @@ import { StatusBadge } from "@/components/partner/StatusBadge";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { isNativeApp } from "@/lib/platform";
 import { listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
+import { useCurrentUser, useCurrentUserId } from "@/lib/cache/session";
+import { qk } from "@/lib/cache/keys";
+import { useEventoEnUrl } from "@/hooks/useEventoEnUrl";
+import { RefreshIndicator } from "@/components/ui/refresh-indicator";
+import {
+  invalidarTrasCambioDeEventos,
+  useCities,
+  usePartnerBalance,
+  usePartnerEvents,
+  usePartnerProfile,
+  usePartnerShowcase,
+  type City,
+  type PartnerEventRow,
+} from "@/hooks/queries/partnerData";
 
 type Section =
   | "metricas"
@@ -166,14 +181,6 @@ const SECCIONES_SOLO_WEB = new Set<Section>([
   "cashless",
 ]);
 
-/** Ninguna carga del arranque puede dejar el panel colgado en su loader. */
-const LOAD_TIMEOUT_MS = 10_000;
-
-/** Las consultas de Supabase son "thenables": withTimeout necesita una Promise. */
-function timed<T>(query: PromiseLike<T>, label: string): Promise<Awaited<T>> {
-  return withTimeout(Promise.resolve(query), LOAD_TIMEOUT_MS, label);
-}
-
 const describeError = (err: unknown): string => {
   if (err instanceof TimeoutError) {
     return "El servidor no responde. Revisa tu conexión y vuelve a intentarlo.";
@@ -186,56 +193,91 @@ const describeError = (err: unknown): string => {
   return "Error desconocido";
 };
 
-type EventRow = {
-  id: string;
-  title: string;
-  description: string | null;
-  city: string;
-  date_start: string;
-  date_end: string | null;
-  status: string;
-  price_cents: number;
-  capacity: number | null;
-  tickets_sold: number;
-  image_url: string | null;
+type EventRow = PartnerEventRow;
+
+/**
+ * Editor de eventos abierto, en la URL (?editor=nuevo | editar:<id> |
+ * duplicar:<id>): si el navegador recarga la pestaña (o iOS cierra la app)
+ * mientras se crea un evento, al volver se reabre y recupera su borrador.
+ */
+type EditorState = { mode: EditorMode; eventId?: string } | null;
+
+const leerEditor = (raw: string | null): EditorState => {
+  if (!raw) return null;
+  if (raw === "nuevo") return { mode: "create" };
+  const [accion, id] = raw.split(":");
+  if (id && accion === "editar") return { mode: "edit", eventId: id };
+  if (id && accion === "duplicar") return { mode: "duplicate", eventId: id };
+  return null;
 };
 
-type City = { id: string; name: string; slug: string };
+const escribirEditor = (e: NonNullable<EditorState>) =>
+  e.mode === "create" ? "nuevo" : `${e.mode === "edit" ? "editar" : "duplicar"}:${e.eventId ?? ""}`;
 
-type Profile = {
-  id: string;
-  business_name: string | null;
-  business_category: string | null;
-  city: string | null;
-  business_city: string | null;
-  account_status: string;
-};
-
-const PROFILE_COLUMNS = "id, business_name, business_category, city, business_city, account_status";
+// Referencias estables mientras no hay datos (evitan recalcular memos hijos).
+const SIN_EVENTOS: EventRow[] = [];
+const SIN_CIUDADES: City[] = [];
 
 const PartnerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   // La sección vive en la URL (/partner-dashboard/:section): atrás, recargar
-  // y los enlaces de las notificaciones llevan a la sección correcta.
+  // y los enlaces de las notificaciones llevan a la sección correcta. El
+  // evento elegido (?evento=, Asistentes/En vivo) viaja con ella.
   const { section: sectionParam } = useParams<{ section?: string }>();
   const section: Section = isSection(sectionParam) ? sectionParam : "metricas";
+  const [eventoElegido] = useEventoEnUrl();
   const setSection = useCallback(
-    (id: Section) => navigate(id === "metricas" ? "/partner-dashboard" : `/partner-dashboard/${id}`),
-    [navigate],
+    (id: Section) =>
+      navigate({
+        pathname: id === "metricas" ? "/partner-dashboard" : `/partner-dashboard/${id}`,
+        search: eventoElegido ? `?evento=${encodeURIComponent(eventoElegido)}` : "",
+      }),
+    [navigate, eventoElegido],
   );
-  const [userId, setUserId] = useState<string>("");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
-  const [loading, setLoading] = useState(true);
-  // Fallo de la carga de eventos (o del arranque). Mientras no es null no se
-  // pinta nada que dependa de la lista: ni "Tu primer evento" ni KPIs a cero.
-  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Sesión síncrona (src/lib/cache/session): el primer render ya sabe quién
+  // es y encuentra sus datos en la caché, sin esperar a auth.getUser().
+  const uid = useCurrentUserId();
+  const userId = uid ?? "";
+  // Email del user (para autocompletar email facturación del wizard)
+  const userEmail = useCurrentUser()?.email ?? null;
+
+  // Datos del panel en la caché (hooks/queries/partnerData): al volver a una
+  // sección, a la pestaña o al recargar se pintan al instante y se refrescan
+  // detrás. Solo la primera vez, sin nada guardado, hay "Cargando…".
+  const eventsQuery = usePartnerEvents(uid);
+  const events = eventsQuery.data ?? SIN_EVENTOS;
+  const loading = !!uid && eventsQuery.isPending;
+  // Fallo de la carga de eventos sin nada que enseñar. Mientras no es null no
+  // se pinta nada que dependa de la lista: ni "Tu primer evento" ni KPIs a
+  // cero. Con datos de antes, un refresco fallido no los tapa.
+  const loadError =
+    eventsQuery.isError && eventsQuery.data === undefined ? describeError(eventsQuery.error) : null;
+  const refrescandoEventos = eventsQuery.isFetching && !eventsQuery.isPending;
+  const profile = usePartnerProfile(uid).data ?? null;
+  const cities = useCities().data ?? SIN_CIUDADES;
+
   // Editor state: única fuente para create/edit/duplicate. Cuando es null
   // el modal está cerrado. Cuando hay objeto, el wizard se abre en el modo
-  // y con el evento indicado.
-  const [editor, setEditor] = useState<{ mode: EditorMode; eventId?: string } | null>(null);
+  // y con el evento indicado. Vive en la URL (?editor=).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editorParam = searchParams.get("editor");
+  const editor = useMemo(() => leerEditor(editorParam), [editorParam]);
+  const setEditor = useCallback(
+    (next: EditorState) =>
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          if (next) p.set("editor", escribirEditor(next));
+          else p.delete("editor");
+          return p;
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  );
   // Confirmación de borrado: se guarda el evento target hasta que el usuario
   // confirma o cancela. AlertDialog se monta al final del árbol.
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
@@ -247,180 +289,54 @@ const PartnerDashboard = () => {
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [changingStatus, setChangingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // Email del user (para autocompletar email facturación del wizard)
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   // Permite reabrir manualmente el onboarding desde el HelpSheet.
   const [reopenOnboarding, setReopenOnboarding] = useState(false);
   // Lista de primeros pasos ocultada en esta visita.
   const [checklistHidden, setChecklistHidden] = useState(false);
-  // Secciones maqueta visibles solo para la organización de demo (web).
-  const [showcase, setShowcase] = useState(false);
 
   // Contexto de partner: organización, venue, brand y estado real del
   // onboarding (server-truth, NO localStorage). Es la única fuente para
   // decidir si el wizard debe abrirse.
-  const partnerCtx = usePartnerContext(userId || null);
+  const partnerCtx = usePartnerContext(uid);
   const orgId = partnerCtx.org?.id ?? null;
 
   // Dentro de la app nativa las maquetas no existen; en la web, solo con el
   // flag partner_showcase activo para la organización.
   const enApp = isNativeApp();
+  const showcase = usePartnerShowcase(uid, orgId, !enApp).data === true && !enApp;
   const seccionVisible = (id: Section) => !SECCIONES_SOLO_WEB.has(id) || (!enApp && showcase);
   // Si un enlace guardado apunta a una seccion que no se puede ver, se cae a
   // Metricas en vez de pintar una pantalla que no deberia estar ahi.
   const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
 
+  // Modo puerta activo en este dispositivo: el panel no se abre.
   useEffect(() => {
-    if (enApp || !userId) {
-      setShowcase(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await timed(
-          supabase.rpc("get_feature_flag", { _code: "partner_showcase", _org_id: orgId }),
-          "get_feature_flag"
-        );
-        if (!cancelled) setShowcase(!error && data === true);
-      } catch {
-        if (!cancelled) setShowcase(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [enApp, userId, orgId]);
+    if (uid && isDoorLocked(uid)) navigate("/door", { replace: true });
+  }, [uid, navigate]);
 
-  const loadEvents = useCallback(async (uid: string) => {
-    // Multi-tenant load: el partner ve sus eventos si es partner_id directo
-    // (legacy) O si pertenece a la org que es dueña del evento. Esto resuelve
-    // el caso super-admin Francisco testeando con Avenue Media: como owner
-    // de la org, debe ver los eventos creados por la org aunque no estén
-    // técnicamente como partner_id=su_uid.
-    let orgIds: string[] = [];
-    try {
-      const [members, owned] = await Promise.all([
-        timed(
-          supabase
-            .from("organization_members")
-            .select("org_id")
-            .eq("user_id", uid)
-            .eq("status", "active"),
-          "organization_members"
-        ),
-        // Fallback: organizations donde el user es owner_id directo
-        timed(supabase.from("organizations").select("id").eq("owner_id", uid), "organizations"),
-      ]);
-      orgIds = (members.data ?? [])
-        .map((m: { org_id: string | null }) => m.org_id)
-        .filter((id): id is string => !!id);
-      for (const o of (owned.data ?? []) as Array<{ id: string }>) {
-        if (!orgIds.includes(o.id)) orgIds.push(o.id);
-      }
-    } catch (err) {
-      // Sin respuesta: mejor un error visible que una lista incompleta.
-      if (err instanceof TimeoutError) throw err;
-      /* RLS o tabla no existente — caemos a sólo partner_id */
-    }
-
-    const filter =
-      orgIds.length > 0
-        ? `partner_id.eq.${uid},org_id.in.(${orgIds.join(",")})`
-        : `partner_id.eq.${uid}`;
-
-    const { data, error } = await timed(
-      supabase
-        .from("events")
-        .select(
-          "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url"
-        )
-        .or(filter)
-        .order("date_start", { ascending: false }),
-      "events"
-    );
-    if (error) throw new Error(error.message);
-    setEvents((data ?? []) as EventRow[]);
-  }, []);
-
-  // Carga inicial: nada puede quedarse colgado (10 s por llamada) y el loader
-  // siempre se apaga. El estado del onboarding vive en usePartnerContext.
-  const loadInitial = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const { data: u, error: authError } = await timed(supabase.auth.getUser(), "auth.getUser");
-      if (authError) throw new Error(authError.message);
-      const uid = u.user?.id;
-      if (!uid) throw new Error("No hay ninguna sesión activa. Vuelve a iniciar sesión.");
-      // Modo puerta activo en este dispositivo: el panel no se abre.
-      if (isDoorLocked(uid)) {
-        navigate("/door", { replace: true });
-        return;
-      }
-      setUserId(uid);
-      setUserEmail(u.user?.email ?? null);
-
-      const [profileRes, citiesRes, eventsRes] = await Promise.allSettled([
-        timed(supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(), "profiles"),
-        timed(supabase.from("cities").select("id, name, slug").eq("active", true), "cities"),
-        loadEvents(uid),
-      ]);
-      if (profileRes.status === "fulfilled") {
-        if (profileRes.value.data) setProfile(profileRes.value.data as Profile);
-      } else {
-        console.warn("[PartnerDashboard] perfil:", profileRes.reason);
-      }
-      if (citiesRes.status === "fulfilled") {
-        setCities((citiesRes.value.data ?? []) as City[]);
-      } else {
-        console.warn("[PartnerDashboard] ciudades:", citiesRes.reason);
-      }
-      if (eventsRes.status === "rejected") throw eventsRes.reason;
-    } catch (err) {
-      console.error("[PartnerDashboard] carga inicial:", err);
-      setLoadError(describeError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadEvents]);
-
-  useEffect(() => {
-    void loadInitial();
-  }, [loadInitial]);
-
-  // Recarga tras crear/editar/borrar: si falla se avisa y se conserva la lista.
+  // Recarga tras crear/editar/borrar: si falla se avisa y se conserva la
+  // lista. También quedan obsoletos En vivo, asistentes, informes, cobros…
+  const { refetch: refetchEvents } = eventsQuery;
   const reloadEvents = useCallback(async () => {
-    if (!userId) return;
-    try {
-      await loadEvents(userId);
-      setLoadError(null);
-    } catch (err) {
+    if (!uid) return;
+    await invalidarTrasCambioDeEventos(queryClient, uid);
+    const r = await refetchEvents();
+    if (r.isError) {
       toast({
         title: "No se pudo actualizar la lista de eventos",
-        description: describeError(err),
+        description: describeError(r.error),
         variant: "destructive",
       });
     }
-  }, [userId, loadEvents, toast]);
+  }, [uid, queryClient, refetchEvents, toast]);
 
   // Cuando el wizard finaliza, refrescamos profile + events + contexto.
   const refreshAllPartnerData = async () => {
-    if (!userId) return;
+    if (!uid) return;
     await Promise.all([
       partnerCtx.refresh(),
       reloadEvents(),
-      (async () => {
-        try {
-          const { data: p } = await timed(
-            supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle(),
-            "profiles"
-          );
-          if (p) setProfile(p as Profile);
-        } catch (err) {
-          console.warn("[PartnerDashboard] perfil:", err);
-        }
-      })(),
+      queryClient.invalidateQueries({ queryKey: qk.partner.profile(uid) }),
     ]);
   };
 
@@ -616,7 +532,8 @@ const PartnerDashboard = () => {
     ticketsVendidos: events.reduce((s, e) => s + (e.tickets_sold ?? 0), 0),
   };
 
-  const retryLoad = () => void loadInitial();
+  const retryLoad = () => void refetchEvents();
+  const reintentando = eventsQuery.isFetching;
 
   /** Secciones que dependen de la lista de eventos: cargando, error o contenido. */
   const eventsGate = (content: React.ReactNode) =>
@@ -629,7 +546,7 @@ const PartnerDashboard = () => {
         compact
       />
     ) : loadError ? (
-      <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
+      <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={reintentando} />
     ) : (
       content
     );
@@ -780,10 +697,8 @@ const PartnerDashboard = () => {
                       description: "Con sus tipos de entrada y precios.",
                       done: events.length > 0 || partnerCtx.status.hasEvent,
                       actionLabel: "Crear evento",
-                      onAction: () => {
-                        setSection("eventos");
-                        setEditor({ mode: "create" });
-                      },
+                      // Sección y editor en una sola navegación: dos seguidas se pisan.
+                      onAction: () => navigate("/partner-dashboard/eventos?editor=nuevo"),
                     },
                     {
                       id: "publicar",
@@ -811,7 +726,7 @@ const PartnerDashboard = () => {
 
               {loadError ? (
                 <div className="mb-6">
-                  <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
+                  <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={reintentando} />
                 </div>
               ) : (
                 <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -890,7 +805,10 @@ const PartnerDashboard = () => {
                   el ancho disponible sin overflow. */}
               <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-3">
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Mis eventos</h1>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Mis eventos</h1>
+                    <RefreshIndicator active={refrescandoEventos} />
+                  </div>
                   <p className="text-sm text-muted-foreground">Crea y gestiona los eventos de tu local.</p>
                 </div>
                 {/* "Festival multi-día" oculto hasta la Fase 3: el pase se
@@ -938,7 +856,7 @@ const PartnerDashboard = () => {
                 />
               ) : loadError ? (
                 // Nunca "Tu primer evento" si la carga ha fallado.
-                <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={loading} />
+                <LoadErrorCard message={loadError} onRetry={retryLoad} retrying={reintentando} />
               ) : events.length === 0 ? (
                 <PasifyEmptyState
                   icon={<Calendar className="h-7 w-7" />}
@@ -1505,17 +1423,17 @@ const LoadErrorCard = ({
 
 /**
  * En vivo: el evento de ahora (pickActiveEvent) y, si esta noche hay más de
- * uno, un selector con los que tiene sentido mirar.
+ * uno, un selector con los que tiene sentido mirar. El elegido va en la URL
+ * (?evento=): se conserva al ir a otra sección y volver, y al recargar.
  */
 const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName: string | null }) => {
   const options = useMemo(() => listEventChoices(events), [events]);
-  const [selectedId, setSelectedId] = useState<string | null>(() => pickActiveEvent(events)?.id ?? null);
-
-  useEffect(() => {
-    if (selectedId && options.some((e) => e.id === selectedId)) return;
-    const next = pickActiveEvent(events)?.id ?? options[0]?.id ?? null;
-    if (next !== selectedId) setSelectedId(next);
-  }, [events, options, selectedId]);
+  const [eventoUrl, setEventoUrl] = useEventoEnUrl();
+  const selectedId =
+    eventoUrl && options.some((e) => e.id === eventoUrl)
+      ? eventoUrl
+      : pickActiveEvent(events)?.id ?? options[0]?.id ?? null;
+  const setSelectedId = setEventoUrl;
 
   const selected = options.find((e) => e.id === selectedId) ?? null;
 
@@ -1563,81 +1481,26 @@ const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName:
 /**
  * Stripe: sin botones que no hacen nada. El estado "conectada" sale de la
  * organización (lo que de verdad usa el checkout), no de profiles.
+ * Los datos vienen de la caché (usePartnerBalance): al volver a Cobros salen
+ * al instante y se refrescan detrás.
  */
-type BalanceRow = {
-  paid_orders: number;
-  gross_cents: number;
-  refunded_cents: number;
-  fee_cents: number;
-  net_cents: number;
-};
-
-// partner_balance_v (security_invoker) aún no está en los types generados.
-const loadBalance = (orgId: string) =>
-  (
-    supabase as unknown as {
-      from: (t: "partner_balance_v") => {
-        select: (c: string) => {
-          eq: (
-            k: string,
-            v: string,
-          ) => { maybeSingle: () => Promise<{ data: BalanceRow | null; error: { message: string } | null }> };
-        };
-      };
-    }
-  )
-    .from("partner_balance_v")
-    .select("paid_orders, gross_cents, refunded_cents, fee_cents, net_cents")
-    .eq("org_id", orgId)
-    .maybeSingle();
-
 const euros = (cents: number) =>
   new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format((cents ?? 0) / 100);
 
 const StripeSection = ({ orgId }: { orgId: string | null }) => {
-  const [connected, setConnected] = useState<boolean | null>(null);
-  const [balance, setBalance] = useState<BalanceRow | null>(null);
-  const [balanceState, setBalanceState] = useState<"loading" | "ready" | "error">("loading");
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    if (!orgId) {
-      setConnected(false);
-      setBalanceState("ready");
-      return;
-    }
-    let cancelled = false;
-    setBalanceState("loading");
-    (async () => {
-      try {
-        const [orgRes, balRes] = await Promise.all([
-          timed(
-            supabase
-              .from("organizations")
-              .select("stripe_connect_account_id, stripe_connect_charges_enabled")
-              .eq("id", orgId)
-              .maybeSingle(),
-            "organizations.stripe"
-          ),
-          timed(loadBalance(orgId), "partner_balance_v"),
-        ]);
-        if (cancelled) return;
-        const org = orgRes.data;
-        setConnected(!orgRes.error && !!org?.stripe_connect_account_id && org?.stripe_connect_charges_enabled === true);
-        if (balRes.error) throw new Error(balRes.error.message);
-        setBalance(balRes.data);
-        setBalanceState("ready");
-      } catch {
-        if (!cancelled) {
-          setConnected((c) => c ?? false);
-          setBalanceState("error");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [orgId, reloadKey]);
+  const uid = useCurrentUserId();
+  const query = usePartnerBalance(uid, orgId);
+  // Sin organización no hay nada que leer: ni conectada ni ventas.
+  const sinOrg = !orgId;
+  const connected: boolean | null = sinOrg ? false : query.data ? query.data.connected : query.isError ? false : null;
+  const balance = query.data?.balance ?? null;
+  const balanceState: "loading" | "ready" | "error" = sinOrg
+    ? "ready"
+    : query.data
+      ? "ready"
+      : query.isError
+        ? "error"
+        : "loading";
 
   const rows: Array<{ label: string; value: number; sign?: "-" ; strong?: boolean }> = balance
     ? [
@@ -1650,7 +1513,10 @@ const StripeSection = ({ orgId }: { orgId: string | null }) => {
 
   return (
     <div>
-      <h1 className="mb-1 text-3xl font-bold tracking-tight">Cobros</h1>
+      <div className="mb-1 flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">Cobros</h1>
+        <RefreshIndicator active={query.isFetching && !!query.data} />
+      </div>
       <p className="mb-6 text-sm text-muted-foreground">Cómo cobras las entradas que vendes y cuánto llevas.</p>
 
       <Card>
@@ -1690,8 +1556,12 @@ const StripeSection = ({ orgId }: { orgId: string | null }) => {
           ) : balanceState === "error" ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               No hemos podido cargar tus cobros.
-              <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-                <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+              <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
+                {query.isFetching ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 Reintentar
               </Button>
             </div>

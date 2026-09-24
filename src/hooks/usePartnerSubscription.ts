@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
 import { withTimeout } from "@/lib/withTimeout";
 import { captureError, getErrorMessage } from "@/lib/sentry";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
 
 /**
  * Pasify · usePartnerSubscription (post Fase 3 hardening).
@@ -26,6 +29,10 @@ import { captureError, getErrorMessage } from "@/lib/sentry";
  *    `loading` y si falla conserva los datos previos.
  *  - Este hook NO decide redirecciones: eso es cosa de quien lo usa
  *    (PartnerGate).
+ *
+ * Caché: la fila vive en qk.partner.subscription (compartida y guardada en el
+ * dispositivo). Se guarda la fila tal cual; `hasAccess` y los días se
+ * calculan al leer, con la hora actual.
  */
 
 export type PartnerSubscriptionStatus =
@@ -164,6 +171,30 @@ interface UseOpts {
   orgId?: string;
 }
 
+async function leerSuscripcion(orgId: string): Promise<SubscriptionRow | null> {
+  try {
+    const { data, error } = await withTimeout(
+      Promise.resolve(
+        supabase
+          .from("partner_subscriptions")
+          .select(
+            "id, plan_code, status, trial_ends_at, current_period_end, cancel_at_period_end, admin_granted_until",
+          )
+          .eq("org_id", orgId)
+          .maybeSingle(),
+      ),
+      SUBSCRIPTION_TIMEOUT_MS,
+      "partner_subscriptions",
+    );
+    if (error) throw error;
+    return (data as SubscriptionRow | null) ?? null;
+  } catch (e) {
+    console.error("usePartnerSubscription error:", e);
+    captureError(e, { where: "usePartnerSubscription.load", orgId });
+    throw e;
+  }
+}
+
 export const usePartnerSubscription = (
   userIdOrOpts?: string | UseOpts,
 ): PartnerSubscriptionState => {
@@ -175,114 +206,68 @@ export const usePartnerSubscription = (
       ? userIdOrOpts.orgId
       : undefined;
 
+  const uid = useCurrentUserId();
+  const queryClient = useQueryClient();
   const {
     tenant,
     loading: tenantLoading,
+    refreshing: tenantRefreshing,
     error: tenantError,
     refetch: refetchTenant,
   } = useOrganization();
   const resolvedOrgId = explicitOrgId ?? tenant?.org_id ?? null;
 
-  // `datos` = última lectura buena y de qué org es (null = nada leído aún).
-  const [datos, setDatos] = useState<Datos | null>(null);
-  // Último fallo de lectura y de qué org (solo se expone si es la actual).
-  const [fallo, setFallo] = useState<{ orgId: string; message: string } | null>(null);
-
-  const mountedRef = useRef(true);
-  const seqRef = useRef(0);
-  const enCursoRef = useRef<{ orgId: string; promise: Promise<void> } | null>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  /**
-   * Lee la suscripción de `orgId`. Con `reutilizar`, si ya hay una lectura
-   * de esa misma org en curso se espera a esa en vez de lanzar otra (evita
-   * que el efecto pise la lectura que acaba de lanzar `refetch`).
-   */
-  const load = useCallback((orgId: string | null, reutilizar: boolean): Promise<void> => {
-    if (reutilizar && orgId && enCursoRef.current?.orgId === orgId) {
-      return enCursoRef.current.promise;
-    }
-
-    const seq = ++seqRef.current;
-
-    if (!orgId) {
-      // Sin organización: es un dato (no un fallo). Quien use el hook decide
-      // qué hacer (PartnerGate activa el plan gratuito, que crea la org).
-      enCursoRef.current = null;
-      setDatos(datosVacios(null));
-      setFallo(null);
-      return Promise.resolve();
-    }
-
-    const carga = { orgId, promise: Promise.resolve() };
-    carga.promise = (async () => {
-      try {
-        const { data, error: queryError } = await withTimeout(
-          Promise.resolve(
-            supabase
-              .from("partner_subscriptions")
-              .select(
-                "id, plan_code, status, trial_ends_at, current_period_end, cancel_at_period_end, admin_granted_until",
-              )
-              .eq("org_id", orgId)
-              .maybeSingle(),
-          ),
-          SUBSCRIPTION_TIMEOUT_MS,
-          "partner_subscriptions",
-        );
-        if (queryError) throw queryError;
-        if (!mountedRef.current || seq !== seqRef.current) return;
-        setDatos(data ? calcularDatos(orgId, data as SubscriptionRow) : datosVacios(orgId));
-        setFallo(null);
-      } catch (e) {
-        if (!mountedRef.current || seq !== seqRef.current) return;
-        console.error("usePartnerSubscription error:", e);
-        // Los datos previos (si los hay) se conservan: un fallo de red no es
-        // "sin suscripción".
-        setFallo({ orgId, message: getErrorMessage(e) });
-        captureError(e, { where: "usePartnerSubscription.load", orgId });
-      } finally {
-        if (enCursoRef.current === carga) enCursoRef.current = null;
-      }
-    })();
-    enCursoRef.current = carga;
-    return carga.promise;
-  }, []);
-
   // Sin org explícita hay que esperar a que se resuelva el tenant (con org
   // explícita, lo que haga el tenant no importa y no debe relanzar la lectura).
   const esperandoTenant = !explicitOrgId && tenantLoading;
 
-  useEffect(() => {
-    if (esperandoTenant) return;
-    void load(resolvedOrgId, true);
-  }, [resolvedOrgId, esperandoTenant, load]);
+  const query = useQuery({
+    queryKey: qk.partner.subscription(uid ?? "", resolvedOrgId),
+    queryFn: () => leerSuscripcion(resolvedOrgId as string),
+    enabled: !!resolvedOrgId && !esperandoTenant,
+    staleTime: 2 * 60_000,
+  });
 
   const refetch = useCallback(async () => {
-    // Fuera el error mientras se reintenta: la pantalla pasa a loader.
-    setFallo(null);
     let orgId: string | null = explicitOrgId ?? null;
     if (!explicitOrgId) {
       // Puede que la org acabe de crearse (claim_partner_free_plan).
       const t = await refetchTenant();
       orgId = t?.org_id ?? null;
     }
-    await load(orgId, false);
-  }, [explicitOrgId, refetchTenant, load]);
+    if (!orgId) return;
+    const id = orgId;
+    await queryClient
+      .fetchQuery({
+        queryKey: qk.partner.subscription(uid ?? "", id),
+        queryFn: () => leerSuscripcion(id),
+        staleTime: 0,
+      })
+      .catch(() => undefined); // el error queda en la consulta
+  }, [explicitOrgId, refetchTenant, queryClient, uid]);
 
-  // ¿Los datos son de la org actual? Si no, no se exponen (serían de otra org).
-  const datosActuales = datos !== null && datos.orgId === resolvedOrgId ? datos : null;
-  const errorSuscripcion = fallo !== null && fallo.orgId === resolvedOrgId ? fallo.message : null;
+  // Sin organización es un dato (no un fallo): quien use el hook decide qué
+  // hacer (PartnerGate activa el plan gratuito, que crea la org).
+  const fila = query.data;
+  const datosActuales = useMemo<Datos | null>(() => {
+    if (esperandoTenant) return null;
+    if (!resolvedOrgId) return datosVacios(null);
+    if (fila === undefined) return null;
+    return fila ? calcularDatos(resolvedOrgId, fila) : datosVacios(resolvedOrgId);
+  }, [esperandoTenant, resolvedOrgId, fila]);
+
+  // Reintento sin datos todavía: loader, nunca un "sin acceso" que dispararía
+  // el alta del plan gratuito.
+  const reintentando = !!resolvedOrgId && fila === undefined && query.isFetching;
+  const errorSuscripcion =
+    resolvedOrgId && query.error && !reintentando ? getErrorMessage(query.error) : null;
   // Sin org explícita, si no se pudo resolver el tenant es un error (no "sin org").
-  const errorTenant = !explicitOrgId && !tenant && !tenantLoading ? tenantError : null;
+  const tenantReintentando = !explicitOrgId && !tenant && tenantRefreshing;
+  const errorTenant =
+    !explicitOrgId && !tenant && !tenantLoading && !tenantReintentando ? tenantError : null;
   const errorExpuesto = errorSuscripcion ?? errorTenant ?? null;
-  const loading = esperandoTenant || (datosActuales === null && errorExpuesto === null);
+  const loading =
+    esperandoTenant || tenantReintentando || reintentando || (datosActuales === null && errorExpuesto === null);
 
   return {
     ...(datosActuales ?? datosVacios(resolvedOrgId)),
