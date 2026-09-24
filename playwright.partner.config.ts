@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import { FAKE_SUPABASE_KEY, FAKE_SUPABASE_URL } from "./tests/e2e/support/fake-supabase";
 
 /**
- * Smoke del panel de local con Supabase simulado (tests/e2e/partner-shell.spec.ts).
+ * Panel de local con Supabase simulado: smoke (tests/e2e/partner-shell.spec.ts)
+ * y caché de datos (tests/e2e/partner-cache.spec.ts).
  *
  * Config aparte de playwright.config.ts: arranca su propio Vite en :8090 con
  * VITE_SUPABASE_URL apuntando a un puerto local donde no escucha nadie, y el
@@ -22,7 +23,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: "**/partner-shell.spec.ts",
+  testMatch: ["**/partner-shell.spec.ts", "**/partner-cache.spec.ts"],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,
   expect: { timeout: 10_000 },

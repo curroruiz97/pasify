@@ -69,6 +69,10 @@ export interface SupabaseFalso {
   supabaseReal: string[];
   /** Peticiones al Supabase falso aún sin contestar. */
   enVuelo(): number;
+  /** Datos pedidos (REST y RPC, sin auth) en orden: "GET /rest/v1/events". */
+  peticiones: string[];
+  /** Retraso de cada respuesta de datos (REST y RPC), para simular una red lenta. */
+  retrasoMs: number;
 }
 
 type Fila = Record<string, unknown>;
@@ -669,6 +673,13 @@ export async function instalarSupabaseFalso(
   const sinMock = new Set<string>();
   const supabaseReal: string[] = [];
   let pendientes = 0;
+  const falso: SupabaseFalso = {
+    sinMock,
+    supabaseReal,
+    enVuelo: () => pendientes,
+    peticiones: [],
+    retrasoMs: 0,
+  };
 
   await page.addInitScript(
     ({ clave: claveSesion, sesion }) => {
@@ -700,6 +711,11 @@ export async function instalarSupabaseFalso(
         const url = new URL(req.url());
         const ruta = url.pathname;
         let respuesta: Respuesta;
+
+        if (ruta.startsWith("/rest/v1/") && req.method() !== "OPTIONS") {
+          falso.peticiones.push(`${req.method()} ${ruta}`);
+          if (falso.retrasoMs > 0) await new Promise((r) => setTimeout(r, falso.retrasoMs));
+        }
 
         if (ruta.startsWith("/auth/v1/")) {
           respuesta = responderAuth(ruta, req, url, datos, sinMock);
@@ -757,7 +773,7 @@ export async function instalarSupabaseFalso(
     },
   );
 
-  return { sinMock, supabaseReal, enVuelo: () => pendientes };
+  return falso;
 }
 
 /**
