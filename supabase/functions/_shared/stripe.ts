@@ -1,5 +1,6 @@
 // Pasify · Stripe SDK shared
 import Stripe from "npm:stripe@14";
+import { HttpError } from "./internal-auth.ts";
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 /** Secreto del endpoint de PLATAFORMA (checkout, cargos, suscripciones). */
@@ -47,6 +48,63 @@ export function stripeWebhookSecrets(): Array<{ kind: "platform" | "connect"; se
 export function stripeKeyIsLive(): boolean {
   const key = (Deno.env.get("STRIPE_SECRET_KEY") ?? "").trim();
   return key.startsWith("sk_live_") || key.startsWith("rk_live_");
+}
+
+/* ---------------------------------------------------------------------------
+   Pagos de prueba en producción
+   ---------------------------------------------------------------------------
+   Con una clave de test en producción, la tarjeta 4242 "pagaba" de verdad:
+   entradas pagadas, email con QR, puntos, aviso de venta al local, entrada
+   válida en puerta e importe en el saldo que Pasify liquida. En producción:
+     - no se abre ningún pago si la clave no es live (assertLivePayments);
+     - las sesiones y eventos de Stripe con livemode = false se ignoran
+       (isIgnoredTestModeObject).
+   Fuera de producción todo sigue igual que antes.
+
+   Escape para probar en producción: el secreto PASIFY_ALLOW_TEST_PAYMENTS =
+   "true" desactiva los dos controles, y las compras con tarjeta de prueba
+   vuelven a confirmarse (entradas, email, puntos, aviso de venta). Solo
+   durante la prueba: quitarlo al acabar. En la base de datos esos pedidos
+   quedan con livemode = false y, mientras el ajuste require_live_payments de
+   app_settings siga a true, el escáner los rechaza ('test_payment') y no
+   suman en el saldo del local.
+   --------------------------------------------------------------------------- */
+
+/** Ref del proyecto de Supabase de producción (solo si falta PASIFY_ENV). */
+const PRODUCTION_PROJECT_REF = "ixkyfwzkknehvsqpopof";
+
+/**
+ * true si esta función corre en producción. Manda el secreto PASIFY_ENV
+ * ("production" = producción; cualquier otro valor, no). Si no existe, se
+ * deduce del SUPABASE_URL del proyecto de producción.
+ */
+export function isProductionEnv(): boolean {
+  const env = (Deno.env.get("PASIFY_ENV") ?? "").trim().toLowerCase();
+  if (env) return env === "production";
+  return (Deno.env.get("SUPABASE_URL") ?? "").includes(PRODUCTION_PROJECT_REF);
+}
+
+/** Escape explícito PASIFY_ALLOW_TEST_PAYMENTS = "true" (ver arriba). */
+export function testPaymentsAllowed(): boolean {
+  return (Deno.env.get("PASIFY_ALLOW_TEST_PAYMENTS") ?? "").trim().toLowerCase() === "true";
+}
+
+/**
+ * En producción solo se cobra con clave live. Si no, HttpError 503
+ * `payments_unavailable` (salvo el escape). Llamarlo antes de reservar nada.
+ */
+export function assertLivePayments(): void {
+  if (isProductionEnv() && !stripeKeyIsLive() && !testPaymentsAllowed()) {
+    throw new HttpError(503, "payments_unavailable", "Los pagos no están disponibles en este momento.");
+  }
+}
+
+/**
+ * true si una sesión o un evento de Stripe de modo prueba (livemode false)
+ * debe ignorarse: en producción y sin el escape. Fuera de producción, nunca.
+ */
+export function isIgnoredTestModeObject(livemode: boolean | null | undefined): boolean {
+  return livemode === false && isProductionEnv() && !testPaymentsAllowed();
 }
 
 export { STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET, STRIPE_CONNECT_CLIENT_ID };

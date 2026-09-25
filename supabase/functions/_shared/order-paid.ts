@@ -37,6 +37,12 @@ export interface HandleOrderPaidInput {
   amountTotal: number;
   /** `payment_intent.application_fee_amount` en céntimos (0 sin Connect). */
   applicationFee: number;
+  /**
+   * `session.livemode` de Stripe: se guarda en ticket_orders.livemode. Con
+   * false (pago de prueba) el escáner rechaza las entradas y el pedido no suma
+   * en el saldo del local mientras require_live_payments esté activo.
+   */
+  livemode: boolean | null;
   /** Quién confirma, para los logs ("webhook:checkout.session.completed", "confirm-checkout-session"...). */
   source: string;
 }
@@ -60,11 +66,14 @@ type Log = ReturnType<typeof logger.child>;
 export async function handleOrderPaid(input: HandleOrderPaidInput): Promise<HandleOrderPaidResult> {
   const log = logger.child({ function: "order-paid", source: input.source, session_id: input.sessionId });
 
+  // _livemode necesita la migración 20260925110100 (mark_order_paid_v2 con 5
+  // parámetros): desplegar esta función después de aplicarla.
   const { data, error } = await supabaseAdmin.rpc("mark_order_paid_v2", {
     _session_id: input.sessionId,
     _payment_intent_id: input.paymentIntentId,
     _amount_total_cents: Math.max(0, Math.round(input.amountTotal || 0)),
     _application_fee_cents: Math.max(0, Math.round(input.applicationFee || 0)),
+    _livemode: typeof input.livemode === "boolean" ? input.livemode : null,
   });
   if (error) throw new Error(`mark_order_paid_v2_failed: ${error.message}`);
 
