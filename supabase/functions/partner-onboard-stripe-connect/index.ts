@@ -1,6 +1,8 @@
 // Pasify · partner-onboard-stripe-connect
 // Crea o reutiliza Stripe Connect account para la organización del partner
 // y devuelve un account_link URL para que el owner complete onboarding.
+// return_url y refresh_url tienen que ser de un origen propio (_shared/urls.ts):
+// Stripe manda ahí al local al terminar o al caducar el enlace.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
@@ -9,6 +11,7 @@ import { requireStripe } from "../_shared/stripe.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { logger } from "../_shared/logger.ts";
 import { safeErrorResponse } from "../_shared/internal-auth.ts";
+import { isAllowedReturnUrl, safeOrigin } from "../_shared/urls.ts";
 
 interface Payload {
   org_id: string;
@@ -24,8 +27,15 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     await enforceRateLimit({ key: `connect_onboard:${user.id}`, max: 10, windowSec: 3600 });
 
-    const body = (await req.json()) as Payload;
-    if (!body.org_id || !body.return_url || !body.refresh_url) return errorResponse("invalid_payload", 400);
+    const body = (await req.json().catch(() => null)) as Payload | null;
+    if (!body?.org_id || !body.return_url || !body.refresh_url) return errorResponse("invalid_payload", 400);
+    if (!isAllowedReturnUrl(body.return_url) || !isAllowedReturnUrl(body.refresh_url)) {
+      logger.warn("connect_onboard_return_url_rejected", {
+        return_origin: safeOrigin(body.return_url),
+        refresh_origin: safeOrigin(body.refresh_url),
+      });
+      return errorResponse("invalid_return_url", 400, "invalid_return_url");
+    }
 
     // Verificar que el user es owner/admin del org
     const { data: org } = await supabaseAdmin

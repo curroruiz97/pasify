@@ -15,6 +15,10 @@
 //      En producción una sesión de modo prueba (livemode false) no confirma
 //      nada: 409 test_payment_not_accepted (salvo PASIFY_ALLOW_TEST_PAYMENTS,
 //      ver _shared/stripe.ts).
+//   3) Si el pedido ya estaba pagado se responde sin preguntar a Stripe, pero
+//      si su email no llegó a salir (Resend caído o sin clave) se reintenta en
+//      segundo plano (retryTicketsEmailIfMissing: con margen tras el pago y
+//      como mucho 3 veces cada 15 minutos).
 //
 // verify_jwt = false (config.toml): la autorización la hace esta función.
 // Rate limit por IP.
@@ -29,16 +33,28 @@ import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser, isPlatformAdmin } from "../_shared/supabase.ts";
 import { requireStripe, stripeId, isCheckoutSessionPaid, isIgnoredTestModeObject } from "../_shared/stripe.ts";
 import { enforceRateLimit, clientIp, RateLimitError } from "../_shared/rate-limit.ts";
-import { handleOrderPaid } from "../_shared/order-paid.ts";
+import { handleOrderPaid, PAID_ORDER_STATUSES, retryTicketsEmailIfMissing } from "../_shared/order-paid.ts";
 import { logger } from "../_shared/logger.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION_ID_RE = /^cs_[A-Za-z0-9_]{10,255}$/;
-/** Estados de pedido que ya implican cobro (no hace falta preguntar a Stripe). */
-const PAID_ORDER_STATUSES = new Set(["paid", "partial_refund", "refunded"]);
 
 function fail(status: number, code: string, message: string): Response {
   return jsonResponse({ error: code, message }, { status });
+}
+
+/**
+ * Trabajo que no debe retrasar la respuesta (la página de vuelta espera). El
+ * runtime mantiene viva la función hasta que termina (EdgeRuntime.waitUntil);
+ * si no existe, se espera aquí.
+ */
+async function runInBackground(task: Promise<unknown>): Promise<void> {
+  const runtime = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (typeof runtime?.waitUntil === "function") {
+    runtime.waitUntil(task);
+    return;
+  }
+  await task;
 }
 
 Deno.serve(async (req) => {
@@ -80,7 +96,7 @@ Deno.serve(async (req) => {
     // 1) Pedido + autorización
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("ticket_orders")
-      .select("id, status, buyer_user_id")
+      .select("id, status, buyer_user_id, tickets_email_sent_at")
       .eq("stripe_session_id", sessionId)
       .maybeSingle();
     if (orderErr) {
@@ -104,8 +120,14 @@ Deno.serve(async (req) => {
 
     const olog = logger.child({ function: "confirm-checkout-session", order_id: order.id, session_id: sessionId });
 
-    // 2) Ya pagado: no hace falta molestar a Stripe.
+    // 2) Ya pagado: no hace falta molestar a Stripe. Si el email con las
+    //    entradas no salió, se reintenta (B1-16: antes solo lo reintentaba
+    //    una confirmación que llegaba a handleOrderPaid, y esta respondía
+    //    antes).
     if (PAID_ORDER_STATUSES.has(order.status)) {
+      if (!order.tickets_email_sent_at) {
+        await runInBackground(retryTicketsEmailIfMissing(order.id, "confirm-checkout-session"));
+      }
       return jsonResponse({ status: "paid", order_id: order.id });
     }
 

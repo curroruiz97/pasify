@@ -1,26 +1,43 @@
-// Pasify · "pedido pagado": punto único que usan stripe-webhook y
-// confirm-checkout-session cuando Stripe confirma el cobro de un pedido.
+// Pasify · "pedido pagado": punto único que usan stripe-webhook,
+// confirm-checkout-session y reconcile-pending-orders cuando Stripe confirma
+// el cobro de un pedido.
 //
 //   1) `mark_order_paid_v2` (SQL, atómica e idempotente) marca el pedido y
 //      sus entradas como pagados y escribe el ledger de comisiones. Devuelve
 //      `newly_paid = true` SOLO a quien lo marca por primera vez.
 //   2) Si `newly_paid`, se lanzan los efectos: email con las entradas y sus
-//      QR, puntos de fidelidad y notificaciones in-app (comprador + equipo
-//      del local). Así webhook y confirmación manual pueden llegar a la vez,
-//      o repetirse, sin duplicar correos ni puntos.
+//      QR, puntos de fidelidad, referido (grant_referral_on_first_purchase)
+//      y notificaciones in-app (comprador + equipo del local). Así webhook y
+//      confirmación manual pueden llegar a la vez, o repetirse, sin duplicar
+//      correos ni puntos.
+//   3) Si ya estaba pagado y el email no llegó a salir, se reintenta.
 //
 // Los efectos nunca lanzan: si falla el correo o una notificación se
-// registra en el log y la compra sigue confirmada.
+// registra en el log y la compra sigue confirmada. El email solo cuenta como
+// enviado (ticket_orders.tickets_email_sent_at) si lo aceptó Resend: sin
+// RESEND_API_KEY el envío es simulado y no se marca, para que se reintente.
 //
 // Si el evento ya está cancelado (el pago de una sesión que seguía abierta
 // llega después de cancelar), no se mandan entradas: se crean sus solicitudes
 // de reembolso por cancelación y se devuelve el dinero en el momento.
+//
+// Además:
+//   - handleFreeOrderCreated: efectos de un pedido gratis (email y avisos).
+//   - retryTicketsEmailIfMissing / resendTicketsEmail: reintento automático y
+//     reenvío a petición (resend-tickets-email).
+//   - settlePendingOrder: resuelve un pedido pendiente contra Stripe (lo
+//     confirma si se cobró; si no, caduca la sesión y lo anula). Lo usan
+//     stripe-create-checkout, cancel-checkout y reconcile-pending-orders.
 
+import type Stripe from "npm:stripe@14";
 import { supabaseAdmin, SUPABASE_URL } from "./supabase.ts";
 import { logger } from "./logger.ts";
-import { sendEmail } from "./resend.ts";
+import { emailDelivered, sendEmail } from "./resend.ts";
 import { DEFAULT_TIMEZONE, formatMoney, ticketDoorCode, ticketPurchasedEmail } from "./email-templates.ts";
 import { enqueueNotification } from "./notify.ts";
+import { HttpError } from "./internal-auth.ts";
+import { enforceRateLimit, RateLimitError } from "./rate-limit.ts";
+import { isCheckoutSessionPaid, isIgnoredTestModeObject, stripeId } from "./stripe.ts";
 import {
   executeRefund,
   isStaleProcessing,
@@ -29,6 +46,18 @@ import {
   resumeStaleRefund,
   type RefundContext,
 } from "./refund.ts";
+
+/** Estados de pedido que implican cobro. */
+export const PAID_ORDER_STATUSES: ReadonlySet<string> = new Set(["paid", "partial_refund", "refunded"]);
+
+/**
+ * El primer envío del email sale justo al marcar el pago: un reintento antes
+ * de este margen (la página de vuelta pregunta varias veces) lo duplicaría.
+ */
+const EMAIL_RETRY_GRACE_MS = 60_000;
+/** Reintentos automáticos del email por pedido (webhook, vuelta de Stripe…). */
+const EMAIL_RETRY_MAX = 3;
+const EMAIL_RETRY_WINDOW_SEC = 900;
 
 export interface HandleOrderPaidInput {
   sessionId: string;
@@ -93,7 +122,7 @@ export async function handleOrderPaid(input: HandleOrderPaidInput): Promise<Hand
     await runPaidEffects(row.order_id, log);
   } else {
     log.info("order_already_paid", { order_id: row.order_id });
-    await retryTicketsEmailIfMissing(row.order_id, log);
+    await retryTicketsEmailIfMissing(row.order_id, input.source);
   }
 
   return { orderId: row.order_id, newlyPaid: !!row.newly_paid };
@@ -172,10 +201,12 @@ interface OrderContext {
     buyer_first_name: string | null;
     total_cents: number;
     currency: string | null;
+    livemode: boolean | null;
   };
   event: {
     id: string;
     title: string;
+    status: string | null;
     date_start: string;
     venue_name: string | null;
     address: string | null;
@@ -191,6 +222,8 @@ interface OrderContext {
     holder_name: string | null;
     amount_paid_cents: number;
     status: string;
+    /** Transferida a otra persona: su QR ya no es del comprador. */
+    transferred: boolean;
   }>;
 }
 
@@ -200,6 +233,7 @@ async function runPaidEffects(orderId: string, log: Log): Promise<void> {
     const results = await Promise.allSettled([
       sendTicketsEmail(ctx, log),
       grantLoyaltyPoints(ctx, log),
+      grantReferral(ctx, log),
       notifyPurchase(ctx, log),
     ]);
     for (const r of results) {
@@ -211,23 +245,79 @@ async function runPaidEffects(orderId: string, log: Log): Promise<void> {
 }
 
 /**
- * Un pago ya confirmado cuyo email no llegó a salir (Resend caído, sin
- * clave…): la siguiente confirmación del mismo pago lo reintenta. Solo el
- * email; puntos y notificaciones ya se dieron con `newly_paid`.
+ * Pedido gratis recién creado (create_free_ticket_order, ya pagado a 0 €):
+ * email con las entradas y avisos al comprador y al local. Sin puntos ni
+ * referido. Nunca lanza.
  */
-async function retryTicketsEmailIfMissing(orderId: string, log: Log): Promise<void> {
+export async function handleFreeOrderCreated(orderId: string, source: string): Promise<void> {
+  const log = logger.child({ function: "order-paid", source, order_id: orderId });
+  try {
+    const ctx = await loadOrderContext(orderId);
+    const results = await Promise.allSettled([
+      sendTicketsEmail(ctx, log),
+      notifyPurchase(ctx, log, { free: true }),
+    ]);
+    for (const r of results) {
+      if (r.status === "rejected") log.warn("free_order_effect_failed", { error: String(r.reason) });
+    }
+  } catch (err) {
+    log.warn("free_order_effects_failed", { error: String(err) });
+  }
+}
+
+/**
+ * Un pago ya confirmado cuyo email no llegó a salir (Resend caído, sin
+ * clave…): se reintenta cuando llega otra confirmación del mismo pago
+ * (webhook repetido, vuelta del cliente a la página de Stripe). Solo el
+ * email; puntos y notificaciones ya se dieron con `newly_paid`. Con margen
+ * tras el pago y como mucho EMAIL_RETRY_MAX veces cada 15 minutos. Devuelve
+ * true si ha salido. Nunca lanza.
+ */
+export async function retryTicketsEmailIfMissing(orderId: string, source: string): Promise<boolean> {
+  const log = logger.child({ function: "order-paid", source, order_id: orderId });
   try {
     const { data, error } = await supabaseAdmin
       .from("ticket_orders")
-      .select("tickets_email_sent_at")
+      .select("status, paid_at, tickets_email_sent_at")
       .eq("id", orderId)
       .maybeSingle();
-    if (error || !data || data.tickets_email_sent_at) return;
-    log.info("tickets_email_retry", { order_id: orderId });
-    await sendTicketsEmail(await loadOrderContext(orderId), log);
+    if (error || !data || data.tickets_email_sent_at || !PAID_ORDER_STATUSES.has(data.status)) return false;
+    const paidAt = data.paid_at ? Date.parse(data.paid_at) : Number.NaN;
+    if (Number.isFinite(paidAt) && Date.now() - paidAt < EMAIL_RETRY_GRACE_MS) return false;
+
+    try {
+      await enforceRateLimit({
+        key: `tickets-email-retry:${orderId}`,
+        max: EMAIL_RETRY_MAX,
+        windowSec: EMAIL_RETRY_WINDOW_SEC,
+      });
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        log.info("tickets_email_retry_throttled");
+        return false;
+      }
+      throw err;
+    }
+
+    log.info("tickets_email_retry");
+    return await sendTicketsEmail(await loadOrderContext(orderId), log);
   } catch (err) {
-    log.warn("tickets_email_retry_failed", { order_id: orderId, error: String(err) });
+    log.warn("tickets_email_retry_failed", { error: String(err) });
+    return false;
   }
+}
+
+/**
+ * Reenvío a petición (resend-tickets-email): siempre al email del pedido, con
+ * las entradas vigentes que siguen siendo del comprador. Clave de idempotencia
+ * nueva: con la del primer envío Resend devolvería el mensaje de entonces sin
+ * volver a mandarlo. Devuelve true si ha salido. Lanza si no puede leer el
+ * pedido.
+ */
+export async function resendTicketsEmail(orderId: string, source: string): Promise<boolean> {
+  const log = logger.child({ function: "order-paid", source, order_id: orderId });
+  const ctx = await loadOrderContext(orderId);
+  return await sendTicketsEmail(ctx, log, { idempotencyKey: `order-${orderId}-resend-${crypto.randomUUID()}` });
 }
 
 const fullName = (first: string | null | undefined, last: string | null | undefined) =>
@@ -236,7 +326,7 @@ const fullName = (first: string | null | undefined, last: string | null | undefi
 async function loadOrderContext(orderId: string): Promise<OrderContext> {
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("ticket_orders")
-    .select("id, event_id, org_id, buyer_user_id, buyer_email, buyer_first_name, total_cents, currency")
+    .select("id, event_id, org_id, buyer_user_id, buyer_email, buyer_first_name, total_cents, currency, livemode")
     .eq("id", orderId)
     .maybeSingle();
   if (orderErr || !order) throw new Error(`order_load_failed: ${orderErr?.message ?? "not_found"}`);
@@ -244,12 +334,14 @@ async function loadOrderContext(orderId: string): Promise<OrderContext> {
   const [eventRes, ticketsRes] = await Promise.all([
     supabaseAdmin
       .from("events")
-      .select("id, title, date_start, venue_name, address, city, partner_id, venue_id")
+      .select("id, title, status, date_start, venue_name, address, city, partner_id, venue_id")
       .eq("id", order.event_id)
       .maybeSingle(),
     supabaseAdmin
       .from("tickets")
-      .select("id, access_url_token, qr_token, tier_id, holder_first_name, holder_last_name, amount_paid_cents, status")
+      .select(
+        "id, access_url_token, qr_token, tier_id, holder_first_name, holder_last_name, amount_paid_cents, status, transferred_to_user_id",
+      )
       .eq("order_id", orderId)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true }),
@@ -279,11 +371,12 @@ async function loadOrderContext(orderId: string): Promise<OrderContext> {
   }
 
   return {
-    order,
+    order: { ...order, livemode: typeof order.livemode === "boolean" ? order.livemode : null },
     event: ev
       ? {
           id: ev.id,
           title: ev.title,
+          status: ev.status ?? null,
           date_start: ev.date_start,
           venue_name: ev.venue_name ?? venue?.name ?? null,
           address: ev.address ?? venue?.address ?? null,
@@ -300,21 +393,33 @@ async function loadOrderContext(orderId: string): Promise<OrderContext> {
       holder_name: fullName(t.holder_first_name, t.holder_last_name),
       amount_paid_cents: t.amount_paid_cents ?? 0,
       status: t.status,
+      transferred: !!t.transferred_to_user_id,
     })),
   };
 }
 
-async function sendTicketsEmail(ctx: OrderContext, log: Log): Promise<void> {
+/**
+ * Email con las entradas vigentes del pedido que siguen siendo del comprador
+ * (una transferida lleva otro QR y es de otra persona). Nada si el evento está
+ * cancelado. Marca tickets_email_sent_at solo si Resend lo aceptó. Devuelve
+ * true si ha salido. Nunca lanza.
+ */
+async function sendTicketsEmail(
+  ctx: OrderContext,
+  log: Log,
+  opts: { idempotencyKey?: string } = {},
+): Promise<boolean> {
   const { order, event } = ctx;
-  const tickets = ctx.tickets.filter((t) => t.status === "paid" || t.status === "used");
-  if (!order.buyer_email || !event || tickets.length === 0) {
+  const tickets = ctx.tickets.filter((t) => (t.status === "paid" || t.status === "used") && !t.transferred);
+  if (!order.buyer_email || !event || event.status === "cancelled" || tickets.length === 0) {
     log.warn("tickets_email_skipped", {
       order_id: order.id,
       has_email: !!order.buyer_email,
       has_event: !!event,
+      event_cancelled: event?.status === "cancelled",
       tickets: tickets.length,
     });
-    return;
+    return false;
   }
 
   const email = ticketPurchasedEmail({
@@ -347,22 +452,30 @@ async function sendTicketsEmail(ctx: OrderContext, log: Log): Promise<void> {
       subject: email.subject,
       html: email.html,
       text: email.text,
-      idempotencyKey: `order-${order.id}`,
+      idempotencyKey: opts.idempotencyKey ?? `order-${order.id}`,
       tags: [
         { name: "category", value: "tickets" },
         { name: "kind", value: "order_paid" },
       ],
     });
+    if (!emailDelivered(res)) {
+      // Sin proveedor de email (RESEND_API_KEY) no ha salido nada: no se
+      // apunta como enviado, y la siguiente confirmación lo reintentará.
+      log.error("tickets_email_not_sent", { order_id: order.id, provider: res.provider });
+      return false;
+    }
     log.info("tickets_email_sent", { order_id: order.id, provider: res.provider, email_id: res.id });
     const { error: markErr } = await supabaseAdmin
       .from("ticket_orders")
       .update({ tickets_email_sent_at: new Date().toISOString() })
       .eq("id", order.id);
     if (markErr) log.warn("tickets_email_mark_failed", { order_id: order.id, error: markErr.message });
+    return true;
   } catch (err) {
     // Nivel error a propósito: es un cliente que ha pagado y no tiene su QR
     // por correo (sí en la app si tiene cuenta). Buscar "tickets_email_failed".
     log.error("tickets_email_failed", { order_id: order.id, error: String(err) });
+    return false;
   }
 }
 
@@ -383,10 +496,34 @@ async function grantLoyaltyPoints(ctx: OrderContext, log: Log): Promise<void> {
   if (error) log.warn("loyalty_grant_failed", { order_id: order.id, error: error.message });
 }
 
-async function notifyPurchase(ctx: OrderContext, log: Log): Promise<void> {
+/** La RPC no existe (todavía no se ha aplicado la migración que la crea). */
+function isMissingFunctionError(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST202" || error.code === "42883" || /could not find the function/i.test(error.message ?? "");
+}
+
+/**
+ * Premio del referido en la primera compra (grant_referral_on_first_purchase,
+ * de la migración de reembolsos y referidos): solo compras con importe y que
+ * no son de prueba (livemode distinto de false). Si la función aún no existe
+ * se registra y se sigue.
+ */
+async function grantReferral(ctx: OrderContext, log: Log): Promise<void> {
+  const { order } = ctx;
+  if (!order.buyer_user_id || (order.total_cents ?? 0) <= 0 || order.livemode === false) return;
+  const { error } = await supabaseAdmin.rpc("grant_referral_on_first_purchase", { _user_id: order.buyer_user_id });
+  if (!error) return;
+  if (isMissingFunctionError(error)) {
+    log.info("referral_rpc_missing", { order_id: order.id });
+    return;
+  }
+  log.warn("referral_grant_failed", { order_id: order.id, error: error.message });
+}
+
+async function notifyPurchase(ctx: OrderContext, log: Log, opts: { free?: boolean } = {}): Promise<void> {
   const { order, event } = ctx;
   const paidCount = ctx.tickets.filter((t) => t.status === "paid" || t.status === "used").length || ctx.tickets.length;
   const title = event?.title ?? "tu evento";
+  const free = !!opts.free;
   const jobs: Array<Promise<unknown>> = [];
 
   if (order.buyer_user_id) {
@@ -394,12 +531,12 @@ async function notifyPurchase(ctx: OrderContext, log: Log): Promise<void> {
       user_id: order.buyer_user_id,
       category: "tickets",
       kind: "ticket_paid",
-      title: "Compra confirmada",
+      title: free ? "Entrada confirmada" : "Compra confirmada",
       body: paidCount === 1
         ? `Tu entrada para ${title} ya está en Mis entradas, con su QR.`
         : `Tus ${paidCount} entradas para ${title} ya están en Mis entradas, con su QR.`,
       link: "/#/client-dashboard",
-      payload: { order_id: order.id, event_id: order.event_id },
+      payload: { order_id: order.id, event_id: order.event_id, ...(free ? { free: true } : {}) },
     }));
   }
 
@@ -425,15 +562,16 @@ async function notifyPurchase(ctx: OrderContext, log: Log): Promise<void> {
   }
 
   const amount = formatMoney(order.total_cents, order.currency ?? "EUR");
+  const units = `${paidCount} ${paidCount === 1 ? "entrada" : "entradas"}`;
   for (const userId of recipients) {
     jobs.push(enqueueNotification({
       user_id: userId,
       category: "tickets",
       kind: "ticket_sold",
-      title: `Nueva venta · ${title}`,
-      body: `${paidCount} ${paidCount === 1 ? "entrada" : "entradas"} · ${amount}`,
+      title: free ? `Nueva reserva gratis · ${title}` : `Nueva venta · ${title}`,
+      body: free ? `${units} gratis` : `${units} · ${amount}`,
       link: "/#/partner-dashboard/eventos",
-      payload: { order_id: order.id, event_id: order.event_id },
+      payload: { order_id: order.id, event_id: order.event_id, ...(free ? { free: true } : {}) },
     }));
   }
 
@@ -441,4 +579,160 @@ async function notifyPurchase(ctx: OrderContext, log: Log): Promise<void> {
   for (const r of results) {
     if (r.status === "rejected") log.warn("purchase_notification_failed", { order_id: order.id, error: String(r.reason) });
   }
+}
+
+/* ===========================================================================
+   Pedidos pendientes contra Stripe
+   =========================================================================== */
+
+/**
+ * Cómo acaba un pedido pendiente:
+ *   cancelled   anulado (o ya lo estaba): sus plazas quedan libres;
+ *   paid        Stripe lo había cobrado: confirmado con handleOrderPaid;
+ *   not_pending ya no estaba pendiente cuando se fue a anular;
+ *   processing  sesión completada con un pago asíncrono en curso (lo cerrará
+ *               el webhook): no se toca;
+ *   open        la sesión sigue abierta y Stripe no la deja caducar: no se toca.
+ */
+export type PendingOrderOutcome = "cancelled" | "paid" | "not_pending" | "processing" | "open";
+
+export interface PendingOrderRef {
+  id: string;
+  stripe_session_id: string | null;
+}
+
+export interface SettlePendingOrderOptions {
+  /** Cliente de Stripe. Si falta y el pedido tiene sesión: HttpError 503. */
+  stripe: Stripe | null;
+  /** Para los logs y para handleOrderPaid. */
+  source: string;
+  /**
+   * Cómo queda anulado: 'failed' (cancel_ticket_order: lo deja el comprador)
+   * o 'expired' (expire_ticket_order: caducó sin pagar).
+   */
+  cancelAs: "failed" | "expired";
+}
+
+/**
+ * Resuelve un pedido 'pending' contra Stripe:
+ *   - sin sesión → se anula;
+ *   - sesión abierta → se caduca en Stripe y se anula (si Stripe no deja
+ *     caducarla porque se acaba de completar, se vuelve a mirar);
+ *   - cobrada → handleOrderPaid (con su livemode), no se anula. Un pago de
+ *     prueba en producción no genera entradas: se anula;
+ *   - caducada, o que ya no existe en esta cuenta de Stripe → se anula.
+ * Lanza HttpError 502 si Stripe no contesta (no se toca nada).
+ */
+export async function settlePendingOrder(
+  order: PendingOrderRef,
+  opts: SettlePendingOrderOptions,
+): Promise<PendingOrderOutcome> {
+  const log = logger.child({
+    function: "order-paid",
+    source: opts.source,
+    order_id: order.id,
+    session_id: order.stripe_session_id,
+  });
+  const sessionId = order.stripe_session_id;
+  if (!sessionId) return await cancelPendingOrder(order, opts.cancelAs, log);
+  if (!opts.stripe) {
+    throw new HttpError(503, "payments_unavailable", "Los pagos no están disponibles en este momento.");
+  }
+  const stripe = opts.stripe;
+
+  let session = await retrieveCheckoutSession(stripe, sessionId, log);
+  if (!session) {
+    log.warn("pending_order_session_missing");
+    return await cancelPendingOrder(order, opts.cancelAs, log);
+  }
+  if (session.metadata?.order_id && session.metadata.order_id !== order.id) {
+    log.error("session_order_mismatch", { session_order_id: session.metadata.order_id });
+    throw new HttpError(409, "session_order_mismatch", "El pago no corresponde a este pedido.");
+  }
+
+  if (session.status === "open") {
+    try {
+      await stripe.checkout.sessions.expire(sessionId);
+      log.info("pending_order_session_expired");
+      return await cancelPendingOrder(order, opts.cancelAs, log);
+    } catch (err) {
+      // Lo normal: se acaba de completar o de caducar. Se vuelve a mirar.
+      log.info("session_expire_rejected", { error: stripeErrorMessage(err) });
+      session = await retrieveCheckoutSession(stripe, sessionId, log);
+      if (!session) return await cancelPendingOrder(order, opts.cancelAs, log);
+      if (session.status === "open") return "open";
+    }
+  }
+
+  if (isCheckoutSessionPaid(session)) {
+    if (isIgnoredTestModeObject(session.livemode)) {
+      log.warn("test_mode_session_ignored", { status: session.status, payment_status: session.payment_status });
+      return await cancelPendingOrder(order, opts.cancelAs, log);
+    }
+    const pi = session.payment_intent;
+    const res = await handleOrderPaid({
+      sessionId,
+      paymentIntentId: stripeId(pi),
+      amountTotal: session.amount_total ?? 0,
+      applicationFee: pi && typeof pi === "object" ? pi.application_fee_amount ?? 0 : 0,
+      livemode: session.livemode,
+      source: opts.source,
+    });
+    log.warn("pending_order_was_paid", { newly_paid: res.newlyPaid });
+    return "paid";
+  }
+
+  if (session.status === "expired") return await cancelPendingOrder(order, opts.cancelAs, log);
+
+  // 'complete' sin cobrar: pago asíncrono en curso.
+  log.info("pending_order_payment_processing", { payment_status: session.payment_status });
+  return "processing";
+}
+
+/** Sesión con el PaymentIntent (comisión real). null si no existe en esta cuenta. */
+async function retrieveCheckoutSession(
+  stripe: Stripe,
+  sessionId: string,
+  log: Log,
+): Promise<Stripe.Checkout.Session | null> {
+  try {
+    return await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent"] });
+  } catch (err) {
+    const e = err as { code?: string; statusCode?: number; type?: string };
+    if (e.code === "resource_missing" || e.statusCode === 404) return null;
+    log.error("stripe_session_retrieve_failed", { type: e.type, error: stripeErrorMessage(err) });
+    throw new HttpError(502, "payment_provider_error", "No hemos podido consultar el pago. Inténtalo de nuevo en unos segundos.");
+  }
+}
+
+function stripeErrorMessage(err: unknown): string {
+  const e = err as { message?: string } | null;
+  return (e?.message ?? String(err)).slice(0, 300);
+}
+
+async function cancelPendingOrder(
+  order: PendingOrderRef,
+  cancelAs: "failed" | "expired",
+  log: Log,
+): Promise<PendingOrderOutcome> {
+  // Las dos RPC solo tocan un pedido que siga 'pending' (y sus entradas
+  // pendientes): un cobro que se confirme a la vez gana.
+  const { error } = cancelAs === "expired" && order.stripe_session_id
+    ? await supabaseAdmin.rpc("expire_ticket_order", { _session_id: order.stripe_session_id })
+    : await supabaseAdmin.rpc("cancel_ticket_order", { _order_id: order.id });
+  if (error) throw new Error(`pending_order_cancel_failed: ${error.message}`);
+
+  const { data, error: readErr } = await supabaseAdmin
+    .from("ticket_orders")
+    .select("status")
+    .eq("id", order.id)
+    .maybeSingle();
+  if (readErr) throw new Error(`pending_order_read_failed: ${readErr.message}`);
+  const status = (data?.status as string | undefined) ?? null;
+  if (status === "failed" || status === "expired") {
+    log.info("pending_order_cancelled", { status });
+    return "cancelled";
+  }
+  if (status && PAID_ORDER_STATUSES.has(status)) return "paid";
+  return "not_pending";
 }
