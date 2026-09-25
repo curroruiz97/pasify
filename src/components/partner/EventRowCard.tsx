@@ -1,13 +1,8 @@
-import { Copy, ExternalLink, EyeOff, MoreVertical, Music, Pencil, QrCode, RotateCcw, Send, Share2, Trash2, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import type { ReactNode } from "react";
+import { Music } from "lucide-react";
 import { StatusBadge } from "@/components/partner/StatusBadge";
+import { SoldBar } from "@/components/partner/SoldBar";
+import { formatInTimeZone } from "@/components/partner/zonedTime";
 
 /**
  * EventRowCard — versión móvil del row de la tabla de eventos del partner.
@@ -16,8 +11,11 @@ import { StatusBadge } from "@/components/partner/StatusBadge";
  *
  *   [thumb 56] [title + status badge]
  *               [eyebrow opcional 'Festival multi-día']
- *   [Ciudad · Fecha · Precio · Aforo  (micro-grid 4 col)]
- *                                                  [⋮ menu]
+ *   [Ciudad · Fecha · Precio  (micro-grid 3 col)]
+ *   [Vendidas / aforo con su barra]                   [⋮ menu]
+ *
+ * La fecha va en la hora del local (`timeZone`), como la ven los compradores.
+ * El menú de acciones (EventActionsMenu) lo pone quien la usa.
  *
  * Estilo Pasify: warm shadow lift on hover, border subtle, padding 16 px.
  */
@@ -40,28 +38,18 @@ export type EventRowCardEvent = {
 
 export interface EventRowCardProps {
   event: EventRowCardEvent;
-  onEdit?: () => void;
-  onDuplicate?: () => void;
-  onDelete?: () => void;
-  /** Publicado → borrador (deja de venderse). */
-  onUnpublish?: () => void;
-  /** Borrador → publicado. */
-  onPublish?: () => void;
-  /** Solo publicados: enlace público, página del evento y QR para cartel. */
-  onShare?: () => void;
-  onOpenPublic?: () => void;
-  onShowQr?: () => void;
-  /** Cancelar (publicado/borrador) o reintentar reembolsos (cancelado). */
-  onCancel?: () => void;
+  /** Zona horaria del local del evento (sin ella, la del dispositivo). */
+  timeZone?: string;
+  /** Menú de acciones (abajo a la derecha). */
+  menu?: ReactNode;
 }
 
-const formatShortDate = (iso: string) =>
-  new Date(iso).toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const FECHA_CORTA: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
 
 const Stat = ({ label, value }: { label: string; value: string }) => (
   <div className="min-w-0">
@@ -77,18 +65,7 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const EventRowCard = ({
-  event,
-  onEdit,
-  onDuplicate,
-  onDelete,
-  onUnpublish,
-  onPublish,
-  onShare,
-  onOpenPublic,
-  onShowQr,
-  onCancel,
-}: EventRowCardProps) => {
+export const EventRowCard = ({ event, timeZone, menu }: EventRowCardProps) => {
   return (
     <article
       className="group relative rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5"
@@ -100,6 +77,7 @@ export const EventRowCard = ({
       onMouseLeave={(e) => {
         e.currentTarget.style.boxShadow = "0 1px 0 rgba(255,255,255,0.02) inset";
       }}
+      aria-label={event.title}
     >
       {/* Top row: thumb + title + status */}
       <div className="flex items-start gap-3">
@@ -150,105 +128,19 @@ export const EventRowCard = ({
         </div>
       </div>
 
-      {/* Bottom row: micro-grid 4 col */}
-      <div className="mt-4 grid grid-cols-4 gap-2">
+      {/* Micro-grid 3 col */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
         <Stat label="Ciudad" value={event.city || "—"} />
-        <Stat label="Fecha" value={formatShortDate(event.date_start)} />
-        <Stat
-          label="Precio"
-          value={`${(event.price_cents / 100).toFixed(2)} €`}
-        />
-        <Stat
-          label="Aforo"
-          value={event.capacity != null ? String(event.capacity) : "—"}
-        />
+        <Stat label="Fecha" value={formatInTimeZone(event.date_start, FECHA_CORTA, timeZone)} />
+        <Stat label="Precio" value={`${(event.price_cents / 100).toFixed(2)} €`} />
       </div>
 
-      {/* Overflow menu — absolute bottom right to keep the micro-grid clean */}
-      <div className="absolute bottom-2 right-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              aria-label="Acciones del evento"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {onEdit && (
-              <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Editar evento
-              </DropdownMenuItem>
-            )}
-            {onDuplicate && (
-              <DropdownMenuItem onClick={onDuplicate}>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicar evento
-              </DropdownMenuItem>
-            )}
-            {onPublish && event.status === "draft" && (
-              <DropdownMenuItem onClick={onPublish}>
-                <Send className="mr-2 h-4 w-4" />
-                Publicar
-              </DropdownMenuItem>
-            )}
-            {event.status === "published" && onShare && (
-              <DropdownMenuItem onClick={onShare}>
-                <Share2 className="mr-2 h-4 w-4" />
-                Compartir enlace
-              </DropdownMenuItem>
-            )}
-            {event.status === "published" && onOpenPublic && (
-              <DropdownMenuItem onClick={onOpenPublic}>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Ver página del evento
-              </DropdownMenuItem>
-            )}
-            {event.status === "published" && onShowQr && (
-              <DropdownMenuItem onClick={onShowQr}>
-                <QrCode className="mr-2 h-4 w-4" />
-                QR para cartel
-              </DropdownMenuItem>
-            )}
-            {onUnpublish && event.status === "published" && (
-              <DropdownMenuItem onClick={onUnpublish}>
-                <EyeOff className="mr-2 h-4 w-4" />
-                Retirar de la venta
-              </DropdownMenuItem>
-            )}
-            {onCancel && (event.status === "published" || event.status === "draft") && (
-              <DropdownMenuItem
-                onClick={onCancel}
-                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Cancelar evento
-              </DropdownMenuItem>
-            )}
-            {onCancel && event.status === "cancelled" && event.tickets_sold > 0 && (
-              <DropdownMenuItem onClick={onCancel}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reintentar reembolsos
-              </DropdownMenuItem>
-            )}
-            {onDelete && (onEdit || onDuplicate) && (
-              <DropdownMenuSeparator />
-            )}
-            {onDelete && (
-              <DropdownMenuItem
-                onClick={onDelete}
-                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar evento
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Vendidas sobre el aforo; el menú, a su derecha */}
+      <div className="mt-3 flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <SoldBar sold={event.tickets_sold} capacity={event.capacity} />
+        </div>
+        {menu && <div className="-mb-1 -mr-2 shrink-0">{menu}</div>}
       </div>
     </article>
   );

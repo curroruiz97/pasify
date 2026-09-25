@@ -45,12 +45,19 @@ import {
 } from "@/components/partner/TicketTiersBuilder";
 import { isBelowStripeMinimum, priceEurToCents } from "@/components/partner/tierPrice";
 import {
+  DEFAULT_REFUND_HOURS,
+  MAX_REFUND_HOURS,
+  parseRefundHours,
+  refundHoursForDb,
+  summarizePolicies,
+} from "@/components/partner/tierPolicy";
+import {
   EventDateTimeSection,
   composeIsoStartEnd,
   validateDateTime,
   type DateTimeValue,
 } from "@/components/partner/EventDateTimeSection";
-import { addDaysToDate, isoToWallClock } from "@/components/partner/zonedTime";
+import { addDaysToDate, isoToWallClock, timeZoneLabel } from "@/components/partner/zonedTime";
 import { describeWriteError, expectRows } from "@/components/partner/writeErrors";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import {
@@ -111,7 +118,49 @@ import {
  * Evento nuevo: el local elegido rellena la dirección, el cupo de la entrada
  * por defecto (su aforo) y la zona horaria con la que se leen el día y las
  * horas (EventDateTimeSection).
+ *
+ * Hora del local (B4-09): el día y las horas se escriben y se leen en la zona
+ * del local del evento (`venues.timezone`), también al duplicar y al
+ * recuperar el borrador, y se rotula «Hora de <ciudad del local>». Para no
+ * leerlos con la zona del dispositivo por llegar tarde la lista de locales,
+ * el formulario espera a tener el contexto del local (`contextReady`).
+ *
+ * Políticas de cada tipo (D-3): devoluciones (NULL = sin devolución salvo
+ * cancelación; N = hasta N horas antes) y transferencia; en el resumen se ven
+ * las dos.
+ *
+ * Organización suspendida (`publishBlockedReason`): se puede editar y guardar
+ * como borrador, pero no publicar.
  */
+
+/**
+ * Filas de ticket_tiers con la política de devoluciones que admite NULL ("sin
+ * devolución salvo cancelación"). Los tipos generados aún tienen la columna
+ * como NOT NULL: la migración de reembolsos de la Ola 2 la hace opcional, y al
+ * regenerarlos estos casts sobran.
+ */
+type TierInsert = Omit<TablesInsert<"ticket_tiers">, "refundable_until_hours_before"> & {
+  refundable_until_hours_before: number | null;
+};
+type TierUpdate = Omit<TablesUpdate<"ticket_tiers">, "refundable_until_hours_before"> & {
+  refundable_until_hours_before?: number | null;
+};
+const comoInsert = (row: TierInsert) => row as unknown as TablesInsert<"ticket_tiers">;
+const comoInserts = (rows: TierInsert[]) => rows as unknown as TablesInsert<"ticket_tiers">[];
+const comoUpdate = (row: TierUpdate) => row as unknown as TablesUpdate<"ticket_tiers">;
+
+/** Tipo de un borrador guardado antes de que existieran las políticas: con las de por defecto. */
+const normalizarTipo = (t: Partial<TierDraft>): TierDraft => {
+  const base = createEmptyTier();
+  return {
+    ...base,
+    ...t,
+    _key: typeof t._key === "string" && t._key ? t._key : base._key,
+    refundMode: t.refundMode === "hours" ? "hours" : "none",
+    refundHours: typeof t.refundHours === "string" && t.refundHours ? t.refundHours : DEFAULT_REFUND_HOURS,
+    transferAllowed: typeof t.transferAllowed === "boolean" ? t.transferAllowed : true,
+  };
+};
 
 /**
  * Borrador de "Nuevo evento" en el dispositivo (lib/drafts): si mientras se
@@ -130,6 +179,12 @@ interface BorradorEvento {
   imageUrl: string;
   willPublish: boolean;
   venueId: string | null;
+  /**
+   * Zona con la que se escribieron el día y las horas. Se usa si el local ya
+   * no está en la lista; si está, manda la suya. Falta en los borradores
+   * anteriores a guardarla.
+   */
+  timeZone?: string;
 }
 
 const esBorradorValido = (b: unknown): b is BorradorEvento => {
@@ -204,6 +259,14 @@ interface Props {
    */
   venues?: EditorVenue[];
   defaultVenueId?: string | null;
+  /**
+   * El contexto del local (sus locales y zonas horarias) ya se ha cargado.
+   * Hasta entonces el formulario espera: leer o escribir la fecha antes
+   * usaría la zona del dispositivo.
+   */
+  contextReady?: boolean;
+  /** Si no se puede publicar (organización suspendida), el motivo. */
+  publishBlockedReason?: string | null;
   /** Llamado tras guardar con éxito. */
   onSaved: () => void | Promise<void>;
 }
@@ -238,10 +301,14 @@ export const EventEditorWizard = ({
   defaultVenueName = "",
   venues = [],
   defaultVenueId = null,
+  contextReady = true,
+  publishBlockedReason = null,
   onSaved,
 }: Props) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Abierto pero sin el contexto del local todavía: se espera (ver Props).
+  const esperandoContexto = open && !contextReady;
 
   // -----------------------------------------------------------------
   // State
@@ -287,6 +354,18 @@ export const EventEditorWizard = ({
   const [tierSalesMap, setTierSalesMap] = useState<Record<string, TierSales>>({});
   const [removedTierDbIds, setRemovedTierDbIds] = useState<Set<string>>(new Set());
   const [eventHasSales, setEventHasSales] = useState(false);
+  // "Nuevo evento" ya rellenado (con el borrador o vacío). Hasta entonces no
+  // se guarda borrador: el formulario en blanco de mientras borraría el de verdad.
+  const [formListo, setFormListo] = useState(false);
+
+  // Local del evento y rótulo de su hora («Hora de Santa Cruz de Tenerife»).
+  const venueActual = venues.find((v) => v.id === venueId) ?? null;
+  const etiquetaHora = timeZoneLabel(venueActual?.city, timeZone);
+
+  // Sin poder publicar (organización suspendida): nunca "Publicar al guardar".
+  useEffect(() => {
+    if (publishBlockedReason) setWillPublish(false);
+  }, [publishBlockedReason]);
 
   /** Formulario vacío de "Nuevo evento" (con el local por defecto). */
   const aplicarValoresDeNuevo = () => {
@@ -304,7 +383,7 @@ export const EventEditorWizard = ({
     setOriginalStatus(null);
     setTiers([tierPorDefecto(defaultVenue)]);
     setImageUrl("");
-    setWillPublish(true);
+    setWillPublish(!publishBlockedReason);
     setTierSalesMap({});
     setEventHasSales(false);
   };
@@ -320,7 +399,7 @@ export const EventEditorWizard = ({
   // Guarda el borrador de "Nuevo evento" mientras se rellena (con una pausa
   // para no escribir en cada tecla). Un formulario sin tocar no deja borrador.
   useEffect(() => {
-    if (!open || mode !== "create" || !claveBorrador) return;
+    if (!open || mode !== "create" || !claveBorrador || !formListo) return;
     const t = setTimeout(() => {
       const [primero] = tiers;
       // El cupo que viene del aforo del local no cuenta como "tocado".
@@ -336,7 +415,9 @@ export const EventEditorWizard = ({
         primero?.priceEur !== porDefecto.priceEur ||
         primero?.capacity !== porDefecto.capacity ||
         primero?.perUserMax !== porDefecto.perUserMax ||
-        primero?.active !== porDefecto.active;
+        primero?.active !== porDefecto.active ||
+        primero?.refundMode !== porDefecto.refundMode ||
+        primero?.transferAllowed !== porDefecto.transferAllowed;
       if (!tocado) {
         removeDraft(claveBorrador);
         return;
@@ -352,17 +433,39 @@ export const EventEditorWizard = ({
         imageUrl,
         willPublish,
         venueId,
+        timeZone,
       };
       writeDraft(claveBorrador, borrador);
     }, 400);
     return () => clearTimeout(t);
-  }, [open, mode, claveBorrador, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, venues]);
+  }, [
+    open,
+    mode,
+    claveBorrador,
+    formListo,
+    step,
+    title,
+    description,
+    dateTime,
+    location,
+    tiers,
+    imageUrl,
+    willPublish,
+    venueId,
+    venues,
+    timeZone,
+  ]);
 
   // -----------------------------------------------------------------
-  // Reset / load según mode al abrir
+  // Reset / load según mode al abrir (con el contexto del local ya cargado:
+  // sin él, el día y las horas se leerían con la zona del dispositivo)
   // -----------------------------------------------------------------
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setFormListo(false);
+      return;
+    }
+    if (!contextReady) return;
     setStep(0);
     setRemovedTierDbIds(new Set());
 
@@ -370,26 +473,31 @@ export const EventEditorWizard = ({
       const guardado = claveBorrador ? readDraft<unknown>(claveBorrador) : null;
       if (guardado && esBorradorValido(guardado.data)) {
         const b = guardado.data;
+        const venueDelBorrador = venues.find((v) => v.id === b.venueId);
         setStep(Math.min(Math.max(b.step ?? 0, 0), STEPS.length - 1));
         setTitle(b.title);
         setDescription(b.description);
         setDateTime(b.dateTime);
         setLocation(b.location);
         setVenueId(b.venueId ?? null);
-        setTimeZone(zonaDe(venues.find((v) => v.id === b.venueId)));
+        // La hora se escribió como hora del local: con la zona del local (o,
+        // si ya no está en la lista, con la que se escribió).
+        setTimeZone(zonaDe(venueDelBorrador) ?? (b.timeZone || undefined));
         setOriginalStatus(null);
         setTiers(
-          b.tiers.length > 0 ? b.tiers : [tierPorDefecto(venues.find((v) => v.id === b.venueId))]
+          b.tiers.length > 0 ? b.tiers.map((t) => normalizarTipo(t)) : [tierPorDefecto(venueDelBorrador)]
         );
         setImageUrl(b.imageUrl ?? "");
-        setWillPublish(b.willPublish ?? true);
+        setWillPublish((b.willPublish ?? true) && !publishBlockedReason);
         setTierSalesMap({});
         setEventHasSales(false);
         setBorradorDe(guardado.savedAt);
+        setFormListo(true);
         return;
       }
       setBorradorDe(null);
       aplicarValoresDeNuevo();
+      setFormListo(true);
       return;
     }
 
@@ -397,7 +505,7 @@ export const EventEditorWizard = ({
       void loadForEdit(eventId, mode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, eventId]);
+  }, [open, mode, eventId, contextReady]);
 
   const loadForEdit = async (eid: string, m: EditorMode) => {
     setLoadingInitial(true);
@@ -415,7 +523,9 @@ export const EventEditorWizard = ({
       // 2) Tiers
       const { data: t, error: tErr } = await supabase
         .from("ticket_tiers")
-        .select("id, name, description, price_cents, capacity, per_user_max, status, sort_order")
+        .select(
+          "id, name, description, price_cents, capacity, per_user_max, status, sort_order, refundable_until_hours_before, transfer_allowed"
+        )
         .eq("event_id", eid)
         .order("sort_order", { ascending: true });
       if (tErr) throw tErr;
@@ -497,16 +607,23 @@ export const EventEditorWizard = ({
       setEventHasSales(m === "edit" ? hasSales : false);
       setTierSalesMap(salesMap);
 
-      const draftTiers: TierDraft[] = (t ?? []).map((row, idx) => ({
-        _key: `db-${row.id}`,
-        dbId: m === "edit" ? row.id : undefined, // duplicate trata como nuevo
-        name: row.name ?? "",
-        description: row.description ?? "",
-        priceEur: ((row.price_cents ?? 0) / 100).toFixed(2),
-        capacity: row.capacity != null ? String(row.capacity) : "",
-        perUserMax: row.per_user_max != null ? String(row.per_user_max) : "4",
-        active: (row.status ?? "active") === "active",
-      }));
+      const draftTiers: TierDraft[] = (t ?? []).map((row) => {
+        // NULL = sin devolución (salvo cancelación); N = hasta N horas antes.
+        const horas: number | null = row.refundable_until_hours_before ?? null;
+        return {
+          _key: `db-${row.id}`,
+          dbId: m === "edit" ? row.id : undefined, // duplicate trata como nuevo
+          name: row.name ?? "",
+          description: row.description ?? "",
+          priceEur: ((row.price_cents ?? 0) / 100).toFixed(2),
+          capacity: row.capacity != null ? String(row.capacity) : "",
+          perUserMax: row.per_user_max != null ? String(row.per_user_max) : "4",
+          active: (row.status ?? "active") === "active",
+          refundMode: horas === null ? "none" : "hours",
+          refundHours: horas === null ? DEFAULT_REFUND_HOURS : String(horas),
+          transferAllowed: row.transfer_allowed ?? true,
+        };
+      });
       setTiers(draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error cargando evento";
@@ -554,8 +671,15 @@ export const EventEditorWizard = ({
       totalCapacity: totalCap,
       imageUrl: imageUrl || null,
       willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
+      timeZoneLabel: etiquetaHora,
+      // Lo que verá quien compre: las políticas de los tipos a la venta.
+      policies: activeTiers.map((t) => ({
+        name: t.name,
+        refundHours: refundHoursForDb(t.refundMode, t.refundHours),
+        transferAllowed: t.transferAllowed,
+      })),
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone]);
+  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone, etiquetaHora]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -595,6 +719,9 @@ export const EventEditorWizard = ({
             if (Number.isFinite(cap) && cap < sales.sold) {
               return `El cupo de "${t.name}" no puede ser menor que las ventas (${sales.sold}).`;
             }
+          }
+          if (t.refundMode === "hours" && parseRefundHours(t.refundHours) === null) {
+            return `El plazo de devolución de "${t.name}" tiene que ser un número entero de horas entre 1 y ${MAX_REFUND_HOURS}.`;
           }
         }
       }
@@ -668,6 +795,12 @@ export const EventEditorWizard = ({
   const submit = async (status: "draft" | "published" | "keep") => {
     const effective: "draft" | "published" =
       status === "keep" ? (originalStatus === "published" ? "published" : "draft") : status;
+    // Organización suspendida: no se publica (el servidor también lo
+    // rechaza). Guardar un evento que ya estaba publicado sí se deja.
+    if (publishBlockedReason && status === "published") {
+      toast({ title: "No se puede publicar", description: publishBlockedReason, variant: "destructive" });
+      return;
+    }
     const err = validateAll(effective);
     if (err) {
       toast({ title: "Faltan datos", description: err, variant: "destructive" });
@@ -767,7 +900,7 @@ export const EventEditorWizard = ({
       })
       .select("id");
     const [createdEvent] = expectRows<{ id: string }>(eventRes);
-    const tiersToInsert: TablesInsert<"ticket_tiers">[] = tiers.map((t, idx) => ({
+    const tiersToInsert: TierInsert[] = tiers.map((t, idx) => ({
       event_id: createdEvent.id,
       name: t.name.trim(),
       description: t.description.trim() || null,
@@ -777,8 +910,10 @@ export const EventEditorWizard = ({
       per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
       status: estadoDelTipo(t.active),
       sort_order: idx,
+      refundable_until_hours_before: refundHoursForDb(t.refundMode, t.refundHours),
+      transfer_allowed: t.transferAllowed,
     }));
-    const tiersRes = await supabase.from("ticket_tiers").insert(tiersToInsert).select("id");
+    const tiersRes = await supabase.from("ticket_tiers").insert(comoInserts(tiersToInsert)).select("id");
     try {
       expectRows(tiersRes, tiersToInsert.length);
     } catch (err) {
@@ -846,14 +981,21 @@ export const EventEditorWizard = ({
       const sales = t.dbId ? tierSalesMap[t.dbId] : undefined;
       const tierCap = t.capacity ? parseInt(t.capacity, 10) : null;
       const tierPriceC = priceEurToCents(t.priceEur || "0") ?? 0;
+      // Políticas: también en un tipo con ventas (valen para lo que se pida
+      // a partir de ahora; el editor lo avisa).
+      const politicas = {
+        refundable_until_hours_before: refundHoursForDb(t.refundMode, t.refundHours),
+        transfer_allowed: t.transferAllowed,
+      };
       if (t.dbId) {
         // Si tiene ventas: no toques price ni bajes capacity bajo sold
-        const update: TablesUpdate<"ticket_tiers"> = {
+        const update: TierUpdate = {
           name: t.name.trim(),
           description: t.description.trim() || null,
           per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
           status: estadoDelTipo(t.active),
           sort_order: idx,
+          ...politicas,
         };
         if (!sales?.hasSales) {
           update.price_cents = tierPriceC;
@@ -863,24 +1005,27 @@ export const EventEditorWizard = ({
 
         const upRes = await supabase
           .from("ticket_tiers")
-          .update(update)
+          .update(comoUpdate(update))
           .eq("id", t.dbId)
           .select("id");
         expectRows(upRes);
       } else {
         const insRes = await supabase
           .from("ticket_tiers")
-          .insert({
-            event_id: eid,
-            name: t.name.trim(),
-            description: t.description.trim() || null,
-            price_cents: tierPriceC,
-            currency: "EUR",
-            capacity: tierCap,
-            per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
-            status: estadoDelTipo(t.active),
-            sort_order: idx,
-          })
+          .insert(
+            comoInsert({
+              event_id: eid,
+              name: t.name.trim(),
+              description: t.description.trim() || null,
+              price_cents: tierPriceC,
+              currency: "EUR",
+              capacity: tierCap,
+              per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+              status: estadoDelTipo(t.active),
+              sort_order: idx,
+              ...politicas,
+            })
+          )
           .select("id");
         const [creado] = expectRows<{ id: string }>(insRes);
         // Si algo falla después y se vuelve a guardar, este tipo ya existe:
@@ -1072,10 +1217,10 @@ export const EventEditorWizard = ({
           {/* Body: layout 2-col en lg+, 1-col en mobile */}
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <main className="scrollbar-pasify min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7 md:py-8">
-              {loadingInitial ? (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
+              {loadingInitial || esperandoContexto ? (
+                <div className="flex h-full items-center justify-center text-muted-foreground" role="status">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Cargando evento…
+                  {mode === "create" ? "Preparando el formulario…" : "Cargando evento…"}
                 </div>
               ) : (
                 <>
@@ -1098,6 +1243,7 @@ export const EventEditorWizard = ({
                       venues={venues}
                       venueId={venueId}
                       timeZone={timeZone}
+                      placeName={venueActual?.city ?? null}
                       onVenueChange={(id) => {
                         const v = venues.find((x) => x.id === id);
                         const anterior = venues.find((x) => x.id === venueId);
@@ -1154,10 +1300,16 @@ export const EventEditorWizard = ({
                       editStatus={mode === "edit" ? originalStatus ?? "draft" : null}
                       disabled={submitting}
                       eventHasSales={eventHasSales}
+                      blockedReason={publishBlockedReason}
                     />
                   )}
                   {step === 5 && (
-                    <StepReview summary={summary} eventHasSales={eventHasSales} mode={mode} />
+                    <StepReview
+                      summary={summary}
+                      eventHasSales={eventHasSales}
+                      mode={mode}
+                      blockedReason={publishBlockedReason}
+                    />
                   )}
                 </>
               )}
@@ -1189,7 +1341,7 @@ export const EventEditorWizard = ({
               <Button
                 type="button"
                 onClick={goNext}
-                disabled={submitting || loadingInitial}
+                disabled={submitting || loadingInitial || esperandoContexto}
                 className="h-10"
                 style={{
                   background:
@@ -1209,7 +1361,8 @@ export const EventEditorWizard = ({
                     <Button
                       variant="outline"
                       type="button"
-                      disabled={submitting}
+                      disabled={submitting || !!publishBlockedReason}
+                      title={publishBlockedReason ?? undefined}
                       onClick={() => submit("published")}
                       className="h-10"
                     >
@@ -1339,6 +1492,7 @@ const StepWhenWhere = ({
   venues,
   venueId,
   timeZone,
+  placeName,
   onVenueChange,
   disabled,
 }: {
@@ -1351,6 +1505,8 @@ const StepWhenWhere = ({
   venueId: string | null;
   /** Zona horaria del local elegido (el día y las horas son los suyos). */
   timeZone?: string;
+  /** Ciudad del local elegido («Hora de <ciudad>»). */
+  placeName?: string | null;
   onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
@@ -1370,6 +1526,7 @@ const StepWhenWhere = ({
           onChange={onDateTimeChange}
           disabled={disabled}
           timeZone={timeZone}
+          placeName={placeName}
         />
       </section>
       <section>
@@ -1379,11 +1536,12 @@ const StepWhenWhere = ({
         </h3>
         {venues.length > 0 && (
           <div className="mb-4">
-            <Label htmlFor="evt-venue" className="text-xs">
+            {/* "evt-local": "evt-venue" es el nombre del local, más abajo. */}
+            <Label htmlFor="evt-local" className="text-xs">
               Local *
             </Label>
             <Select value={venueId ?? ""} onValueChange={onVenueChange} disabled={disabled}>
-              <SelectTrigger id="evt-venue" className="mt-1.5">
+              <SelectTrigger id="evt-local" className="mt-1.5">
                 <SelectValue placeholder="Elige el local" />
               </SelectTrigger>
               <SelectContent>
@@ -1425,7 +1583,7 @@ const StepTickets = ({
   <StepShell
     eyebrow="Paso 03"
     title={<>Tipos de <span style={serif} className="text-orange-500">entrada</span>.</>}
-    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio y cupo. Lo que ya se ha vendido queda protegido automáticamente."
+    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente."
   >
     <div className="mx-auto max-w-3xl">
       <TicketTiersBuilder
@@ -1537,6 +1695,7 @@ const StepPublish = ({
   editStatus,
   disabled,
   eventHasSales,
+  blockedReason,
 }: {
   willPublish: boolean;
   onWillPublishChange: (v: boolean) => void;
@@ -1544,6 +1703,8 @@ const StepPublish = ({
   editStatus: string | null;
   disabled?: boolean;
   eventHasSales: boolean;
+  /** Motivo por el que no se puede publicar (organización suspendida). */
+  blockedReason?: string | null;
 }) => (
   <StepShell
     eyebrow="Paso 05"
@@ -1551,6 +1712,7 @@ const StepPublish = ({
     subtitle="Guárdalo como borrador para seguir ajustándolo o publícalo ya en el calendario."
   >
     <div className="mx-auto max-w-3xl">
+      {blockedReason && <PublishBlockedNote reason={blockedReason} published={editStatus === "published"} />}
       {editStatus ? (
         <div className="rounded-2xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -1569,10 +1731,11 @@ const StepPublish = ({
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-start gap-3">
           <Switch
-            checked={willPublish}
+            checked={willPublish && !blockedReason}
             onCheckedChange={onWillPublishChange}
-            disabled={disabled}
+            disabled={disabled || !!blockedReason}
             className="mt-1"
+            aria-label="Publicar al guardar"
           />
           <div className="flex-1">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -1616,98 +1779,131 @@ const StepPublish = ({
   </StepShell>
 );
 
+/**
+ * Aviso de que no se puede publicar (organización suspendida). Un evento que
+ * ya estaba publicado no se despublica: se oculta al público mientras dure.
+ */
+const PublishBlockedNote = ({ reason, published }: { reason: string; published?: boolean }) => (
+  <div
+    className="mb-4 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[12px] leading-relaxed text-foreground"
+    role="note"
+  >
+    <AlertTriangle className="mt-[1px] h-4 w-4 shrink-0 text-destructive" />
+    <span>
+      {reason}{" "}
+      {published
+        ? "Mientras dure, este evento no se ve en la web ni vende entradas; puedes seguir editándolo."
+        : "Puedes seguir editando y guardarlo como borrador."}
+    </span>
+  </div>
+);
+
 const StepReview = ({
   summary,
   eventHasSales,
   mode,
+  blockedReason,
 }: {
   summary: EventSummary;
   eventHasSales: boolean;
   mode: EditorMode;
-}) => (
-  <StepShell
-    eyebrow="Paso 06"
-    title={<>Revisa antes de <span style={serif} className="text-orange-500">guardar</span>.</>}
-    subtitle="Comprueba que toda la información del evento es correcta. Los clientes verán exactamente esto."
-  >
-    <div className="mx-auto grid max-w-4xl grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-5">
-        <ReviewRow label="Título" value={summary.title || "—"} />
-        <ReviewRow
-          label="Fecha"
-          value={
-            summary.date
-              ? new Date(`${summary.date}T${summary.startTime || "00:00"}:00`).toLocaleDateString(
-                  "es-ES",
-                  { weekday: "long", day: "numeric", month: "long", year: "numeric" }
-                )
-              : "—"
-          }
-        />
-        <ReviewRow
-          label="Horario"
-          value={
-            summary.startTime
-              ? `${summary.startTime}h${summary.endTime ? ` → ${summary.endTime}h${summary.crossesMidnight ? " (+1)" : ""}` : ""}`
-              : "—"
-          }
-        />
-        <ReviewRow
-          label="Ubicación"
-          value={
-            [summary.venueName, summary.address, summary.city].filter(Boolean).join(" · ") || "—"
-          }
-        />
-        <ReviewRow
-          label="Tickets"
-          value={
-            summary.ticketCount > 0
-              ? `${summary.ticketCount} tipo${summary.ticketCount === 1 ? "" : "s"}${
-                  summary.minPriceEur != null
-                    ? ` · desde ${summary.minPriceEur.toFixed(2)}€`
-                    : ""
-                }`
-              : "Sin tickets activos"
-          }
-        />
-        <ReviewRow
-          label="Aforo total"
-          value={summary.totalCapacity != null ? `${summary.totalCapacity} entradas` : "Sin límite explícito"}
-        />
-        <ReviewRow
-          label="Visibilidad"
-          value={
-            mode === "edit"
-              ? summary.willPublish
-                ? "Publicado (sigue igual al guardar)"
-                : "Sin publicar"
-              : summary.willPublish
-              ? "Se publicará al guardar"
-              : "Borrador (no visible)"
-          }
-        />
-        {eventHasSales && (
-          <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-[12px] leading-relaxed text-orange-200">
-            <strong className="font-semibold">Edición con ventas:</strong> los
-            tipos de entrada con tickets vendidos han mantenido su precio. El
-            resto de cambios se aplicará al guardar.
-          </div>
-        )}
-        {mode === "duplicate" && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-[12px] leading-relaxed text-emerald-200">
-            <strong className="font-semibold">Modo duplicar:</strong> esto
-            creará un evento NUEVO en borrador, no afectará al original.
-          </div>
-        )}
+  blockedReason?: string | null;
+}) => {
+  const politicas = summarizePolicies(summary.policies ?? []);
+  return (
+    <StepShell
+      eyebrow="Paso 06"
+      title={<>Revisa antes de <span style={serif} className="text-orange-500">guardar</span>.</>}
+      subtitle="Comprueba que toda la información del evento es correcta. Los clientes verán exactamente esto."
+    >
+      <div className="mx-auto grid max-w-4xl grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-5">
+          {blockedReason && (
+            <PublishBlockedNote reason={blockedReason} published={mode === "edit" && summary.willPublish} />
+          )}
+          <ReviewRow label="Título" value={summary.title || "—"} />
+          <ReviewRow
+            label="Fecha"
+            value={
+              summary.date
+                ? new Date(`${summary.date}T${summary.startTime || "00:00"}:00`).toLocaleDateString(
+                    "es-ES",
+                    { weekday: "long", day: "numeric", month: "long", year: "numeric" }
+                  )
+                : "—"
+            }
+          />
+          <ReviewRow
+            label="Horario"
+            value={
+              summary.startTime
+                ? `${summary.startTime}h${
+                    summary.endTime ? ` → ${summary.endTime}h${summary.crossesMidnight ? " (+1)" : ""}` : ""
+                  }${summary.timeZoneLabel ? ` · ${summary.timeZoneLabel}` : ""}`
+                : "—"
+            }
+          />
+          <ReviewRow
+            label="Ubicación"
+            value={
+              [summary.venueName, summary.address, summary.city].filter(Boolean).join(" · ") || "—"
+            }
+          />
+          <ReviewRow
+            label="Tickets"
+            value={
+              summary.ticketCount > 0
+                ? `${summary.ticketCount} tipo${summary.ticketCount === 1 ? "" : "s"}${
+                    summary.minPriceEur != null
+                      ? ` · desde ${summary.minPriceEur.toFixed(2)}€`
+                      : ""
+                  }`
+                : "Sin tickets activos"
+            }
+          />
+          <ReviewRow
+            label="Aforo total"
+            value={summary.totalCapacity != null ? `${summary.totalCapacity} entradas` : "Sin límite explícito"}
+          />
+          <ReviewRow label="Devoluciones" value={politicas.refunds.length ? politicas.refunds : "—"} />
+          <ReviewRow label="Transferencia" value={politicas.transfers.length ? politicas.transfers : "—"} />
+          <ReviewRow
+            label="Visibilidad"
+            value={
+              mode === "edit"
+                ? summary.willPublish
+                  ? "Publicado (sigue igual al guardar)"
+                  : "Sin publicar"
+                : summary.willPublish
+                ? "Se publicará al guardar"
+                : "Borrador (no visible)"
+            }
+          />
+          {eventHasSales && (
+            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-[12px] leading-relaxed text-orange-200">
+              <strong className="font-semibold">Edición con ventas:</strong> los
+              tipos de entrada con tickets vendidos han mantenido su precio. El
+              resto de cambios se aplicará al guardar; las devoluciones y la
+              transferencia, a las solicitudes nuevas.
+            </div>
+          )}
+          {mode === "duplicate" && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-[12px] leading-relaxed text-emerald-200">
+              <strong className="font-semibold">Modo duplicar:</strong> esto
+              creará un evento NUEVO en borrador, no afectará al original.
+            </div>
+          )}
+        </div>
+        <div>
+          <EventSummaryCard summary={summary} defaultCollapsed={false} />
+        </div>
       </div>
-      <div>
-        <EventSummaryCard summary={summary} defaultCollapsed={false} />
-      </div>
-    </div>
-  </StepShell>
-);
+    </StepShell>
+  );
+};
 
-const ReviewRow = ({ label, value }: { label: string; value: string }) => (
+/** Fila del resumen; con varias líneas (una política por tipo), una debajo de otra. */
+const ReviewRow = ({ label, value }: { label: string; value: string | string[] }) => (
   <div className="flex items-start gap-4 border-b border-border/60 pb-4">
     <div
       className="w-32 shrink-0 text-[10px] uppercase text-muted-foreground"
@@ -1715,8 +1911,20 @@ const ReviewRow = ({ label, value }: { label: string; value: string }) => (
     >
       {label}
     </div>
-    <div className="flex-1 text-sm font-medium capitalize text-foreground">
-      {value}
+    <div className="flex-1 text-sm font-medium text-foreground first-letter:uppercase">
+      {Array.isArray(value) ? (
+        value.length === 1 ? (
+          value[0]
+        ) : (
+          <ul className="space-y-1">
+            {value.map((v) => (
+              <li key={v}>{v}</li>
+            ))}
+          </ul>
+        )
+      ) : (
+        value
+      )}
     </div>
   </div>
 );

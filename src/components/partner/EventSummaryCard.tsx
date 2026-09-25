@@ -1,14 +1,17 @@
 import { useState } from "react";
 import {
+  ArrowLeftRight,
   CalendarDays,
   ChevronDown,
   Clock,
   Eye,
   EyeOff,
   MapPin,
+  RotateCcw,
   Ticket as TicketIcon,
   Users,
 } from "lucide-react";
+import { summarizePolicies, type TierPolicySummary } from "@/components/partner/tierPolicy";
 
 /**
  * EventSummaryCard — resumen sticky en desktop, accordion en móvil.
@@ -40,6 +43,10 @@ export interface EventSummary {
   totalCapacity: number | null;
   imageUrl: string | null;
   willPublish: boolean;
+  /** Con qué hora se leen el día y las horas: «Hora de Santa Cruz de Tenerife». */
+  timeZoneLabel?: string;
+  /** Devoluciones y transferencia de los tipos activos. */
+  policies?: TierPolicySummary[];
 }
 
 interface Props {
@@ -78,6 +85,7 @@ const formatPrice = (eur: number | null): string => {
 
 export const EventSummaryCard = ({ summary, defaultCollapsed = true }: Props) => {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const politicas = summarizePolicies(summary.policies ?? []);
 
   return (
     <aside
@@ -171,6 +179,9 @@ export const EventSummaryCard = ({ summary, defaultCollapsed = true }: Props) =>
           </Row>
           <Row icon={<Clock className="h-4 w-4" />} label="Horario">
             {formatTimeRange(summary.startTime, summary.endTime, summary.crossesMidnight)}
+            {summary.timeZoneLabel && summary.startTime && (
+              <span className="block text-[12px] text-muted-foreground">{summary.timeZoneLabel}</span>
+            )}
           </Row>
           <Row icon={<MapPin className="h-4 w-4" />} label="Dónde">
             {summary.venueName || summary.address || summary.city ? (
@@ -210,6 +221,16 @@ export const EventSummaryCard = ({ summary, defaultCollapsed = true }: Props) =>
               <span style={mono}>{summary.totalCapacity} entradas</span>
             </Row>
           )}
+          {politicas.refunds.length > 0 && (
+            <Row icon={<RotateCcw className="h-4 w-4" />} label="Devoluciones">
+              <PolicyLines lines={politicas.refunds} />
+            </Row>
+          )}
+          {politicas.transfers.length > 0 && (
+            <Row icon={<ArrowLeftRight className="h-4 w-4" />} label="Transferencia">
+              <PolicyLines lines={politicas.transfers} />
+            </Row>
+          )}
 
           <div className="!mt-4 border-t border-border pt-3">
             <div
@@ -238,6 +259,20 @@ export const EventSummaryCard = ({ summary, defaultCollapsed = true }: Props) =>
     </aside>
   );
 };
+
+/** Una línea por política (una sola si todos los tipos tienen la misma). */
+const PolicyLines = ({ lines }: { lines: string[] }) =>
+  lines.length === 1 ? (
+    <span>{lines[0]}</span>
+  ) : (
+    <ul className="space-y-0.5">
+      {lines.map((l) => (
+        <li key={l} className="text-[13px]">
+          {l}
+        </li>
+      ))}
+    </ul>
+  );
 
 const Row = ({
   icon,

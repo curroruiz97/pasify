@@ -1,8 +1,8 @@
-import { CalendarDays, Clock, Moon } from "lucide-react";
+import { CalendarDays, Clock, Globe2, Moon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { PasifyDateInput } from "@/components/ui/pasify-date-input";
 import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
-import { deviceTimeZone, zonedWallTimeToDate } from "@/components/partner/zonedTime";
+import { isoToWallClock, timeZoneLabel, zonedWallTimeToDate } from "@/components/partner/zonedTime";
 
 /**
  * EventDateTimeSection — selector fecha + hora inicio + hora fin separados.
@@ -21,7 +21,8 @@ import { deviceTimeZone, zonedWallTimeToDate } from "@/components/partner/zonedT
  * (`venues.timezone`), no los del móvil de quien crea el evento. Un local de
  * Canarias editado desde Madrid (o al revés) ya no se desplaza una hora. Sin
  * zona (local sin elegir, o la del local no es válida) se usa la del
- * dispositivo, como antes.
+ * dispositivo, como antes. Se rotula «Hora de <ciudad del local>» y, si el
+ * dispositivo está en otra zona, se dice qué hora es ahora en cada sitio.
  *
  * No persiste — el padre llama a `composeIsoStartEnd(...)` antes del INSERT.
  */
@@ -43,6 +44,8 @@ interface Props {
   disabled?: boolean;
   /** Zona horaria del local (IANA, p. ej. "Europe/Madrid"). */
   timeZone?: string;
+  /** Ciudad del local, para rotular «Hora de <ciudad>». */
+  placeName?: string | null;
 }
 
 /**
@@ -97,14 +100,29 @@ export const validateDateTime = (v: DateTimeValue, timeZone?: string): string | 
   return null;
 };
 
-export const EventDateTimeSection = ({ value, onChange, disabled, timeZone }: Props) => {
+export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, placeName }: Props) => {
   const { crossesMidnight } = composeIsoStartEnd(value, timeZone);
-  const differsFromDevice = !!timeZone && deviceTimeZone() !== timeZone;
+  const label = timeZoneLabel(placeName, timeZone);
+  // Solo se avisa si el reloj del local y el del dispositivo marcan ahora
+  // horas distintas (Europe/Madrid y Europe/Paris dan la misma: nada que decir).
+  const ahoraLocal = timeZone ? isoToWallClock(new Date(), timeZone)?.time : undefined;
+  const ahoraAqui = isoToWallClock(new Date())?.time;
+  const otraHora = !!ahoraLocal && !!ahoraAqui && ahoraLocal !== ahoraAqui;
+  const lugar = placeName?.trim() || "el local";
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="sm:col-span-3">
+      <div
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] text-foreground"
+        style={mono}
+        data-testid="evt-time-zone"
+      >
+        <Globe2 className="h-3.5 w-3.5 text-orange-500" />
+        {label}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
           <Label htmlFor="evt-date" className="flex items-center gap-2 text-xs">
             <CalendarDays className="h-3.5 w-3.5 text-orange-500" />
             Día del evento *
@@ -148,17 +166,12 @@ export const EventDateTimeSection = ({ value, onChange, disabled, timeZone }: Pr
             />
           </div>
         </div>
-        <div className="hidden sm:block">
-          <Label className="text-xs invisible">spacer</Label>
-          <div className="mt-1.5 flex h-10 items-center text-[11px] text-muted-foreground">
-            <span style={mono}>{timeZone ? `Hora del local · ${timeZone}` : "Zona horaria local"}</span>
-          </div>
-        </div>
       </div>
 
-      {timeZone && differsFromDevice && (
+      {otraHora && (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Las horas son las del local ({timeZone}), no las de este dispositivo.
+          Las horas son las de {lugar}, no las de este dispositivo: ahora allí son las {ahoraLocal} y aquí las{" "}
+          {ahoraAqui}. Los compradores ven la hora de {lugar}.
         </p>
       )}
 

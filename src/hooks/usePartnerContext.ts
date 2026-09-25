@@ -76,6 +76,13 @@ export interface PartnerOrg {
   contact_phone: string | null;
   vat_id: string | null;
   metadata: Record<string, unknown>;
+  /**
+   * Suspendida por Pasify (organizations.suspended_at): no puede publicar ni
+   * vender; la puerta, los reembolsos y el panel siguen. null = no. Puede
+   * faltar en un contexto guardado antes de leerla o si la columna aún no
+   * existe en la BD.
+   */
+  suspended_at?: string | null;
 }
 
 export interface PartnerVenue {
@@ -158,6 +165,45 @@ interface Snapshot {
 
 const SNAPSHOT_VACIO: Snapshot = { status: null, org: null, brand: null, venue: null, venues: [] };
 
+/** Columna que puede no estar aún en la BD (o en los tipos generados). */
+const COLUMNA_INEXISTENTE = new Set(["42703", "PGRST204"]);
+
+type RespuestaSuelta = PromiseLike<{
+  data: { suspended_at?: string | null } | null;
+  error: { message: string; code?: string | null } | null;
+}>;
+
+/**
+ * Suspensión de la organización, en su propia consulta y sin poder romper el
+ * contexto: si la columna aún no existe (la migración de la suspensión va
+ * aparte) o no se puede leer, el panel sigue como si no estuviera suspendida.
+ * El servidor rechaza igualmente publicar y vender.
+ */
+async function leerSuspension(orgId: string): Promise<string | null> {
+  try {
+    // Sin tipos: organizations.suspended_at aún no está en los generados.
+    const sinTipos = supabase as unknown as {
+      from: (t: "organizations") => {
+        select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => RespuestaSuelta } };
+      };
+    };
+    const { data, error } = await conTimeout(
+      sinTipos.from("organizations").select("suspended_at").eq("id", orgId).maybeSingle(),
+      "organizations.suspended_at",
+    );
+    if (error) {
+      if (!COLUMNA_INEXISTENTE.has(error.code ?? "")) {
+        console.warn("[usePartnerContext] suspensión:", error.message);
+      }
+      return null;
+    }
+    return data?.suspended_at ?? null;
+  } catch (err) {
+    console.warn("[usePartnerContext] suspensión:", getErrorMessage(err));
+    return null;
+  }
+}
+
 async function leerContexto(): Promise<Snapshot> {
   try {
     // 1) Llama a la RPC que combina todas las senales server-side.
@@ -201,9 +247,10 @@ async function leerContexto(): Promise<Snapshot> {
     if (!mapped.primaryOrgId) return { status: mapped, org: null, brand: null, venue: null, venues: [] };
 
     // 2) Fila completa de la org, 3) brand asociado (create_organization
-    //    crea exactamente 1) y 4) TODOS los venues activos (multi-local,
-    //    ver migración 0011). Son independientes: en paralelo.
-    const [orgRes, brandRes, venuesRes] = await Promise.all([
+    //    crea exactamente 1), 4) TODOS los venues activos (multi-local,
+    //    ver migración 0011) y 5) si Pasify la ha suspendido. Son
+    //    independientes: en paralelo.
+    const [orgRes, brandRes, venuesRes, suspendedAt] = await Promise.all([
       conTimeout(
         supabase
           .from("organizations")
@@ -237,6 +284,7 @@ async function leerContexto(): Promise<Snapshot> {
           .order("created_at", { ascending: true }),
         "venues",
       ),
+      leerSuspension(mapped.primaryOrgId),
     ]);
     const fallo = orgRes.error ?? brandRes.error ?? venuesRes.error;
     if (fallo) throw fallo;
@@ -247,9 +295,10 @@ async function leerContexto(): Promise<Snapshot> {
       (mapped.primaryVenueId
         ? list.find((v) => v.id === mapped.primaryVenueId)
         : null) ?? list[0] ?? null;
+    const org = (orgRes.data as PartnerOrg | null) ?? null;
     return {
       status: mapped,
-      org: (orgRes.data as PartnerOrg | null) ?? null,
+      org: org ? { ...org, suspended_at: suspendedAt } : null,
       brand: (brandRes.data as PartnerBrand | null) ?? null,
       venues: list,
       venue: primary,
