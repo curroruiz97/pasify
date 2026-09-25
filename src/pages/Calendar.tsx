@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, MapPin, ChevronDown, Sparkles, LayoutGrid, CalendarDays } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
-import { useCalendarEvents, useInvalidateEvents } from "@/hooks/useEvents";
-import { type CalendarEvent } from "@/components/calendar/EventListCard";
+import { useCalendarEvents, useInvalidateEvents, type CalendarEvent } from "@/hooks/useEvents";
 import EventPosterCard from "@/components/calendar/EventPosterCard";
 import MonthCalendarView from "@/components/calendar/MonthCalendarView";
 import CitySelector from "@/components/shared/CitySelector";
@@ -13,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedMarqueeHero } from "@/components/ui/hero-3";
 import { useToast } from "@/hooks/use-toast";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
+import { loginPathWithNext } from "@/lib/eventLinks";
 import { DEFAULT_CITY } from "@/constants/spanishCities";
 import { DEFAULT_COUNTRY, getCountryByCode } from "@/constants/countries";
 
@@ -40,8 +40,10 @@ const Calendar = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
-  // /e/:id → 302 → /calendar?event=<id>. We highlight the matching card
-  // and scroll to it once the event list has loaded.
+  // /calendar?event=<id>: vuelta del login tras pulsar "Comprar" sin sesión
+  // (y enlaces antiguos). Resaltamos esa tarjeta y la acercamos en cuanto
+  // carga la lista. Los enlaces compartidos (/e/:id) ya abren la página del
+  // evento, que no depende de la ciudad elegida.
   const focusEventId = searchParams.get("event");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
@@ -83,15 +85,14 @@ const Calendar = () => {
   const { invalidateAll } = useInvalidateEvents();
 
   // Once we know the user + the visible events, fetch which of those they
-  // already participate in so the inline button shows "Mi entrada" instead
-  // of "Participar".
+  // already participate in so the card shows "Mi entrada" (y "Comprar más").
   useEffect(() => {
     if (!authedUserId || events.length === 0) {
       // Solo limpiar si ya hay algo (evita re-renders innecesarios → loops).
       setParticipantIds((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
-    const eventIds = (events as CalendarEvent[]).map((e) => e.id);
+    const eventIds = events.map((e) => e.id);
     let cancelled = false;
     (async () => {
       // Pasify: la participación se materializa con un ticket pagado, no con
@@ -128,22 +129,27 @@ const Calendar = () => {
     eventsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  // When the user lands here from /e/:id, scroll to the matching card
-  // and pulse a highlight ring so they know which one was shared.
+  // Con ?event=<id>, acercamos esa tarjeta y la resaltamos un momento para
+  // que se vea cuál era.
   useEffect(() => {
     if (!focusEventId || events.length === 0) return;
-    const exists = (events as CalendarEvent[]).some((e) => e.id === focusEventId);
+    const exists = events.some((e) => e.id === focusEventId);
     if (!exists) return;
+    // La tarjeta solo está en la vista de pósters (sin guardarlo como preferida).
+    setView("posters");
     setHighlightedId(focusEventId);
-    // Defer until the card is in the DOM
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`event-card-${focusEventId}`);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
     const timer = window.setTimeout(() => setHighlightedId(null), 4000);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusEventId, events.length]);
+
+  // Ya con la tarjeta pintada (y la vista de pósters puesta), la acercamos.
+  useEffect(() => {
+    if (!highlightedId) return;
+    document
+      .getElementById(`event-card-${highlightedId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedId]);
 
   // Realtime: any event change in the city refreshes the list immediately.
   useEffect(() => {
@@ -176,20 +182,17 @@ const Calendar = () => {
   // en `src/hooks/useTicketCheckout.ts` y la usa también `PublicPartnerPage`.
   const { checkout: buyTicket, pendingId: buyingId, checkoutSheet } = useTicketCheckout();
 
-  // handleParticipate — wrapper específico del Calendar que añade dos atajos
-  // antes de delegar al hook:
-  //   (a) auth gate con returnTo=/calendar
-  //   (b) si ya tienes ticket del evento → ir directo al wallet (no compra)
-  const handleParticipate = async (event: CalendarEvent) => {
+  // "Mi entrada": a la cartera con el QR de este evento abierto.
+  // ClientDashboard lee ?wallet=... al montar y se lo pasa a WalletSheet.
+  const handleViewTicket = (event: CalendarEvent) => {
+    navigate(`/client-dashboard?wallet=${encodeURIComponent(event.id)}`);
+  };
+
+  // Comprar (también "Comprar más" si ya tiene entrada: otra más u otro
+  // tipo). Sin sesión, al login, que vuelve aquí con la tarjeta resaltada.
+  const handleBuy = async (event: CalendarEvent) => {
     if (!authedUserId) {
-      navigate(`/register-client?next=${encodeURIComponent("/calendar")}`);
-      return;
-    }
-    if (participantIds.has(event.id)) {
-      // Already participating → drop straight into the Wallet sheet
-      // with this event's QR card open. ClientDashboard reads the
-      // ?wallet=... param at mount and forwards it to WalletSheet.
-      navigate(`/client-dashboard?wallet=${encodeURIComponent(event.id)}`);
+      navigate(loginPathWithNext(`/calendar?event=${encodeURIComponent(event.id)}`));
       return;
     }
     // Mantén el optimistic Set local para que la card muestre estado
@@ -211,6 +214,20 @@ const Calendar = () => {
       });
     }
   };
+
+  // Misma tarjeta en la cuadrícula de pósters y en la lista del día elegido
+  // en la vista de calendario.
+  const renderPosterCard = (ev: CalendarEvent) => (
+    <EventPosterCard
+      key={ev.id}
+      event={ev}
+      isParticipant={participantIds.has(ev.id)}
+      participating={participatingIds.has(ev.id) || buyingId === ev.id}
+      highlighted={highlightedId === ev.id}
+      onBuy={handleBuy}
+      onViewTicket={handleViewTicket}
+    />
+  );
 
   const handleBack = () => {
     if (isAuthed) {
@@ -357,23 +374,10 @@ const Calendar = () => {
             </p>
           </div>
         ) : view === "calendar" ? (
-          <MonthCalendarView
-            events={events as CalendarEvent[]}
-            onEventClick={handleParticipate}
-          />
+          <MonthCalendarView events={events} renderEvent={renderPosterCard} />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-            {(events as CalendarEvent[]).map((ev) => (
-              <EventPosterCard
-                key={ev.id}
-                event={ev}
-                isAuthed={isAuthed}
-                isParticipant={participantIds.has(ev.id)}
-                participating={participatingIds.has(ev.id) || buyingId === ev.id}
-                highlighted={highlightedId === ev.id}
-                onParticipate={handleParticipate}
-              />
-            ))}
+            {events.map(renderPosterCard)}
           </div>
         )}
       </main>

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
+import { EVENT_OPEN_WITHOUT_END_MS, isEventOver } from "@/components/tickets/ticketUtils";
 
 /**
  * Pasify · hooks de eventos.
@@ -18,13 +19,11 @@ import { qk } from "@/lib/cache/keys";
  * RLS pública (`events_public_read`) deja leer 'published' y 'past'.
  *
  * Los hooks devuelven el row Pasify + ALIASES legacy (`start_date`, `end_date`,
- * `profile_image_url`) para no romper los componentes legacy (EventListCard,
- * EventPosterCard, MonthCalendarView) que aún usan los nombres viejos.
+ * `profile_image_url`) que aún usan las tarjetas del calendario
+ * (EventPosterCard, MonthCalendarView).
  */
 
 const STALE_TIME = 60 * 1000;
-/** El calendario enseña lo de las últimas 12 h en adelante (noches en curso). */
-const VENTANA_PASADO_MS = 12 * 60 * 60 * 1000;
 
 type Profile = {
   id: string;
@@ -53,34 +52,31 @@ type EventRow = {
   status: string;
 };
 
-const decorate = (e: EventRow, p: Profile | null) => {
-  // Si no hay date_end usamos date_start + 4h por defecto (la mayoría de los
-  // eventos nocturnos duran <4h y los consumers legacy esperan end_date no-null).
-  const effectiveEnd =
-    e.date_end ??
-    new Date(new Date(e.date_start).getTime() + 4 * 60 * 60 * 1000).toISOString();
+const decorate = (e: EventRow, p: Profile | null) => ({
+  ...e,
+  // ====== Aliases legacy (Pasify) para back-compat ======
+  start_date: e.date_start,
+  // Sin hora de fin (es opcional) no se inventa ninguna: antes salía
+  // "23:00 → 03:00" en eventos que nadie había dicho que acabaran a las 3.
+  end_date: e.date_end,
+  discount_percentage: null as number | null,
+  price: e.price_cents / 100,
+  location_name: e.venue_name,
+  // ============================================================
+  profiles: p
+    ? {
+        id: p.id,
+        business_name: p.business_name,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        profile_image_url: p.avatar_url, // legacy alias
+        avatar_url: p.avatar_url,
+      }
+    : null,
+});
 
-  return {
-    ...e,
-    // ====== Aliases legacy (Pasify) para back-compat ======
-    start_date: e.date_start,
-    end_date: effectiveEnd,
-    discount_percentage: null as number | null,
-    price: e.price_cents / 100,
-    location_name: e.venue_name,
-    // ============================================================
-    profiles: p
-      ? {
-          id: p.id,
-          business_name: p.business_name,
-          first_name: p.first_name,
-          last_name: p.last_name,
-          profile_image_url: p.avatar_url, // legacy alias
-          avatar_url: p.avatar_url,
-        }
-      : null,
-  };
-};
+/** Evento del calendario público, tal como lo pintan sus tarjetas. */
+export type CalendarEvent = ReturnType<typeof decorate>;
 
 const eventsQuery = () =>
   supabase
@@ -129,32 +125,37 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
   return events.map((e) => decorate(e, (e.partner_id && profilesMap.get(e.partner_id)) || null));
 };
 
-type CalendarEvent = ReturnType<typeof decorate>;
-
 // Lo guardado en el dispositivo puede ser de ayer: nunca se pinta un evento
-// que ya pasó, aunque venga de la caché (el refresco lo quita del todo).
-const sinPasados = (eventos: CalendarEvent[]): CalendarEvent[] => {
-  const corte = Date.now() - VENTANA_PASADO_MS;
-  return eventos.filter((e) => new Date(e.date_start).getTime() >= corte);
+// que ya terminó, aunque venga de la caché (el refresco lo quita del todo).
+const sinTerminados = (eventos: CalendarEvent[]): CalendarEvent[] => {
+  const ahora = Date.now();
+  return eventos.filter((e) => !isEventOver(e, ahora));
 };
 
 /* ============ useCalendarEvents (página /calendar pública) ============ */
-// Events 'published' + futuros (date_start >= ahora-12h para cubrir noches
-// que ya empezaron pero siguen activas). Filtra por city si llega.
+// Eventos 'published' que siguen a la venta, con la MISMA regla que el
+// servidor (`create_ticket_order`, ver isEventOver): hasta `date_end` o, sin
+// hora de fin, hasta 12 h después de empezar. Así salen las noches que ya
+// han empezado y los eventos de varios días en curso, y no los que ya
+// acabaron aunque empezaran hace poco. Filtra por city si llega.
 // Caché pública (qk.public.calendarEvents), guardada un día en el
 // dispositivo: al volver al calendario o recargar sale al instante.
 export const useCalendarEvents = (city?: string, _country?: string) => {
   return useQuery({
     queryKey: qk.public.calendarEvents(city ?? null),
     queryFn: async () => {
-      const cutoff = new Date(Date.now() - VENTANA_PASADO_MS).toISOString();
+      const ahora = Date.now();
+      const nowIso = new Date(ahora).toISOString();
+      const sinFinDesde = new Date(ahora - EVENT_OPEN_WITHOUT_END_MS).toISOString();
       return fetchEventsWithProfiles((q) => {
-        let r = q.eq("status", "published").gte("date_start", cutoff);
+        let r = q
+          .eq("status", "published")
+          .or(`date_end.gte.${nowIso},and(date_end.is.null,date_start.gte.${sinFinDesde})`);
         if (city) r = r.ilike("city", city);
         return r;
       });
     },
-    select: sinPasados,
+    select: sinTerminados,
     staleTime: STALE_TIME,
     refetchOnReconnect: "always",
   });

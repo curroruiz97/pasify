@@ -1,71 +1,84 @@
-import { Calendar, Share2, Loader2, Ticket } from "lucide-react";
+import { Calendar, Share2, Loader2, Plus, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { optimizedImage } from "@/lib/image";
-import { useToast } from "@/hooks/use-toast";
+import { shareEventLink } from "@/lib/eventLinks";
 import { Button } from "@/components/ui/button";
-import { eventPriceLabel } from "@/components/tickets/ticketUtils";
-import type { CalendarEvent } from "./EventListCard";
+import { eventPriceLabel, isEventOver } from "@/components/tickets/ticketUtils";
+import type { CalendarEvent } from "@/hooks/useEvents";
 
 interface EventPosterCardProps {
   event: CalendarEvent;
+  /** Ya tiene entrada de este evento: "Mi entrada" y, debajo, "Comprar más". */
   isParticipant?: boolean;
+  /** Compra en curso: spinner en el botón de comprar. */
   participating?: boolean;
-  isAuthed?: boolean;
   highlighted?: boolean;
-  onParticipate?: (event: CalendarEvent) => void;
+  /** Abre el selector de entradas (tipo y cantidad). */
+  onBuy?: (event: CalendarEvent) => void;
+  /** Abre la entrada de este evento en la cartera. */
+  onViewTicket?: (event: CalendarEvent) => void;
 }
 
-const formatRange = (startIso: string, endIso: string) => {
+/**
+ * "23:30" o, si el evento tiene hora de fin, "23:30 → 06:00". Sin hora de fin
+ * (es opcional) no se inventa ninguna.
+ */
+const formatRange = (startIso: string, endIso: string | null) => {
   const start = new Date(startIso);
+  const fmtTime = (d: Date) => format(d, "HH:mm");
+  if (!endIso) return fmtTime(start);
   const end = new Date(endIso);
   const sameDay =
     start.getFullYear() === end.getFullYear() &&
     start.getMonth() === end.getMonth() &&
     start.getDate() === end.getDate();
-  const fmtTime = (d: Date) => format(d, "HH:mm");
   return sameDay
     ? `${fmtTime(start)} → ${fmtTime(end)}`
     : `${format(start, "d MMM HH:mm", { locale: es })} → ${format(end, "d MMM HH:mm", { locale: es })}`;
 };
 
-// Self-contained event card — name + day + time + Participar button
+// Self-contained event card — name + day + time + Comprar button
 // inline so the user never needs to drill into a separate detail screen.
 const EventPosterCard = ({
   event,
   isParticipant,
   participating,
-  isAuthed,
   highlighted,
-  onParticipate,
+  onBuy,
+  onViewTicket,
 }: EventPosterCardProps) => {
   const { t } = useTranslation();
-  const { toast } = useToast();
 
   const dateChip = format(new Date(event.start_date), "EEE d 'de' MMMM", { locale: es });
-  const timeRange = formatRange(event.start_date, event.end_date);
+  const timeRange = formatRange(event.date_start, event.date_end);
   // `price` (euros) = `events.price_cents` / 100, el mínimo de sus tipos de
   // entrada: "Desde X €", o "Gratis".
   const priceLabel =
     event.price != null ? eventPriceLabel(Math.round(Number(event.price) * 100)) : null;
+  // Misma regla que el servidor para dejar de vender (ver isEventOver).
+  const over = isEventOver(event);
 
-  const handleShare = async (e: React.MouseEvent) => {
+  const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = window.location.origin + `/e/${event.id}`;
-    const text = "¿Y tú qué haces? ¿No te unes? 🎉";
-    try {
-      const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-      if (nav.share) {
-        await nav.share({ title: event.title, text, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        toast({ title: t("common.copied", "Enlace copiado") });
-      }
-    } catch {
-      // user dismissed
-    }
+    // Enlace de la web pública (también desde la app nativa), con vista previa.
+    void shareEventLink(event.id, event.title);
   };
+
+  const buyContent = participating ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : isParticipant ? (
+    <>
+      <Plus className="mr-1.5 h-3.5 w-3.5" />
+      {t("calendar.buyMore", "Comprar más")}
+    </>
+  ) : (
+    <>
+      <Ticket className="mr-1.5 h-3.5 w-3.5" />
+      {t("calendar.buyTickets", "Comprar entradas")}
+    </>
+  );
 
   return (
     <article
@@ -80,15 +93,7 @@ const EventPosterCard = ({
           (vertical posters get small black bands on the sides; better
           than cropping a face/title off-frame). */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-black">
-        {event.media_type === "video" && event.video_url ? (
-          <video
-            src={event.video_url}
-            className="h-full w-full object-contain"
-            muted
-            playsInline
-            preload="metadata"
-          />
-        ) : event.image_url ? (
+        {event.image_url ? (
           <img
             src={optimizedImage(event.image_url, "feed")}
             alt={event.title}
@@ -120,7 +125,7 @@ const EventPosterCard = ({
         </button>
       </div>
 
-      {/* Footer info — name + day chip + time + Participar */}
+      {/* Footer info — name + day chip + time + comprar */}
       <div className="flex flex-1 flex-col gap-3 p-4">
         <h3 className="break-words text-sm font-bold uppercase leading-tight tracking-wide text-foreground sm:text-base">
           {event.title}
@@ -140,28 +145,44 @@ const EventPosterCard = ({
           <p className="text-sm font-semibold text-foreground">{priceLabel}</p>
         )}
 
-        <Button
-          type="button"
-          onClick={() => onParticipate?.(event)}
-          disabled={participating}
-          size="sm"
-          className="mt-auto h-9 w-full rounded-full text-xs font-semibold"
-          variant={isParticipant ? "outline" : "default"}
-        >
-          {participating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isParticipant ? (
-            <>
+        {isParticipant ? (
+          // Ya tiene entrada: la ve en la cartera y puede comprar más (u otro tipo).
+          <div className="mt-auto flex flex-col gap-1.5">
+            <Button
+              type="button"
+              onClick={() => onViewTicket?.(event)}
+              size="sm"
+              className="h-9 w-full rounded-full text-xs font-semibold"
+              variant="outline"
+            >
               <Ticket className="mr-1.5 h-3.5 w-3.5" />
               {t("calendar.viewMyTicket", "Mi entrada")}
-            </>
-          ) : (
-            <>
-              <Ticket className="mr-1.5 h-3.5 w-3.5" />
-              {t("calendar.buyTickets", "Comprar entradas")}
-            </>
-          )}
-        </Button>
+            </Button>
+            {!over && (
+              <Button
+                type="button"
+                onClick={() => onBuy?.(event)}
+                disabled={participating}
+                size="sm"
+                className="h-8 w-full rounded-full text-xs font-semibold"
+                variant="ghost"
+              >
+                {buyContent}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => onBuy?.(event)}
+            disabled={participating || over}
+            size="sm"
+            className="mt-auto h-9 w-full rounded-full text-xs font-semibold"
+            variant="default"
+          >
+            {over ? t("calendar.eventOver", "Evento terminado") : buyContent}
+          </Button>
+        )}
       </div>
     </article>
   );

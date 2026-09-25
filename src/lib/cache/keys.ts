@@ -44,5 +44,9 @@ export const qk = {
     cities: () => ["public", "cities"] as const,
     partners: () => ["public", "partners"] as const,
     calendarEvents: (city: string | null) => ["public", "calendar-events", city] as const,
+    /** Ficha de un local (vista `public_partners`), página /p/:id. */
+    partner: (id: string) => ["public", "partner", id] as const,
+    /** Eventos publicados de un local, página /p/:id. */
+    partnerEvents: (id: string) => ["public", "partner-events", id] as const,
   },
 };

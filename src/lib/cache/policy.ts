@@ -55,6 +55,9 @@ function reglaPara(key: QueryKey): Regla {
     const recursoPublico = (key as readonly unknown[])[1];
     if (recursoPublico === "cities" || recursoPublico === "partners") return { maxAgeMs: 7 * DIA };
     if (recursoPublico === "calendar-events") return { maxAgeMs: DIA };
+    // Ficha de un local ya visitado: se ve también sin conexión.
+    if (recursoPublico === "partner") return { maxAgeMs: 7 * DIA };
+    if (recursoPublico === "partner-events") return { maxAgeMs: DIA };
     return null;
   }
   return null;

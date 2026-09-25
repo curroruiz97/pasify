@@ -3,8 +3,9 @@
  *
  * Funciones puras (sin React) que comparten el selector de entradas
  * (TierPickerSheet), la cartera (ClientDashboard + TicketQRModal), las
- * páginas de vuelta de Stripe (TicketSuccess, TicketReturn) y la entrada
- * pública (PublicTicket).
+ * páginas de vuelta de Stripe (TicketSuccess, TicketReturn), la entrada
+ * pública (PublicTicket) y las páginas públicas de venta (PublicEvent,
+ * calendario y ficha del local).
  *
  * Fechas: un evento se muestra SIEMPRE en su hora local (Europe/Madrid por
  * defecto), no en la del dispositivo. Quien abre la entrada desde Londres
@@ -25,6 +26,14 @@ export const MAX_TICKETS_PER_ORDER = 10;
 export function ticketDoorCode(qrToken: string | null | undefined): string | null {
   const hex = (qrToken ?? "").replace(/-/g, "");
   return hex.length >= 8 ? hex.slice(0, 8).toUpperCase() : null;
+}
+
+/**
+ * Referencia corta del pedido ("A1B2C3D4"). Mismo cálculo que
+ * `orderReference` en supabase/functions/_shared/email-templates.ts.
+ */
+export function orderReference(orderId: string | null | undefined): string {
+  return (orderId ?? "").replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 // ============================================================ precios
@@ -117,6 +126,29 @@ export function formatMomentLong(iso: string | null | undefined, tz?: string | n
   const date = formatIn(iso, tz, { day: "numeric", month: "long" });
   const time = formatEventTime(iso, tz);
   return date && time ? `${date} a las ${time}` : date;
+}
+
+/**
+ * Sin hora de fin (es opcional en el editor), un evento se sigue vendiendo
+ * hasta 12 horas después de empezar: la ventana de `create_ticket_order`.
+ */
+export const EVENT_OPEN_WITHOUT_END_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * ¿Ha terminado el evento? MISMA regla con la que el servidor deja de vender
+ * (`create_ticket_order`, migración 20260923120200_ticket_flow_v2.sql):
+ * termina en `date_end` o, si no tiene, 12 horas después de `date_start`.
+ * Antes la página daba por terminado un evento de las 23:00 sin hora de fin
+ * a la 1:01, justo con la cola en la puerta.
+ */
+export function isEventOver(
+  event: { date_start: string | null | undefined; date_end?: string | null },
+  now: number = Date.now()
+): boolean {
+  const end = toDate(event.date_end);
+  if (end) return end.getTime() < now;
+  const start = toDate(event.date_start);
+  return !!start && start.getTime() + EVENT_OPEN_WITHOUT_END_MS < now;
 }
 
 /** Piezas de las píldoras de fecha de las tarjetas: { day: "12", month: "oct" }. */

@@ -17,17 +17,19 @@ import {
   formatEventDate,
   formatEventTime,
   formatPriceCents,
+  isEventOver,
   tierAvailability,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
 
 /**
- * Página pública de un evento: `/#/e/:eventId`.
+ * Página pública de un evento: `/#/e/:eventId` (el enlace compartido es
+ * `/e/:eventId`, que pasa por api/e/[id].ts para la vista previa).
  *
  * Es el enlace que comparte el local (Instagram, WhatsApp, cartel con QR):
  * no depende de la ciudad del calendario ni de tener sesión para verla.
- * Comprar sí pide sesión (lo resuelve useTicketCheckout, que manda a
- * registrarse y vuelve aquí).
+ * Comprar sí pide sesión (lo resuelve useTicketCheckout, que manda al login
+ * con `next` y vuelve aquí).
  *
  * Datos: todo es lectura pública con RLS (eventos publicados o pasados,
  * tipos de entrada activos, locales activos, public_partners). Un borrador
@@ -145,6 +147,13 @@ const PublicEvent = () => {
     void load();
   }, [load]);
 
+  // Título de la pestaña: el del evento mientras se ve (y el de antes al salir).
+  useEffect(() => {
+    const previo = document.title;
+    return () => {
+      document.title = previo;
+    };
+  }, []);
   useEffect(() => {
     if (state.kind === "ready") document.title = `${state.data.event.title} · Pasify`;
   }, [state]);
@@ -231,9 +240,10 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
   const time = formatEventTime(event.date_start, tz);
   const place = [venueName, address, city].filter(Boolean).join(" · ");
   const mapsQuery = [venueName, address, city].filter(Boolean).join(", ");
-  const isPast =
-    event.status === "past" ||
-    new Date(event.date_end ?? event.date_start).getTime() < Date.now() - 2 * 60 * 60 * 1000;
+  // Misma regla que el servidor al vender (`create_ticket_order`): hasta
+  // `date_end` o, sin hora de fin, 12 h después de empezar. Antes se cerraba
+  // 2 h después del inicio: un evento de las 23:00 salía "terminado" a la 1:01.
+  const isPast = event.status === "past" || isEventOver(event);
 
   const tierRows = useMemo(
     () => tiers.map((t) => ({ tier: t, availability: tierAvailability(t) })),

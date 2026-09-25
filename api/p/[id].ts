@@ -1,24 +1,23 @@
-// Public shareable URL for an event:  https://pasifyy.vercel.app/e/<event-id>
-// (publicEventUrl / shareEventLink en src/lib/eventLinks.ts).
+// Enlace público de la ficha de un local:  https://pasifyy.vercel.app/p/<partner-id>
+// (publicPartnerUrl / sharePartnerLink en src/lib/eventLinks.ts).
 //
-// WhatsApp / Telegram / Facebook / Twitter / LinkedIn scrape the URL with a
-// non-JS crawler and look at the HTML <meta og:*> tags to build the link card.
-// Pasify es una SPA Vite (sin SSR) → desde React no podemos inyectar esas tags;
-// el bot sólo vería el index.html vacío. Por eso el enlace va sin `#`: lo que
-// hay detrás del `#` nunca llega al servidor.
+// Mismo patrón que api/e/[id].ts: los rastreadores de vista previa (WhatsApp,
+// Telegram, Meta, Twitter…) no ejecutan JS y la SPA no puede darles etiquetas
+// og:*; lo que va detrás del `#` ni siquiera llega al servidor.
 //
-// Este serverless function (Vercel):
-//   - Navegadores reales: 302 directo a la página del evento en la app,
-//     /#/e/<id> (PublicEvent), sin consultar nada. Antes iba a
-//     /#/calendar?event=<id>, que filtra por la ciudad de quien abre el
-//     enlace: si no era la del evento, no lo veía.
-//   - Rastreadores de vista previa: consulta el evento desde Supabase REST y
-//     sirve HTML con las tags og:* / twitter:* (imagen + título +
-//     descripción), con meta-refresh + JS replace por si lo abre un navegador.
-//   - Evento inexistente o retirado: también a /#/e/<id>, que ya dice "no
-//     disponible" y ofrece ver otros. Id que no es un UUID: al calendario.
+//   - Navegadores reales: 302 directo a la ficha en la app, /#/p/<id>
+//     (PublicPartnerPage), sin consultar nada.
+//   - Rastreadores: HTML con og:* / twitter:* del local (nombre, imagen y
+//     descripción) desde la vista pública `public_partners`, que ya filtra
+//     locales aprobados y no expone datos personales. Con meta-refresh + JS
+//     replace por si lo abre un navegador.
+//   - Local inexistente o no aprobado: también a /#/p/<id>, que dice "Local
+//     no encontrado". Id que no es un UUID: al calendario.
 //
-// Wired en vercel.json:  /e/:id  →  /api/e/:id
+// Autocontenido a propósito (sin imports relativos): el proyecto es ESM
+// ("type": "module") y cada función de api/ se despliega por separado.
+//
+// Wired en vercel.json:  /p/:id  →  /api/p/:id  (antes del catch-all).
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
@@ -26,9 +25,7 @@ const SUPABASE_ANON =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   "";
-// `SITE_URL` lo configuras en Vercel Dashboard → Settings → Environment Variables.
-// Temporal: pasifyy.vercel.app. Cuando uses el dominio definitivo (pasify.es)
-// solo cambias la env var, no toca código.
+// Igual que en api/e/[id].ts: `SITE_URL` en Vercel → Environment Variables.
 const SITE_URL = (process.env.SITE_URL || "https://pasifyy.vercel.app").replace(
   /\/$/,
   ""
@@ -36,8 +33,7 @@ const SITE_URL = (process.env.SITE_URL || "https://pasifyy.vercel.app").replace(
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Link-preview crawlers (WhatsApp/Telegram/Meta/Twitter/LinkedIn/Discord/
-// Slack/Pinterest/Skype). Solo a ellos servimos el HTML con og:*.
+// Link-preview crawlers: la misma lista que api/e/[id].ts.
 const LINK_PREVIEW_BOT_RE =
   /WhatsApp|TelegramBot|facebookexternalhit|facebookcatalog|Facebot|Twitterbot|LinkedInBot|Slackbot|Discordbot|SkypeUriPreview|Pinterest|GoogleBot|bingbot|Embedly|Iframely|Applebot/i;
 
@@ -52,22 +48,25 @@ interface VercelResponse {
   end(body?: string): void;
 }
 
+interface PartnerRow {
+  id: string;
+  business_name: string | null;
+  business_description: string | null;
+  city: string | null;
+  avatar_url: string | null;
+  cover_image_url: string | null;
+}
+
 const escapeHtml = (s: string) =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
   );
 
-interface EventRow {
-  id: string;
-  title: string | null;
-  description: string | null;
-  image_url: string | null;
-  date_start: string;
-  date_end: string | null;
-  city: string | null;
-  venue_name: string | null;
-  price_cents: number | null;
-}
+/** Texto en una línea y como mucho `max` caracteres (las tarjetas cortan el resto). */
+const summarize = (s: string | null, max = 200) => {
+  const clean = (s ?? "").replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
+};
 
 function redirect(res: VercelResponse, location: string, cacheControl: string) {
   res.statusCode = 302;
@@ -76,12 +75,12 @@ function redirect(res: VercelResponse, location: string, cacheControl: string) {
   return res.end();
 }
 
-/** El evento con la clave pública (RLS: solo publicados o pasados). null si no está o falla. */
-async function fetchEvent(id: string): Promise<EventRow | null> {
+/** El local desde `public_partners` con la clave pública. null si no está o falla. */
+async function fetchPartner(id: string): Promise<PartnerRow | null> {
   if (!SUPABASE_URL || !SUPABASE_ANON) return null;
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/events?id=eq.${id}&select=id,title,description,image_url,date_start,date_end,city,venue_name,price_cents&limit=1`,
+      `${SUPABASE_URL}/rest/v1/public_partners?id=eq.${id}&select=id,business_name,business_description,city,avatar_url,cover_image_url&limit=1`,
       {
         headers: {
           apikey: SUPABASE_ANON,
@@ -90,7 +89,7 @@ async function fetchEvent(id: string): Promise<EventRow | null> {
       }
     );
     if (!r.ok) return null;
-    const arr = (await r.json()) as EventRow[];
+    const arr = (await r.json()) as PartnerRow[];
     return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
   } catch {
     return null;
@@ -101,57 +100,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawId = req.query?.id;
   const id = (Array.isArray(rawId) ? rawId[0] : rawId) ?? "";
 
-  // Enlace roto o recortado: no hay evento que enseñar.
+  // Enlace roto o heredado ("demo-1"…): no hay local que enseñar.
   if (!UUID_RE.test(id)) {
     return redirect(res, `${SITE_URL}/#/calendar`, "public, max-age=60");
   }
 
-  // Redirect target — Pasify usa HashRouter, así que la ruta real es /#/e/<id>
-  // (no /e/<id> sin hash). WhatsApp/Telegram in-app browsers respetan el #
-  // en Location si va en la URL completa. El index.html además tiene un script
-  // de rescate por si algún browser strips el hash.
-  const targetUrl = `${SITE_URL}/#/e/${id}`;
+  // HashRouter: la ruta real es /#/p/<id>.
+  const targetUrl = `${SITE_URL}/#/p/${id}`;
 
-  // Browsers reales: 302 limpio (más robusto que meta-refresh) y sin esperar
-  // a Supabase; la página del evento ya carga sus datos.
+  // Browsers reales: 302 limpio y sin esperar a Supabase.
   const ua = String(req.headers?.["user-agent"] ?? "");
   if (!LINK_PREVIEW_BOT_RE.test(ua)) {
     return redirect(res, targetUrl, "public, max-age=0, must-revalidate");
   }
 
-  const event = await fetchEvent(id);
-  // Unknown / retirado: sin tarjeta propia (el bot se queda con la genérica
-  // del index.html); quien lo abra verá "Este evento no está disponible".
-  if (!event) {
+  const partner = await fetchPartner(id);
+  if (!partner) {
     return redirect(res, targetUrl, "public, max-age=60");
   }
 
-  // og:url se queda como la URL corta canonical (lo que el user comparte).
-  const canonicalUrl = `${SITE_URL}/e/${id}`;
-  const ogImage = event.image_url || `${SITE_URL}/logo.png`;
-  const title = event.title || "Evento Pasify";
-  const description = "¿Y tú qué haces? ¿No te unes? 🎉";
+  const canonicalUrl = `${SITE_URL}/p/${id}`;
+  const name = summarize(partner.business_name, 90) || "Local en Pasify";
+  const city = summarize(partner.city, 60);
+  const description =
+    summarize(partner.business_description) ||
+    `Eventos y entradas de ${name}${city ? ` (${city})` : ""} en Pasify.`;
+  // Para la tarjeta, mejor la portada (apaisada) que el avatar.
+  const cardImage = partner.cover_image_url || partner.avatar_url;
+  const ogImage = cardImage || `${SITE_URL}/logo.png`;
 
   const html = `<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)} · Pasify</title>
+<title>${escapeHtml(name)} · Pasify</title>
 <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
 <meta name="description" content="${escapeHtml(description)}" />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
-<meta property="og:title" content="${escapeHtml(title)}" />
+<meta property="og:title" content="${escapeHtml(name)}" />
 <meta property="og:description" content="${escapeHtml(description)}" />
 <meta property="og:image" content="${escapeHtml(ogImage)}" />
 <meta property="og:image:secure_url" content="${escapeHtml(ogImage)}" />
-<meta property="og:image:type" content="image/jpeg" />
-<meta property="og:image:alt" content="${escapeHtml(title)}" />
+<meta property="og:image:alt" content="${escapeHtml(name)}" />
 <meta property="og:site_name" content="Pasify" />
 <meta property="og:locale" content="es_ES" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="${escapeHtml(title)}" />
+<meta name="twitter:title" content="${escapeHtml(name)}" />
 <meta name="twitter:description" content="${escapeHtml(description)}" />
 <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
 <meta http-equiv="refresh" content="0; url=${escapeHtml(targetUrl)}" />
@@ -167,8 +163,8 @@ a{display:inline-block;padding:12px 24px;background:linear-gradient(180deg,#FF7A
 </head>
 <body>
 <div class="card">
-${event.image_url ? `<img src="${escapeHtml(event.image_url)}" alt="" />` : ""}
-<h1>${escapeHtml(title)}</h1>
+${cardImage ? `<img src="${escapeHtml(cardImage)}" alt="" />` : ""}
+<h1>${escapeHtml(name)}</h1>
 <p>${escapeHtml(description)}</p>
 <a href="${escapeHtml(targetUrl)}">Abrir en Pasify</a>
 </div>
