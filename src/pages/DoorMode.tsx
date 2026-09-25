@@ -17,7 +17,7 @@ import QRScanner from "@/components/partner/QRScanner";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerEvents, type PartnerEventRow } from "@/hooks/queries/partnerData";
 import { useAuth, signOutLocal } from "@/hooks/useAuth";
-import { clearDoorLock, isDoorLocked, isValidDoorPin, lockDoor, unlockDoor } from "@/lib/doorLock";
+import { doorWaitMs, isDoorLocked, isValidDoorPin, lockDoor, unlockDoor } from "@/lib/doorLock";
 
 /**
  * Modo puerta (/door): pantalla completa con solo el escáner.
@@ -36,9 +36,6 @@ interface DoorEvent {
   date_end: string | null;
   status: string;
 }
-
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 30_000;
 
 /**
  * La puerta solo necesita lo de estos días (de hace 3 días a dentro de 7) y
@@ -213,53 +210,88 @@ const DoorSetup = ({ uid, onLocked, onCancel }: { uid: string; onLocked: () => v
   );
 };
 
+/** Espera restante legible: "30 s", "2 min", "1 h". */
+const formatoEspera = (ms: number): string => {
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const min = Math.ceil(s / 60);
+  return min < 60 ? `${min} min` : "1 h";
+};
+
 const ExitButton = ({ uid, onExit }: { uid: string; onExit: () => void }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const attempts = useRef(0);
-  const [lockedUntil, setLockedUntil] = useState(0);
-  const [now, setNow] = useState(Date.now());
+  const [signingOut, setSigningOut] = useState(false);
+  // Los fallos y la espera viven en doorLock (localStorage): recargar no los
+  // reinicia. Aquí solo se cuenta hacia atrás.
+  const [waitUntil, setWaitUntil] = useState(() => Date.now() + doorWaitMs());
+  const [now, setNow] = useState(() => Date.now());
+
+  // Al abrir, lo que diga el dispositivo (otra pestaña, una recarga…).
+  useEffect(() => {
+    if (!open) return;
+    const t = Date.now();
+    setNow(t);
+    setWaitUntil(t + doorWaitMs(t));
+  }, [open]);
 
   useEffect(() => {
-    if (lockedUntil <= Date.now()) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    if (waitUntil <= Date.now()) return;
+    const t = setInterval(() => {
+      const ahora = Date.now();
+      setNow(ahora);
+      if (ahora >= waitUntil) clearInterval(t);
+    }, 1000);
     return () => clearInterval(t);
-  }, [lockedUntil]);
-  const waitSeconds = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
+  }, [waitUntil]);
+  const waitMs = Math.max(0, waitUntil - now);
+  const waiting = waitMs > 0;
 
   const submit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (waitSeconds > 0) return;
+      if (waiting || checking) return;
       setChecking(true);
-      const ok = await unlockDoor(uid, pin).catch(() => false);
+      const result = await unlockDoor(uid, pin).catch(() => null);
       setChecking(false);
-      if (ok) {
+      if (result?.ok) {
         setOpen(false);
         onExit();
         return;
       }
-      attempts.current += 1;
       setPin("");
-      if (attempts.current >= MAX_ATTEMPTS) {
-        attempts.current = 0;
-        setLockedUntil(Date.now() + LOCKOUT_MS);
-        setNow(Date.now());
-        setError("Demasiados intentos. Espera 30 segundos.");
+      if (!result) {
+        setError("No se ha podido comprobar el PIN. Vuelve a intentarlo.");
+      } else if (result.waitMs > 0) {
+        const t = Date.now();
+        setNow(t);
+        setWaitUntil(t + result.waitMs);
+        setError(null);
+      } else if (result.attemptsLeft <= 2) {
+        const quedan = result.attemptsLeft === 1 ? "Te queda 1 intento" : `Te quedan ${result.attemptsLeft} intentos`;
+        setError(`PIN incorrecto. ${quedan} antes de tener que esperar.`);
       } else {
         setError("PIN incorrecto.");
       }
     },
-    [onExit, pin, uid, waitSeconds],
+    [checking, onExit, pin, uid, waiting],
   );
 
+  // Sin el PIN solo queda cerrar sesión; para volver hará falta la contraseña
+  // del dueño. El bloqueo NO se quita aquí: lo quita la caché cuando la sesión
+  // ya no existe (cache/lifecycle.ts). Si no se pudiera cerrar (sin red y sin
+  // poder borrarla), la puerta sigue bloqueada.
   const forgot = async () => {
-    // Cerrar sesión borra el bloqueo; para volver hace falta la contraseña del dueño.
-    clearDoorLock();
-    await signOutLocal();
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOutLocal();
+    } finally {
+      setSigningOut(false);
+    }
     navigate("/login", { replace: true });
   };
 
@@ -293,28 +325,33 @@ const ExitButton = ({ uid, onExit }: { uid: string; onExit: () => void }) => {
               placeholder="PIN"
               value={pin}
               maxLength={6}
-              disabled={waitSeconds > 0}
+              disabled={waiting}
               onChange={(e) => {
                 setPin(e.target.value.replace(/\D/g, ""));
                 setError(null);
               }}
             />
-            {error && (
+            {(waiting || error) && (
               <p className="text-sm text-destructive">
-                {waitSeconds > 0 ? `Demasiados intentos. Espera ${waitSeconds} s.` : error}
+                {waiting ? `Demasiados intentos. Espera ${formatoEspera(waitMs)}.` : error}
               </p>
             )}
-            <Button type="submit" className="w-full" disabled={checking || pin.length < 4 || waitSeconds > 0}>
+            <Button type="submit" className="w-full" disabled={checking || pin.length < 4 || waiting}>
               {checking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Salir
             </Button>
             <button
               type="button"
               onClick={() => void forgot()}
-              className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground underline underline-offset-4"
+              disabled={signingOut}
+              className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground underline underline-offset-4 disabled:opacity-60"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              ¿Has olvidado el PIN? Cerrar sesión
+              {signingOut ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" />
+              )}
+              {signingOut ? "Cerrando sesión…" : "¿Has olvidado el PIN? Cerrar sesión"}
             </button>
           </form>
         </DialogContent>

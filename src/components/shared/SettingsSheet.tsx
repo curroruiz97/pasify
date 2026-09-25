@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutLocal } from "@/hooks/useAuth";
 import EditPersonalInfoSheet from "@/components/shared/EditPersonalInfoSheet";
 import {
   ArrowLeft,
@@ -69,6 +70,10 @@ type LoadState = "loading" | "ready" | "error";
 
 const passwordErrorMessage = (code: string | undefined) => {
   switch (code) {
+    case "invalid_credentials":
+      return "La contraseña actual no es correcta. Si entras con Google o Apple y nunca has puesto una, créala con «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.";
+    case "over_request_rate_limit":
+      return "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.";
     case "same_password":
       return "La nueva contraseña tiene que ser distinta de la actual.";
     case "weak_password":
@@ -108,6 +113,7 @@ export const SettingsSheet = ({
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -212,12 +218,17 @@ export const SettingsSheet = ({
 
   const resetPasswordForm = () => {
     setPasswordOpen(false);
+    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setPasswordError(null);
   };
 
   const handlePasswordChange = async () => {
+    if (!currentPassword) {
+      setPasswordError("Escribe tu contraseña actual.");
+      return;
+    }
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
       setPasswordError(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
@@ -229,6 +240,25 @@ export const SettingsSheet = ({
     setPasswordError(null);
     setSavingPassword(true);
     try {
+      // Tener la sesión abierta no basta (un móvil prestado, el de la puerta,
+      // un ordenador compartido): antes de cambiarla se comprueba la actual
+      // entrando con ella. Si es correcta, auth-js cambia a esa sesión nueva
+      // del mismo usuario.
+      const { data: actual } = await supabase.auth.getSession();
+      const usuario = actual.session?.user;
+      if (!usuario?.email) {
+        setPasswordError(passwordErrorMessage("session_not_found"));
+        return;
+      }
+      const { data: verificado, error: errorActual } = await supabase.auth.signInWithPassword({
+        email: usuario.email,
+        password: currentPassword,
+      });
+      if (errorActual || verificado.user?.id !== usuario.id) {
+        const incorrecta = !errorActual || errorActual.code === "invalid_credentials" || errorActual.status === 400;
+        setPasswordError(passwordErrorMessage(incorrecta ? "invalid_credentials" : errorActual.code));
+        return;
+      }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
         setPasswordError(passwordErrorMessage(error.code));
@@ -268,7 +298,7 @@ export const SettingsSheet = ({
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      const { error } = await supabase.auth.signOut({ scope: "local" });
+      const { error } = await signOutLocal();
       if (error) throw error;
       onOpenChange(false);
       navigate("/login", { replace: true });
@@ -332,7 +362,7 @@ export const SettingsSheet = ({
 
       // La cuenta ya no existe: el token local es basura. Limpiamos sesion
       // y mandamos al login, si no la app se queda con una sesion fantasma.
-      await supabase.auth.signOut({ scope: "local" });
+      await signOutLocal();
       setShowDeleteConfirm(false);
       onOpenChange(false);
       toast({
@@ -496,6 +526,15 @@ export const SettingsSheet = ({
                 >
                   <Input
                     type="password"
+                    autoComplete="current-password"
+                    placeholder="Contraseña actual"
+                    aria-label="Contraseña actual"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    disabled={savingPassword}
+                  />
+                  <Input
+                    type="password"
                     autoComplete="new-password"
                     placeholder="Nueva contraseña"
                     aria-label="Nueva contraseña"
@@ -533,7 +572,7 @@ export const SettingsSheet = ({
                       type="submit"
                       size="sm"
                       className="flex-1"
-                      disabled={savingPassword || !newPassword || !confirmPassword}
+                      disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
                     >
                       {savingPassword ? "Guardando…" : "Guardar contraseña"}
                     </Button>

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
+import { getSessionSnapshot } from "@/lib/cache/session";
 import type { Ticket as WalletTicket, TicketEventInfo } from "@/components/client/TicketQRModal";
 
 /**
@@ -8,7 +9,8 @@ import type { Ticket as WalletTicket, TicketEventInfo } from "@/components/clien
  *
  * Las entradas se guardan en el dispositivo 30 días (cache/policy.ts): la
  * cartera se abre al instante y funciona en la puerta sin cobertura (el QR se
- * dibuja en el propio móvil a partir del token).
+ * dibuja en el propio móvil a partir del token). Por eso no llevan datos
+ * personales de terceros (ver sinDatosDeTerceros).
  */
 
 export type WalletTicketRow = WalletTicket & { event: TicketEventInfo | null };
@@ -21,6 +23,36 @@ export type PublicPartner = {
   avatar_url: string | null;
   cover_image_url: string | null;
 };
+
+type CamposDePersonas = Pick<
+  WalletTicket,
+  "buyer_first_name" | "buyer_last_name" | "buyer_email" | "holder_first_name" | "holder_last_name" | "holder_email"
+> & { buyer_user_id: string | null };
+
+/**
+ * Entrada recibida por transferencia: los `buyer_*` son del comprador
+ * original, un tercero, y no se guardan (ticketHolderName ya no los usa en
+ * las transferidas). Los `holder_*` los reescribe accept_ticket_transfer con
+ * los datos de quien la recibe; en las aceptadas antes de ese cambio (no hubo
+ * backfill) pueden seguir siendo del titular anterior, así que solo se
+ * conservan si el email es el del usuario.
+ *
+ * Devuelve los campos que hay que pisar (nada si la entrada es suya).
+ */
+function sinDatosDeTerceros(
+  t: CamposDePersonas,
+  userId: string,
+  email: string | null,
+): Partial<CamposDePersonas> {
+  if (t.buyer_user_id === userId) return {};
+  const titularEsElUsuario = !!email && (t.holder_email ?? "").trim().toLowerCase() === email;
+  return {
+    buyer_first_name: null,
+    buyer_last_name: null,
+    buyer_email: "",
+    ...(titularEsElUsuario ? {} : { holder_first_name: null, holder_last_name: null, holder_email: null }),
+  };
+}
 
 /**
  * Entradas que tienes AHORA: compradas por ti y no transferidas, o
@@ -118,8 +150,14 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
     });
   });
 
+  // Email de la sesión solo si es la de este usuario (un cambio de cuenta a
+  // medias no puede dar por buenos los datos de otro).
+  const sesion = getSessionSnapshot().session;
+  const email = sesion?.user?.id === userId ? sesion.user.email?.trim().toLowerCase() || null : null;
+
   return ticks.map((t) => ({
     ...t,
+    ...sinDatosDeTerceros(t, userId, email),
     tier_name: t.tier_id ? tierNames.get(t.tier_id) ?? null : null,
     event: eventMap.get(t.event_id) ?? null,
   }));

@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // che React possa montare → schermo bianco. Logghiamo e usiamo fallback
 // così almeno l'app monta e l'utente vede l'errore nella console.
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || SUPABASE_PUBLISHABLE_KEY.includes("PLACEHOLDER")) {
-  // eslint-disable-next-line no-console
+   
   console.error(
     "[Pasify] Supabase env vars mancanti o placeholder. Aggiungi VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY a .env.local (vedi .env.example). Login e chiamate API non funzioneranno finché non sono settate."
   );
@@ -20,6 +20,15 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || SUPABASE_PUBLISHABLE_KEY.inclu
 const SAFE_URL = SUPABASE_URL || "https://placeholder.supabase.co";
 const SAFE_KEY = SUPABASE_PUBLISHABLE_KEY || "placeholder-anon-key";
 
+/**
+ * Clave de la sesión en el storage. Es EXACTAMENTE la que supabase-js usa por
+ * defecto (`sb-<primera etiqueta del host>-auth-token`, la misma cuenta que
+ * hace createClient con la URL): cambiarla cerraría todas las sesiones
+ * abiertas. Se fija aquí para que signOutLocal (useAuth.tsx) pueda borrar la
+ * sesión de este dispositivo cuando auth-js no puede hacerlo (sin red).
+ */
+export const SUPABASE_AUTH_STORAGE_KEY = `sb-${new URL(SAFE_URL.trim()).hostname.split(".")[0]}-auth-token`;
+
 // detectSessionInUrl solo su web: su Capacitor native il deep link è gestito
 // dal listener appUrlOpen in App.tsx (per OAuth usiamo il plugin GoogleAuth).
 const isNative = Capacitor.isNativePlatform();
@@ -27,6 +36,7 @@ const isNative = Capacitor.isNativePlatform();
 export const supabase = createClient<Database>(SAFE_URL, SAFE_KEY, {
   auth: {
     storage: capacitorStorage,
+    storageKey: SUPABASE_AUTH_STORAGE_KEY,
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: !isNative,

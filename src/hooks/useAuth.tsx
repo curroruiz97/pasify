@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AuthChangeEvent, User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '@/integrations/supabase/client';
+import { capacitorStorage } from '@/lib/capacitorStorage';
 import { withTimeout } from '@/lib/withTimeout';
 import { captureError, getErrorMessage, setSentryTag, setSentryUser } from '@/lib/sentry';
 import { queryClient } from '@/lib/cache/queryClient';
 import { qk } from '@/lib/cache/keys';
 import { getSessionSnapshot, noteSession } from '@/lib/cache/session';
+import { anotarCierreForzado } from '@/lib/cache/lifecycle';
 
 /**
  * Pasify auth hook · super-admin/dev mode.
@@ -229,30 +231,109 @@ const fetchRoles = (userId: string): Promise<RolesResult> => {
   return peticion;
 };
 
+// Enlace de recuperación de contraseña procesado por auth-js en ESTA carga
+// (evento PASSWORD_RECOVERY). Se escucha a nivel de módulo porque auth-js lo
+// emite al arrancar, antes de que UpdatePassword (lazy) llegue a montarse.
+let usuarioEnRecuperacion: string | null = null;
+supabase.auth.onAuthStateChange((event, nextSession) => {
+  if (event === 'PASSWORD_RECOVERY') usuarioEnRecuperacion = nextSession?.user?.id ?? null;
+  else if (event === 'SIGNED_OUT') usuarioEnRecuperacion = null;
+});
+
+/**
+ * ¿La sesión de `userId` llegó en esta carga por un enlace de recuperación?
+ * Solo entonces UpdatePassword deja poner una contraseña nueva sin la actual.
+ */
+export const isPasswordRecoverySession = (userId: string | null | undefined): boolean =>
+  !!userId && usuarioEnRecuperacion === userId;
+
+// Cerrar sesión: cuánto se espera al servidor (revocar la sesión) y, después,
+// a que auth-js termine lo que tenga en curso.
+const SIGN_OUT_RED_MS = 4_000;
+const SIGN_OUT_LOCAL_MS = 3_000;
+
+/** Lo que borra auth-js al cerrar sesión (_removeSession), sin pasar por su lock. */
+const CLAVES_SESION = [
+  SUPABASE_AUTH_STORAGE_KEY,
+  `${SUPABASE_AUTH_STORAGE_KEY}-code-verifier`,
+  `${SUPABASE_AUTH_STORAGE_KEY}-user`,
+];
+
+const borrarSesionDelDispositivo = () =>
+  Promise.all(CLAVES_SESION.map((clave) => capacitorStorage.removeItem(clave).catch(() => undefined)));
+
+/** signOut de este dispositivo con límite de tiempo. Devuelve el error; nunca lanza. */
+async function intentarSignOut(ms: number, label: string): Promise<Error | null> {
+  try {
+    const { error } = await withTimeout(supabase.auth.signOut({ scope: 'local' }), ms, label);
+    return error ?? null;
+  } catch (err) {
+    return err instanceof Error ? err : new Error(getErrorMessage(err));
+  }
+}
+
+/** Recarga la app en /login (último recurso de signOutLocal). */
+function recargarEnLogin() {
+  try {
+    // Sin hashchange: que el router no llegue a pintar /login con la sesión vieja.
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/login`);
+  } catch {
+    /* noop */
+  }
+  window.location.reload();
+}
+
 /**
  * Cierra la sesión SOLO en este dispositivo (`scope: 'local'`). El scope
  * global por defecto revoca los refresh tokens de todas las sesiones del
  * usuario: echaría al resto de dispositivos del local (p.ej. la tablet de
  * puerta) y rompe el multi-cuenta.
  *
- * Ojo: si no hay red, auth-js devuelve el error SIN borrar la sesión local.
+ * Todas las salidas de la app pasan por aquí, y la sesión sale de este
+ * dispositivo aunque no haya red (antes, sin cobertura, el botón no hacía
+ * nada y la sesión seguía viva en un móvil compartido):
+ *  1. signOut normal, que también revoca la sesión en el servidor. Sin red
+ *     (navigator.onLine) ni se intenta.
+ *  2. Si falla (sin red auth-js devuelve el error SIN borrar la sesión), se
+ *     borra del storage aquí y se repite: sin sesión guardada auth-js ya no
+ *     sale a la red, solo emite SIGNED_OUT, y la app reacciona como siempre
+ *     (useAuth, caché y bloqueo del modo puerta en cache/lifecycle.ts).
+ *  3. Si auth-js sigue ocupado (sin red y con el token caducado, un refresco
+ *     con reintentos retiene su lock ~25 s), se recarga en /login: la recarga
+ *     corta lo que tuviera en curso y, al arrancar sin sesión, la caché
+ *     termina la limpieza (anotarCierreForzado).
+ *
+ * Nunca se anuncia un SIGNED_OUT a mano: un refresco en curso podría volver a
+ * guardar la sesión y la app seguiría dentro, ya sin el bloqueo de la puerta.
  */
 export const signOutLocal = async (): Promise<{ error: Error | null }> => {
   writeStoredRole(null);
-  try {
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
-    if (error) {
-      console.error('[useAuth] signOut falló:', error);
-      captureError(error, { where: 'signOutLocal' });
-      return { error };
+  const userId = getSessionSnapshot().userId;
+  const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if (!sinRed) {
+    const error = await intentarSignOut(SIGN_OUT_RED_MS, 'auth.signOut');
+    if (!error) {
+      setSentryUser(null);
+      return { error: null };
     }
+    console.warn('[useAuth] signOut sin servidor; se cierra solo en este dispositivo:', getErrorMessage(error));
+  }
+
+  await borrarSesionDelDispositivo();
+  const error = await intentarSignOut(SIGN_OUT_LOCAL_MS, 'auth.signOut(local)');
+  if (!error) {
     setSentryUser(null);
     return { error: null };
-  } catch (err) {
-    console.error('[useAuth] signOut falló:', err);
-    captureError(err, { where: 'signOutLocal' });
-    return { error: err instanceof Error ? err : new Error(getErrorMessage(err)) };
   }
+
+  console.error('[useAuth] auth-js no ha podido cerrar la sesión; se recarga la app:', error);
+  captureError(error, { where: 'signOutLocal' });
+  await borrarSesionDelDispositivo();
+  if (userId) anotarCierreForzado(userId);
+  setSentryUser(null);
+  recargarEnLogin();
+  return { error: null };
 };
 
 export const useAuth = () => {

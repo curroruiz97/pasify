@@ -60,6 +60,13 @@ export interface OpcionesSupabaseFalso {
    * única que ve las secciones maqueta en la web. Por defecto, un local real.
    */
   showcase?: boolean;
+  /**
+   * Cuándo se siembra la sesión en localStorage: en cada carga ("siempre", por
+   * defecto) o solo en la primera de la pestaña ("una-vez"). Para comprobar
+   * que cerrar sesión la borra de verdad hace falta "una-vez": si no, cada
+   * recarga la vuelve a poner.
+   */
+  sembrarSesion?: "siempre" | "una-vez";
 }
 
 export interface SupabaseFalso {
@@ -73,6 +80,12 @@ export interface SupabaseFalso {
   peticiones: string[];
   /** Retraso de cada respuesta de datos (REST y RPC), para simular una red lenta. */
   retrasoMs: number;
+  /**
+   * Toda petición al Supabase falso falla como sin conexión, pero el
+   * navegador sigue creyéndose en línea (navigator.onLine): cobertura que no
+   * llega al servidor. Para el modo avión de verdad, `context.setOffline(true)`.
+   */
+  sinRed: boolean;
 }
 
 type Fila = Record<string, unknown>;
@@ -679,14 +692,20 @@ export async function instalarSupabaseFalso(
     enVuelo: () => pendientes,
     peticiones: [],
     retrasoMs: 0,
+    sinRed: false,
   };
 
   await page.addInitScript(
-    ({ clave: claveSesion, sesion }) => {
+    ({ clave: claveSesion, sesion, unaVez }) => {
       if (window.top !== window) return;
+      if (unaVez) {
+        // sessionStorage sobrevive a las recargas de la pestaña.
+        if (window.sessionStorage.getItem("e2e.sesion-sembrada")) return;
+        window.sessionStorage.setItem("e2e.sesion-sembrada", "1");
+      }
       window.localStorage.setItem(claveSesion, JSON.stringify(sesion));
     },
-    { clave: CLAVE_SESION, sesion: datos.sesion },
+    { clave: CLAVE_SESION, sesion: datos.sesion, unaVez: opciones.sembrarSesion === "una-vez" },
   );
 
   // Todo lo que no sea la propia app ni el Supabase falso se corta aquí.
@@ -705,6 +724,7 @@ export async function instalarSupabaseFalso(
   await page.route(
     (url) => url.origin === ORIGEN_SUPABASE,
     async (route: Route) => {
+      if (falso.sinRed) return route.abort("internetdisconnected");
       pendientes++;
       try {
         const req = route.request();

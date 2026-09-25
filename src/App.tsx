@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { queryClient } from "@/lib/cache/queryClient";
 import { useCacheLifecycle } from "@/lib/cache/lifecycle";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { isDoorLocked, useDoorLocked } from "@/lib/doorLock";
 import { useTranslation } from "react-i18next";
 import logo from "./assets/logo.webp";
 
@@ -30,7 +32,6 @@ const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard"));
 const PublicEvent = lazy(() => import("./pages/PublicEvent"));
 const DoorMode = lazy(() => import("./pages/DoorMode"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const PartnerSubscribe = lazy(() => import("./pages/PartnerSubscribe"));
 const PartnerManage = lazy(() => import("./pages/PartnerManage"));
 const PartnerSuccess = lazy(() => import("./pages/PartnerSuccess"));
@@ -120,6 +121,18 @@ const RootRoute = ({ session }: { session: any }) => {
   return <Index />;
 };
 
+// Modo puerta activo en este dispositivo (src/lib/doorLock.ts): ninguna otra
+// pantalla, tampoco las que no pasan por ProtectedRoute (/login, que con la
+// sesión viva mandaba al panel, o /update-password). Se sale con el PIN o
+// cerrando sesión. El bloqueo se escucha en vivo: si se activa en otra
+// pestaña, esta también pasa a /door.
+const DoorLockGuard = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  const locked = useDoorLocked(useCurrentUserId());
+  if (locked && location.pathname !== "/door") return <Navigate to="/door" replace />;
+  return <>{children}</>;
+};
+
 // `/partner/:id` era la ficha de local heredada (PartnerDetails), rota desde
 // el snapshot; la vigente es `/p/:id`. La ruta se conserva solo para que los
 // enlaces guardados y las notificaciones antiguas lleguen a la ficha buena.
@@ -175,6 +188,10 @@ const NotificationDeepLinkHandler = () => {
       // Sessione corrente
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id;
+
+      // Modo puerta: ni navegar ni cambiar de cuenta desde una notificación.
+      // El bloqueo es por usuario: con otra cuenta guardada se saldría de la puerta.
+      if (isDoorLocked(currentUserId)) return;
 
       // Caso 1: notifica senza target user → naviga e basta (legacy)
       if (!targetUserId) {
@@ -247,10 +264,13 @@ const PageTransitions = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Offline banner component
+// Offline banner component. Solo informa: nunca bloquea toques
+// (pointer-events-none) y en modo puerta no sale: tapaba la cabecera, y con
+// ella «Salir», justo sin red; el escáner ya avisa de que así no se valida.
 const OfflineBanner = () => {
   const { isOnline, wasOffline } = useNetworkStatus();
   const { t } = useTranslation();
+  const location = useLocation();
 
   useEffect(() => {
     if (wasOffline && isOnline) {
@@ -263,10 +283,10 @@ const OfflineBanner = () => {
     }
   }, [wasOffline, isOnline, t]);
 
-  if (isOnline) return null;
+  if (isOnline || location.pathname === "/door") return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium shadow-lg">
+    <div className="pointer-events-none fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium shadow-lg">
       {t("network.offline", "Offline mode - data may not be up to date")}
     </div>
   );
@@ -367,16 +387,17 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
-        <OfflineBanner />
         {/* Prefetch dati in background */}
         <DataPrefetcher userId={session?.user?.id} />
         <HashRouter>
+          <OfflineBanner />
           <NotificationDeepLinkHandler />
           {/* Floating multi-role switcher (visible when user tiene 2+ roles
               y está en una ruta de dashboard). */}
           <PanelSwitcher />
           <Suspense fallback={<PageLoader />}>
             <PageTransitions>
+            <DoorLockGuard>
             <Routes>
               {/* Loggato → dashboard appropriata según rol efectivo
                   (resolveInitialDashboard). Non loggato (web) → landing Pasify.
@@ -445,7 +466,6 @@ const App = () => {
                   </ProtectedRoute>
                 }
               />
-              <Route path="/admin-setup" element={<AdminSetup />} />
 
               {/* Partner subscription (Stripe) */}
               <Route
@@ -488,6 +508,7 @@ const App = () => {
               <Route path="/privacidad" element={<Privacidad />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </DoorLockGuard>
             </PageTransitions>
           </Suspense>
         </HashRouter>

@@ -69,13 +69,15 @@ const toRefund = (r: DbRow): RefundRequest => ({
 
 const SIN_SOLICITUDES: RefundRequest[] = [];
 
-async function leerSolicitudes(): Promise<RefundRequest[]> {
-  const { data, error } = await supabase
+/** `requesterId`: solo las que ha pedido ese usuario; null = todas las que deje ver RLS. */
+async function leerSolicitudes(requesterId: string | null): Promise<RefundRequest[]> {
+  let consulta = supabase
     .from("refund_requests")
     .select(
       "id, ticket_id, order_id, event_id, requester_user_id, amount_cents, currency, reason, reason_code, status, decided_at, decision_note, auto_approved, created_at, events(title, date_start, venue_name)"
-    )
-    .order("created_at", { ascending: false });
+    );
+  if (requesterId) consulta = consulta.eq("requester_user_id", requesterId);
+  const { data, error } = await consulta.order("created_at", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as unknown as DbRow[]).map(toRefund);
 }
@@ -85,14 +87,17 @@ async function leerSolicitudes(): Promise<RefundRequest[]> {
  * Realtime sobre `refund_requests` · RPC para crear y decidir.
  *
  * Modos:
- *  - "mine"  → solo las del user (RLS filtra)
+ *  - "mine"  → solo las que ha pedido el usuario. Se filtra en la consulta:
+ *              RLS no basta, al super-admin (o a un owner/manager que entra
+ *              como cliente) le deja ver las de toda la plataforma o del local.
  *  - "org"   → todas las del org/partner (RLS por membership)
  *  - "admin" → todas (RLS admin)
  *
  * Caché: "mine" vive en qk.me.refunds (guardada en el dispositivo, son las
- * del propio usuario). "org"/"admin" traen solicitudes de otras personas:
- * solo en memoria. Un cambio en tiempo real refresca la lista sin vaciarla
- * (antes cada cambio volvía a poner `loading` y parpadeaba el wallet).
+ * del propio usuario, motivo incluido). "org"/"admin" traen solicitudes de
+ * otras personas: solo en memoria. Un cambio en tiempo real refresca la lista
+ * sin vaciarla (antes cada cambio volvía a poner `loading` y parpadeaba el
+ * wallet).
  */
 export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
   const { toast } = useToast();
@@ -105,7 +110,7 @@ export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
 
   const query = useQuery({
     queryKey,
-    queryFn: leerSolicitudes,
+    queryFn: () => leerSolicitudes(mode === "mine" ? uid : null),
     enabled: !!uid,
   });
   const requests = query.data ?? SIN_SOLICITUDES;

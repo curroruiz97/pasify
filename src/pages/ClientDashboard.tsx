@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutLocal } from "@/hooks/useAuth";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
 import { useSessionState } from "@/lib/useSessionState";
@@ -132,7 +133,7 @@ const ClientDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const handleLogout = async () => {
-    await supabase.auth.signOut({ scope: 'local' });
+    await signOutLocal();
     navigate("/");
   };
   // HashRouter: ?session_id=... aparece como query del hash. `useSearchParams`
