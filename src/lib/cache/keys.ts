@@ -39,6 +39,41 @@ export const qk = {
     live: (uid: string, eventId: string) => ["partner", uid, "live", eventId] as const,
     forecast: (uid: string) => ["partner", uid, "forecast"] as const,
   },
+  /**
+   * Cuarto ámbito, "admin" → ["admin", uid, …]: panel de admin, datos de toda
+   * la plataforma (de otras personas). Solo en memoria: policy.ts no guarda
+   * nunca este ámbito en el dispositivo y se vacía al cerrar sesión o cambiar
+   * de cuenta.
+   */
+  admin: {
+    all: (uid: string) => ["admin", uid] as const,
+    /** Flag admin_showcase (módulos maqueta con la franja DEMO). */
+    showcase: (uid: string) => ["admin", uid, "showcase"] as const,
+    kpis: (uid: string) => ["admin", uid, "kpis"] as const,
+    /** Prefijo de los listados de usuarios (Locales, Clientes). */
+    users: (uid: string) => ["admin", uid, "users"] as const,
+    usersPage: (uid: string, params: Record<string, string | number | null>) =>
+      ["admin", uid, "users", params] as const,
+    userFacets: (uid: string, role: string) => ["admin", uid, "user-facets", role] as const,
+    events: (uid: string, page: number) => ["admin", uid, "events", page] as const,
+    /** Prefijo de la bandeja de soporte: Realtime lo invalida entero. */
+    supportInbox: (uid: string) => ["admin", uid, "support-inbox"] as const,
+    supportInboxList: (uid: string, filter: string, limit: number) =>
+      ["admin", uid, "support-inbox", "list", filter, limit] as const,
+    supportUnread: (uid: string) => ["admin", uid, "support-inbox", "unread"] as const,
+    /** Una conversación abierta por el admin (SupportChat). */
+    supportChat: (uid: string, conversation: string) => ["admin", uid, "support", conversation] as const,
+    /** Prefijo de la cola de reembolsos del admin (no es la de useRefundRequests). */
+    refundQueue: (uid: string) => ["admin", uid, "refund-queue"] as const,
+    refundQueuePage: (uid: string, queue: string, page: number) =>
+      ["admin", uid, "refund-queue", "page", queue, page] as const,
+    refundCounts: (uid: string) => ["admin", uid, "refund-queue", "counts"] as const,
+    /** Prefijo de la auditoría (todas las tablas). */
+    auditAll: (uid: string) => ["admin", uid, "audit"] as const,
+    audit: (uid: string, kind: string, limit: number) => ["admin", uid, "audit", kind, limit] as const,
+    adminIds: (uid: string) => ["admin", uid, "admin-ids"] as const,
+    killSwitches: (uid: string) => ["admin", uid, "ai-kill-switches"] as const,
+  },
   public: {
     all: () => ["public"] as const,
     cities: () => ["public", "cities"] as const,

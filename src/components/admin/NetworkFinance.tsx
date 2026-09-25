@@ -14,9 +14,9 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { format, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
+import { DemoButton } from "./AdminDemo";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -25,7 +25,9 @@ const serif = {
   fontWeight: 400,
 };
 
-// Mock data
+// Maqueta (solo en modo demo, bajo la franja "DEMO · datos ficticios"): las
+// cifras son inventadas y los locales, de ejemplo. Las finanzas reales de la
+// red llegan en la Ola 2.
 const buildMonthly = () => {
   const arr: Array<{ month: Date; gmv: number; takeRate: number; netRevenue: number }> = [];
   for (let i = 11; i >= 0; i--) {
@@ -38,12 +40,12 @@ const buildMonthly = () => {
 };
 
 const SETTLEMENTS = [
-  { id: "set-01", partner: "Pacha Ibiza", gmvCents: 184_523_00, commissionCents: 10_812_00, status: "ready", scheduledFor: new Date() },
-  { id: "set-02", partner: "Razzmatazz", gmvCents: 76_840_00, commissionCents: 4_469_00, status: "ready", scheduledFor: new Date() },
-  { id: "set-03", partner: "Sala Apolo", gmvCents: 52_180_00, commissionCents: 3_046_00, status: "ready", scheduledFor: new Date() },
-  { id: "set-04", partner: "Teatro Kapital", gmvCents: 42_900_00, commissionCents: 2_524_00, status: "pending_kyc", scheduledFor: null },
-  { id: "set-05", partner: "Beach Club Estrella", gmvCents: 38_120_00, commissionCents: 2_241_00, status: "ready", scheduledFor: new Date() },
-  { id: "set-06", partner: "Medusa Festival", gmvCents: 18_400_00, commissionCents: 1_086_00, status: "hold", scheduledFor: null },
+  { id: "set-01", partner: "Nocturna Ibiza (ejemplo)", gmvCents: 184_523_00, commissionCents: 10_812_00, status: "ready", scheduledFor: new Date() },
+  { id: "set-02", partner: "Sala Prisma (ejemplo)", gmvCents: 76_840_00, commissionCents: 4_469_00, status: "ready", scheduledFor: new Date() },
+  { id: "set-03", partner: "Aurora Live (ejemplo)", gmvCents: 52_180_00, commissionCents: 3_046_00, status: "ready", scheduledFor: new Date() },
+  { id: "set-04", partner: "Teatro Faro (ejemplo)", gmvCents: 42_900_00, commissionCents: 2_524_00, status: "pending_kyc", scheduledFor: null },
+  { id: "set-05", partner: "Litoral Beach (ejemplo)", gmvCents: 38_120_00, commissionCents: 2_241_00, status: "ready", scheduledFor: new Date() },
+  { id: "set-06", partner: "Brisa Festival (ejemplo)", gmvCents: 18_400_00, commissionCents: 1_086_00, status: "hold", scheduledFor: null },
 ];
 
 const COHORTS = [
@@ -78,7 +80,8 @@ export const NetworkFinance = () => {
           Finanzas <span style={serif} className="text-orange-500">de la red</span>
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          GMV, take-rate, cohortes y settlements con cada partner.
+          Maqueta: GMV, comisión, cohortes y liquidaciones con cifras inventadas. Las finanzas reales llegarán en
+          una próxima versión.
         </p>
       </header>
 
@@ -125,10 +128,10 @@ export const NetworkFinance = () => {
             Cohortes
           </Tab>
         </div>
-        <Button variant="outline" className="hidden sm:inline-flex">
+        <DemoButton variant="outline" className="hidden sm:inline-flex">
           <Download className="mr-2 h-4 w-4" />
-          Export Holded/SAGE
-        </Button>
+          Exportar a contabilidad
+        </DemoButton>
       </div>
 
       {tab === "overview" && <Overview monthly={monthly} ytdGmv={ytdGmv} ytdNet={ytdNet} />}
@@ -283,13 +286,13 @@ const Settlements = () => {
               className="mt-1 text-[11px] uppercase text-muted-foreground"
               style={{ ...mono, letterSpacing: "0.16em" }}
             >
-              {SETTLEMENTS.filter((s) => s.status === "ready").length} payouts listos vía Stripe Connect
+              {SETTLEMENTS.filter((s) => s.status === "ready").length} liquidaciones de ejemplo listas
             </div>
           </div>
-          <Button>
+          <DemoButton>
             <Receipt className="mr-2 h-4 w-4" />
-            Procesar payouts
-          </Button>
+            Procesar liquidaciones
+          </DemoButton>
         </div>
       </div>
 

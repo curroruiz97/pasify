@@ -53,129 +53,132 @@ interface Organization {
   brands: Brand[];
 }
 
+// Maqueta (solo en modo demo, bajo la franja "DEMO · datos ficticios"):
+// organizaciones, marcas y correos inventados. Nada de marcas reales, y los
+// correos usan el dominio reservado .example (nunca existe).
 const ORGS: Organization[] = [
   {
     id: "org-1",
-    name: "Pacha Group",
+    name: "Grupo Nocturna",
     country: "ES",
     tier: "enterprise",
-    contactEmail: "ceo@pachagroup.com",
+    contactEmail: "direccion@grupo-nocturna.example",
     joinedAt: "2024-02-15",
     brands: [
       {
         id: "br-1-1",
-        name: "Pacha Ibiza",
+        name: "Nocturna Ibiza",
         category: "Discoteca",
         countries: ["ES"],
         venues: [
-          { id: "v-1-1-1", name: "Pacha Ibiza · Main Room", city: "Ibiza", capacity: 3000, monthlyGmvCents: 284_500_00, status: "active", rating: 4.8 },
-          { id: "v-1-1-2", name: "Pacha Ibiza · Funky Room", city: "Ibiza", capacity: 600, monthlyGmvCents: 48_200_00, status: "active", rating: 4.6 },
+          { id: "v-1-1-1", name: "Nocturna Ibiza · Sala principal", city: "Ibiza", capacity: 3000, monthlyGmvCents: 284_500_00, status: "active", rating: 4.8 },
+          { id: "v-1-1-2", name: "Nocturna Ibiza · Sala funk", city: "Ibiza", capacity: 600, monthlyGmvCents: 48_200_00, status: "active", rating: 4.6 },
         ],
       },
       {
         id: "br-1-2",
-        name: "Lío Ibiza",
+        name: "Cala Lumen",
         category: "Beach Club",
         countries: ["ES"],
         venues: [
-          { id: "v-1-2-1", name: "Lío Ibiza · Beach Club", city: "Ibiza", capacity: 800, monthlyGmvCents: 124_300_00, status: "active", rating: 4.9 },
+          { id: "v-1-2-1", name: "Cala Lumen · Beach Club", city: "Ibiza", capacity: 800, monthlyGmvCents: 124_300_00, status: "active", rating: 4.9 },
         ],
       },
       {
         id: "br-1-3",
-        name: "Pacha Barcelona",
+        name: "Nocturna Barcelona",
         category: "Discoteca",
         countries: ["ES"],
         venues: [
-          { id: "v-1-3-1", name: "Pacha Barcelona", city: "Barcelona", capacity: 1800, monthlyGmvCents: 142_800_00, status: "active", rating: 4.5 },
+          { id: "v-1-3-1", name: "Nocturna Barcelona", city: "Barcelona", capacity: 1800, monthlyGmvCents: 142_800_00, status: "active", rating: 4.5 },
         ],
       },
     ],
   },
   {
     id: "org-2",
-    name: "Costa Group",
+    name: "Litoral Eventos",
     country: "ES",
     tier: "enterprise",
-    contactEmail: "info@costagroup.es",
+    contactEmail: "info@litoral-eventos.example",
     joinedAt: "2024-09-08",
     brands: [
       {
         id: "br-2-1",
-        name: "Costa Brava Beach",
+        name: "Litoral Beach",
         category: "Beach Club",
         countries: ["ES"],
         venues: [
-          { id: "v-2-1-1", name: "Costa Brava · Lloret", city: "Lloret de Mar", capacity: 1200, monthlyGmvCents: 86_400_00, status: "active", rating: 4.4 },
-          { id: "v-2-1-2", name: "Costa Brava · Platja d'Aro", city: "Platja d'Aro", capacity: 900, monthlyGmvCents: 64_200_00, status: "active", rating: 4.3 },
-          { id: "v-2-1-3", name: "Costa Brava · Sitges", city: "Sitges", capacity: 700, monthlyGmvCents: 38_900_00, status: "pending", rating: 0 },
+          { id: "v-2-1-1", name: "Litoral Beach · Lloret", city: "Lloret de Mar", capacity: 1200, monthlyGmvCents: 86_400_00, status: "active", rating: 4.4 },
+          { id: "v-2-1-2", name: "Litoral Beach · Platja d'Aro", city: "Platja d'Aro", capacity: 900, monthlyGmvCents: 64_200_00, status: "active", rating: 4.3 },
+          { id: "v-2-1-3", name: "Litoral Beach · Sitges", city: "Sitges", capacity: 700, monthlyGmvCents: 38_900_00, status: "pending", rating: 0 },
         ],
       },
     ],
   },
   {
     id: "org-3",
-    name: "Razzmatazz S.L.",
+    name: "Sala Prisma S.L.",
     country: "ES",
     tier: "business",
-    contactEmail: "operations@razzmatazz.com",
+    contactEmail: "operaciones@sala-prisma.example",
     joinedAt: "2024-04-22",
     brands: [
       {
         id: "br-3-1",
-        name: "Razzmatazz",
+        name: "Sala Prisma",
         category: "Club",
         countries: ["ES"],
         venues: [
-          { id: "v-3-1-1", name: "Razzmatazz · Sala 1", city: "Barcelona", capacity: 1800, monthlyGmvCents: 76_840_00, status: "active", rating: 4.7 },
-          { id: "v-3-1-2", name: "Razzmatazz · Sala 2", city: "Barcelona", capacity: 600, monthlyGmvCents: 18_200_00, status: "active", rating: 4.4 },
+          { id: "v-3-1-1", name: "Sala Prisma · Sala 1", city: "Barcelona", capacity: 1800, monthlyGmvCents: 76_840_00, status: "active", rating: 4.7 },
+          { id: "v-3-1-2", name: "Sala Prisma · Sala 2", city: "Barcelona", capacity: 600, monthlyGmvCents: 18_200_00, status: "active", rating: 4.4 },
         ],
       },
     ],
   },
   {
     id: "org-4",
-    name: "Sala Apolo Group",
+    name: "Aurora Live",
     country: "ES",
     tier: "business",
-    contactEmail: "admin@salaapolo.com",
+    contactEmail: "admin@aurora-live.example",
     joinedAt: "2023-10-14",
     brands: [
       {
         id: "br-4-1",
-        name: "Sala Apolo",
+        name: "Aurora Live",
         category: "Sala conciertos",
         countries: ["ES"],
         venues: [
-          { id: "v-4-1-1", name: "Sala Apolo", city: "Barcelona", capacity: 1200, monthlyGmvCents: 52_180_00, status: "active", rating: 4.8 },
+          { id: "v-4-1-1", name: "Aurora Live", city: "Valencia", capacity: 1200, monthlyGmvCents: 52_180_00, status: "active", rating: 4.8 },
         ],
       },
       {
         id: "br-4-2",
-        name: "La [2] de Apolo",
+        name: "La Pequeña Aurora",
         category: "Sala conciertos",
         countries: ["ES"],
         venues: [
-          { id: "v-4-2-1", name: "La [2] de Apolo", city: "Barcelona", capacity: 500, monthlyGmvCents: 18_400_00, status: "active", rating: 4.6 },
+          { id: "v-4-2-1", name: "La Pequeña Aurora", city: "Valencia", capacity: 500, monthlyGmvCents: 18_400_00, status: "active", rating: 4.6 },
         ],
       },
     ],
   },
   {
     id: "org-5",
-    name: "Medusa Events",
+    name: "Brisa Festivales",
     country: "ES",
     tier: "starter",
-    contactEmail: "hello@medusaevents.es",
+    contactEmail: "hola@brisa-festivales.example",
     joinedAt: "2026-01-11",
     brands: [
       {
         id: "br-5-1",
-        name: "Medusa Festival",
+        name: "Brisa Festival",
         category: "Festival",
         countries: ["ES"],
         venues: [
-          { id: "v-5-1-1", name: "Medusa Beach Festival", city: "Cullera", capacity: 25000, monthlyGmvCents: 348_200_00, status: "active", rating: 4.6 },
+          { id: "v-5-1-1", name: "Brisa Festival · Playa", city: "Gandia", capacity: 25000, monthlyGmvCents: 348_200_00, status: "active", rating: 4.6 },
         ],
       },
     ],
@@ -242,7 +245,7 @@ export const OrganizationsHub = () => {
           Organizations <span style={serif} className="text-orange-500">hub</span>
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Jerarquía completa Organization → Brand → Venue · multi-tenant enterprise.
+          Maqueta de la jerarquía Organización → Marca → Local, con organizaciones inventadas.
         </p>
       </header>
 

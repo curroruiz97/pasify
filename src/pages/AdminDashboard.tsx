@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutLocal } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { qk } from "@/lib/cache/keys";
+import { getErrorMessage } from "@/lib/sentry";
+import { isNativeApp } from "@/lib/platform";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,20 +21,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  LogOut,
-  LayoutDashboard,
-  Store,
-  Users,
+  AlertTriangle,
+  BarChart3,
+  Brain,
   Calendar,
-  Ticket,
-  MessageCircle,
   CheckCircle2,
-  XCircle,
+  ChevronRight,
+  FileSearch,
+  HelpCircle,
+  Landmark,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessageCircle,
+  MoreHorizontal,
+  Network,
+  RefreshCw,
   RotateCcw,
-  Check,
-  X as XIcon,
+  Scale,
+  Settings,
+  Shield,
+  ShieldAlert,
+  Store,
+  Ticket,
+  Users,
+  XCircle,
 } from "lucide-react";
-import SupportChat from "@/components/support/SupportChat";
 import Wordmark from "@/components/Wordmark";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { LivePulse } from "@/components/admin/LivePulse";
@@ -41,53 +58,26 @@ import { OrganizationsHub } from "@/components/admin/OrganizationsHub";
 import { ComplianceHub } from "@/components/admin/ComplianceHub";
 import { AISafetyConsole } from "@/components/admin/AISafetyConsole";
 import { IndustryBenchmarks } from "@/components/admin/IndustryBenchmarks";
-import { Shield, Landmark, Brain, Network, Scale, ShieldAlert, BarChart3, Menu, MoreHorizontal, HelpCircle, Settings, ChevronRight } from "lucide-react";
+import { AdminRefundsQueue } from "@/components/admin/AdminRefundsQueue";
+import { AdminSupportInbox } from "@/components/admin/AdminSupportInbox";
+import { DemoBanner } from "@/components/admin/AdminDemo";
+import {
+  useAdminEvents,
+  useAdminKpis,
+  useAdminRealtime,
+  useAdminRefundCounts,
+  useAdminShowcase,
+  useAdminSupportUnread,
+  useAdminUserFacets,
+  useAdminUsers,
+  type AdminUserRow,
+} from "@/components/admin/adminQueries";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
-import { useRefundRequests, type RefundStatus } from "@/hooks/useRefundRequests";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
-import { format } from "date-fns";
-import { es as esDate } from "date-fns/locale";
-
-const UsersIcon2 = Users;
-const CalendarIcon2 = Calendar;
-
-type Profile = {
-  id: string;
-  email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  city: string | null;
-  business_name: string | null;
-  business_category: string | null;
-  account_status: string;
-  created_at: string;
-};
-
-type EventRow = {
-  id: string;
-  partner_id: string;
-  title: string;
-  city: string;
-  date_start: string;
-  status: string;
-  price_cents: number;
-  tickets_sold: number;
-  partner?: { business_name: string | null; first_name: string | null; last_name: string | null } | null;
-};
-
-type SupportConv = {
-  id: string;
-  client_id: string;
-  kind?: string | null;
-  last_message_at: string | null;
-  last_message_preview: string | null;
-  unread_for_admin: number;
-};
 
 type Section =
   | "metricas"
@@ -101,99 +91,46 @@ type Section =
   | "benchmarks"
   | "trust"
   | "compliance"
+  | "auditoria"
   | "refunds"
   | "soporte";
 
+/**
+ * Módulos maqueta (decisión D-7: no se borran, pero solo en modo demo).
+ *   - En la app nativa no existen nunca (directriz 2.1(a) de Apple).
+ *   - En la web solo los ve un admin con el flag admin_showcase encendido
+ *     para su uid (get_feature_flag con el uid como "organización"),
+ *     apagado por defecto.
+ *   - Cuando se ven, llevan arriba la franja "DEMO · datos ficticios" y sus
+ *     botones sin efecto van desactivados con el rótulo "Demo".
+ * Live Pulse (en Métricas) sigue la misma regla.
+ */
+const SECCIONES_DEMO = new Set<Section>(["orgs", "finance", "ai", "ai_safety", "benchmarks", "trust", "compliance"]);
+
+const PAGE_SIZE = 25;
+const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const uid = useCurrentUserId();
   const [section, setSection] = useState<Section>("metricas");
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ locales: 0, clientes: 0, eventos: 0, ticketsVendidos: 0 });
-  const [locales, setLocales] = useState<Profile[]>([]);
-  const [clientes, setClientes] = useState<Profile[]>([]);
-  const [localFilter, setLocalFilter] = useState({
-    search: "",
-    category: "all",
-    city: "all",
-    status: "all",
-  });
-  const [eventos, setEventos] = useState<EventRow[]>([]);
-  const [conversations, setConversations] = useState<SupportConv[]>([]);
-  const [selectedConv, setSelectedConv] = useState<SupportConv | null>(null);
 
-  useEffect(() => {
-    loadAll();
-  }, []);
+  const enApp = isNativeApp();
+  const showcase = useAdminShowcase(uid, !enApp).data === true && !enApp;
+  const seccionVisible = (id: Section) => !SECCIONES_DEMO.has(id) || showcase;
+  // Un enlace o un estado anterior que apunte a un módulo demo sin el flag
+  // cae a Métricas en vez de pintar una maqueta.
+  const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
 
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const { data: localeRoles } = await supabase.from("user_roles").select("user_id").eq("role", "partner");
-      const localeIds = (localeRoles ?? []).map((r) => r.user_id);
-      const localeProfilesRes = localeIds.length
-        ? await supabase.from("profiles").select("*").in("id", localeIds).order("created_at", { ascending: false })
-        : { data: [] as any[] };
-
-      const { data: clientRoles } = await supabase.from("user_roles").select("user_id").eq("role", "client");
-      const clientIds = (clientRoles ?? []).map((r) => r.user_id);
-      const clientProfilesRes = clientIds.length
-        ? await supabase.from("profiles").select("*").in("id", clientIds).order("created_at", { ascending: false })
-        : { data: [] as any[] };
-
-      const { data: eventsData } = await supabase
-        .from("events")
-        .select("id, partner_id, title, city, date_start, status, price_cents, tickets_sold")
-        .order("date_start", { ascending: false })
-        .limit(100);
-
-      const eventsWithPartner: EventRow[] = (eventsData ?? []).map((e: any) => {
-        const partner = (localeProfilesRes.data ?? []).find((p: any) => p.id === e.partner_id);
-        return {
-          ...e,
-          partner: partner
-            ? { business_name: partner.business_name, first_name: partner.first_name, last_name: partner.last_name }
-            : null,
-        };
-      });
-
-      const { count: ticketsCount } = await supabase
-        .from("tickets")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "paid");
-
-      const { data: convsData } = await supabase
-        .from("support_conversations")
-        .select("*")
-        .order("last_message_at", { ascending: false, nullsFirst: false });
-
-      setLocales((localeProfilesRes.data ?? []) as Profile[]);
-      setClientes((clientProfilesRes.data ?? []) as Profile[]);
-      setEventos(eventsWithPartner);
-      setConversations((convsData ?? []) as SupportConv[]);
-      setStats({
-        locales: (localeProfilesRes.data ?? []).length,
-        clientes: (clientProfilesRes.data ?? []).length,
-        eventos: eventsWithPartner.length,
-        ticketsVendidos: ticketsCount ?? 0,
-      });
-    } catch (e: any) {
-      console.error("Error loading admin data:", e);
-      toast({ title: "Error", description: e?.message ?? "Error cargando datos", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateLocaleStatus = async (id: string, status: "approved" | "rejected") => {
-    const { error } = await supabase.from("profiles").update({ account_status: status }).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
-    }
-    toast({ title: status === "approved" ? "Local aprobado" : "Local rechazado" });
-    setLocales((prev) => prev.map((l) => (l.id === id ? { ...l, account_status: status } : l)));
-  };
+  // Tiempo real del panel (bandeja de soporte y cola de reembolsos) y los
+  // contadores del menú, que salen del servidor.
+  useAdminRealtime(uid);
+  const noLeidos = useAdminSupportUnread(uid);
+  const reembolsos = useAdminRefundCounts(uid);
+  const totalUnread = noLeidos.data?.messages ?? 0;
+  const reembolsosPorAtender = (reembolsos.data?.pending ?? 0) + (reembolsos.data?.attention ?? 0);
+  const badgeFor = (id: Section) =>
+    id === "soporte" ? totalUnread : id === "refunds" ? reembolsosPorAtender : undefined;
 
   const handleLogout = async () => {
     await signOutLocal();
@@ -204,47 +141,69 @@ const AdminDashboard = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Tree de navegación — 4 grupos por dominio para reducir scroll.
-  const navTree: NavTreeNode<Section>[] = [
-    { kind: "item", id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
-    {
-      kind: "group", id: "directory", label: "Directorio", icon: <Network className="h-5 w-5" />,
-      children: [
-        { id: "orgs", label: "Organizations", icon: <Network className="h-4 w-4" /> },
-        { id: "locales", label: "Locales", icon: <Store className="h-4 w-4" /> },
-        { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
-      ],
-    },
-    { kind: "item", id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
-    { kind: "item", id: "finance", label: "Finanzas", icon: <Landmark className="h-5 w-5" /> },
-    {
-      kind: "group", id: "intelligence", label: "Inteligencia", icon: <Brain className="h-5 w-5" />,
-      children: [
-        { id: "ai", label: "AI Insights", icon: <Brain className="h-4 w-4" /> },
-        { id: "ai_safety", label: "AI Safety", icon: <ShieldAlert className="h-4 w-4" /> },
-        { id: "benchmarks", label: "Benchmarks", icon: <BarChart3 className="h-4 w-4" /> },
-      ],
-    },
-    {
-      kind: "group", id: "governance", label: "Gobierno", icon: <Scale className="h-5 w-5" />,
-      children: [
-        { id: "trust", label: "Trust & Safety", icon: <Shield className="h-4 w-4" /> },
-        { id: "compliance", label: "Compliance", icon: <Scale className="h-4 w-4" /> },
-        { id: "refunds", label: "Reembolsos", icon: <RotateCcw className="h-4 w-4" /> },
-      ],
-    },
-    { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
-  ];
+  // Árbol de navegación. Los módulos maqueta solo aparecen en modo demo.
+  const navTree = useMemo<NavTreeNode<Section>[]>(() => {
+    const demo = (label: string) => `${label} · demo`;
+    const tree: NavTreeNode<Section>[] = [
+      { kind: "item", id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
+      {
+        kind: "group",
+        id: "directory",
+        label: "Directorio",
+        icon: <Network className="h-5 w-5" />,
+        children: [
+          ...(showcase ? [{ id: "orgs" as const, label: demo("Organizaciones"), icon: <Network className="h-4 w-4" /> }] : []),
+          { id: "locales", label: "Locales", icon: <Store className="h-4 w-4" /> },
+          { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
+        ],
+      },
+      { kind: "item", id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
+    ];
+    if (showcase) {
+      tree.push(
+        { kind: "item", id: "finance", label: demo("Finanzas"), icon: <Landmark className="h-5 w-5" /> },
+        {
+          kind: "group",
+          id: "intelligence",
+          label: demo("Inteligencia"),
+          icon: <Brain className="h-5 w-5" />,
+          children: [
+            { id: "ai", label: "AI Insights", icon: <Brain className="h-4 w-4" /> },
+            { id: "ai_safety", label: "AI Safety", icon: <ShieldAlert className="h-4 w-4" /> },
+            { id: "benchmarks", label: "Benchmarks", icon: <BarChart3 className="h-4 w-4" /> },
+          ],
+        },
+      );
+    }
+    tree.push(
+      {
+        kind: "group",
+        id: "governance",
+        label: "Gobierno",
+        icon: <Scale className="h-5 w-5" />,
+        children: [
+          { id: "refunds", label: "Reembolsos", icon: <RotateCcw className="h-4 w-4" /> },
+          { id: "auditoria", label: "Auditoría", icon: <FileSearch className="h-4 w-4" /> },
+          ...(showcase
+            ? [
+                { id: "trust" as const, label: demo("Trust & Safety"), icon: <Shield className="h-4 w-4" /> },
+                { id: "compliance" as const, label: demo("Compliance"), icon: <Scale className="h-4 w-4" /> },
+              ]
+            : []),
+        ],
+      },
+      { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
+    );
+    return tree;
+  }, [showcase]);
 
   // Bottom tab bar mobile — 4 entradas más usadas; el resto via drawer "Más".
   const tabBarItems: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
     { id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
-    { id: "finance", label: "Finanzas", icon: <Landmark className="h-5 w-5" /> },
+    { id: "refunds", label: "Reembolsos", icon: <RotateCcw className="h-5 w-5" /> },
     { id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
-
-  const totalUnread = conversations.reduce((s, c) => s + (c.unread_for_admin ?? 0), 0);
 
   return (
     <div
@@ -256,21 +215,20 @@ const AdminDashboard = () => {
         <aside className="hidden w-60 border-r border-border bg-card md:flex md:flex-col">
           <div className="flex flex-col items-start gap-3 border-b border-border p-5">
             <Wordmark height={84} />
-            <Badge variant="outline" className="border-primary/40 text-primary">
-              Admin
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="border-primary/40 text-primary">
+                Admin
+              </Badge>
+              {showcase && (
+                <Badge variant="outline" className="border-amber-500/50 text-amber-500">
+                  Modo demo
+                </Badge>
+              )}
+            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto p-3">
-            <NavTree<Section>
-              tree={navTree}
-              section={section}
-              onSelect={(id) => {
-                setSection(id);
-                setSelectedConv(null);
-              }}
-              badgeFor={(id) => (id === "soporte" ? totalUnread : undefined)}
-            />
+            <NavTree<Section> tree={navTree} section={seccionActiva} onSelect={setSection} badgeFor={badgeFor} />
           </nav>
 
           <div className="border-t border-border p-3">
@@ -287,382 +245,73 @@ const AdminDashboard = () => {
           endSlot={
             <AdminDrawer
               navTree={navTree}
-              section={section}
-              onSelect={(id) => {
-                setSection(id);
-                setSelectedConv(null);
-              }}
+              section={seccionActiva}
+              onSelect={setSection}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
-              totalUnread={totalUnread}
+              badgeFor={badgeFor}
             />
           }
         />
 
         {/* Main content */}
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
-          {section === "metricas" && (
-            <div>
-              <h1 className="mb-1 text-3xl font-bold tracking-tight">Métricas</h1>
-              <p className="mb-6 text-sm text-muted-foreground">Resumen general de la plataforma Pasify.</p>
+          {SECCIONES_DEMO.has(seccionActiva) && <DemoBanner />}
 
-              <LivePulse
-                liveEvents={Math.min(3, eventos.length)}
-                gmvCentsToday={stats.ticketsVendidos * 1500}
-                scansPerMin={47 + Math.floor(stats.ticketsVendidos / 100)}
-                openAlerts={totalUnread > 0 ? 2 : 0}
-              />
-
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard icon={<Store className="h-5 w-5" />} label="Locales" value={stats.locales} />
-                <StatCard icon={<Users className="h-5 w-5" />} label="Clientes" value={stats.clientes} />
-                <StatCard icon={<Calendar className="h-5 w-5" />} label="Eventos" value={stats.eventos} />
-                <StatCard
-                  icon={<Ticket className="h-5 w-5" />}
-                  label="Tickets vendidos"
-                  value={stats.ticketsVendidos}
-                />
-              </div>
-            </div>
+          {seccionActiva === "metricas" && (
+            <MetricsSection
+              uid={uid}
+              showcase={showcase}
+              unread={totalUnread}
+              refundsPending={reembolsos.data?.pending ?? null}
+              refundsAttention={reembolsos.data?.attention ?? null}
+              onGo={setSection}
+            />
           )}
 
-          {section === "locales" && (
-            <SectionShell title="Locales" subtitle="Gestión y aprobación de locales registrados.">
-              {/* Filtros */}
-              {locales.length > 0 && (
-                <PartnerFilters
-                  filter={localFilter}
-                  onChange={setLocalFilter}
-                  total={locales.length}
-                  filtered={applyLocalFilter(locales, localFilter).length}
-                  cities={Array.from(new Set(locales.map((l) => l.city).filter(Boolean))) as string[]}
-                  categories={
-                    Array.from(
-                      new Set(locales.map((l) => l.business_category).filter(Boolean))
-                    ) as string[]
-                  }
-                />
-              )}
-              {loading ? (
-                <PasifyEmptyState icon={<Store className="h-7 w-7" />} eyebrow="Cargando" title="Sincronizando locales…" spin compact />
-              ) : locales.length === 0 ? (
-                <PasifyEmptyState
-                  icon={<Store className="h-7 w-7" />}
-                  eyebrow="Sin locales"
-                  title="Aún no hay locales registrados."
-                  subtitle="Cuando los partners se den de alta aparecerán aquí con su estado de KYC."
-                  compact
-                />
-              ) : applyLocalFilter(locales, localFilter).length === 0 ? (
-                <PasifyEmptyState
-                  icon={<Store className="h-7 w-7" />}
-                  eyebrow="Sin resultados"
-                  title="Nada coincide con los filtros."
-                  subtitle="Prueba a limpiar la búsqueda o cambiar las opciones."
-                  action={{
-                    label: "Limpiar filtros",
-                    onClick: () => setLocalFilter({ search: "", category: "all", city: "all", status: "all" }),
-                  }}
-                  compact
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Local</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Ciudad</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {applyLocalFilter(locales, localFilter).map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell className="font-medium">
-                          {l.business_name ?? (`${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "—")}
-                        </TableCell>
-                        <TableCell className="capitalize text-muted-foreground">
-                          {l.business_category ?? "—"}
-                        </TableCell>
-                        <TableCell>{l.city ?? "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{l.email ?? "—"}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={l.account_status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {l.account_status !== "approved" && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="mr-2"
-                              onClick={() => updateLocaleStatus(l.id, "approved")}
-                            >
-                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                              Aprobar
-                            </Button>
-                          )}
-                          {l.account_status !== "rejected" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateLocaleStatus(l.id, "rejected")}
-                            >
-                              <XCircle className="mr-1 h-3.5 w-3.5" />
-                              Rechazar
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </SectionShell>
-          )}
+          {seccionActiva === "locales" && <LocalesSection uid={uid} />}
 
-          {section === "clientes" && (
-            <SectionShell title="Clientes" subtitle="Usuarios que han comprado o pueden comprar tickets.">
-              {loading ? (
-                <PasifyEmptyState icon={<UsersIcon2 className="h-7 w-7" />} eyebrow="Cargando" title="Sincronizando clientes…" spin compact />
-              ) : clientes.length === 0 ? (
-                <PasifyEmptyState
-                  icon={<UsersIcon2 className="h-7 w-7" />}
-                  eyebrow="Sin clientes"
-                  title="Aún no hay clientes registrados."
-                  subtitle="Cuando los usuarios creen su cuenta aparecerán aquí ordenados por última actividad."
-                  compact
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Teléfono</TableHead>
-                      <TableHead>Ciudad</TableHead>
-                      <TableHead>Registrado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {clientes.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">
-                          {`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{c.email ?? "—"}</TableCell>
-                        <TableCell>{c.phone ?? "—"}</TableCell>
-                        <TableCell>{c.city ?? "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(c.created_at).toLocaleDateString("es-ES")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </SectionShell>
-          )}
+          {seccionActiva === "clientes" && <ClientesSection uid={uid} />}
 
-          {section === "eventos" && (
-            <SectionShell title="Eventos" subtitle="Eventos publicados por los locales en Pasify.">
-              {loading ? (
-                <PasifyEmptyState icon={<CalendarIcon2 className="h-7 w-7" />} eyebrow="Cargando" title="Sincronizando eventos…" spin compact />
-              ) : eventos.length === 0 ? (
-                <PasifyEmptyState
-                  icon={<CalendarIcon2 className="h-7 w-7" />}
-                  eyebrow="Sin eventos"
-                  title="Aún no hay eventos publicados."
-                  subtitle="Los eventos que los partners creen aparecerán aquí en tiempo real."
-                  compact
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Evento</TableHead>
-                      <TableHead>Local</TableHead>
-                      <TableHead>Ciudad</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Precio</TableHead>
-                      <TableHead>Vendidos</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {eventos.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="font-medium">{e.title}</TableCell>
-                        <TableCell className="text-muted-foreground">{e.partner?.business_name ?? "—"}</TableCell>
-                        <TableCell>{e.city}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(e.date_start).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </TableCell>
-                        <TableCell>{(e.price_cents / 100).toFixed(2)} €</TableCell>
-                        <TableCell>{e.tickets_sold}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={e.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </SectionShell>
-          )}
+          {seccionActiva === "eventos" && <EventosSection uid={uid} />}
 
-          {section === "finance" && <NetworkFinance />}
+          {seccionActiva === "finance" && <NetworkFinance />}
 
-          {section === "ai" && <AiInsightsHub />}
+          {seccionActiva === "ai" && <AiInsightsHub />}
 
-          {section === "ai_safety" && <AISafetyConsole />}
+          {seccionActiva === "ai_safety" && <AISafetyConsole />}
 
-          {section === "benchmarks" && <IndustryBenchmarks />}
+          {seccionActiva === "benchmarks" && <IndustryBenchmarks />}
 
-          {section === "orgs" && <OrganizationsHub />}
+          {seccionActiva === "orgs" && <OrganizationsHub />}
 
-          {section === "compliance" && <ComplianceHub />}
+          {seccionActiva === "compliance" && <ComplianceHub />}
 
-          {section === "trust" && (
-            <div className="space-y-8">
-              <TrustSafetyCenter />
-              <AuditTrailViewer />
-            </div>
-          )}
+          {seccionActiva === "trust" && <TrustSafetyCenter />}
 
-          {section === "refunds" && <RefundsQueue />}
+          {seccionActiva === "auditoria" && <AuditTrailViewer />}
 
-          {section === "soporte" && (
-            <div>
-              <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
-              <p className="mb-6 text-sm text-muted-foreground">
-                Inbox de conversaciones con clientes. Click en una para responder.
-              </p>
+          {seccionActiva === "refunds" && <AdminRefundsQueue uid={uid} />}
 
-              <div className="grid gap-4 md:grid-cols-[320px_1fr]">
-                {/* Conversation list */}
-                <div className="rounded-2xl border border-border bg-card max-h-[70vh] overflow-y-auto">
-                  {conversations.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-10 text-center text-sm text-muted-foreground">
-                      <MessageCircle className="mb-2 h-8 w-8 opacity-50" />
-                      Aún no hay conversaciones.
-                    </div>
-                  ) : (
-                    conversations.map((conv) => {
-                      // Las conversaciones de locales (partner_admin) guardan en
-                      // client_id al usuario del local: se busca en ambas listas.
-                      const isPartnerConv = conv.kind === "partner_admin";
-                      const person =
-                        clientes.find((c) => c.id === conv.client_id) ||
-                        locales.find((l) => l.id === conv.client_id) ||
-                        null;
-                      const personName =
-                        [person?.first_name, person?.last_name].filter(Boolean).join(" ") ||
-                        person?.email ||
-                        null;
-                      const fullName = isPartnerConv
-                        ? `Local · ${person?.business_name || personName || "sin nombre"}`
-                        : personName || "Cliente sin nombre";
-                      const isActive = selectedConv?.id === conv.id;
-                      const unread = conv.unread_for_admin ?? 0;
-                      return (
-                        <button
-                          key={conv.id}
-                          onClick={() => setSelectedConv(conv)}
-                          className={`flex w-full flex-col items-start gap-1 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 ${isActive ? "bg-muted/60" : ""}`}
-                        >
-                          <div className="flex w-full items-center justify-between gap-2">
-                            <span className="truncate text-sm font-semibold">{fullName}</span>
-                            {unread > 0 && (
-                              <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                                {unread}
-                              </span>
-                            )}
-                          </div>
-                          <p className="line-clamp-2 text-xs text-muted-foreground">
-                            {conv.last_message_preview || "(Sin mensajes)"}
-                          </p>
-                          {conv.last_message_at && (
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-                              {new Date(conv.last_message_at).toLocaleString("es-ES", {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Selected conversation */}
-                <div className="rounded-2xl border border-border bg-card min-h-[400px]">
-                  {selectedConv ? (
-                    (() => {
-                      const person =
-                        clientes.find((c) => c.id === selectedConv.client_id) ||
-                        locales.find((l) => l.id === selectedConv.client_id) ||
-                        null;
-                      return (
-                        <SupportChat
-                          key={selectedConv.id}
-                          mode="admin"
-                          conversationId={selectedConv.id}
-                          selectedClientId={selectedConv.client_id}
-                          selectedClient={{
-                            id: selectedConv.client_id,
-                            first_name: person?.first_name ?? null,
-                            last_name: person?.last_name ?? null,
-                            email: person?.email ?? null,
-                          }}
-                        />
-                      );
-                    })()
-                  ) : (
-                    <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center text-sm text-muted-foreground">
-                      <MessageCircle className="mb-3 h-10 w-10 opacity-40" />
-                      Selecciona una conversación de la izquierda para responder.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          {seccionActiva === "soporte" && <AdminSupportInbox uid={uid} />}
         </main>
 
         {/* Mobile bottom tab bar — primitiva compartida (MobileBottomNav).
-            El badge de unread sigue mostrándose sobre el icono de Soporte. */}
+            Los contadores de Soporte y Reembolsos salen del servidor. */}
         <MobileBottomNav<Section>
-          items={tabBarItems.map((item) => ({
-            ...item,
-            badge: item.id === "soporte" ? totalUnread : undefined,
-          }))}
-          activeId={section}
-          onSelect={(id) => {
-            setSection(id);
-            setSelectedConv(null);
-          }}
+          items={tabBarItems.map((item) => ({ ...item, badge: badgeFor(item.id) }))}
+          activeId={seccionActiva}
+          onSelect={setSection}
           drawerSlot={
             <AdminDrawer
               navTree={navTree}
-              section={section}
-              onSelect={(id) => {
-                setSection(id);
-                setSelectedConv(null);
-              }}
+              section={seccionActiva}
+              onSelect={setSection}
               onLogout={handleLogout}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
-              totalUnread={totalUnread}
+              badgeFor={badgeFor}
               variant="tab"
             />
           }
@@ -681,14 +330,482 @@ const AdminDashboard = () => {
         open={helpOpen}
         onOpenChange={setHelpOpen}
         role="admin"
-        onOpenSupport={() => {
-          setSection("soporte");
-          setSelectedConv(null);
-        }}
+        onOpenSupport={() => setSection("soporte")}
       />
     </div>
   );
 };
+
+// ============================================================================
+// Métricas: datos reales (v_admin_platform_kpis) y lo que espera al admin
+// ============================================================================
+
+const MetricsSection = ({
+  uid,
+  showcase,
+  unread,
+  refundsPending,
+  refundsAttention,
+  onGo,
+}: {
+  uid: string | null;
+  showcase: boolean;
+  unread: number;
+  refundsPending: number | null;
+  refundsAttention: number | null;
+  onGo: (s: Section) => void;
+}) => {
+  const kpis = useAdminKpis(uid);
+  const k = kpis.data;
+  return (
+    <div>
+      <h1 className="mb-1 text-3xl font-bold tracking-tight">Métricas</h1>
+      <p className="mb-6 text-sm text-muted-foreground">Resumen de la plataforma Pasify con datos reales.</p>
+
+      {showcase && (
+        <>
+          <DemoBanner>Live Pulse es una maqueta con cifras inventadas. Las tarjetas de debajo son reales.</DemoBanner>
+          <LivePulse />
+        </>
+      )}
+
+      {kpis.isError && (
+        <ErrorCard
+          mensaje={`No se han podido cargar las métricas: ${getErrorMessage(kpis.error)}`}
+          onRetry={() => void kpis.refetch()}
+        />
+      )}
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard icon={<Store className="h-5 w-5" />} label="Locales" value={k?.partners ?? null} />
+        <StatCard icon={<Users className="h-5 w-5" />} label="Clientes" value={k?.clients ?? null} />
+        <StatCard icon={<Calendar className="h-5 w-5" />} label="Eventos publicados" value={k?.publishedEvents ?? null} />
+        <StatCard
+          icon={<Ticket className="h-5 w-5" />}
+          label="Entradas vendidas"
+          value={k?.ticketsSold ?? null}
+          sub="Pagadas, incluidas las ya usadas en puerta"
+        />
+      </div>
+
+      <h2
+        className="mb-3 mt-8 text-[11px] uppercase text-muted-foreground"
+        style={{ ...mono, letterSpacing: "0.2em" }}
+      >
+        Pendiente
+      </h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <PendingCard
+          icon={<RotateCcw className="h-5 w-5" />}
+          label="Reembolsos por revisar"
+          value={refundsPending}
+          onClick={() => onGo("refunds")}
+        />
+        <PendingCard
+          icon={<AlertTriangle className="h-5 w-5" />}
+          label="Reembolsos con incidencia"
+          value={refundsAttention}
+          alert
+          onClick={() => onGo("refunds")}
+        />
+        <PendingCard
+          icon={<MessageCircle className="h-5 w-5" />}
+          label="Mensajes de soporte sin leer"
+          value={unread}
+          onClick={() => onGo("soporte")}
+        />
+      </div>
+
+      <p className="mt-8 max-w-2xl text-xs text-muted-foreground">
+        Las finanzas de la red (volumen de ventas, comisiones y liquidaciones) llegan en una próxima versión: hoy el
+        panel no enseña ninguna cifra económica. Las entradas vendidas incluyen las de pedidos de prueba de Stripe.
+      </p>
+    </div>
+  );
+};
+
+const StatCard = ({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | null;
+  sub?: string;
+}) => (
+  <Card>
+    <CardContent className="p-5">
+      <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-xs uppercase tracking-wider">{label}</span>
+      </div>
+      <div className="text-3xl font-bold">{value === null ? "—" : value.toLocaleString("es-ES")}</div>
+      {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
+    </CardContent>
+  </Card>
+);
+
+const PendingCard = ({
+  icon,
+  label,
+  value,
+  alert,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | null;
+  alert?: boolean;
+  onClick: () => void;
+}) => {
+  const activo = (value ?? 0) > 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-between gap-3 rounded-2xl border bg-card p-5 text-left transition hover:bg-muted/40"
+      style={{ borderColor: activo && alert ? "rgba(229,72,77,0.5)" : "hsl(var(--border))" }}
+    >
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <span
+        className="text-2xl font-bold"
+        style={{ color: activo ? (alert ? "#E5484D" : "#FF7A4D") : undefined }}
+      >
+        {value === null ? "—" : value.toLocaleString("es-ES")}
+      </span>
+    </button>
+  );
+};
+
+// ============================================================================
+// Locales y Clientes: admin_list_users, filtrado y paginado en el servidor
+// ============================================================================
+
+/** Lo tecleado en el buscador, 300 ms después de dejar de escribir. */
+function useDebounced<T>(value: T, ms = 300): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+interface LocalFilter {
+  search: string;
+  category: string;
+  city: string;
+  status: string;
+}
+
+const SIN_FILTROS: LocalFilter = { search: "", category: "all", city: "all", status: "all" };
+
+const LocalesSection = ({ uid }: { uid: string | null }) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<LocalFilter>(SIN_FILTROS);
+  const [page, setPage] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const search = useDebounced(filter.search);
+  // Otro filtro, otra búsqueda: de vuelta a la primera página.
+  const cambiarFiltro = (f: LocalFilter) => {
+    setFilter(f);
+    setPage(0);
+  };
+
+  const locales = useAdminUsers(uid, {
+    role: "partner",
+    search,
+    status: filter.status === "all" ? null : filter.status,
+    city: filter.city === "all" ? null : filter.city,
+    category: filter.category === "all" ? null : filter.category,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const facets = useAdminUserFacets(uid, "partner");
+  const rows = locales.data?.rows ?? [];
+  const total = locales.data?.total ?? 0;
+
+  // Aprobar o rechazar puede vaciar la última página de un filtro: a la anterior.
+  const paginaVacia = !locales.isFetching && !!locales.data && locales.data.rows.length === 0 && page > 0;
+  useEffect(() => {
+    if (paginaVacia) setPage((p) => Math.max(0, p - 1));
+  }, [paginaVacia]);
+  const hayFiltros =
+    !!filter.search || filter.category !== "all" || filter.city !== "all" || filter.status !== "all";
+
+  const updateLocaleStatus = async (id: string, status: "approved" | "rejected") => {
+    setBusyId(id);
+    const { error } = await supabase.from("profiles").update({ account_status: status }).eq("id", id);
+    setBusyId(null);
+    if (error) {
+      toast({ title: "No se ha podido cambiar el estado", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: status === "approved" ? "Local aprobado" : "Local rechazado" });
+    if (uid) void queryClient.invalidateQueries({ queryKey: qk.admin.users(uid) });
+  };
+
+  return (
+    <SectionShell title="Locales" subtitle="Gestión y aprobación de locales registrados.">
+      <PartnerFilters
+        filter={filter}
+        onChange={cambiarFiltro}
+        total={total}
+        loading={locales.isFetching}
+        cities={facets.data?.cities ?? []}
+        categories={facets.data?.categories ?? []}
+        hayFiltros={hayFiltros}
+      />
+      {locales.isError ? (
+        <ErrorCard
+          mensaje={`No se han podido cargar los locales: ${getErrorMessage(locales.error)}`}
+          onRetry={() => void locales.refetch()}
+        />
+      ) : locales.isPending ? (
+        <PasifyEmptyState icon={<Store className="h-7 w-7" />} eyebrow="Cargando" title="Cargando locales…" spin compact />
+      ) : rows.length === 0 ? (
+        hayFiltros ? (
+          <PasifyEmptyState
+            icon={<Store className="h-7 w-7" />}
+            eyebrow="Sin resultados"
+            title="Nada coincide con los filtros."
+            subtitle="Prueba a limpiar la búsqueda o cambiar las opciones."
+            action={{ label: "Limpiar filtros", onClick: () => cambiarFiltro(SIN_FILTROS) }}
+            compact
+          />
+        ) : (
+          <PasifyEmptyState
+            icon={<Store className="h-7 w-7" />}
+            eyebrow="Sin locales"
+            title="Aún no hay locales registrados."
+            subtitle="Cuando los partners se den de alta aparecerán aquí con su estado."
+            compact
+          />
+        )
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Local</TableHead>
+                <TableHead>Categoría</TableHead>
+                <TableHead>Ciudad</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell className="font-medium">{nombreLocal(l)}</TableCell>
+                  <TableCell className="capitalize text-muted-foreground">{l.business_category ?? "—"}</TableCell>
+                  <TableCell>{l.city ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{l.email ?? "—"}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={l.account_status} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    {l.account_status !== "approved" && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="mr-2"
+                        disabled={busyId === l.id}
+                        onClick={() => void updateLocaleStatus(l.id, "approved")}
+                      >
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                        Aprobar
+                      </Button>
+                    )}
+                    {l.account_status !== "rejected" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === l.id}
+                        onClick={() => void updateLocaleStatus(l.id, "rejected")}
+                      >
+                        <XCircle className="mr-1 h-3.5 w-3.5" />
+                        Rechazar
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Paginador page={page} total={total} onPage={setPage} cargando={locales.isFetching} />
+        </>
+      )}
+    </SectionShell>
+  );
+};
+
+const nombreLocal = (l: AdminUserRow) =>
+  l.business_name || `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "—";
+
+const ClientesSection = ({ uid }: { uid: string | null }) => {
+  const [texto, setTexto] = useState("");
+  const [page, setPage] = useState(0);
+  const search = useDebounced(texto);
+
+  const clientes = useAdminUsers(uid, {
+    role: "client",
+    search,
+    status: null,
+    city: null,
+    category: null,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const rows = clientes.data?.rows ?? [];
+  const total = clientes.data?.total ?? 0;
+
+  return (
+    <SectionShell title="Clientes" subtitle="Usuarios que han comprado o pueden comprar entradas.">
+      <div className="border-b border-border p-3 md:p-4">
+        <Input
+          placeholder="Buscar por nombre o email…"
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setPage(0);
+          }}
+          className="h-10 rounded-xl"
+        />
+      </div>
+      {clientes.isError ? (
+        <ErrorCard
+          mensaje={`No se han podido cargar los clientes: ${getErrorMessage(clientes.error)}`}
+          onRetry={() => void clientes.refetch()}
+        />
+      ) : clientes.isPending ? (
+        <PasifyEmptyState icon={<Users className="h-7 w-7" />} eyebrow="Cargando" title="Cargando clientes…" spin compact />
+      ) : rows.length === 0 ? (
+        <PasifyEmptyState
+          icon={<Users className="h-7 w-7" />}
+          eyebrow={search ? "Sin resultados" : "Sin clientes"}
+          title={search ? "Nadie coincide con la búsqueda." : "Aún no hay clientes registrados."}
+          subtitle={search ? undefined : "Cuando los usuarios creen su cuenta aparecerán aquí, los más recientes primero."}
+          compact
+        />
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Teléfono</TableHead>
+                <TableHead>Ciudad</TableHead>
+                <TableHead>Registrado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">
+                    {`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{c.email ?? "—"}</TableCell>
+                  <TableCell>{c.phone ?? "—"}</TableCell>
+                  <TableCell>{c.city ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(c.created_at).toLocaleDateString("es-ES")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Paginador page={page} total={total} onPage={setPage} cargando={clientes.isFetching} />
+        </>
+      )}
+    </SectionShell>
+  );
+};
+
+// ============================================================================
+// Eventos (todos, paginados)
+// ============================================================================
+
+const EventosSection = ({ uid }: { uid: string | null }) => {
+  const [page, setPage] = useState(0);
+  const eventos = useAdminEvents(uid, page, PAGE_SIZE);
+  const rows = eventos.data?.rows ?? [];
+  const total = eventos.data?.total ?? 0;
+
+  return (
+    <SectionShell title="Eventos" subtitle="Eventos de los locales en Pasify, los más recientes primero.">
+      {eventos.isError ? (
+        <ErrorCard
+          mensaje={`No se han podido cargar los eventos: ${getErrorMessage(eventos.error)}`}
+          onRetry={() => void eventos.refetch()}
+        />
+      ) : eventos.isPending ? (
+        <PasifyEmptyState icon={<Calendar className="h-7 w-7" />} eyebrow="Cargando" title="Cargando eventos…" spin compact />
+      ) : rows.length === 0 ? (
+        <PasifyEmptyState
+          icon={<Calendar className="h-7 w-7" />}
+          eyebrow="Sin eventos"
+          title="Aún no hay eventos."
+          subtitle="Los eventos que creen los locales aparecerán aquí."
+          compact
+        />
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Evento</TableHead>
+                <TableHead>Local</TableHead>
+                <TableHead>Ciudad</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Precio desde</TableHead>
+                <TableHead>Vendidas</TableHead>
+                <TableHead>Estado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell className="font-medium">{e.title}</TableCell>
+                  <TableCell className="text-muted-foreground">{e.localName ?? "—"}</TableCell>
+                  <TableCell>{e.city}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(e.date_start).toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </TableCell>
+                  <TableCell>{(e.price_cents / 100).toFixed(2)} €</TableCell>
+                  <TableCell>
+                    {e.tickets_sold}
+                    {e.capacity ? <span className="text-muted-foreground"> / {e.capacity}</span> : null}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={e.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Paginador page={page} total={total} onPage={setPage} cargando={eventos.isFetching} />
+        </>
+      )}
+    </SectionShell>
+  );
+};
+
+// ============================================================================
+// Piezas comunes
+// ============================================================================
 
 const SectionShell = ({
   title,
@@ -708,6 +825,57 @@ const SectionShell = ({
   </div>
 );
 
+const Paginador = ({
+  page,
+  total,
+  onPage,
+  cargando,
+}: {
+  page: number;
+  total: number;
+  onPage: (p: number) => void;
+  cargando?: boolean;
+}) => {
+  const desde = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const hasta = Math.min(total, (page + 1) * PAGE_SIZE);
+  return (
+    <div
+      className="flex items-center justify-between border-t border-border px-4 py-3 text-[11px] uppercase text-muted-foreground"
+      style={{ ...mono, letterSpacing: "0.14em" }}
+    >
+      <span className="inline-flex items-center gap-2">
+        {desde}–{hasta} de {total.toLocaleString("es-ES")}
+        {cargando && <RefreshCw className="h-3 w-3 animate-spin" />}
+      </span>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => onPage(Math.max(0, page - 1))}>
+          Anterior
+        </Button>
+        <Button variant="outline" size="sm" disabled={hasta >= total} onClick={() => onPage(page + 1)}>
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const ErrorCard = ({ mensaje, onRetry }: { mensaje: string; onRetry: () => void }) => (
+  <div
+    role="alert"
+    className="m-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+    style={{ borderColor: "rgba(229,72,77,0.45)", background: "rgba(229,72,77,0.06)" }}
+  >
+    <span className="flex items-start gap-2 text-sm text-foreground">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+      {mensaje}
+    </span>
+    <Button variant="outline" size="sm" onClick={onRetry}>
+      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+      Reintentar
+    </Button>
+  </div>
+);
+
 // ============================================================================
 // AdminDrawer — Sheet lateral con todas las secciones (sidebar mobile).
 // Mismo patrón que PartnerDrawer/ClientDrawer; reusa NavTree.
@@ -722,7 +890,7 @@ const AdminDrawer = ({
   onLogout,
   onOpenSettings,
   onOpenHelp,
-  totalUnread,
+  badgeFor,
   variant = "topbar",
 }: {
   navTree: NavTreeNode<Section>[];
@@ -731,7 +899,7 @@ const AdminDrawer = ({
   onLogout: () => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
-  totalUnread: number;
+  badgeFor: (id: Section) => number | undefined;
   variant?: "topbar" | "tab";
 }) => {
   const [open, setOpen] = useState(false);
@@ -785,7 +953,7 @@ const AdminDrawer = ({
               onSelect(id);
               setOpen(false);
             }}
-            badgeFor={(id) => (id === "soporte" ? totalUnread : undefined)}
+            badgeFor={badgeFor}
           />
 
           <div
@@ -841,18 +1009,6 @@ const AdminDrawer = ({
   );
 };
 
-const StatCard = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) => (
-  <Card>
-    <CardContent className="p-5">
-      <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-xs uppercase tracking-wider">{label}</span>
-      </div>
-      <div className="text-3xl font-bold">{value}</div>
-    </CardContent>
-  </Card>
-);
-
 const StatusBadge = ({ status }: { status: string }) => {
   const variant: Record<string, { label: string; cls: string }> = {
     approved: { label: "Aprobado", cls: "bg-success/15 text-success border-success/30" },
@@ -872,218 +1028,31 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 // ============================================================================
-// RefundsQueue — cola de reembolsos pendientes
-// ============================================================================
-
-const refundsMono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-
-const RefundsQueue = () => {
-  // decideRefund aprueba o rechaza (RPC decide_refund) y, si aprueba, lanza
-  // el reembolso en Stripe (process-refund). `setStatus` no existía.
-  // Modo admin: solicitudes de otras personas, solo en memoria (nunca en el
-  // dispositivo del admin).
-  const { requests, decideRefund } = useRefundRequests("admin");
-  const pending = requests.filter((r) => r.status === "pending");
-  const decided = requests.filter((r) => r.status !== "pending");
-
-  return (
-    <div>
-      <h1 className="mb-1 text-3xl font-bold tracking-tight">Reembolsos</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Cola de solicitudes de reembolso enviadas por los clientes. Aprueba o rechaza con un click.
-      </p>
-
-      <div
-        className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] uppercase text-orange-500"
-        style={{ ...refundsMono, letterSpacing: "0.2em" }}
-      >
-        <span className="inline-block h-px w-5 bg-orange-500/70" />
-        En cola · {pending.length.toString().padStart(2, "0")} pendientes
-      </div>
-
-      {requests.length === 0 ? (
-        <PasifyEmptyState
-          icon={<RotateCcw className="h-7 w-7" />}
-          eyebrow="Sin reembolsos"
-          title="Aún no hay solicitudes."
-          subtitle="Cuando un cliente solicite un reembolso aparecerá aquí con su motivo y datos del ticket."
-          compact
-        />
-      ) : (
-        <>
-          {pending.length > 0 && (
-            <section className="mb-8">
-              <div
-                className="mb-3 text-[10px] uppercase text-muted-foreground"
-                style={{ ...refundsMono, letterSpacing: "0.2em" }}
-              >
-                Pendientes
-              </div>
-              <div className="space-y-3">
-                {pending.map((r) => (
-                  <RefundRow
-                    key={r.id}
-                    request={r}
-                    onApprove={() => void decideRefund(r.id, "approve").catch(() => {})}
-                    onReject={() => void decideRefund(r.id, "reject").catch(() => {})}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {decided.length > 0 && (
-            <section>
-              <div
-                className="mb-3 text-[10px] uppercase text-muted-foreground"
-                style={{ ...refundsMono, letterSpacing: "0.2em" }}
-              >
-                Histórico
-              </div>
-              <div className="space-y-2 opacity-75">
-                {decided.map((r) => (
-                  <RefundRow key={r.id} request={r} readonly />
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-    </div>
-  );
-};
-
-const RefundRow = ({
-  request,
-  onApprove,
-  onReject,
-  readonly,
-}: {
-  request: ReturnType<typeof useRefundRequests>["requests"][number];
-  onApprove?: () => void;
-  onReject?: () => void;
-  readonly?: boolean;
-}) => {
-  const statusColor: Record<RefundStatus, string> = {
-    pending: "#E8B04C",
-    approved: "#4DB87A",
-    rejected: "#8A8275",
-  };
-  const statusLabel: Record<RefundStatus, string> = {
-    pending: "En revisión",
-    approved: "Aprobado",
-    rejected: "Denegado",
-  };
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 md:flex-row md:items-center md:justify-between"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span
-            className="rounded-full px-2 py-0.5 text-[9px] uppercase"
-            style={{
-              ...refundsMono,
-              letterSpacing: "0.18em",
-              background: `${statusColor[request.status]}22`,
-              color: statusColor[request.status],
-              border: `1px solid ${statusColor[request.status]}44`,
-            }}
-          >
-            {statusLabel[request.status]}
-          </span>
-          <span
-            className="text-[10px] uppercase text-muted-foreground"
-            style={{ ...refundsMono, letterSpacing: "0.14em" }}
-          >
-            {format(new Date(request.requestedAt), "d MMM · HH:mm", { locale: esDate })}
-          </span>
-        </div>
-        <div className="mt-1 truncate text-base font-semibold text-foreground">
-          {request.eventTitle}
-        </div>
-        <div
-          className="mt-0.5 text-[12px] text-muted-foreground"
-          style={refundsMono}
-        >
-          {request.partnerName ?? "Local"} ·{" "}
-          {request.eventDate
-            ? format(new Date(request.eventDate), "d MMM · HH:mm", { locale: esDate })
-            : "—"}{" "}
-          · {(request.amount_cents / 100).toFixed(2)} €
-        </div>
-        <p className="mt-2 line-clamp-2 text-sm text-foreground/85">
-          <span className="text-muted-foreground">Motivo: </span>
-          {request.reason}
-        </p>
-      </div>
-
-      {!readonly && (
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onReject}>
-            <XIcon className="mr-1.5 h-3.5 w-3.5" />
-            Denegar
-          </Button>
-          <Button size="sm" onClick={onApprove}>
-            <Check className="mr-1.5 h-3.5 w-3.5" />
-            Aprobar
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// Partner filters (search + categoría + ciudad + estado)
+// Filtros de Locales (búsqueda + categoría + ciudad + estado), en el servidor
 // ============================================================================
 
 const filterMono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-
-interface LocalFilter {
-  search: string;
-  category: string;
-  city: string;
-  status: string;
-}
-
-const applyLocalFilter = (list: Profile[], f: LocalFilter): Profile[] => {
-  const q = f.search.trim().toLowerCase();
-  return list.filter((l) => {
-    if (q) {
-      const hay = `${l.business_name ?? ""} ${l.first_name ?? ""} ${l.last_name ?? ""} ${l.email ?? ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    if (f.category !== "all" && (l.business_category ?? "") !== f.category) return false;
-    if (f.city !== "all" && (l.city ?? "") !== f.city) return false;
-    if (f.status !== "all" && (l.account_status ?? "") !== f.status) return false;
-    return true;
-  });
-};
 
 const PartnerFilters = ({
   filter,
   onChange,
   total,
-  filtered,
+  loading,
   cities,
   categories,
+  hayFiltros,
 }: {
   filter: LocalFilter;
   onChange: (f: LocalFilter) => void;
   total: number;
-  filtered: number;
+  loading: boolean;
   cities: string[];
   categories: string[];
+  hayFiltros: boolean;
 }) => {
-  const update = <K extends keyof LocalFilter>(k: K, v: LocalFilter[K]) =>
-    onChange({ ...filter, [k]: v });
+  const update = <K extends keyof LocalFilter>(k: K, v: LocalFilter[K]) => onChange({ ...filter, [k]: v });
   return (
-    <div
-      className="mb-4 rounded-2xl border border-border bg-card p-3 md:p-4"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }}
-    >
+    <div className="border-b border-border p-3 md:p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">
           <Input
@@ -1137,13 +1106,15 @@ const PartnerFilters = ({
         className="mt-3 flex items-center justify-between text-[10px] uppercase text-muted-foreground"
         style={{ ...filterMono, letterSpacing: "0.18em" }}
       >
-        <span>
-          {filtered === total ? `${total} locales` : `${filtered} de ${total} locales`}
+        <span className="inline-flex items-center gap-2">
+          {total.toLocaleString("es-ES")} {total === 1 ? "local" : "locales"}
+          {hayFiltros ? " con estos filtros" : ""}
+          {loading && <RefreshCw className="h-3 w-3 animate-spin" />}
         </span>
-        {(filter.search || filter.category !== "all" || filter.city !== "all" || filter.status !== "all") && (
+        {hayFiltros && (
           <button
             type="button"
-            onClick={() => onChange({ search: "", category: "all", city: "all", status: "all" })}
+            onClick={() => onChange(SIN_FILTROS)}
             className="rounded-full border border-border px-2.5 py-1 text-orange-500 transition hover:border-orange-500/40"
           >
             Limpiar

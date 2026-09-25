@@ -29,8 +29,24 @@ import {
   Wand2,
   ListFilter,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { DemoButton } from "./AdminDemo";
+import { useAiKillSwitches } from "./adminQueries";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -40,16 +56,28 @@ const serif = {
 };
 
 /* ============================================================
-   AISafetyConsole — Fase 6
+   AISafetyConsole — Fase 6 (maqueta, solo en modo demo)
    Oversight cross-tenant de TODA la IA que Pasify opera para
-   sus partners. Kill-switches, anomaly feed, model perf,
-   audit trail. El equipo Pasify mira aquí cuando algo huele mal.
+   sus partners. Métricas, anomalías y auditoría son de EJEMPLO
+   (locales "de ejemplo", un ticker simulado).
+
+   Lo único real es el kill-switch de las capacidades que la app
+   usa de verdad (forecast y pricing: el panel del local llama a
+   sus edge functions, que consultan ai_kill_switches): lee la
+   tabla, la cambia con la RPC toggle_ai_kill_switch (queda en
+   audit_logs) y pide confirmación, porque para la capacidad en
+   producción. ai-concierge-reply también lo consulta, pero la app
+   no la llama.
    ============================================================ */
 
 type Capability = "autopilot" | "pricing" | "doorvision" | "concierge" | "marketing" | "forecast";
 
 interface CapabilityRow {
   id: Capability;
+  /** capability_code en ai_kill_switches. */
+  code: string;
+  /** ¿Hay una edge function que respete el kill-switch? Si no, la capacidad no existe todavía. */
+  realSwitch: boolean;
   label: string;
   icon: React.ReactNode;
   color: string;
@@ -63,12 +91,12 @@ interface CapabilityRow {
 }
 
 const CAPABILITIES: CapabilityRow[] = [
-  { id: "autopilot",  label: "AutoPilot",        icon: <Bot className="h-4 w-4" />,        color: "#FF7A4D", tenantsTotal: 184, tenantsActive: 142, decisions24h: 9_842, precision: 0.94, latencyMs: 240, errorRate: 0.006, killed: false },
-  { id: "pricing",    label: "Pricing IA",       icon: <Tag className="h-4 w-4" />,        color: "#E8B04C", tenantsTotal: 184, tenantsActive: 168, decisions24h: 3_412, precision: 0.91, latencyMs: 90,  errorRate: 0.004, killed: false },
-  { id: "doorvision", label: "Door Vision",      icon: <ScanFace className="h-4 w-4" />,   color: "#A78BFA", tenantsTotal: 48,  tenantsActive: 41,  decisions24h: 14_220, precision: 0.97, latencyMs: 38,  errorRate: 0.012, killed: false },
-  { id: "concierge",  label: "Concierge cliente",icon: <MessageSquare className="h-4 w-4" />, color: "#3B82F6", tenantsTotal: 184, tenantsActive: 158, decisions24h: 6_180, precision: 0.88, latencyMs: 410, errorRate: 0.009, killed: false },
-  { id: "marketing",  label: "Marketing auto",   icon: <Megaphone className="h-4 w-4" />,  color: "#EC4899", tenantsTotal: 184, tenantsActive: 132, decisions24h: 712,   precision: 0.92, latencyMs: 1_120, errorRate: 0.002, killed: false },
-  { id: "forecast",   label: "Forecast IA",      icon: <Brain className="h-4 w-4" />,      color: "#4DB87A", tenantsTotal: 184, tenantsActive: 184, decisions24h: 184,   precision: 0.89, latencyMs: 8_400, errorRate: 0.001, killed: false },
+  { id: "autopilot",  code: "autopilot",   realSwitch: false, label: "AutoPilot",        icon: <Bot className="h-4 w-4" />,        color: "#FF7A4D", tenantsTotal: 184, tenantsActive: 142, decisions24h: 9_842, precision: 0.94, latencyMs: 240, errorRate: 0.006, killed: false },
+  { id: "pricing",    code: "pricing",     realSwitch: true,  label: "Pricing IA",       icon: <Tag className="h-4 w-4" />,        color: "#E8B04C", tenantsTotal: 184, tenantsActive: 168, decisions24h: 3_412, precision: 0.91, latencyMs: 90,  errorRate: 0.004, killed: false },
+  { id: "doorvision", code: "door_vision", realSwitch: false, label: "Door Vision",      icon: <ScanFace className="h-4 w-4" />,   color: "#A78BFA", tenantsTotal: 48,  tenantsActive: 41,  decisions24h: 14_220, precision: 0.97, latencyMs: 38,  errorRate: 0.012, killed: false },
+  { id: "concierge",  code: "concierge",   realSwitch: false, label: "Concierge cliente",icon: <MessageSquare className="h-4 w-4" />, color: "#3B82F6", tenantsTotal: 184, tenantsActive: 158, decisions24h: 6_180, precision: 0.88, latencyMs: 410, errorRate: 0.009, killed: false },
+  { id: "marketing",  code: "marketing",   realSwitch: false, label: "Marketing auto",   icon: <Megaphone className="h-4 w-4" />,  color: "#EC4899", tenantsTotal: 184, tenantsActive: 132, decisions24h: 712,   precision: 0.92, latencyMs: 1_120, errorRate: 0.002, killed: false },
+  { id: "forecast",   code: "forecast",    realSwitch: true,  label: "Forecast IA",      icon: <Brain className="h-4 w-4" />,      color: "#4DB87A", tenantsTotal: 184, tenantsActive: 184, decisions24h: 184,   precision: 0.89, latencyMs: 8_400, errorRate: 0.001, killed: false },
 ];
 
 type AnomalySeverity = "low" | "medium" | "high" | "critical";
@@ -85,56 +113,57 @@ interface Anomaly {
   resolved?: boolean;
 }
 
+// Anomalías y auditoría de ejemplo: locales inventados ("de ejemplo").
 const SEED_ANOMALIES: Anomaly[] = [
   {
     id: "an1",
     ts: Date.now() - 1000 * 60 * 7,
     capability: "pricing",
-    tenantId: "t-1834",
-    tenantName: "Sala Apolo",
+    tenantId: "t-demo-c",
+    tenantName: "Local de ejemplo C",
     severity: "high",
     title: "Subida +24% fuera de banda configurada",
-    detail: "Banda partner: +0/+15%. El modelo intentó +24% en Friday Sessions. Detenido por guardrail, no ejecutado.",
+    detail: "Banda del local: +0/+15%. El modelo intentó +24% en una sesión de viernes. Detenido por guardrail, no ejecutado.",
   },
   {
     id: "an2",
     ts: Date.now() - 1000 * 60 * 22,
     capability: "concierge",
-    tenantId: "t-2901",
-    tenantName: "Razzmatazz",
+    tenantId: "t-demo-b",
+    tenantName: "Local de ejemplo B",
     severity: "medium",
     title: "Confianza media cae a 0.61 (umbral 0.78)",
-    detail: "Modelo concierge ES está enrutando 38% más mensajes a humano que ayer. Posible drift por nueva campaña.",
+    detail: "El concierge está enrutando un 38% más de mensajes a una persona que ayer. Posible deriva por una campaña nueva.",
   },
   {
     id: "an3",
     ts: Date.now() - 1000 * 60 * 41,
     capability: "doorvision",
-    tenantId: "t-1199",
-    tenantName: "Pacha Ibiza",
+    tenantId: "t-demo-a",
+    tenantName: "Local de ejemplo A",
     severity: "critical",
-    title: "Falso positivo identificación menor",
-    detail: "Cliente reportó haber sido rechazado siendo mayor de edad. Imagen revisada — modelo tenía baja confianza (0.51).",
+    title: "Falso positivo en la verificación de edad",
+    detail: "Un cliente mayor de edad fue rechazado en puerta. Imagen revisada: el modelo tenía baja confianza (0.51).",
   },
   {
     id: "an4",
     ts: Date.now() - 1000 * 60 * 65,
     capability: "marketing",
-    tenantId: "t-1502",
-    tenantName: "Costa Group",
+    tenantId: "t-demo-d",
+    tenantName: "Local de ejemplo D",
     severity: "low",
     title: "Coste por campaña +18% vs baseline",
-    detail: "Modelo de bidding está pagando más por click que la mediana del segmento. Bajo umbral de alerta.",
+    detail: "El modelo de pujas paga más por clic que la mediana del segmento. Por debajo del umbral de alerta.",
   },
   {
     id: "an5",
     ts: Date.now() - 1000 * 60 * 90,
     capability: "autopilot",
-    tenantId: "t-1834",
-    tenantName: "Sala Apolo",
+    tenantId: "t-demo-c",
+    tenantName: "Local de ejemplo C",
     severity: "medium",
-    title: "Bucle de approval-rejection detectado",
-    detail: "Agente repropone misma decisión 4 veces tras rechazo del humano. Posible loop — sugerencia: ajustar política.",
+    title: "Bucle de aprobación-rechazo detectado",
+    detail: "El agente repropone la misma decisión 4 veces tras el rechazo humano. Posible bucle: conviene ajustar la política.",
   },
 ];
 
@@ -149,32 +178,43 @@ interface AuditEntry {
 }
 
 const SEED_AUDIT: AuditEntry[] = [
-  { id: "au1", ts: Date.now() - 1000 * 30,  capability: "doorvision", tenantName: "Pacha Ibiza",     action: "Verificación facial · acceso permitido",    result: "ok",        modelVersion: "dv-3.2.1" },
-  { id: "au2", ts: Date.now() - 1000 * 90,  capability: "concierge",  tenantName: "Razzmatazz",      action: "WhatsApp · respuesta sobre dress code",     result: "ok",        modelVersion: "cc-1.9.4" },
-  { id: "au3", ts: Date.now() - 1000 * 120, capability: "pricing",    tenantName: "Sala Apolo",      action: "Subida +24% en Friday Sessions",             result: "blocked",   modelVersion: "pp-2.3.0" },
-  { id: "au4", ts: Date.now() - 1000 * 180, capability: "autopilot",  tenantName: "Medusa Events",   action: "Reembolso €38 · cliente T-5d",               result: "escalated", modelVersion: "ap-0.8.2" },
-  { id: "au5", ts: Date.now() - 1000 * 220, capability: "marketing",  tenantName: "Costa Group",     action: "Campaña Meta retargeting · €40",             result: "ok",        modelVersion: "mk-1.2.7" },
-  { id: "au6", ts: Date.now() - 1000 * 280, capability: "forecast",   tenantName: "Sala Apolo",      action: "Predicción aforo Friday · 1840 asistentes",  result: "ok",        modelVersion: "fc-2.1.0" },
+  { id: "au1", ts: Date.now() - 1000 * 30,  capability: "doorvision", tenantName: "Local de ejemplo A", action: "Verificación facial · acceso permitido",    result: "ok",        modelVersion: "dv-3.2.1" },
+  { id: "au2", ts: Date.now() - 1000 * 90,  capability: "concierge",  tenantName: "Local de ejemplo B", action: "WhatsApp · respuesta sobre dress code",     result: "ok",        modelVersion: "cc-1.9.4" },
+  { id: "au3", ts: Date.now() - 1000 * 120, capability: "pricing",    tenantName: "Local de ejemplo C", action: "Subida +24% en sesión de viernes",          result: "blocked",   modelVersion: "pp-2.3.0" },
+  { id: "au4", ts: Date.now() - 1000 * 180, capability: "autopilot",  tenantName: "Local de ejemplo E", action: "Reembolso €38 · cliente T-5d",               result: "escalated", modelVersion: "ap-0.8.2" },
+  { id: "au5", ts: Date.now() - 1000 * 220, capability: "marketing",  tenantName: "Local de ejemplo D", action: "Campaña de retargeting · €40",               result: "ok",        modelVersion: "mk-1.2.7" },
+  { id: "au6", ts: Date.now() - 1000 * 280, capability: "forecast",   tenantName: "Local de ejemplo C", action: "Predicción de aforo del viernes · 1840",     result: "ok",        modelVersion: "fc-2.1.0" },
 ];
 
 export const AISafetyConsole = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const uid = useCurrentUserId();
   const [tab, setTab] = useState<"overview" | "capabilities" | "anomalies" | "audit">("overview");
-  const [capabilities, setCapabilities] = useState<CapabilityRow[]>(CAPABILITIES);
-  const [anomalies, setAnomalies] = useState<Anomaly[]>(SEED_ANOMALIES);
+  const [anomalies] = useState<Anomaly[]>(SEED_ANOMALIES);
   const [audit, setAudit] = useState<AuditEntry[]>(SEED_AUDIT);
   const [auditQ, setAuditQ] = useState("");
   const [severityFilter, setSeverityFilter] = useState<"all" | AnomalySeverity>("all");
+  const [confirmar, setConfirmar] = useState<CapabilityRow | null>(null);
+  const [cambiando, setCambiando] = useState(false);
 
-  /* simulate live audit entries */
+  // Kill-switches reales (tabla ai_kill_switches, con Realtime).
+  const switches = useAiKillSwitches(uid, true);
+  const capabilities = useMemo(() => {
+    const porCodigo = new Map((switches.data ?? []).map((s) => [s.capability_code, s.killed]));
+    return CAPABILITIES.map((c) => ({ ...c, killed: porCodigo.get(c.code) ?? false }));
+  }, [switches.data]);
+
+  /* Auditoría "en vivo" SIMULADA (maqueta): entradas de ejemplo cada pocos segundos. */
   const auditCounterRef = useRef(7);
   useEffect(() => {
     const tickActions: { cap: Capability; tenantName: string; action: string; result: "ok" | "blocked" | "escalated"; v: string }[] = [
-      { cap: "doorvision", tenantName: "Pacha Ibiza",   action: "Verificación facial · permitido",  result: "ok", v: "dv-3.2.1" },
-      { cap: "concierge",  tenantName: "Sala Apolo",    action: "Email · respuesta sobre horarios", result: "ok", v: "cc-1.9.4" },
-      { cap: "pricing",    tenantName: "Razzmatazz",    action: "Subida +8% Sunday matinee",        result: "ok", v: "pp-2.3.0" },
-      { cap: "autopilot",  tenantName: "Costa Group",   action: "Push 'queda 10%' enviado",         result: "ok", v: "ap-0.8.2" },
-      { cap: "forecast",   tenantName: "Medusa Events", action: "Predicción demanda Friday",         result: "ok", v: "fc-2.1.0" },
-      { cap: "marketing",  tenantName: "Pacha Ibiza",   action: "Bid pausado · coste alto",         result: "blocked", v: "mk-1.2.7" },
+      { cap: "doorvision", tenantName: "Local de ejemplo A", action: "Verificación facial · permitido",  result: "ok", v: "dv-3.2.1" },
+      { cap: "concierge",  tenantName: "Local de ejemplo C", action: "Email · respuesta sobre horarios", result: "ok", v: "cc-1.9.4" },
+      { cap: "pricing",    tenantName: "Local de ejemplo B", action: "Subida +8% sesión de domingo",     result: "ok", v: "pp-2.3.0" },
+      { cap: "autopilot",  tenantName: "Local de ejemplo D", action: "Aviso 'queda 10%' enviado",        result: "ok", v: "ap-0.8.2" },
+      { cap: "forecast",   tenantName: "Local de ejemplo E", action: "Predicción de demanda del viernes", result: "ok", v: "fc-2.1.0" },
+      { cap: "marketing",  tenantName: "Local de ejemplo A", action: "Puja pausada · coste alto",        result: "blocked", v: "mk-1.2.7" },
     ];
     const id = setInterval(() => {
       const idx = auditCounterRef.current % tickActions.length;
@@ -185,11 +225,46 @@ export const AISafetyConsole = () => {
     return () => clearInterval(id);
   }, []);
 
-  const toggleKill = (id: Capability) =>
-    setCapabilities((prev) => prev.map((c) => (c.id === id ? { ...c, killed: !c.killed } : c)));
-
-  const resolveAnomaly = (id: string) =>
-    setAnomalies((prev) => prev.map((a) => (a.id === id ? { ...a, resolved: true } : a)));
+  /**
+   * Kill-switch real: para (o reanuda) la capacidad en producción. La RPC
+   * invierte el estado, así que antes se comprueba que nadie lo haya cambiado
+   * desde que se pintó la pantalla.
+   */
+  const toggleKill = async (cap: CapabilityRow) => {
+    setCambiando(true);
+    try {
+      const { data: actual, error: readErr } = await supabase
+        .from("ai_kill_switches")
+        .select("killed")
+        .eq("capability_code", cap.code)
+        .maybeSingle();
+      if (readErr) throw readErr;
+      if (!actual) {
+        toast({ title: "Esta capacidad no tiene kill-switch", variant: "destructive" });
+        return;
+      }
+      if (actual.killed !== cap.killed) {
+        toast({ title: "El estado ha cambiado", description: "Otra persona lo ha tocado. Revisa y vuelve a intentarlo." });
+        return;
+      }
+      const { data, error } = await supabase.rpc("toggle_ai_kill_switch", {
+        _capability: cap.code,
+        _reason: cap.killed ? "Reanudada desde la consola de IA del admin" : "Parada desde la consola de IA del admin",
+      });
+      if (error) throw error;
+      toast({ title: data ? `${cap.label} detenida en producción` : `${cap.label} reanudada` });
+    } catch (e) {
+      toast({
+        title: "No se ha podido cambiar el kill-switch",
+        description: e instanceof Error ? e.message : (e as { message?: string })?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCambiando(false);
+      setConfirmar(null);
+      if (uid) void queryClient.invalidateQueries({ queryKey: qk.admin.killSwitches(uid) });
+    }
+  };
 
   const totals = useMemo(() => {
     const decisions = capabilities.reduce((s, c) => s + c.decisions24h, 0);
@@ -226,7 +301,12 @@ export const AISafetyConsole = () => {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">AI Safety Console</h1>
         <p className="max-w-[68ch] text-sm text-muted-foreground">
-          Toda la IA que Pasify ejecuta para los partners — visible, auditable, parable. Una mirada cross-tenant para detectar drift, sesgos o bucles antes de que escalen.
+          Maqueta de la supervisión de la IA que Pasify ejecuta para los locales. Métricas, anomalías y auditoría son
+          de ejemplo.
+        </p>
+        <p className="max-w-[68ch] text-sm font-medium text-foreground">
+          El kill-switch de Pricing IA y Forecast IA es real: para esa capacidad en producción para todos los locales
+          y queda en la auditoría.
         </p>
       </header>
 
@@ -365,7 +445,7 @@ export const AISafetyConsole = () => {
             ) : (
               <div className="space-y-2">
                 {open.slice(0, 4).map((a) => (
-                  <AnomalyRow key={a.id} anomaly={a} onResolve={() => resolveAnomaly(a.id)} compact />
+                  <AnomalyRow key={a.id} anomaly={a} compact />
                 ))}
                 <button
                   onClick={() => setTab("anomalies")}
@@ -389,7 +469,7 @@ export const AISafetyConsole = () => {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 </span>
-                streaming
+                simulación
               </span>
             </div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -405,7 +485,12 @@ export const AISafetyConsole = () => {
       {tab === "capabilities" && (
         <section className="space-y-3">
           {capabilities.map((c) => (
-            <CapabilityCard key={c.id} cap={c} onToggleKill={() => toggleKill(c.id)} />
+            <CapabilityCard
+              key={c.id}
+              cap={c}
+              switchReady={switches.isSuccess}
+              onToggleKill={() => setConfirmar(c)}
+            />
           ))}
         </section>
       )}
@@ -445,7 +530,7 @@ export const AISafetyConsole = () => {
           ) : (
             <div className="space-y-2">
               {filteredAnomalies.map((a) => (
-                <AnomalyRow key={a.id} anomaly={a} onResolve={() => resolveAnomaly(a.id)} />
+                <AnomalyRow key={a.id} anomaly={a} />
               ))}
             </div>
           )}
@@ -468,7 +553,7 @@ export const AISafetyConsole = () => {
             <div className="mt-3 inline-flex items-center gap-3 text-[11px] text-muted-foreground" style={mono}>
               <span>{filteredAudit.length.toLocaleString("es-ES")} entradas</span>
               <span>·</span>
-              <span>cada decisión IA queda registrada</span>
+              <span>entradas de ejemplo</span>
             </div>
           </div>
 
@@ -494,6 +579,41 @@ export const AISafetyConsole = () => {
           </div>
         </section>
       )}
+
+      {/* Confirmación del kill-switch real */}
+      <AlertDialog
+        open={!!confirmar}
+        onOpenChange={(abierto) => {
+          if (!abierto && !cambiando) setConfirmar(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmar?.killed ? `¿Reanudar ${confirmar.label}?` : `¿Parar ${confirmar?.label} en producción?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto no es parte de la demo: es real.{" "}
+              {confirmar?.killed
+                ? "La capacidad vuelve a funcionar para todos los locales."
+                : "La capacidad deja de funcionar para todos los locales hasta que la reanudes."}{" "}
+              Queda registrado en la auditoría.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cambiando}>Cancelar</AlertDialogCancel>
+            <Button
+              variant={confirmar?.killed ? "default" : "destructive"}
+              disabled={cambiando}
+              onClick={() => {
+                if (confirmar) void toggleKill(confirmar);
+              }}
+            >
+              {confirmar?.killed ? "Reanudar" : "Parar en producción"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -570,7 +690,16 @@ const BigStat = ({
   );
 };
 
-const CapabilityCard = ({ cap, onToggleKill }: { cap: CapabilityRow; onToggleKill: () => void }) => {
+const CapabilityCard = ({
+  cap,
+  switchReady,
+  onToggleKill,
+}: {
+  cap: CapabilityRow;
+  /** El estado real del kill-switch ya se ha leído (si no, no se puede tocar). */
+  switchReady: boolean;
+  onToggleKill: () => void;
+}) => {
   const precPct = Math.round(cap.precision * 100);
   return (
     <div
@@ -615,29 +744,40 @@ const CapabilityCard = ({ cap, onToggleKill }: { cap: CapabilityRow; onToggleKil
 
       <div className="mt-5 flex flex-col gap-2 border-t pt-4 md:flex-row md:items-center md:justify-between" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
         <div className="text-[11.5px] text-muted-foreground">
-          {cap.killed
-            ? "Capability detenida globalmente. Ningún tenant la está ejecutando ahora mismo."
-            : "Si detectas drift, sesgos o un incidente grave, puedes parar esta capability en TODOS los tenants con un click."}
+          {!cap.realSwitch
+            ? "Esta capacidad aún no existe: su kill-switch no tendría efecto."
+            : cap.killed
+              ? "Detenida en producción (kill-switch real). Ningún local la está ejecutando ahora mismo."
+              : "Kill-switch real: si hay deriva, sesgos o un incidente grave, para esta capacidad para TODOS los locales."}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <DemoButton variant="outline" size="sm">
             <Eye className="mr-2 h-3.5 w-3.5" />
             Auditoría
-          </Button>
-          <button
-            onClick={onToggleKill}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[11px] uppercase transition"
-            style={{
-              ...mono,
-              letterSpacing: "0.16em",
-              color: cap.killed ? "#4DB87A" : "#EF4444",
-              borderColor: cap.killed ? "rgba(77,184,122,0.40)" : "rgba(239,68,68,0.40)",
-              background: cap.killed ? "rgba(77,184,122,0.06)" : "rgba(239,68,68,0.06)",
-            }}
-          >
-            {cap.killed ? <Play className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
-            {cap.killed ? "Reanudar" : "Kill-switch"}
-          </button>
+          </DemoButton>
+          {cap.realSwitch ? (
+            <button
+              type="button"
+              onClick={onToggleKill}
+              disabled={!switchReady}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[11px] uppercase transition disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                ...mono,
+                letterSpacing: "0.16em",
+                color: cap.killed ? "#4DB87A" : "#EF4444",
+                borderColor: cap.killed ? "rgba(77,184,122,0.40)" : "rgba(239,68,68,0.40)",
+                background: cap.killed ? "rgba(77,184,122,0.06)" : "rgba(239,68,68,0.06)",
+              }}
+            >
+              {cap.killed ? <Play className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
+              {cap.killed ? "Reanudar" : "Kill-switch"}
+            </button>
+          ) : (
+            <DemoButton variant="outline" size="sm">
+              <Power className="mr-2 h-3.5 w-3.5" />
+              Kill-switch
+            </DemoButton>
+          )}
         </div>
       </div>
     </div>
@@ -653,7 +793,7 @@ const MiniMetric = ({ label, value, accent }: { label: string; value: string; ac
   </div>
 );
 
-const AnomalyRow = ({ anomaly, onResolve, compact = false }: { anomaly: Anomaly; onResolve: () => void; compact?: boolean }) => {
+const AnomalyRow = ({ anomaly, compact = false }: { anomaly: Anomaly; compact?: boolean }) => {
   const sev = SEVERITY_CFG[anomaly.severity];
   return (
     <div
@@ -684,14 +824,10 @@ const AnomalyRow = ({ anomaly, onResolve, compact = false }: { anomaly: Anomaly;
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <button
-          onClick={onResolve}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium"
-          style={{ background: "#4DB87A", color: "#fff", border: 0 }}
-        >
-          <Check className="h-3 w-3" />
+        <DemoButton size="sm" variant="outline" className="h-7 px-2.5 text-[11px]">
+          <Check className="mr-1 h-3 w-3" />
           Resolver
-        </button>
+        </DemoButton>
       </div>
     </div>
   );
