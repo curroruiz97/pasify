@@ -43,6 +43,21 @@ const formatterFor = (timeZone: string): Intl.DateTimeFormat | null => {
   return formatters.get(timeZone) ?? null;
 };
 
+/** ¿Es una zona IANA que este navegador conoce? */
+export const isValidTimeZone = (timeZone?: string | null): timeZone is string =>
+  !!timeZone && formatterFor(timeZone) !== null;
+
+/**
+ * Rótulo de la hora con la que se leen el día y las horas de un evento:
+ * «Hora de Santa Cruz de Tenerife» (ciudad del local). Sin zona válida es la
+ * del dispositivo, y así se dice.
+ */
+export const timeZoneLabel = (placeName?: string | null, timeZone?: string | null): string => {
+  if (!isValidTimeZone(timeZone)) return "Hora de este dispositivo";
+  const lugar = placeName?.trim();
+  return lugar ? `Hora de ${lugar}` : "Hora del local";
+};
+
 interface WallClock {
   year: number;
   month: number;
@@ -108,6 +123,30 @@ export const isoToWallClock = (
   }
   const c = wallClockIn(ms, f);
   return { date: `${c.year}-${pad2(c.month)}-${pad2(c.day)}`, time: `${pad2(c.hour)}:${pad2(c.minute)}` };
+};
+
+/**
+ * Un instante escrito en la hora de `timeZone` (la del local), con las
+ * opciones de Intl que se pidan. Sin zona, o si no es válida, en la del
+ * dispositivo. La web, el email y Stripe enseñan la hora del local: el panel
+ * también, para que no haya dos horas distintas del mismo evento.
+ */
+export const formatInTimeZone = (
+  iso: string | Date,
+  options: Intl.DateTimeFormatOptions,
+  timeZone?: string | null,
+  locale = "es-ES"
+): string => {
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  if (timeZone) {
+    try {
+      return d.toLocaleString(locale, { ...options, timeZone });
+    } catch {
+      /* zona no válida: la del dispositivo */
+    }
+  }
+  return d.toLocaleString(locale, options);
 };
 
 /** "YYYY-MM-DD" + n días (calendario puro, sin horas ni cambios de hora). */

@@ -40,6 +40,12 @@ export const qk = {
     attendees: (uid: string, eventId: string) => ["partner", uid, "attendees", eventId] as const,
     live: (uid: string, eventId: string) => ["partner", uid, "live", eventId] as const,
     forecast: (uid: string) => ["partner", uid, "forecast"] as const,
+    /**
+     * Bandeja de reembolsos del local (solicitudes de su organización). Lleva
+     * datos de compradores (el motivo que escriben): solo en memoria, nunca en
+     * policy.ts.
+     */
+    refunds: (uid: string, orgId: string) => ["partner", uid, "refunds", orgId] as const,
   },
   /**
    * Cuarto ámbito, "admin" → ["admin", uid, …]: panel de admin, datos de toda

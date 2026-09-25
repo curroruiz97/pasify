@@ -20,14 +20,27 @@ export type WriteFailure = "network" | "rejected" | "no_rows";
 export class WriteError extends Error {
   readonly kind: WriteFailure;
   readonly code: string | null;
+  /** Estado HTTP de la respuesta, si lo hubo (funciones del servidor). */
+  readonly status: number | null;
 
-  constructor(kind: WriteFailure, message: string, code: string | null = null) {
+  constructor(kind: WriteFailure, message: string, code: string | null = null, status: number | null = null) {
     super(message);
     this.name = "WriteError";
     this.kind = kind;
     this.code = code;
+    this.status = status;
   }
 }
+
+/**
+ * Texto de la organización suspendida (Pasify la suspende desde el panel de
+ * admin): la franja del panel y el motivo de que «Publicar» esté desactivado.
+ * El servidor también rechaza publicar y vender; su error se traduce a esto.
+ */
+export const SUSPENDED_ACCOUNT_MESSAGE =
+  "Tu cuenta está suspendida: no puedes publicar ni vender entradas. Escríbenos desde Soporte.";
+
+const SUSPENDED_RE = /suspend|suspensi[oó]n|cannot_sell|no puede vender/i;
 
 /** Lo que devuelve una escritura de supabase-js. */
 interface WriteResponse<T> {
@@ -69,8 +82,56 @@ export function expectRows<T>(res: WriteResponse<T>, expected = 1): T[] {
   return rows;
 }
 
+/**
+ * Error de una edge function (supabase.functions.invoke) → WriteError.
+ *
+ * Las funciones de Pasify responden `{ error: { message, code } }`
+ * (_shared/cors.ts: `message` es el código de máquina, p. ej. "forbidden", y
+ * `code` un detalle o "generic_error"). Sin respuesta es la red: no se sabe
+ * si se ha aplicado.
+ */
+export async function toFunctionWriteError(error: unknown): Promise<WriteError> {
+  const e = (error ?? {}) as { name?: unknown; message?: unknown; context?: unknown };
+  const raw = typeof e.message === "string" && e.message ? e.message : "Error desconocido";
+  if (e.name === "FunctionsFetchError" || NETWORK_RE.test(raw) || isOffline()) {
+    return new WriteError("network", raw);
+  }
+  const context = e.context;
+  if (typeof Response !== "undefined" && context instanceof Response) {
+    let body: unknown = null;
+    try {
+      body = await context.clone().json();
+    } catch {
+      /* sin cuerpo JSON */
+    }
+    const b = (body ?? null) as { error?: unknown; message?: unknown; code?: unknown } | null;
+    const texto = (v: unknown) => (typeof v === "string" && v ? v : null);
+    let machine: string | null = null;
+    let detail: string | null = null;
+    if (typeof b?.error === "string") {
+      machine = b.error;
+    } else if (b?.error && typeof b.error === "object") {
+      const err = b.error as { message?: unknown; code?: unknown };
+      machine = texto(err.message);
+      const c = texto(err.code);
+      detail = c && c !== "generic_error" ? c : null;
+    } else if (b) {
+      // Respuesta de la pasarela de Supabase (p. ej. la función aún no está
+      // desplegada: { code: "NOT_FOUND", message: "Requested function was not found" }).
+      machine = texto(b.code);
+      detail = texto(b.message);
+    }
+    return new WriteError("rejected", detail ?? machine ?? raw, machine, context.status);
+  }
+  return new WriteError("rejected", raw);
+}
+
 /** Mensajes del servidor (triggers y RLS) en lenguaje del local. */
 const friendlyServerMessage = (message: string, code: string | null): string | null => {
+  // Organización suspendida por Pasify: ni publicar ni vender.
+  if (SUSPENDED_RE.test(message) || (code !== null && SUSPENDED_RE.test(code))) {
+    return SUSPENDED_ACCOUNT_MESSAGE;
+  }
   if (message.includes("Cannot change price")) {
     return "Hay tipos de entrada con ventas: su precio ya no se puede cambiar. Revísalos.";
   }
@@ -89,6 +150,14 @@ const friendlyServerMessage = (message: string, code: string | null): string | n
   if (/precio mínimo|no está activa|tu nombre|organización|propietario/i.test(message)) return message;
   if (code === "42501" || /row-level security|permission denied/i.test(message)) {
     return "Tu cuenta no tiene permiso para hacer este cambio en este evento.";
+  }
+  // Un dato obligatorio que no ha llegado (p. ej. una versión del servidor
+  // que aún no admite un valor vacío): no es culpa del local ni de la red.
+  if (code === "23502" || /not-null constraint/i.test(message)) {
+    return "El servidor no ha aceptado un dato vacío y no ha guardado el cambio. Recarga la página y vuelve a intentarlo; si sigue pasando, escríbenos desde Soporte.";
+  }
+  if (code === "23514" || /check constraint/i.test(message)) {
+    return "El servidor no acepta alguno de los valores (cupo, precio o plazo de devolución). Revísalos y vuelve a guardar.";
   }
   if (message.includes("foreign key") || message.includes("violates")) {
     return "Hay entradas o pedidos que dependen de esto y el servidor no lo acepta. Si es un evento, cancélalo o retíralo de la venta en vez de borrarlo.";

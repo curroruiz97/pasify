@@ -1,10 +1,17 @@
-import { AlertTriangle, Copy, Lock, Plus, Sparkles, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Copy, Info, Lock, Plus, ShieldCheck, Sparkles, Ticket, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasifyPriceInput } from "@/components/ui/pasify-price-input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { isBelowStripeMinimum } from "@/components/partner/tierPrice";
+import {
+  DEFAULT_REFUND_HOURS,
+  MAX_REFUND_HOURS,
+  parseRefundHours,
+  type RefundMode,
+} from "@/components/partner/tierPolicy";
 
 /**
  * TicketTiersBuilder — constructor multi-tier reutilizable.
@@ -17,6 +24,9 @@ import { isBelowStripeMinimum } from "@/components/partner/tierPrice";
  *   - Capacidad opcional
  *   - Límite por usuario (default 10)
  *   - Activo on/off
+ *   - Devoluciones (D-3): "Sin devolución (salvo cancelación)", por defecto,
+ *     o "Hasta N horas antes del evento" (tierPolicy.ts)
+ *   - Se puede transferir on/off
  *
  * Modo edición: si se pasa `salesByDbId` (mapa dbId → contadores reales),
  * los tiers con ventas se bloquean parcialmente:
@@ -24,6 +34,8 @@ import { isBelowStripeMinimum } from "@/components/partner/tierPrice";
  *   - Capacity no puede bajar por debajo de las ventas ya hechas.
  *   - No se puede eliminar (sólo ocultar via switch active=false).
  *   - Muestra badge "X vendidas · Y dentro".
+ *   - Las políticas sí se pueden cambiar, avisando de que afectan a las
+ *     solicitudes nuevas (se leen al pedir la devolución o la transferencia).
  *
  * Maneja sus propios botones add / duplicate / remove. El partner DEBE
  * tener al menos un tier — el botón remove del último se desactiva.
@@ -43,6 +55,12 @@ export interface TierDraft {
   capacity: string;
   perUserMax: string;
   active: boolean;
+  /** Devoluciones: "none" = sin devolución (salvo cancelación); "hours" = hasta N horas antes. */
+  refundMode: RefundMode;
+  /** N de "hasta N horas antes del evento", tal como se escribe. */
+  refundHours: string;
+  /** El comprador puede pasar la entrada a otra persona. */
+  transferAllowed: boolean;
 }
 
 export interface TierSales {
@@ -74,6 +92,9 @@ export const createEmptyTier = (name = "Entrada General", priceEur = ""): TierDr
   capacity: "",
   perUserMax: "4",
   active: true,
+  refundMode: "none",
+  refundHours: DEFAULT_REFUND_HOURS,
+  transferAllowed: true,
 });
 
 interface Props {
@@ -225,7 +246,8 @@ export const TicketTiersBuilder = ({
                     {sales?.sold ?? 0} entradas
                   </strong>
                   . No puedes cambiar el precio ni borrarlo. Puedes ocultarlo
-                  (futuras ventas) o ajustar el cupo siempre que sea ≥ vendidas.
+                  (futuras ventas), ajustar el cupo siempre que sea ≥ vendidas y
+                  cambiar sus devoluciones y transferencia.
                 </span>
               </div>
             )}
@@ -326,6 +348,13 @@ export const TicketTiersBuilder = ({
                 />
               </div>
             </div>
+
+            <TierPolicies
+              tier={tier}
+              hasSales={isLocked}
+              disabled={disabled}
+              onChange={(patch) => updateTier(tier._key, patch)}
+            />
           </article>
         );
       })}
@@ -364,6 +393,134 @@ export const TicketTiersBuilder = ({
         </div>
       </div>
     </div>
+  );
+};
+
+/**
+ * Devoluciones y transferencia de un tipo (D-3). En un tipo con ventas se
+ * pueden cambiar igual: se aplican a lo que se pida a partir de ahora.
+ */
+const TierPolicies = ({
+  tier,
+  hasSales,
+  disabled,
+  onChange,
+}: {
+  tier: TierDraft;
+  hasSales: boolean;
+  disabled?: boolean;
+  onChange: (patch: Partial<TierDraft>) => void;
+}) => {
+  const id = tier._key;
+  const hours = parseRefundHours(tier.refundHours);
+  const hoursInvalid = tier.refundMode === "hours" && hours === null;
+  const elegirHoras = () => {
+    if (tier.refundMode !== "hours") {
+      onChange({ refundMode: "hours", refundHours: tier.refundHours || DEFAULT_REFUND_HOURS });
+    }
+  };
+
+  return (
+    <section
+      className="mt-4 rounded-xl border border-border/70 bg-muted/20 p-3"
+      aria-label="Devoluciones y transferencia"
+    >
+      <div
+        className="mb-3 flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
+        style={{ ...mono, letterSpacing: "0.18em" }}
+      >
+        <ShieldCheck className="h-3 w-3 text-orange-500" />
+        Devoluciones y transferencia
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <div className="mb-2 text-xs font-medium text-foreground" id={`tier-refund-label-${id}`}>
+            Devoluciones
+          </div>
+          <RadioGroup
+            value={tier.refundMode}
+            onValueChange={(v) =>
+              v === "hours" ? elegirHoras() : onChange({ refundMode: "none" })
+            }
+            disabled={disabled}
+            aria-labelledby={`tier-refund-label-${id}`}
+            className="gap-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="none" id={`tier-refund-none-${id}`} />
+              <Label htmlFor={`tier-refund-none-${id}`} className="text-xs font-normal">
+                Sin devolución (salvo cancelación)
+              </Label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <RadioGroupItem value="hours" id={`tier-refund-hours-${id}`} />
+              <Label htmlFor={`tier-refund-hours-${id}`} className="text-xs font-normal">
+                Hasta
+              </Label>
+              <Input
+                id={`tier-refund-n-${id}`}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_REFUND_HOURS}
+                step={1}
+                value={tier.refundHours}
+                // Tocar el número (o escribirlo) elige "Hasta N horas"; pasar
+                // por él con el tabulador no cambia la política.
+                onPointerDown={elegirHoras}
+                onChange={(e) => onChange({ refundMode: "hours", refundHours: e.target.value })}
+                disabled={disabled}
+                aria-label="Horas antes del evento"
+                aria-invalid={hoursInvalid || undefined}
+                className="h-8 w-20 px-2 text-sm"
+              />
+              <span className="text-xs text-foreground">horas antes del evento</span>
+            </div>
+          </RadioGroup>
+          {hoursInvalid ? (
+            <p className="mt-1.5 text-[11px] text-destructive" role="alert">
+              Escribe un número entero de horas entre 1 y {MAX_REFUND_HOURS}.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              {tier.refundMode === "hours"
+                ? `El comprador puede pedirla hasta ${hours} ${hours === 1 ? "hora" : "horas"} antes de que empiece. Te llega a Reembolsos y tú decides.`
+                : "Solo se devuelve el dinero si cancelas el evento."}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor={`tier-transfer-${id}`} className="text-xs font-medium">
+              Se puede transferir
+            </Label>
+            <Switch
+              id={`tier-transfer-${id}`}
+              checked={tier.transferAllowed}
+              onCheckedChange={(v) => onChange({ transferAllowed: v })}
+              disabled={disabled}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            {tier.transferAllowed
+              ? "El comprador puede pasar su entrada a otra persona desde su cuenta."
+              : "La entrada no se puede pasar a otra persona."}
+          </p>
+        </div>
+      </div>
+
+      {hasSales && (
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-orange-200" role="note">
+          <Info className="mt-[1px] h-3.5 w-3.5 shrink-0 text-orange-500" />
+          <span>
+            <strong className="font-semibold">Afecta a las solicitudes nuevas.</strong> Este tipo ya tiene
+            ventas: lo que ya se ha pedido o transferido no cambia.
+          </span>
+        </p>
+      )}
+    </section>
   );
 };
 

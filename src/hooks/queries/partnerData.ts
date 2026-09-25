@@ -2,6 +2,8 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { qk } from "@/lib/cache/keys";
+import { useRealtimeInvalidate } from "@/lib/cache/useRealtimeInvalidate";
+import { toFunctionWriteError } from "@/components/partner/writeErrors";
 
 /**
  * Datos del panel de local en la caché (React Query).
@@ -32,6 +34,11 @@ export type PartnerEventRow = {
   capacity: number | null;
   tickets_sold: number;
   image_url: string | null;
+  /**
+   * Local del evento: su zona horaria es la de la fecha que se enseña. Puede
+   * faltar en una lista guardada en el dispositivo antes de pedirlo.
+   */
+  venue_id?: string | null;
 };
 
 export type PartnerProfile = {
@@ -80,7 +87,9 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
   const { data, error } = await timed(
     supabase
       .from("events")
-      .select("id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url")
+      .select(
+        "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id"
+      )
       .or(filter)
       .order("date_start", { ascending: false }),
     "events",
@@ -210,14 +219,226 @@ export function usePartnerBalance(uid: string | null, orgId: string | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Reembolsos: bandeja del local (B1-07, B4-05)
+// ---------------------------------------------------------------------------
+
+export type PartnerRefundStatus = "pending" | "approved" | "processing" | "refunded" | "failed" | "rejected";
+
+const ESTADOS_REEMBOLSO: ReadonlySet<string> = new Set<PartnerRefundStatus>([
+  "pending",
+  "approved",
+  "processing",
+  "refunded",
+  "failed",
+  "rejected",
+]);
+
+export interface PartnerRefundRequest {
+  id: string;
+  eventId: string;
+  eventTitle: string | null;
+  eventDate: string | null;
+  /** Local del evento: la fecha se enseña en su zona horaria. */
+  venueId: string | null;
+  /** Tipo de entrada (null si no se puede leer). */
+  tierName: string | null;
+  amountCents: number;
+  currency: string;
+  /** Lo que escribió el comprador al pedirla. */
+  reason: string;
+  status: PartnerRefundStatus;
+  /** Motivo del rechazo (o nota de quien la decidió). */
+  decisionNote: string | null;
+  decidedAt: string | null;
+  /** La aprobó el plazo del tipo de entrada, sin pasar por el local. */
+  autoApproved: boolean;
+  createdAt: string;
+}
+
+export interface PartnerRefunds {
+  /** Por decidir: la que más lleva esperando, primero. */
+  pending: PartnerRefundRequest[];
+  /** Ya decididas (en curso, reembolsadas, fallidas y rechazadas): la más reciente, primero. */
+  decided: PartnerRefundRequest[];
+}
+
+/** Todas las pendientes cuentan (menú y lista); de las decididas, las últimas. */
+const MAX_PENDIENTES = 500;
+const MAX_DECIDIDAS = 100;
+
+// Sin el email ni el nombre del comprador: la bandeja no los necesita.
+const COLUMNAS_REEMBOLSO =
+  "id, event_id, amount_cents, currency, reason, status, decision_note, decided_at, auto_approved, created_at, events(title, date_start, venue_id), tickets(ticket_tiers(name))";
+
+type Embebido<T> = T | T[] | null | undefined;
+
+interface FilaReembolso {
+  id: string;
+  event_id: string;
+  amount_cents: number | null;
+  currency: string | null;
+  reason: string | null;
+  status: string;
+  decision_note: string | null;
+  decided_at: string | null;
+  auto_approved: boolean | null;
+  created_at: string;
+  events: Embebido<{ title: string | null; date_start: string | null; venue_id: string | null }>;
+  tickets: Embebido<{ ticket_tiers: Embebido<{ name: string | null }> }>;
+}
+
+/** PostgREST da un objeto por cada relación "a uno"; por si acaso, también una lista. */
+const uno = <T>(v: Embebido<T>): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+
+const aSolicitud = (r: FilaReembolso): PartnerRefundRequest => {
+  const evento = uno(r.events);
+  const tipo = uno(uno(r.tickets)?.ticket_tiers);
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    eventTitle: evento?.title ?? null,
+    eventDate: evento?.date_start ?? null,
+    venueId: evento?.venue_id ?? null,
+    tierName: tipo?.name ?? null,
+    amountCents: r.amount_cents ?? 0,
+    currency: (r.currency || "EUR").toUpperCase(),
+    reason: r.reason ?? "",
+    // Un estado que la app aún no conoce se trata como "en curso", nunca como pendiente.
+    status: ESTADOS_REEMBOLSO.has(r.status) ? (r.status as PartnerRefundStatus) : "processing",
+    decisionNote: r.decision_note,
+    decidedAt: r.decided_at,
+    autoApproved: r.auto_approved === true,
+    createdAt: r.created_at,
+  };
+};
+
+/**
+ * Solicitudes de la organización (la RLS deja leerlas a owner, admin y
+ * manager). Las de "evento cancelado" no salen: no son peticiones que decidir
+ * (nacen aprobadas al cancelar) y se siguen desde el menú del evento.
+ */
+async function leerReembolsos(orgId: string): Promise<PartnerRefunds> {
+  const [pendientes, decididas] = await Promise.all([
+    timed(
+      supabase
+        .from("refund_requests")
+        .select(COLUMNAS_REEMBOLSO)
+        .eq("org_id", orgId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(MAX_PENDIENTES),
+      "refund_requests.pending",
+    ),
+    timed(
+      supabase
+        .from("refund_requests")
+        .select(COLUMNAS_REEMBOLSO)
+        .eq("org_id", orgId)
+        .neq("status", "pending")
+        .or("reason_code.is.null,reason_code.neq.event_cancelled")
+        .order("created_at", { ascending: false })
+        .limit(MAX_DECIDIDAS),
+      "refund_requests.decided",
+    ),
+  ]);
+  if (pendientes.error) throw pendientes.error;
+  if (decididas.error) throw decididas.error;
+  const filas = (data: unknown) => ((data ?? []) as FilaReembolso[]).map(aSolicitud);
+  return {
+    pending: filas(pendientes.data).filter((r) => r.status === "pending"),
+    decided: filas(decididas.data).filter((r) => r.status !== "pending"),
+  };
+}
+
+/**
+ * Bandeja de reembolsos del local. La usa también el menú (número de
+ * pendientes): es la misma consulta. Datos de compradores → solo en memoria
+ * (policy.ts no guarda "refunds") y poco rato cuando nadie la mira.
+ */
+export function usePartnerRefunds(uid: string | null, orgId: string | null) {
+  return useQuery({
+    queryKey: qk.partner.refunds(uid ?? "", orgId ?? ""),
+    queryFn: () => leerReembolsos(orgId as string),
+    enabled: !!uid && !!orgId,
+    gcTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Tiempo real: una solicitud nueva, una decisión o el reembolso hecho en
+ * Stripe refrescan la bandeja (y el número del menú) sin recargar.
+ */
+export function usePartnerRefundsLive(uid: string | null, orgId: string | null) {
+  useRealtimeInvalidate({
+    canal: uid && orgId ? "partner-refunds" : null,
+    tabla: "refund_requests",
+    filtro: orgId ? `org_id=eq.${orgId}` : undefined,
+    eventos: ["*"],
+    queryKey: uid && orgId ? qk.partner.refunds(uid, orgId) : null,
+  });
+}
+
+export type RefundDecision = "approve" | "reject";
+
+/** decide-refund exige una nota de al menos 5 caracteres para rechazar. */
+export const REJECT_NOTE_MIN_LENGTH = 5;
+
+/** Aprobar llama a Stripe: se le da más margen que a una lectura. */
+const DECIDE_TIMEOUT_MS = 30_000;
+
+/**
+ * Aprueba o rechaza una solicitud con la edge function decide-refund (JWT de
+ * owner/admin/manager de la organización del evento). Aprobar ejecuta el
+ * reembolso en Stripe; rechazar se lo explica al comprador por email con la
+ * nota. Devuelve el estado en que queda la solicitud (null si la respuesta no
+ * lo trae). Si falla lanza un WriteError (writeErrors.ts) o un TimeoutError.
+ */
+export async function decideRefundRequest(
+  requestId: string,
+  decision: RefundDecision,
+  note?: string,
+): Promise<PartnerRefundStatus | null> {
+  const nota = note?.trim() ?? "";
+  const body = { request_id: requestId, decision, ...(nota ? { note: nota } : {}) };
+  const res = await withTimeout(
+    supabase.functions.invoke("decide-refund", { body }),
+    DECIDE_TIMEOUT_MS,
+    "decide-refund",
+  ).catch(async (err: unknown) => {
+    if (err instanceof TimeoutError) throw err;
+    throw await toFunctionWriteError(err);
+  });
+  if (res.error) throw await toFunctionWriteError(res.error);
+  const status = (res.data as { status?: unknown } | null)?.status;
+  return typeof status === "string" && ESTADOS_REEMBOLSO.has(status) ? (status as PartnerRefundStatus) : null;
+}
+
+/**
+ * Tras decidir una solicitud: la bandeja (y el menú) al momento; cobros,
+ * informes, asistentes, En vivo y eventos cambian con el reembolso.
+ */
+export async function invalidarTrasDecidirReembolso(queryClient: QueryClient, uid: string): Promise<void> {
+  const derivados = new Set(["balance", "reports", "attendees", "live", "events"]);
+  void queryClient.invalidateQueries({
+    queryKey: qk.partner.all(uid),
+    predicate: (q) => derivados.has(String(q.queryKey[2])),
+  });
+  await queryClient.invalidateQueries({
+    queryKey: qk.partner.all(uid),
+    predicate: (q) => q.queryKey[2] === "refunds",
+  });
+}
+
 /**
  * Tras crear, editar, publicar, cancelar o borrar un evento: fuera de fecha
  * todo lo que sale de los eventos (lista, primeros pasos, En vivo,
- * asistentes, informes, cobros, previsión). Se refresca ya lo que se está
+ * asistentes, informes, cobros, previsión y reembolsos: cancelar convierte
+ * las solicitudes pendientes en reembolsos). Se refresca ya lo que se está
  * viendo y el resto al volver a él. Devuelve cuando la lista está al día.
  */
 export async function invalidarTrasCambioDeEventos(queryClient: QueryClient, uid: string): Promise<void> {
-  const derivados = new Set(["context", "live", "attendees", "reports", "balance", "forecast"]);
+  const derivados = new Set(["context", "live", "attendees", "reports", "balance", "forecast", "refunds"]);
   void queryClient.invalidateQueries({
     queryKey: qk.partner.all(uid),
     predicate: (q) => derivados.has(String(q.queryKey[2])),

@@ -6,10 +6,10 @@ import { signOutLocal } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertTriangle,
+  Ban,
   LogOut,
   LayoutDashboard,
   Calendar,
@@ -18,26 +18,18 @@ import {
   MessageCircle,
   Plus,
   Ticket,
+  Undo2,
   Users as UsersIcon,
   Loader2,
   Radio,
-  Copy,
-  ExternalLink,
   Lock,
   EyeOff,
-  QrCode,
-  RotateCcw,
-  Send,
-  XCircle,
-  Share2,
-  MoreVertical,
   Receipt,
   Trash2,
   Menu,
   Settings,
   HelpCircle,
   MoreHorizontal,
-  Pencil,
   RefreshCcw,
 } from "lucide-react";
 import Wordmark from "@/components/Wordmark";
@@ -46,19 +38,17 @@ import { OnboardingChecklist } from "@/components/partner/OnboardingChecklist";
 import type { EditorMode } from "@/components/partner/EventEditorWizard";
 import { usePartnerContext } from "@/hooks/usePartnerContext";
 import { SectionBoundary } from "@/components/partner/SectionBoundary";
-import { describeWriteError, expectRows, toWriteError } from "@/components/partner/writeErrors";
+import {
+  SUSPENDED_ACCOUNT_MESSAGE,
+  describeWriteError,
+  expectRows,
+  toWriteError,
+} from "@/components/partner/writeErrors";
 import { Megaphone, Gem, Briefcase, Wand2, Gauge, Wifi, Plug, Crown, ScanFace, Bot, BarChart3, Workflow, ChevronRight, LineChart } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { PartnerSettingsBlock } from "@/components/shared/PartnerSettingsBlock";
 import { HelpSheet } from "@/components/shared/HelpSheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,12 +62,13 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
-import { EventRowCard } from "@/components/partner/EventRowCard";
+import { PartnerEventList } from "@/components/partner/PartnerEventList";
+import type { EventActions } from "@/components/partner/EventActionsMenu";
 import { EventQrDialog } from "@/components/partner/EventQrDialog";
 import { CancelEventDialog, type CancelTarget } from "@/components/partner/CancelEventDialog";
+import { formatInTimeZone } from "@/components/partner/zonedTime";
 import { shareEventLink } from "@/lib/eventLinks";
 import { isDoorLocked } from "@/lib/doorLock";
-import { StatusBadge } from "@/components/partner/StatusBadge";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { isNativeApp } from "@/lib/platform";
 import { listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
@@ -91,6 +82,8 @@ import {
   usePartnerBalance,
   usePartnerEvents,
   usePartnerProfile,
+  usePartnerRefunds,
+  usePartnerRefundsLive,
   usePartnerShowcase,
   type City,
   type PartnerEventRow,
@@ -122,6 +115,7 @@ const EventEditorWizard = diferido(() =>
 );
 const PartnerReports = diferido(() => import("@/components/partner/PartnerReports").then((m) => m.PartnerReports));
 const PartnerForecast = diferido(() => import("@/components/partner/PartnerForecast").then((m) => m.PartnerForecast));
+const PartnerRefunds = diferido(() => import("@/components/partner/PartnerRefunds").then((m) => m.PartnerRefunds));
 // Maquetas (SECCIONES_SOLO_WEB): solo la organización de demo las abre.
 const TpvCierreZ = diferido(() => import("@/components/partner/TpvCierreZ").then((m) => m.TpvCierreZ));
 const PartnerCRM = diferido(() => import("@/components/partner/PartnerCRM").then((m) => m.PartnerCRM));
@@ -160,6 +154,7 @@ type Section =
   | "forecast"
   | "pricing"
   | "eventos"
+  | "reembolsos"
   | "asistentes"
   | "scanner"
   | "door_vision"
@@ -179,7 +174,7 @@ type Section =
 type NavNode = NavTreeNode<Section>;
 
 const ALL_SECTIONS: readonly Section[] = [
-  "metricas", "live", "autopilot", "forecast", "pricing", "eventos", "asistentes", "scanner",
+  "metricas", "live", "autopilot", "forecast", "pricing", "eventos", "reembolsos", "asistentes", "scanner",
   "door_vision", "tpv", "cashless", "vip", "crm", "marketing", "channels", "team", "apps",
   "whitelabel", "benchmarks", "stripe", "soporte",
 ];
@@ -339,6 +334,33 @@ const PartnerDashboard = () => {
   const partnerCtx = usePartnerContext(uid);
   const orgId = partnerCtx.org?.id ?? null;
 
+  // Organización suspendida por Pasify: franja fija y «Publicar» desactivado
+  // con la explicación. El servidor rechaza igualmente publicar y vender; la
+  // puerta, los reembolsos y el panel siguen.
+  const bloqueoPublicar = partnerCtx.org?.suspended_at ? SUSPENDED_ACCOUNT_MESSAGE : null;
+
+  // Reembolsos: el número de pendientes del menú y la bandeja son la misma
+  // consulta, y el tiempo real la mantiene al día.
+  const refundsQuery = usePartnerRefunds(uid, orgId);
+  usePartnerRefundsLive(uid, orgId);
+  const reembolsosPendientes = refundsQuery.data?.pending.length ?? 0;
+  const badgeFor = useCallback(
+    (id: Section) => (id === "reembolsos" ? reembolsosPendientes : undefined),
+    [reembolsosPendientes],
+  );
+
+  // Hora del local de cada evento: la misma que ven los compradores en la
+  // web, el email y Stripe. Sin su local en la lista, la del local principal.
+  const zonaPorLocal = useMemo(
+    () => new Map(partnerCtx.venues.map((v) => [v.id, v.timezone] as const)),
+    [partnerCtx.venues],
+  );
+  const zonaPrincipal = partnerCtx.venue?.timezone || undefined;
+  const timeZoneFor = useCallback(
+    (venueId: string | null | undefined) => (venueId ? zonaPorLocal.get(venueId) : undefined) || zonaPrincipal,
+    [zonaPorLocal, zonaPrincipal],
+  );
+
   // Dentro de la app nativa las maquetas no existen; en la web, solo con el
   // flag partner_showcase activo para la organización.
   const enApp = isNativeApp();
@@ -412,10 +434,27 @@ const PartnerDashboard = () => {
     setEditor({ mode: "edit", eventId: source.id });
   };
 
+  /** Acciones del menú de cada evento (tabla de escritorio y tarjeta móvil). */
+  const accionesDe = (e: EventRow): EventActions => ({
+    onEdit: () => handleEditEvent(e),
+    onDuplicate: () => handleDuplicateEvent(e),
+    onPublish: () => void changeEventStatus(e, "published"),
+    onUnpublish: () => setUnpublishTarget(e),
+    onShare: () => void shareEventLink(e.id, e.title),
+    onOpenPublic: () => navigate(`/e/${e.id}`),
+    onShowQr: () => setQrTarget(e),
+    onCancel: () => setCancelTarget(e),
+    onDelete: () => setDeleteTarget(e),
+  });
+
   // Cambios de estado explícitos: editar un evento ya no los hace (el
   // editor guarda sin tocar el estado).
   const changeEventStatus = async (target: EventRow, to: "draft" | "published") => {
     if (!userId) return;
+    if (to === "published" && bloqueoPublicar) {
+      toast({ title: "No se ha publicado", description: bloqueoPublicar, variant: "destructive" });
+      return;
+    }
     setChangingStatus(true);
     try {
       if (to === "published") {
@@ -513,6 +552,8 @@ const PartnerDashboard = () => {
     { kind: "item", id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
     { kind: "item", id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
     { kind: "item", id: "eventos", label: "Mis eventos", icon: <Calendar className="h-5 w-5" /> },
+    // Solicitudes de devolución que decide el local (con su número en el menú).
+    { kind: "item", id: "reembolsos", label: "Reembolsos", icon: <Undo2 className="h-5 w-5" /> },
     // La previsión es la media de tus eventos comparables, no IA: va fuera
     // del grupo "Pasify IA", que solo tiene maquetas (y un local real no ve).
     { kind: "item", id: "forecast", label: "Previsión", icon: <LineChart className="h-5 w-5" /> },
@@ -649,7 +690,7 @@ const PartnerDashboard = () => {
             )}
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
-            <NavTree<Section> tree={navTree} section={seccionActiva} onSelect={setSection} />
+            <NavTree<Section> tree={navTree} section={seccionActiva} onSelect={setSection} badgeFor={badgeFor} />
           </nav>
           <div className="space-y-1 border-t border-border p-3">
             <Button
@@ -681,11 +722,15 @@ const PartnerDashboard = () => {
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
               businessName={profile?.business_name ?? null}
+              badgeFor={badgeFor}
             />
           }
         />
 
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
+          {/* Organización suspendida: franja fija en todas las secciones. */}
+          {bloqueoPublicar && <SuspendedBanner message={bloqueoPublicar} />}
+
           {/* Banner de error de contexto: si la RPC partner_onboarding_status
               falla (mig no aplicada, RPC revocada, etc.) NO fingimos un
               dashboard funcional — pedimos al usuario que reintente. */}
@@ -822,7 +867,11 @@ const PartnerDashboard = () => {
                 Aforo y ventas por tipo de entrada del evento en curso.
               </p>
               {eventsGate(
-                <LiveSection events={events} partnerName={partnerCtx.org?.name ?? profile?.business_name ?? null} />
+                <LiveSection
+                  events={events}
+                  partnerName={partnerCtx.org?.name ?? profile?.business_name ?? null}
+                  timeZoneFor={timeZoneFor}
+                />
               )}
             </div>
           )}
@@ -914,9 +963,16 @@ const PartnerDashboard = () => {
                   defaultVenueName={partnerCtx.venue?.name || profile?.business_name || ""}
                   venues={partnerCtx.venues}
                   defaultVenueId={partnerCtx.venue?.id ?? null}
+                  contextReady={!partnerCtx.loading}
+                  publishBlockedReason={bloqueoPublicar}
                   onSaved={reloadEvents}
                 />
               </Suspense>
+
+              {/* Un refresco fallido no tapa la lista que ya había: se avisa. */}
+              {eventsQuery.isError && !loadError && (
+                <StaleListNotice onRetry={retryLoad} retrying={reintentando} />
+              )}
 
               {loading ? (
                 <PasifyEmptyState
@@ -938,146 +994,31 @@ const PartnerDashboard = () => {
                   action={{ label: "Nuevo evento", onClick: () => setEditor({ mode: "create" }) }}
                 />
               ) : (
-                <>
-                  {/* Desktop: tabla densa (≥ md). En móvil queda oculta para
-                      evitar el truncado de las 8 columnas. */}
-                  <Card className="hidden md:block">
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Evento</TableHead>
-                            <TableHead>Ciudad</TableHead>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Precio</TableHead>
-                            <TableHead>Aforo</TableHead>
-                            <TableHead>Vendidos</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead className="w-12"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {events.map((e) => (
-                            <TableRow key={e.id}>
-                              <TableCell className="font-medium">{e.title}</TableCell>
-                              <TableCell>{e.city}</TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {new Date(e.date_start).toLocaleString("es-ES", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </TableCell>
-                              <TableCell>{(e.price_cents / 100).toFixed(2)} €</TableCell>
-                              <TableCell>{e.capacity ?? "—"}</TableCell>
-                              <TableCell>{e.tickets_sold}</TableCell>
-                              <TableCell>
-                                <StatusBadge status={e.status} />
-                              </TableCell>
-                              <TableCell className="p-1 text-right">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" aria-label="Acciones del evento">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleEditEvent(e)}>
-                                      <Pencil className="mr-2 h-4 w-4" />
-                                      Editar evento
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDuplicateEvent(e)}>
-                                      <Copy className="mr-2 h-4 w-4" />
-                                      Duplicar evento
-                                    </DropdownMenuItem>
-                                    {e.status === "draft" && (
-                                      <DropdownMenuItem
-                                        disabled={changingStatus}
-                                        onClick={() => void changeEventStatus(e, "published")}
-                                      >
-                                        <Send className="mr-2 h-4 w-4" />
-                                        Publicar
-                                      </DropdownMenuItem>
-                                    )}
-                                    {e.status === "published" && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => void shareEventLink(e.id, e.title)}>
-                                          <Share2 className="mr-2 h-4 w-4" />
-                                          Compartir enlace
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => navigate(`/e/${e.id}`)}>
-                                          <ExternalLink className="mr-2 h-4 w-4" />
-                                          Ver página del evento
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setQrTarget(e)}>
-                                          <QrCode className="mr-2 h-4 w-4" />
-                                          QR para cartel
-                                        </DropdownMenuItem>
-                                      </>
-                                    )}
-                                    {e.status === "published" && (
-                                      <DropdownMenuItem onClick={() => setUnpublishTarget(e)}>
-                                        <EyeOff className="mr-2 h-4 w-4" />
-                                        Retirar de la venta
-                                      </DropdownMenuItem>
-                                    )}
-                                    {(e.status === "published" || e.status === "draft") && (
-                                      <DropdownMenuItem
-                                        onClick={() => setCancelTarget(e)}
-                                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                      >
-                                        <XCircle className="mr-2 h-4 w-4" />
-                                        Cancelar evento
-                                      </DropdownMenuItem>
-                                    )}
-                                    {e.status === "cancelled" && e.tickets_sold > 0 && (
-                                      <DropdownMenuItem onClick={() => setCancelTarget(e)}>
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                        Reintentar reembolsos
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => setDeleteTarget(e)}
-                                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Eliminar evento
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-
-                  {/* Móvil: grid de EventRowCards. Stack vertical, sin scroll
-                      horizontal, con la info esencial + DropdownMenu de
-                      acciones por card. */}
-                  <div className="grid gap-3 md:hidden">
-                    {events.map((e) => (
-                      <EventRowCard
-                        key={e.id}
-                        event={e}
-                        onEdit={() => handleEditEvent(e)}
-                        onDuplicate={() => handleDuplicateEvent(e)}
-                        onDelete={() => setDeleteTarget(e)}
-                        onPublish={() => void changeEventStatus(e, "published")}
-                        onUnpublish={() => setUnpublishTarget(e)}
-                        onShare={() => void shareEventLink(e.id, e.title)}
-                        onOpenPublic={() => navigate(`/e/${e.id}`)}
-                        onShowQr={() => setQrTarget(e)}
-                        onCancel={() => setCancelTarget(e)}
-                      />
-                    ))}
-                  </div>
-                </>
+                // Pestañas (Próximos, Borradores, Pasados), búsqueda por
+                // título y vendidas sobre el aforo en cada fila.
+                <PartnerEventList
+                  events={events}
+                  timeZoneFor={timeZoneFor}
+                  actionsFor={accionesDe}
+                  onCreate={() => setEditor({ mode: "create" })}
+                  changingStatus={changingStatus}
+                  publishBlockedReason={bloqueoPublicar}
+                />
               )}
+            </div>
+          )}
+
+          {/* REEMBOLSOS — solicitudes de devolución que decide el local */}
+          {seccionActiva === "reembolsos" && (
+            <div>
+              <h1 className="mb-1 text-3xl font-bold tracking-tight">Reembolsos</h1>
+              <p className="mb-6 text-sm text-muted-foreground">
+                Devoluciones que piden los compradores dentro del plazo de cada tipo de entrada. Tú decides: si
+                apruebas, les devolvemos el dinero; si rechazas, les explicamos el motivo.
+              </p>
+              <Diferida>
+                <PartnerRefunds orgId={orgId} timeZoneFor={timeZoneFor} />
+              </Diferida>
             </div>
           )}
 
@@ -1340,6 +1281,7 @@ const PartnerDashboard = () => {
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenHelp={() => setHelpOpen(true)}
               businessName={profile?.business_name ?? null}
+              badgeFor={badgeFor}
               variant="tab"
             />
           }
@@ -1517,6 +1459,45 @@ const DemoBanner = () => (
   </div>
 );
 
+/**
+ * Organización suspendida por Pasify: franja fija arriba de todas las
+ * secciones (no se puede cerrar). La puerta, los reembolsos y el resto del
+ * panel siguen funcionando.
+ */
+const SuspendedBanner = ({ message }: { message: string }) => (
+  <div
+    role="alert"
+    className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
+    style={{ background: "rgba(229,72,77,0.10)", borderColor: "rgba(229,72,77,0.45)" }}
+    data-testid="franja-suspendida"
+  >
+    <div
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+      style={{ background: "linear-gradient(180deg, #F0686C 0%, #B42A2E 100%)" }}
+    >
+      <Ban className="h-4 w-4" />
+    </div>
+    <p className="min-w-0 flex-1 self-center text-sm font-medium leading-relaxed text-foreground">{message}</p>
+  </div>
+);
+
+/** Refresco de la lista de eventos fallido con la lista de antes a la vista. */
+const StaleListNotice = ({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) => (
+  <div
+    role="status"
+    className="mb-4 flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+  >
+    <span className="flex items-center gap-2 text-muted-foreground">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+      No hemos podido actualizar la lista: ves la última que se cargó.
+    </span>
+    <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying} className="shrink-0">
+      {retrying ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="mr-2 h-3.5 w-3.5" />}
+      Reintentar
+    </Button>
+  </div>
+);
+
 /** Error de carga de eventos con reintento (Eventos, Métricas y secciones que dependen de ellos). */
 const LoadErrorCard = ({
   message,
@@ -1560,7 +1541,16 @@ const LoadErrorCard = ({
  * uno, un selector con los que tiene sentido mirar. El elegido va en la URL
  * (?evento=): se conserva al ir a otra sección y volver, y al recargar.
  */
-const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName: string | null }) => {
+const LiveSection = ({
+  events,
+  partnerName,
+  timeZoneFor,
+}: {
+  events: EventRow[];
+  partnerName: string | null;
+  /** Hora del local de cada evento. */
+  timeZoneFor: (venueId: string | null | undefined) => string | undefined;
+}) => {
   const options = useMemo(() => listEventChoices(events), [events]);
   const [eventoUrl, setEventoUrl] = useEventoEnUrl();
   const selectedId =
@@ -1583,13 +1573,11 @@ const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName:
           {options.map((e) => (
             <option key={e.id} value={e.id}>
               {e.title} ·{" "}
-              {new Date(e.date_start).toLocaleString("es-ES", {
-                weekday: "short",
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatInTimeZone(
+                e.date_start,
+                { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
+                timeZoneFor(e.venue_id),
+              )}
             </option>
           ))}
         </select>
@@ -1745,6 +1733,7 @@ const PartnerDrawer = ({
   onOpenSettings,
   onOpenHelp,
   businessName,
+  badgeFor,
   variant = "topbar",
 }: {
   navTree: NavNode[];
@@ -1754,9 +1743,13 @@ const PartnerDrawer = ({
   onOpenSettings: () => void;
   onOpenHelp: () => void;
   businessName: string | null;
+  /** Números del menú (reembolsos pendientes). */
+  badgeFor?: (id: Section) => number | undefined;
   variant?: "topbar" | "tab";
 }) => {
   const [open, setOpen] = useState(false);
+  // En la barra inferior, "Más" enseña cuánto espera dentro del cajón.
+  const pendientes = variant === "tab" && badgeFor ? (badgeFor("reembolsos") ?? 0) : 0;
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -1765,9 +1758,24 @@ const PartnerDrawer = ({
             className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
               open ? "text-primary" : "text-muted-foreground"
             }`}
-            aria-label="Más opciones"
+            aria-label={
+              pendientes > 0
+                ? `Más opciones (${pendientes} ${pendientes === 1 ? "reembolso" : "reembolsos"} por decidir)`
+                : "Más opciones"
+            }
           >
-            <MoreHorizontal className="h-5 w-5" />
+            <span className="relative">
+              <MoreHorizontal className="h-5 w-5" />
+              {pendientes > 0 && (
+                <span
+                  className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-primary-foreground"
+                  style={{ background: "#E8542A" }}
+                  aria-hidden="true"
+                >
+                  {pendientes}
+                </span>
+              )}
+            </span>
             <span className="leading-none">Más</span>
           </button>
         ) : (
@@ -1802,6 +1810,7 @@ const PartnerDrawer = ({
           <NavTree
             tree={navTree}
             section={section}
+            badgeFor={badgeFor}
             onSelect={(id) => {
               onSelect(id);
               setOpen(false);
