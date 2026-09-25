@@ -21,9 +21,9 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { DemoButton } from "./AdminDemo";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -45,12 +45,14 @@ interface DsarRequest {
   dueDate: Date;
 }
 
+// Maqueta (solo en modo demo, bajo la franja "DEMO · datos ficticios"):
+// solicitudes inventadas con correos del dominio reservado .example.
 const DSAR: DsarRequest[] = [
-  { id: "dsar-01", email: "carla.s@gmail.com", type: "export", status: "in_progress", receivedAt: subDays(new Date(), 3), dueDate: subDays(new Date(), -27) },
-  { id: "dsar-02", email: "diego.r@hotmail.com", type: "deletion", status: "pending", receivedAt: subDays(new Date(), 1), dueDate: subDays(new Date(), -29) },
-  { id: "dsar-03", email: "lucia.g@yahoo.es", type: "rectification", status: "completed", receivedAt: subDays(new Date(), 8), dueDate: subDays(new Date(), 22) },
-  { id: "dsar-04", email: "pablo.l@protonmail.com", type: "export", status: "completed", receivedAt: subDays(new Date(), 14), dueDate: subDays(new Date(), 16) },
-  { id: "dsar-05", email: "anonimo+temp@guerrillamail.com", type: "deletion", status: "rejected", receivedAt: subDays(new Date(), 22), dueDate: subDays(new Date(), 8) },
+  { id: "dsar-01", email: "persona-01@correo.example", type: "export", status: "in_progress", receivedAt: subDays(new Date(), 3), dueDate: subDays(new Date(), -27) },
+  { id: "dsar-02", email: "persona-02@correo.example", type: "deletion", status: "pending", receivedAt: subDays(new Date(), 1), dueDate: subDays(new Date(), -29) },
+  { id: "dsar-03", email: "persona-03@correo.example", type: "rectification", status: "completed", receivedAt: subDays(new Date(), 8), dueDate: subDays(new Date(), 22) },
+  { id: "dsar-04", email: "persona-04@correo.example", type: "export", status: "completed", receivedAt: subDays(new Date(), 14), dueDate: subDays(new Date(), 16) },
+  { id: "dsar-05", email: "anonimo+temp@correo.example", type: "deletion", status: "rejected", receivedAt: subDays(new Date(), 22), dueDate: subDays(new Date(), 8) },
 ];
 
 const DSAR_TYPE: Record<DsarRequest["type"], { label: string; color: string; icon: React.ReactNode }> = {
@@ -83,11 +85,13 @@ const TAX_REPORTS = [
 // Music licenses
 // =============================================================
 
+// Sin nombres de entidades reales: la maqueta no puede dar a entender que
+// Pasify tiene licencias con ellas.
 const LICENSES = [
-  { name: "SGAE", country: "ES", status: "active", coverage: "Música en vivo + ambiente", monthlyCents: 1_240_00, eventsCovered: 184 },
-  { name: "DACEM", country: "ES", status: "active", coverage: "Comunicación pública", monthlyCents: 480_00, eventsCovered: 184 },
-  { name: "SACEM", country: "FR", status: "active", coverage: "Droits d'auteur", monthlyCents: 720_00, eventsCovered: 28 },
-  { name: "SIAE", country: "IT", status: "pending", coverage: "Diritto d'autore", monthlyCents: 0, eventsCovered: 0 },
+  { name: "Entidad de gestión musical A", country: "ES", status: "active", coverage: "Música en vivo + ambiente", monthlyCents: 1_240_00, eventsCovered: 184 },
+  { name: "Entidad de gestión musical B", country: "ES", status: "active", coverage: "Comunicación pública", monthlyCents: 480_00, eventsCovered: 184 },
+  { name: "Entidad de gestión musical C", country: "FR", status: "active", coverage: "Derechos de autor", monthlyCents: 720_00, eventsCovered: 28 },
+  { name: "Entidad de gestión musical D", country: "IT", status: "pending", coverage: "Derechos de autor", monthlyCents: 0, eventsCovered: 0 },
 ];
 
 // =============================================================
@@ -108,9 +112,9 @@ const AGE_CHECKS = {
 // =============================================================
 
 const AFORO_ALERTS = [
-  { venue: "Pacha Ibiza · Main Room", current: 2940, legal: 3000, pct: 98, severity: "critical" },
-  { venue: "Razzmatazz · Sala 1", current: 1620, legal: 1800, pct: 90, severity: "warning" },
-  { venue: "Costa Brava · Lloret", current: 1080, legal: 1200, pct: 90, severity: "warning" },
+  { venue: "Local de ejemplo A · Sala principal", current: 2940, legal: 3000, pct: 98, severity: "critical" },
+  { venue: "Local de ejemplo B · Sala 1", current: 1620, legal: 1800, pct: 90, severity: "warning" },
+  { venue: "Local de ejemplo C", current: 1080, legal: 1200, pct: 90, severity: "warning" },
 ];
 
 // =============================================================
@@ -132,7 +136,7 @@ export const ComplianceHub = () => {
           Compliance <span style={serif} className="text-orange-500">&</span> Legal
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          GDPR · IVA multi-país · Licencias de música · Edad legal · Aforo bomberos.
+          Maqueta: RGPD · IVA multi-país · Licencias de música · Edad legal · Aforo. Todo son datos de ejemplo.
         </p>
       </header>
 
@@ -172,8 +176,8 @@ export const ComplianceHub = () => {
             </div>
             <h3 className="text-xl font-semibold leading-tight tracking-tight text-foreground">
               {overdueDsar > 0
-                ? `${overdueDsar} solicitud(es) GDPR fuera de plazo`
-                : "La red cumple con GDPR · IVA · licencias musicales"}
+                ? `${overdueDsar} solicitud(es) RGPD fuera de plazo`
+                : "Ejemplo: ninguna solicitud RGPD fuera de plazo"}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {pendingDsar} DSAR pendientes · 4 países activos · {LICENSES.filter((l) => l.status === "active").length} licencias activas
@@ -265,10 +269,10 @@ const DsarPanel = () => (
             {DSAR.length} solicitudes en plazo legal
           </h3>
         </div>
-        <Button variant="outline">
+        <DemoButton variant="outline">
           <Download className="mr-2 h-4 w-4" />
-          Export auditoría
-        </Button>
+          Exportar auditoría
+        </DemoButton>
       </div>
     </div>
 
@@ -375,9 +379,9 @@ const DsarRow = ({ req }: { req: DsarRequest }) => {
           </div>
         </div>
         {req.status === "pending" || req.status === "in_progress" ? (
-          <Button size="sm">Procesar</Button>
+          <DemoButton size="sm">Procesar</DemoButton>
         ) : (
-          <Button size="sm" variant="ghost">Ver</Button>
+          <DemoButton size="sm" variant="ghost">Ver</DemoButton>
         )}
       </div>
     </article>
@@ -407,10 +411,10 @@ const TaxPanel = () => (
             {TAX_REPORTS.length} declaraciones activas
           </h3>
         </div>
-        <Button>
+        <DemoButton>
           <Download className="mr-2 h-4 w-4" />
           Generar trimestre
-        </Button>
+        </DemoButton>
       </div>
     </div>
 
@@ -562,9 +566,9 @@ const LicensesPanel = () => (
             {l.eventsCovered} eventos cubiertos · {(l.monthlyCents / 100).toFixed(0)}€/mes
           </div>
         </div>
-        <Button size="sm" variant="outline">
+        <DemoButton size="sm" variant="outline">
           Detalles
-        </Button>
+        </DemoButton>
       </article>
     ))}
   </section>
@@ -722,7 +726,7 @@ const AforoPanel = () => (
               </div>
             </div>
             {a.severity === "critical" && (
-              <Button size="sm">Cerrar venta</Button>
+              <DemoButton size="sm">Cerrar venta</DemoButton>
             )}
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">

@@ -17,10 +17,10 @@ import {
   TrendingDown,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { DemoButton } from "./AdminDemo";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -47,6 +47,10 @@ interface FraudCase {
   partnerName?: string;
 }
 
+// Maqueta (solo en modo demo, bajo la franja "DEMO · datos ficticios"). Los
+// casos son inventados y NUNCA se atribuyen a un local o persona reales:
+// locales "de ejemplo", correos .example e IPs/ASN de documentación
+// (RFC 5737 y RFC 5398), que no pertenecen a nadie.
 const now = Date.now();
 const CASES: FraudCase[] = [
   {
@@ -55,17 +59,17 @@ const CASES: FraudCase[] = [
     severity: "high",
     status: "open",
     title: "QR escaneado desde 2 puertas distintas",
-    description: "Mismo QR validado en Puerta 1 a las 23:42 y en Puerta 2 a las 23:43 (30s).",
+    description: "Mismo QR validado en la puerta 1 a las 23:42 y en la puerta 2 a las 23:43.",
     detectedAt: new Date(now - 12 * 60 * 1000),
     evidence: [
-      { label: "Ticket", value: "TKT-0184729" },
-      { label: "Evento", value: "Saturday Night · Pacha" },
-      { label: "Puerta 1", value: "23:42:18 (Diego R.)" },
-      { label: "Puerta 2", value: "23:43:05 (Carla S.)" },
+      { label: "Ticket", value: "TKT-EJEMPLO-01" },
+      { label: "Evento", value: "Sábado noche · Local de ejemplo A" },
+      { label: "Puerta 1", value: "23:42:18 (portero 1)" },
+      { label: "Puerta 2", value: "23:43:05 (portero 2)" },
       { label: "Δ tiempo", value: "47 segundos" },
     ],
     riskScore: 87,
-    partnerName: "Pacha Ibiza",
+    partnerName: "Local de ejemplo A",
   },
   {
     id: "f-02",
@@ -73,13 +77,13 @@ const CASES: FraudCase[] = [
     severity: "critical",
     status: "open",
     title: "Tarjeta usada en 4 cuentas en 1 hora",
-    description: "Una misma tarjeta (BIN 459478) ha pagado entradas desde 4 emails distintos.",
+    description: "Una misma tarjeta ha pagado entradas desde 4 emails distintos.",
     detectedAt: new Date(now - 38 * 60 * 1000),
     evidence: [
-      { label: "BIN", value: "459478 ••• 8821" },
+      { label: "Tarjeta", value: "•••• •••• •••• 0000" },
       { label: "Cuentas", value: "4 únicas" },
       { label: "Importe total", value: "240€" },
-      { label: "IP origen", value: "37.142.81.* (Madrid)" },
+      { label: "IP origen", value: "203.0.113.* (ejemplo)" },
     ],
     riskScore: 96,
     amountCents: 24000,
@@ -89,47 +93,47 @@ const CASES: FraudCase[] = [
     kind: "chargeback",
     severity: "medium",
     status: "investigating",
-    title: "Chargeback Visa · 'product not received'",
-    description: "Cliente reclama no haber recibido el ticket — log muestra QR escaneado en puerta.",
+    title: "Contracargo · 'producto no recibido'",
+    description: "El comprador dice que no recibió la entrada; el registro muestra el QR escaneado en puerta.",
     detectedAt: new Date(now - 6 * 60 * 60 * 1000),
     evidence: [
-      { label: "Charge ID", value: "ch_3OvP2k...8q" },
-      { label: "Cliente", value: "j.lopez@gmail.com" },
-      { label: "Scan log", value: "✓ Sí (23:54)" },
+      { label: "Cargo", value: "ch_ejemplo_0003" },
+      { label: "Comprador", value: "comprador-03@correo.example" },
+      { label: "Escaneo", value: "✓ Sí (23:54)" },
       { label: "Disputa abierta", value: "Hace 4h" },
     ],
     riskScore: 64,
     amountCents: 4500,
-    partnerName: "Razzmatazz",
+    partnerName: "Local de ejemplo B",
   },
   {
     id: "f-04",
     kind: "rrpp_abuse",
     severity: "medium",
     status: "open",
-    title: "RRPP con tasa de cancelación 38%",
-    description: "Carla M. tiene 12 cancelaciones en 7 días — vs media red 2.4%.",
+    title: "RRPP con tasa de cancelación del 38%",
+    description: "El código de RRPP PROMO09 acumula 12 cancelaciones en 7 días, frente al 2,4% de media.",
     detectedAt: new Date(now - 18 * 60 * 60 * 1000),
     evidence: [
-      { label: "RRPP", value: "Carla M. · CARLA09" },
+      { label: "RRPP", value: "Código PROMO09" },
       { label: "Vendido 7d", value: "31 tickets" },
       { label: "Cancelado", value: "12 (38.7%)" },
       { label: "Reembolsado", value: "180€" },
     ],
     riskScore: 71,
-    partnerName: "Sala Apolo",
+    partnerName: "Local de ejemplo C",
   },
   {
     id: "f-05",
     kind: "ip_blacklist",
     severity: "high",
     status: "open",
-    title: "IP en blacklist Tor compró 3 entradas",
-    description: "Compra desde nodo de salida Tor identificado como abusivo en últimas 24h.",
+    title: "IP en lista negra compró 3 entradas",
+    description: "Compra desde un nodo de salida Tor marcado como abusivo en las últimas 24 h.",
     detectedAt: new Date(now - 2 * 60 * 60 * 1000),
     evidence: [
-      { label: "IP", value: "185.220.101.42" },
-      { label: "ASN", value: "AS200052 (Tor exit)" },
+      { label: "IP", value: "198.51.100.42" },
+      { label: "ASN", value: "AS64500 (ejemplo)" },
       { label: "User-agent", value: "Headless Chrome" },
       { label: "Fingerprint", value: "Compartido con 2 cuentas más" },
     ],
@@ -142,11 +146,11 @@ const CASES: FraudCase[] = [
     severity: "low",
     status: "false_positive",
     title: "Sospecha de passback descartada",
-    description: "Trabajaba la pulsera con un familiar, validado por host del local.",
+    description: "La pulsera la llevaba un familiar; lo validó el responsable de sala.",
     detectedAt: new Date(now - 26 * 60 * 60 * 1000),
     evidence: [
-      { label: "Pulsera", value: "WB-2941" },
-      { label: "Host", value: "Lucía G. validó" },
+      { label: "Pulsera", value: "WB-0000" },
+      { label: "Validación", value: "Responsable de sala" },
     ],
     riskScore: 22,
   },
@@ -201,7 +205,7 @@ export const TrustSafetyCenter = () => {
           Trust <span style={serif} className="text-orange-500">&</span> Safety
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Centro anti-fraude: cola de casos, reglas, listas y disputas — en tiempo real.
+          Maqueta del centro anti-fraude: cola de casos, reglas, listas y disputas, con casos inventados.
         </p>
       </header>
 
@@ -486,22 +490,22 @@ const CaseDetail = ({ c }: { c: FraudCase }) => {
       </div>
 
       <footer className="relative mt-6 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        <Button>
+        <DemoButton>
           <Ban className="mr-2 h-4 w-4" />
           Confirmar fraude
-        </Button>
-        <Button variant="outline">
+        </DemoButton>
+        <DemoButton variant="outline">
           <CheckCircle2 className="mr-2 h-4 w-4" />
           Falso positivo
-        </Button>
-        <Button variant="outline">
+        </DemoButton>
+        <DemoButton variant="outline">
           <Gavel className="mr-2 h-4 w-4" />
           Escalar a legal
-        </Button>
-        <Button variant="ghost">
+        </DemoButton>
+        <DemoButton variant="ghost">
           <Mail className="mr-2 h-4 w-4" />
-          Contactar partner
-        </Button>
+          Contactar local
+        </DemoButton>
       </footer>
     </article>
   );
@@ -529,9 +533,9 @@ const Blacklists = () => {
         <div className="mb-4 flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-10 rounded-xl pl-9" placeholder="Buscar entrada en lista…" />
+            <Input className="h-10 rounded-xl pl-9" placeholder="Buscar entrada en lista…" disabled />
           </div>
-          <Button>Añadir</Button>
+          <DemoButton>Añadir</DemoButton>
         </div>
 
         <ul className="space-y-2">
@@ -558,9 +562,9 @@ const Blacklists = () => {
                   Bloqueado · {item.since} · {item.reason}
                 </div>
               </div>
-              <Button variant="ghost" size="sm">
+              <DemoButton variant="ghost" size="sm" aria-label="Quitar de la lista">
                 <X className="h-4 w-4" />
-              </Button>
+              </DemoButton>
             </li>
           ))}
         </ul>
@@ -612,18 +616,19 @@ const ListTab = ({
   );
 };
 
+// Listas de ejemplo: correos .example e IPs de documentación (RFC 5737).
 const FAKE_EMAILS = [
-  { value: "fraud_user_01@temp-mail.org", since: "12 mar", reason: "3 chargebacks" },
-  { value: "spam-tickets@guerrillamail.com", since: "8 mar", reason: "Velocidad anómala" },
-  { value: "bot.account+42@protonmail.com", since: "1 mar", reason: "Sospecha bot" },
+  { value: "cuenta-bloqueada-01@correo.example", since: "12 mar", reason: "3 contracargos" },
+  { value: "spam-entradas@correo.example", since: "8 mar", reason: "Velocidad anómala" },
+  { value: "bot+42@correo.example", since: "1 mar", reason: "Sospecha bot" },
 ];
 const FAKE_IPS = [
-  { value: "185.220.101.42", since: "14 mar", reason: "Tor exit node" },
-  { value: "5.62.62.*", since: "9 mar", reason: "VPN abuso" },
+  { value: "198.51.100.42", since: "14 mar", reason: "Nodo Tor" },
+  { value: "192.0.2.*", since: "9 mar", reason: "Abuso desde VPN" },
 ];
-const FAKE_CARDS = [{ value: "459478 ••• 8821", since: "Hoy", reason: "Velocity 4 cuentas/1h" }];
+const FAKE_CARDS = [{ value: "•••• •••• •••• 0000", since: "Hoy", reason: "4 cuentas en 1 h" }];
 const FAKE_DEVICES = [
-  { value: "fp_2d8a91b…f4e2", since: "11 mar", reason: "Múltiples cuentas" },
+  { value: "fp_ejemplo…0001", since: "11 mar", reason: "Múltiples cuentas" },
 ];
 
 // =============================================================
@@ -657,7 +662,7 @@ const Rules = () => (
             Motor de detección
           </h3>
         </div>
-        <Button>Nueva regla</Button>
+        <DemoButton>Nueva regla</DemoButton>
       </div>
     </div>
 

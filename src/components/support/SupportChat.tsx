@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId, useSessionReady } from "@/lib/cache/session";
@@ -20,7 +20,8 @@ import { es } from "date-fns/locale";
 type Message = {
   id: string;
   conversation_id: string;
-  sender_id: string;
+  /** NULL si la cuenta que lo escribió se ha borrado: el mensaje se queda. */
+  sender_id: string | null;
   sender_kind: "client" | "admin" | "partner";
   body: string;
   created_at: string;
@@ -94,11 +95,13 @@ const buildTimeline = (messages: Message[]) => {
       prevSender = null;
     }
 
-    const showAvatar = prevSender !== m.sender_kind;
+    // Autor = tipo + cuenta: dos admins seguidos no se funden en un bloque.
+    const sender = `${m.sender_kind}:${m.sender_id ?? "-"}`;
+    const showAvatar = prevSender !== sender;
     items.push({ kind: "msg", msg: m, showAvatar });
 
     prevDay = d;
-    prevSender = m.sender_kind;
+    prevSender = sender;
   }
 
   return items;
@@ -113,15 +116,21 @@ const mergeMessages = (prev: Message[], incoming: Message[]) => {
 };
 
 interface ChatData {
-  /** null: admin sin conversación con ese usuario. */
+  /**
+   * Admin: null = ese usuario no tiene conversación.
+   * Usuario: null = aún no ha escrito; la conversación se crea con el primer
+   * mensaje (antes cada visita a Soporte dejaba una vacía).
+   */
   convId: string | null;
+  /** Local: organización con la que se abre su conversación. */
+  orgId: string | null;
   messages: Message[];
 }
 
 const SIN_MENSAJES: Message[] = [];
 
-/** Abre (o crea) la conversación y carga sus mensajes. */
-async function abrirConversacion(p: {
+/** Busca la conversación (sin crearla) y carga sus mensajes. */
+async function cargarConversacion(p: {
   uid: string;
   mode: Props["mode"];
   kind: NonNullable<Props["kind"]>;
@@ -131,6 +140,7 @@ async function abrirConversacion(p: {
 }): Promise<ChatData> {
   try {
     let id: string | null = null;
+    let org: string | null = null;
 
     if (p.mode === "admin") {
       if (p.conversationId) {
@@ -145,46 +155,47 @@ async function abrirConversacion(p: {
         if (error) throw error;
         id = data?.[0]?.id ?? null;
       }
-      if (!id) return { convId: null, messages: [] };
-    } else if (p.kind === "partner") {
-      // Si el panel aún no ha cargado la organización se resuelve aquí,
-      // para no abrir una conversación sin org y otra con org después.
-      let org = p.orgId ?? null;
-      if (!org) {
-        const { data: tenant, error: tenantError } = await supabase.rpc("tenant_for_user");
-        if (tenantError) throw tenantError;
-        org = (Array.isArray(tenant) ? tenant[0]?.org_id : null) ?? null;
-      }
-      const { data, error } = await supabase.rpc("open_conversation", {
-        _kind: "partner_admin",
-        ...(org ? { _org_id: org } : {}),
-      });
-      if (error) throw error;
-      if (!data) throw new Error("open_conversation no devolvió conversación");
-      id = data;
     } else {
-      // Un mismo usuario puede tener varias conversaciones (por tipo o ya
-      // cerradas), así que nada de maybeSingle(): la abierta más reciente.
-      const { data: existing, error } = await supabase
-        .from("support_conversations")
-        .select("id")
-        .eq("client_id", p.uid)
-        .eq("kind", "client_admin")
-        .eq("status", "open")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      id = existing?.[0]?.id ?? null;
-      if (!id) {
-        const { data: created, error: insertError } = await supabase
+      if (p.kind === "partner") {
+        // Si el panel aún no ha cargado la organización se resuelve aquí:
+        // la conversación del local va por organización.
+        org = p.orgId ?? null;
+        if (!org) {
+          const { data: tenant, error: tenantError } = await supabase.rpc("tenant_for_user");
+          if (tenantError) throw tenantError;
+          org = (Array.isArray(tenant) ? tenant[0]?.org_id : null) ?? null;
+        }
+      }
+      const suyas = () => {
+        const consulta = supabase
           .from("support_conversations")
-          .insert({ client_id: p.uid, kind: "client_admin" })
           .select("id")
-          .single();
-        if (insertError) throw insertError;
-        id = created.id;
+          .eq("client_id", p.uid)
+          .eq("kind", p.kind === "partner" ? "partner_admin" : "client_admin");
+        if (p.kind !== "partner") return consulta;
+        return org ? consulta.eq("org_id", org) : consulta.is("org_id", null);
+      };
+      // La abierta (solo hay una: índice único; sin maybeSingle() por si el
+      // servidor aún no lo tiene). Si no hay, la última cerrada, con su
+      // historial: al escribir en ella se reabre.
+      const abierta = await suyas()
+        .eq("status", "open")
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(1);
+      if (abierta.error) throw abierta.error;
+      id = abierta.data?.[0]?.id ?? null;
+      if (!id) {
+        const cerrada = await suyas()
+          .neq("status", "open")
+          .not("last_message_at", "is", null)
+          .order("last_message_at", { ascending: false })
+          .limit(1);
+        if (cerrada.error) throw cerrada.error;
+        id = cerrada.data?.[0]?.id ?? null;
       }
     }
+
+    if (!id) return { convId: null, orgId: org, messages: [] };
 
     const { data: rows, error: messagesError } = await supabase
       .from("support_messages")
@@ -192,11 +203,22 @@ async function abrirConversacion(p: {
       .eq("conversation_id", id)
       .order("created_at", { ascending: true });
     if (messagesError) throw messagesError;
-    return { convId: id, messages: (rows ?? []) as Message[] };
+    return { convId: id, orgId: org, messages: (rows ?? []) as Message[] };
   } catch (err) {
     console.error("[SupportChat] no se pudo abrir la conversación:", err);
     throw err;
   }
+}
+
+/**
+ * Lo que llegó por tiempo real mientras la consulta estaba en vuelo no se
+ * pierde: la respuesta del servidor se fusiona con la caché (el servidor
+ * manda en los mensajes que trae, p. ej. su read_at).
+ */
+function fusionarConCache(queryClient: QueryClient, key: QueryKey, fresco: ChatData): ChatData {
+  const previo = queryClient.getQueryData<ChatData>(key);
+  if (!previo || !fresco.convId || previo.convId !== fresco.convId) return fresco;
+  return { ...fresco, messages: mergeMessages(previo.messages, fresco.messages) };
 }
 
 /* ------------------------------------------------------------------
@@ -223,6 +245,7 @@ export const SupportChat = ({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const canalId = useId();
   const readerKind = mode === "admin" ? "admin" : "client";
   const isMine = useCallback(
     (m: Message) => (mode === "admin" ? m.sender_kind === "admin" : m.sender_kind !== "admin"),
@@ -234,30 +257,42 @@ export const SupportChat = ({
       void supabase
         .rpc("mark_conversation_read", { _conversation_id: id, _as_kind: readerKind })
         .then(({ error }) => {
-          if (error) console.warn("[SupportChat] mark_conversation_read:", error.message);
+          if (error) {
+            console.warn("[SupportChat] mark_conversation_read:", error.message);
+            return;
+          }
+          // La bandeja del admin deja de marcarla como no leída (lista y menú).
+          if (mode === "admin" && userId) {
+            void queryClient.invalidateQueries({ queryKey: qk.admin.supportInbox(userId) });
+          }
         });
     },
-    [readerKind]
+    [readerKind, mode, userId, queryClient]
   );
 
   // Conversación y mensajes en la caché (solo en memoria: es una
-  // conversación privada). Volver a Soporte los enseña al instante; al volver
-  // a la pestaña o a la app se refrescan solos (Realtime no reenvía lo que
-  // llegó en segundo plano).
+  // conversación privada). Volver a Soporte los enseña al instante y los
+  // refresca siempre al montar (refetchOnMount "always"): una respuesta que
+  // llegó mientras no se veía el chat no espera a que caduque la caché.
   const chatKey = useMemo<QueryKey>(
     () =>
       mode === "admin"
-        ? ["admin", userId ?? "", "support", conversationId ?? `cliente:${selectedClientId ?? ""}`]
+        ? qk.admin.supportChat(userId ?? "", conversationId ?? `cliente:${selectedClientId ?? ""}`)
         : qk.me.support(userId ?? "", kind, orgId ?? null),
     [mode, userId, conversationId, selectedClientId, kind, orgId]
   );
   const query = useQuery({
     queryKey: chatKey,
-    queryFn: () =>
-      abrirConversacion({ uid: userId as string, mode, kind, orgId, selectedClientId, conversationId }),
+    queryFn: async () =>
+      fusionarConCache(
+        queryClient,
+        chatKey,
+        await cargarConversacion({ uid: userId as string, mode, kind, orgId, selectedClientId, conversationId }),
+      ),
     enabled: !!userId,
     staleTime: 15_000,
     gcTime: 30 * 60_000,
+    refetchOnMount: "always",
   });
   const convId = query.data?.convId ?? null;
   const messages = query.data?.messages ?? SIN_MENSAJES;
@@ -266,17 +301,20 @@ export const SupportChat = ({
     : !userId
       ? "signed_out"
       : query.data
-        ? query.data.convId
+        ? query.data.convId || mode === "client"
           ? "ready"
           : "empty"
         : query.isError
           ? "error"
           : "loading";
 
-  // Leída al abrirla y cada vez que llegan mensajes del servidor.
+  // Leída cuando hay algo de la otra parte sin leer (al abrirla y cuando
+  // llega un mensaje nuevo). mark_conversation_read pone read_at, que vuelve
+  // por Realtime como UPDATE: así no se repite en bucle.
+  const haySinLeer = useMemo(() => messages.some((m) => !isMine(m) && !m.read_at), [messages, isMine]);
   useEffect(() => {
-    if (convId && query.dataUpdatedAt) markRead(convId);
-  }, [convId, query.dataUpdatedAt, markRead]);
+    if (convId && haySinLeer) markRead(convId);
+  }, [convId, haySinLeer, markRead]);
 
   const anadirMensajes = useCallback(
     (nuevos: Message[]) => {
@@ -287,26 +325,30 @@ export const SupportChat = ({
     [queryClient, chatKey]
   );
 
-  // Mensajes nuevos en tiempo real: directos a la caché.
+  // Tiempo real: mensajes nuevos (INSERT) y leídos (UPDATE de read_at),
+  // directos a la caché. Al quedar suscrito (también tras reconectar) se
+  // vuelve a pedir la conversación: lo que llegó antes de la suscripción o
+  // durante un corte no se pierde.
   useEffect(() => {
     if (!convId) return;
     const channel = supabase
-      .channel(`support_${convId}`)
+      .channel(`support_${convId}_${canalId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${convId}` },
+        { event: "*", schema: "public", table: "support_messages", filter: `conversation_id=eq.${convId}` },
         (payload) => {
-          const next = payload.new as Message;
-          anadirMensajes([next]);
-          if (!isMine(next)) markRead(convId);
+          if (payload.eventType !== "INSERT" && payload.eventType !== "UPDATE") return;
+          anadirMensajes([payload.new as Message]);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void queryClient.invalidateQueries({ queryKey: chatKey });
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [convId, isMine, markRead, anadirMensajes]);
+  }, [convId, canalId, anadirMensajes, queryClient, chatKey]);
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -325,24 +367,52 @@ export const SupportChat = ({
   const sendMessage = useCallback(
     async (overrideBody?: string) => {
       const body = (overrideBody ?? input).trim();
-      if (!body || !convId || !userId || sending) return;
+      if (!body || !userId || sending || !query.data) return;
+      if (mode === "admin" && !convId) return;
 
       setSending(true);
-      // Remitente 'client' también para el local: la RLS de support_messages
-      // solo acepta ese valor para quien figura como client_id de la
-      // conversación, y en partner_admin ese es el propio local.
-      const { data, error } = await supabase
-        .from("support_messages")
-        .insert({
-          conversation_id: convId,
-          sender_id: userId,
-          sender_kind: mode === "admin" ? "admin" : "client",
-          body,
-        })
-        .select(MESSAGE_COLUMNS)
-        .single();
+      try {
+        // Primer mensaje: ahora se crea la conversación (open_conversation es
+        // idempotente: con dos pestañas, las dos reciben la misma).
+        let id = convId;
+        const creada = !id;
+        if (!id) {
+          const org = query.data.orgId;
+          const { data: abierta, error: openError } = await supabase.rpc("open_conversation", {
+            _kind: kind === "partner" ? "partner_admin" : "client_admin",
+            ...(kind === "partner" && org ? { _org_id: org } : {}),
+          });
+          if (openError) throw openError;
+          if (!abierta) throw new Error("open_conversation no devolvió conversación");
+          id = abierta;
+          const nueva = abierta;
+          queryClient.setQueryData<ChatData>(chatKey, (prev) => ({
+            convId: nueva,
+            orgId: prev?.orgId ?? org,
+            messages: prev?.convId === nueva ? prev.messages : [],
+          }));
+        }
 
-      if (error) {
+        // Remitente 'client' también para el local: la RLS de support_messages
+        // solo acepta ese valor para quien figura como client_id de la
+        // conversación, y en partner_admin ese es el propio local.
+        const { data, error } = await supabase
+          .from("support_messages")
+          .insert({
+            conversation_id: id,
+            sender_id: userId,
+            sender_kind: mode === "admin" ? "admin" : "client",
+            body,
+          })
+          .select(MESSAGE_COLUMNS)
+          .single();
+        if (error) throw error;
+
+        if (!overrideBody) setInput("");
+        if (data) anadirMensajes([data as Message]);
+        // Si ya existía (otra pestaña u otro dispositivo), trae lo que tenga.
+        if (creada) void queryClient.invalidateQueries({ queryKey: chatKey });
+      } catch (error) {
         console.error("[SupportChat] envío fallido:", error);
         // El borrador no se pierde: sigue en el cuadro de texto para reenviarlo.
         if (overrideBody) setInput(body);
@@ -351,13 +421,11 @@ export const SupportChat = ({
           description: "Revisa tu conexión y vuelve a intentarlo.",
           variant: "destructive",
         });
-      } else {
-        if (!overrideBody) setInput("");
-        if (data) anadirMensajes([data as Message]);
+      } finally {
+        setSending(false);
       }
-      setSending(false);
     },
-    [convId, userId, mode, input, sending, toast, anadirMensajes]
+    [convId, userId, mode, kind, input, sending, toast, anadirMensajes, query.data, queryClient, chatKey]
   );
 
   const otherName = useMemo(() => {
@@ -369,6 +437,14 @@ export const SupportChat = ({
   }, [mode, selectedClient]);
 
   const otherInitial = (otherName.trim()[0] ?? "?").toUpperCase();
+
+  /** Quién firma un mensaje. Una cuenta borrada deja el mensaje con sender_id NULL. */
+  const autor = (m: Message, mine: boolean): string => {
+    if (mode === "client") return mine ? "Tú" : "Pasify";
+    if (m.sender_id === null) return "Usuario eliminado";
+    if (m.sender_kind === "admin") return m.sender_id === userId ? "Tú" : "Equipo Pasify";
+    return otherName.split(" ")[0];
+  };
 
   // Sin sesión: nada de chat simulado, se pide iniciar sesión.
   if (loadState === "signed_out" && mode === "client") {
@@ -566,7 +642,13 @@ export const SupportChat = ({
                             border: mode === "admin" ? "1px solid rgba(244,238,226,0.15)" : "none",
                           }}
                         >
-                          {mode === "client" ? <Headphones className="h-3 w-3" /> : otherInitial}
+                          {mode === "client" ? (
+                            <Headphones className="h-3 w-3" />
+                          ) : m.sender_id === null ? (
+                            "?"
+                          ) : (
+                            otherInitial
+                          )}
                         </div>
                       )}
                     </div>
@@ -582,7 +664,7 @@ export const SupportChat = ({
                           color: mine ? "rgba(232,84,42,0.85)" : "rgba(244,238,226,0.45)",
                         }}
                       >
-                        {mine ? "Tú" : mode === "client" ? "Pasify" : otherName.split(" ")[0]}
+                        {autor(m, mine)}
                       </div>
                     )}
 

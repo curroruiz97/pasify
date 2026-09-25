@@ -16,9 +16,9 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { DemoButton } from "./AdminDemo";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -42,28 +42,31 @@ interface Anomaly {
   affected: string;
 }
 
+// Maqueta (solo en modo demo, bajo la franja "DEMO · datos ficticios"):
+// anomalías inventadas sobre locales "de ejemplo". Nada se atribuye a un
+// local o una persona reales.
 const ANOMALIES: Anomaly[] = [
   {
     id: "an-1",
     severity: "critical",
-    title: "Caída brusca de ventas — Razzmatazz",
+    title: "Caída brusca de ventas — Local de ejemplo B",
     description:
-      "Las ventas online han bajado un 68% en las últimas 4 horas frente al esperado. Posible problema técnico en Stripe Connect.",
+      "Las ventas online han bajado un 68% en las últimas 4 horas frente a lo esperado. Posible problema técnico con el cobro.",
     metric: "Ventas/h",
     delta: -68,
     detectedAt: new Date(Date.now() - 38 * 60 * 1000),
-    affected: "Razzmatazz · 1 evento activo",
+    affected: "Local de ejemplo B · 1 evento activo",
   },
   {
     id: "an-2",
     severity: "warning",
-    title: "Pico anómalo de chargebacks",
+    title: "Pico anómalo de contracargos",
     description:
-      "Los chargebacks de Pacha Ibiza han pasado de 0.2% a 1.4% esta semana. Sospecha de patrón de fraude organizado.",
-    metric: "Chargeback rate",
+      "Los contracargos de un local del ejemplo han pasado del 0,2% al 1,4% esta semana. Conviene revisar sus últimas ventas.",
+    metric: "Tasa de contracargos",
     delta: 600,
     detectedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-    affected: "Pacha Ibiza",
+    affected: "Local de ejemplo A",
   },
   {
     id: "an-3",
@@ -80,11 +83,11 @@ const ANOMALIES: Anomaly[] = [
     severity: "info",
     title: "Crecimiento inesperado en TikTok",
     description:
-      "El tráfico desde TikTok hacia evento Festival Medusa ha crecido +320% — investigar si replicar campaña.",
+      "El tráfico desde TikTok hacia un festival del ejemplo ha crecido un 320%: ¿merece la pena replicar la campaña?",
     metric: "Tráfico canal",
     delta: 320,
     detectedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-    affected: "Medusa Festival",
+    affected: "Festival de ejemplo",
   },
 ];
 
@@ -105,7 +108,7 @@ interface SentimentBucket {
 
 const SENTIMENT: SentimentBucket[] = [
   {
-    partner: "Pacha Ibiza",
+    partner: "Local de ejemplo A",
     positive: 0.72,
     neutral: 0.18,
     negative: 0.1,
@@ -117,7 +120,7 @@ const SENTIMENT: SentimentBucket[] = [
     ],
   },
   {
-    partner: "Razzmatazz",
+    partner: "Local de ejemplo B",
     positive: 0.65,
     neutral: 0.22,
     negative: 0.13,
@@ -128,14 +131,14 @@ const SENTIMENT: SentimentBucket[] = [
     ],
   },
   {
-    partner: "Sala Apolo",
+    partner: "Local de ejemplo C",
     positive: 0.81,
     neutral: 0.13,
     negative: 0.06,
     nps: 72,
     topQuotes: [
       { text: "Programación impecable, line-up indie único.", sentiment: "positive" },
-      { text: "Mejor venue para conciertos de Barcelona.", sentiment: "positive" },
+      { text: "La mejor sala de conciertos de la ciudad.", sentiment: "positive" },
     ],
   },
 ];
@@ -154,7 +157,8 @@ export const AiInsightsHub = () => {
           AI <span style={serif} className="text-orange-500">Insights</span> Hub
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          La IA observa la red 24/7 y te trae anomalías, post-mortems generados y el pulso emocional de tus clientes.
+          Maqueta de lo que podría hacer la IA: anomalías, post-mortems y el pulso de los clientes. Hoy ningún
+          modelo analiza la red: todo lo que ves es un ejemplo.
         </p>
       </header>
 
@@ -187,23 +191,13 @@ export const AiInsightsHub = () => {
               className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
               style={{ ...mono, letterSpacing: "0.22em" }}
             >
-              <span className="relative inline-flex h-1.5 w-1.5">
-                <span
-                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-                  style={{ background: "#4DB87A" }}
-                />
-                <span
-                  className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                  style={{ background: "#4DB87A" }}
-                />
-              </span>
-              IA · Monitoreando
+              IA · Simulación
             </div>
             <h3 className="text-xl font-semibold leading-tight tracking-tight text-foreground">
-              {ANOMALIES.length} anomalías detectadas · {SENTIMENT.length} partners analizados
+              {ANOMALIES.length} anomalías de ejemplo · {SENTIMENT.length} locales de ejemplo
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Última pasada hace 2 minutos. Modelo recalibrado esta mañana con 142 eventos del histórico.
+              Datos inventados para enseñar la idea: no hay ningún modelo vigilando la red.
             </p>
           </div>
         </div>
@@ -339,13 +333,13 @@ const AnomalyCard = ({ a }: { a: Anomaly }) => {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
-        <Button size="sm">Investigar</Button>
-        <Button size="sm" variant="outline">
+        <DemoButton size="sm">Investigar</DemoButton>
+        <DemoButton size="sm" variant="outline">
           Marcar como vista
-        </Button>
-        <Button size="sm" variant="ghost">
+        </DemoButton>
+        <DemoButton size="sm" variant="ghost">
           Silenciar 24h
-        </Button>
+        </DemoButton>
       </div>
     </article>
   );
@@ -357,8 +351,8 @@ const AnomalyCard = ({ a }: { a: Anomaly }) => {
 
 const PostmortemView = () => {
   const event = {
-    title: "Saturday Night · Resident DJs",
-    venue: "Pacha Ibiza",
+    title: "Sábado noche · DJs residentes",
+    venue: "Local de ejemplo A",
     date: subDays(new Date(), 2),
     sold: 612,
     capacity: 800,
@@ -416,7 +410,7 @@ const PostmortemView = () => {
           <strong style={{ color: "#FF7A4D" }}>{(event.revenueCents / 100).toLocaleString("es-ES")}€</strong> de revenue,
           un <strong style={{ color: "#4DB87A" }}>+14% vs el sábado anterior</strong>. El pico de entrada fue a las{" "}
           <strong style={{ color: "#FF7A4D" }}>00:18h</strong>; el cuello de botella estuvo en la puerta 2 (escáner lento).
-          Top RRPP: Carla con 38 entradas. El NPS llegó a {event.nps} — el comentario negativo más recurrente fue el precio de bebidas."
+          Top RRPP: el código PROMO07, con 38 entradas. El NPS llegó a {event.nps} — el comentario negativo más recurrente fue el precio de bebidas."
         </p>
       </section>
 
@@ -454,13 +448,13 @@ const PostmortemView = () => {
         />
       </section>
 
-      <footer className="relative mt-6 flex gap-2 border-t border-border pt-5">
-        <Button>
+      <footer className="relative mt-6 flex flex-wrap gap-2 border-t border-border pt-5">
+        <DemoButton>
           <Sparkles className="mr-2 h-4 w-4" />
           Aplicar acciones IA
-        </Button>
-        <Button variant="outline">Generar PDF</Button>
-        <Button variant="ghost">Compartir con partner</Button>
+        </DemoButton>
+        <DemoButton variant="outline">Generar PDF</DemoButton>
+        <DemoButton variant="ghost">Compartir con el local</DemoButton>
       </footer>
     </article>
   );

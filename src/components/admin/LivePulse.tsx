@@ -10,10 +10,12 @@ const serif = {
 };
 
 interface Props {
-  /** Eventos activos ahora (mock o real). */
+  /** Eventos activos ahora. */
   liveEvents?: number;
   /** GMV de la jornada en céntimos. */
   gmvCentsToday?: number;
+  /** Variación del GMV frente a ayer, en %. */
+  gmvDeltaPct?: number;
   /** Scans/min agregados. */
   scansPerMin?: number;
   /** Alertas operativas abiertas. */
@@ -21,12 +23,16 @@ interface Props {
 }
 
 /**
- * Live Pulse del admin — 4 tiles editoriales con "latido" de la red
- * en tiempo real. Headline tipo NOC (Network Operations Center).
+ * Live Pulse del admin — 4 tiles editoriales con "latido" de la red.
+ * Maqueta: solo se ve en modo demo (flag admin_showcase), bajo la franja
+ * "DEMO · datos ficticios", con estas cifras de ejemplo fijas. No hay datos
+ * reales detrás (antes se derivaban de las entradas: GMV = entradas × 15 € y
+ * un "% vs ayer" aleatorio en cada render).
  */
 export const LivePulse = ({
   liveEvents = 3,
-  gmvCentsToday = 184523_00,
+  gmvCentsToday = 18_452_00,
+  gmvDeltaPct = 9.4,
   scansPerMin = 47,
   openAlerts = 2,
 }: Props) => {
@@ -102,7 +108,7 @@ export const LivePulse = ({
           value={`${(gmvCentsToday / 100).toLocaleString("es-ES", {
             maximumFractionDigits: 0,
           })}€`}
-          sub={`+${Math.round((Math.random() * 8 + 6) * 10) / 10}% vs ayer`}
+          sub={`${gmvDeltaPct >= 0 ? "+" : ""}${gmvDeltaPct.toLocaleString("es-ES", { maximumFractionDigits: 1 })}% vs ayer`}
           color="#E8542A"
         />
         <PulseTile
