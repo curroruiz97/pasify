@@ -15,7 +15,9 @@ import { useAdminIds, useAuditLogs, type AuditKind, type AuditRow, type ProfileL
  *
  * Lee `audit_logs` de las tablas auditadas: roles (user_roles, con su propio
  * trigger), perfiles, solicitudes de reembolso y organizaciones (trigger
- * audit_changes, solo UPDATE y DELETE).
+ * audit_changes, solo UPDATE y DELETE; el reembolso creado por un admin desde
+ * Pedidos también deja su alta) y liquidaciones (partner_settlements, también
+ * las altas).
  *
  * **Escalada** (solo en roles): alguien que no es admin toca el rol de OTRA
  * persona. No cuentan:
@@ -40,6 +42,11 @@ const TABS: { id: AuditKind; label: string; descripcion: string }[] = [
     descripcion: "Cambios de estado de las solicitudes de reembolso (decisiones, reintentos, Stripe).",
   },
   { id: "organizations", label: "Organizaciones", descripcion: "Cambios en las organizaciones de los locales." },
+  {
+    id: "partner_settlements",
+    label: "Liquidaciones",
+    descripcion: "Transferencias a los locales apuntadas en Liquidaciones: altas, cambios y bajas, con quién las hizo.",
+  },
 ];
 
 const PAGE = 100;
@@ -103,6 +110,10 @@ export const AuditTrailViewer = () => {
         const nombre = campo(fila, "name");
         return typeof nombre === "string" ? nombre : String(r.target_id ?? "—").slice(0, 8);
       }
+      case "partner_settlements": {
+        const org = campo(fila, "org_id");
+        return `Organización ${typeof org === "string" ? org.slice(0, 8) : "—"}`;
+      }
       default:
         return "—";
     }
@@ -113,6 +124,14 @@ export const AuditTrailViewer = () => {
     if (r.target_kind === "user_roles") {
       const rol = campo(r.after, "role") ?? campo(r.before, "role");
       return typeof rol === "string" ? `rol ${rol}` : "—";
+    }
+    // Liquidación nueva o borrada: importe y referencia de la transferencia.
+    if (r.target_kind === "partner_settlements" && (!r.before || !r.after)) {
+      const fila = r.after ?? r.before;
+      const importe = Number(campo(fila, "amount_cents"));
+      const ref = campo(fila, "bank_reference");
+      const texto = `${Number.isFinite(importe) ? (importe / 100).toFixed(2).replace(".", ",") : "?"} ${String(campo(fila, "currency") ?? "EUR")}${typeof ref === "string" ? ` · ref. ${ref}` : ""}`;
+      return r.action.startsWith("DELETE") ? `borrada: ${texto}` : texto;
     }
     if (!r.before || !r.after) return r.action.startsWith("DELETE") ? "borrado" : "—";
     const partes: string[] = [];

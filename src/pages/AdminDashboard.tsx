@@ -22,11 +22,14 @@ import {
 } from "@/components/ui/select";
 import {
   AlertTriangle,
+  Ban,
+  Banknote,
   BarChart3,
   Brain,
   Calendar,
   CheckCircle2,
   ChevronRight,
+  ExternalLink,
   FileSearch,
   HelpCircle,
   Landmark,
@@ -36,6 +39,8 @@ import {
   MessageCircle,
   MoreHorizontal,
   Network,
+  PlayCircle,
+  Receipt,
   RefreshCw,
   RotateCcw,
   Scale,
@@ -47,6 +52,13 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Wordmark from "@/components/Wordmark";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { LivePulse } from "@/components/admin/LivePulse";
@@ -60,16 +72,29 @@ import { AISafetyConsole } from "@/components/admin/AISafetyConsole";
 import { IndustryBenchmarks } from "@/components/admin/IndustryBenchmarks";
 import { AdminRefundsQueue } from "@/components/admin/AdminRefundsQueue";
 import { AdminSupportInbox } from "@/components/admin/AdminSupportInbox";
+import { AdminOrders } from "@/components/admin/AdminOrders";
+import { AdminSettlements } from "@/components/admin/AdminSettlements";
+import { OrgEstado, OrgSuspensionDialog, type SuspensionTarget } from "@/components/admin/AdminOrgSuspension";
+import {
+  AdminAttendeesDialog,
+  AdminCancelEventDialog,
+  type EventoCancelable,
+  type EventoRef,
+} from "@/components/admin/AdminEventTools";
 import { DemoBanner } from "@/components/admin/AdminDemo";
 import {
+  orgSuspendida,
   useAdminEvents,
   useAdminKpis,
+  useAdminPartnerOrgs,
   useAdminRealtime,
   useAdminRefundCounts,
   useAdminShowcase,
   useAdminSupportUnread,
   useAdminUserFacets,
   useAdminUsers,
+  type AdminEventRow,
+  type AdminPartnerOrg,
   type AdminUserRow,
 } from "@/components/admin/adminQueries";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
@@ -85,6 +110,8 @@ type Section =
   | "locales"
   | "clientes"
   | "eventos"
+  | "pedidos"
+  | "liquidaciones"
   | "finance"
   | "ai"
   | "ai_safety"
@@ -137,6 +164,14 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
+  // Búsqueda de Pedidos: se conserva al cambiar de sección, y Soporte la
+  // rellena con el email de quien escribe («Sus pedidos»).
+  const [pedidosTexto, setPedidosTexto] = useState("");
+  const buscarPedidos = (email: string) => {
+    setPedidosTexto(email);
+    setSection("pedidos");
+  };
+
   // Mobile Settings/Help sheets — state lifted al padre.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -158,6 +193,8 @@ const AdminDashboard = () => {
         ],
       },
       { kind: "item", id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
+      { kind: "item", id: "pedidos", label: "Pedidos", icon: <Receipt className="h-5 w-5" /> },
+      { kind: "item", id: "liquidaciones", label: "Liquidaciones", icon: <Banknote className="h-5 w-5" /> },
     ];
     if (showcase) {
       tree.push(
@@ -197,10 +234,11 @@ const AdminDashboard = () => {
     return tree;
   }, [showcase]);
 
-  // Bottom tab bar mobile — 4 entradas más usadas; el resto via drawer "Más".
+  // Bottom tab bar mobile — 4 entradas más usadas (el día a día de soporte);
+  // el resto via drawer "Más".
   const tabBarItems: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
-    { id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
+    { id: "pedidos", label: "Pedidos", icon: <Receipt className="h-5 w-5" /> },
     { id: "refunds", label: "Reembolsos", icon: <RotateCcw className="h-5 w-5" /> },
     { id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
@@ -276,6 +314,10 @@ const AdminDashboard = () => {
 
           {seccionActiva === "eventos" && <EventosSection uid={uid} />}
 
+          {seccionActiva === "pedidos" && <AdminOrders uid={uid} texto={pedidosTexto} onTexto={setPedidosTexto} />}
+
+          {seccionActiva === "liquidaciones" && <AdminSettlements uid={uid} />}
+
           {seccionActiva === "finance" && <NetworkFinance />}
 
           {seccionActiva === "ai" && <AiInsightsHub />}
@@ -294,7 +336,7 @@ const AdminDashboard = () => {
 
           {seccionActiva === "refunds" && <AdminRefundsQueue uid={uid} />}
 
-          {seccionActiva === "soporte" && <AdminSupportInbox uid={uid} />}
+          {seccionActiva === "soporte" && <AdminSupportInbox uid={uid} onBuscarPedidos={buscarPedidos} />}
         </main>
 
         {/* Mobile bottom tab bar — primitiva compartida (MobileBottomNav).
@@ -417,8 +459,11 @@ const MetricsSection = ({
       </div>
 
       <p className="mt-8 max-w-2xl text-xs text-muted-foreground">
-        Las finanzas de la red (volumen de ventas, comisiones y liquidaciones) llegan en una próxima versión: hoy el
-        panel no enseña ninguna cifra económica. Las entradas vendidas incluyen las de pedidos de prueba de Stripe.
+        Lo cobrado, las comisiones y lo que se debe a cada local está en{" "}
+        <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => onGo("liquidaciones")}>
+          Liquidaciones
+        </button>
+        , sin pagos de prueba de Stripe. Las entradas vendidas de arriba sí incluyen las de pedidos de prueba.
       </p>
     </div>
   );
@@ -528,8 +573,21 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
     pageSize: PAGE_SIZE,
   });
   const facets = useAdminUserFacets(uid, "partner");
-  const rows = locales.data?.rows ?? [];
+  const rows = useMemo(() => locales.data?.rows ?? [], [locales.data]);
   const total = locales.data?.total ?? 0;
+
+  // Organizaciones de los locales de esta página: suspender es de la
+  // organización (organizations.owner_id), no de la cuenta.
+  const orgs = useAdminPartnerOrgs(
+    uid,
+    rows.map((r) => r.id),
+  );
+  const orgsPorDueno = useMemo(() => {
+    const m = new Map<string, AdminPartnerOrg[]>();
+    for (const o of orgs.data ?? []) m.set(o.owner_id, [...(m.get(o.owner_id) ?? []), o]);
+    return m;
+  }, [orgs.data]);
+  const [suspension, setSuspension] = useState<SuspensionTarget | null>(null);
 
   // Aprobar o rechazar puede vaciar la última página de un filtro: a la anterior.
   const paginaVacia = !locales.isFetching && !!locales.data && locales.data.rows.length === 0 && page > 0;
@@ -539,6 +597,15 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
   const hayFiltros =
     !!filter.search || filter.category !== "all" || filter.city !== "all" || filter.status !== "all";
 
+  const refrescarLocales = () => {
+    if (!uid) return;
+    void queryClient.invalidateQueries({ queryKey: qk.admin.users(uid) });
+    void queryClient.invalidateQueries({ queryKey: qk.admin.partnerOrgs(uid) });
+    // Suspender oculta sus eventos y bloquea su liquidación.
+    void queryClient.invalidateQueries({ queryKey: qk.admin.eventsAll(uid) });
+    void queryClient.invalidateQueries({ queryKey: qk.admin.settlements(uid) });
+  };
+
   const updateLocaleStatus = async (id: string, status: "approved" | "rejected") => {
     setBusyId(id);
     const { error } = await supabase.from("profiles").update({ account_status: status }).eq("id", id);
@@ -547,12 +614,23 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
       toast({ title: "No se ha podido cambiar el estado", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: status === "approved" ? "Local aprobado" : "Local rechazado" });
+    // Rechazar la cuenta no para a un local que ya vende: eso es Suspender.
+    const vende = (orgsPorDueno.get(id) ?? []).some((o) => o.status === "active" && !orgSuspendida(o));
+    toast({
+      title: status === "approved" ? "Local aprobado" : "Local rechazado",
+      description:
+        status === "rejected" && vende
+          ? "Rechazar la cuenta no detiene sus ventas: para pararlas, usa «Suspender»."
+          : undefined,
+    });
     if (uid) void queryClient.invalidateQueries({ queryKey: qk.admin.users(uid) });
   };
 
   return (
-    <SectionShell title="Locales" subtitle="Gestión y aprobación de locales registrados.">
+    <SectionShell
+      title="Locales"
+      subtitle="Aprobación de las cuentas de local. Para parar las ventas de un local, «Suspender»: rechazar la cuenta no las para."
+    >
       <PartnerFilters
         filter={filter}
         onChange={cambiarFiltro}
@@ -590,6 +668,12 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
         )
       ) : (
         <>
+          {orgs.isError && (
+            <ErrorCard
+              mensaje={`No se ha podido leer la organización de cada local (suspender no está disponible): ${getErrorMessage(orgs.error)}`}
+              onRetry={() => void orgs.refetch()}
+            />
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -602,47 +686,82 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">{nombreLocal(l)}</TableCell>
-                  <TableCell className="capitalize text-muted-foreground">{l.business_category ?? "—"}</TableCell>
-                  <TableCell>{l.city ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{l.email ?? "—"}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={l.account_status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-right">
-                    {l.account_status !== "approved" && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="mr-2"
-                        disabled={busyId === l.id}
-                        onClick={() => void updateLocaleStatus(l.id, "approved")}
-                      >
-                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                        Aprobar
-                      </Button>
-                    )}
-                    {l.account_status !== "rejected" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === l.id}
-                        onClick={() => void updateLocaleStatus(l.id, "rejected")}
-                      >
-                        <XCircle className="mr-1 h-3.5 w-3.5" />
-                        Rechazar
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {rows.map((l) => {
+                const suyas = orgsPorDueno.get(l.id) ?? [];
+                const varias = suyas.length > 1;
+                return (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">{nombreLocal(l)}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">{l.business_category ?? "—"}</TableCell>
+                    <TableCell>{l.city ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{l.email ?? "—"}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={l.account_status} />
+                      {suyas.map((o) => (
+                        <OrgEstado key={o.org_id} org={o} varias={varias} />
+                      ))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {l.account_status !== "approved" && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={busyId === l.id}
+                            onClick={() => void updateLocaleStatus(l.id, "approved")}
+                          >
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                            Aprobar
+                          </Button>
+                        )}
+                        {l.account_status !== "rejected" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busyId === l.id}
+                            onClick={() => void updateLocaleStatus(l.id, "rejected")}
+                          >
+                            <XCircle className="mr-1 h-3.5 w-3.5" />
+                            Rechazar
+                          </Button>
+                        )}
+                        {suyas
+                          .filter((o) => o.status !== "closed")
+                          .map((o) =>
+                            orgSuspendida(o) ? (
+                              <Button
+                                key={o.org_id}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSuspension({ org: o, suspender: false })}
+                              >
+                                <PlayCircle className="mr-1 h-3.5 w-3.5" />
+                                {varias ? `Reactivar «${o.name}»` : "Reactivar"}
+                              </Button>
+                            ) : (
+                              <Button
+                                key={o.org_id}
+                                size="sm"
+                                variant="outline"
+                                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => setSuspension({ org: o, suspender: true })}
+                              >
+                                <Ban className="mr-1 h-3.5 w-3.5" />
+                                {varias ? `Suspender «${o.name}»` : "Suspender"}
+                              </Button>
+                            ),
+                          )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           <Paginador page={page} total={total} onPage={setPage} cargando={locales.isFetching} />
         </>
       )}
+      <OrgSuspensionDialog target={suspension} onClose={() => setSuspension(null)} onDone={refrescarLocales} />
     </SectionShell>
   );
 };
@@ -735,10 +854,37 @@ const ClientesSection = ({ uid }: { uid: string | null }) => {
 // ============================================================================
 
 const EventosSection = ({ uid }: { uid: string | null }) => {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
+  const [asistentes, setAsistentes] = useState<EventoRef | null>(null);
+  const [cancelando, setCancelando] = useState<EventoCancelable | null>(null);
   const eventos = useAdminEvents(uid, page, PAGE_SIZE);
   const rows = eventos.data?.rows ?? [];
   const total = eventos.data?.total ?? 0;
+
+  // Cancelar mueve el evento, las entradas, la cola de reembolsos y los saldos.
+  const refrescar = () => {
+    if (!uid) return;
+    for (const key of [
+      qk.admin.eventsAll(uid),
+      qk.admin.refundQueue(uid),
+      qk.admin.kpis(uid),
+      qk.admin.orders(uid),
+      qk.admin.settlements(uid),
+      qk.admin.eventAttendees(uid, cancelando?.id ?? ""),
+    ]) {
+      void queryClient.invalidateQueries({ queryKey: key });
+    }
+  };
+
+  const cancelable = (e: AdminEventRow): EventoCancelable => ({
+    id: e.id,
+    title: e.title,
+    status: e.status,
+    date_start: e.date_start,
+    date_end: e.date_end,
+    tickets_sold: e.tickets_sold,
+  });
 
   return (
     <SectionShell title="Eventos" subtitle="Eventos de los locales en Pasify, los más recientes primero.">
@@ -769,6 +915,9 @@ const EventosSection = ({ uid }: { uid: string | null }) => {
                 <TableHead>Precio desde</TableHead>
                 <TableHead>Vendidas</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="w-12 text-right">
+                  <span className="sr-only">Acciones</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -790,7 +939,60 @@ const EventosSection = ({ uid }: { uid: string | null }) => {
                     {e.capacity ? <span className="text-muted-foreground"> / {e.capacity}</span> : null}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={e.status} />
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={e.status} />
+                      {e.orgSuspended && (
+                        <Badge
+                          variant="outline"
+                          className="border-destructive/30 bg-destructive/15 text-destructive"
+                          title="Su local está suspendido: el evento no se ve ni se vende"
+                        >
+                          Local suspendido
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={`Acciones de ${e.title}`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <a href={`#/e/${e.id}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Ficha pública
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setAsistentes({ id: e.id, title: e.title })}>
+                          <Users className="mr-2 h-4 w-4" />
+                          Asistentes
+                        </DropdownMenuItem>
+                        {(e.status === "published" || e.status === "draft") && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onSelect={() => setCancelando(cancelable(e))}
+                            >
+                              <XCircle className="mr-2 h-4 w-4" />
+                              Cancelar y reembolsar
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        {e.status === "cancelled" && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => setCancelando(cancelable(e))}>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Reintentar reembolsos
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -799,6 +1001,8 @@ const EventosSection = ({ uid }: { uid: string | null }) => {
           <Paginador page={page} total={total} onPage={setPage} cargando={eventos.isFetching} />
         </>
       )}
+      <AdminAttendeesDialog uid={uid} event={asistentes} onClose={() => setAsistentes(null)} />
+      <AdminCancelEventDialog event={cancelando} onClose={() => setCancelando(null)} onDone={refrescar} />
     </SectionShell>
   );
 };

@@ -184,16 +184,22 @@ export interface AdminEventRow {
   title: string;
   city: string;
   date_start: string;
+  date_end: string | null;
   status: string;
   price_cents: number;
   tickets_sold: number;
   capacity: number | null;
+  org_id: string | null;
   localName: string | null;
+  /** Su local está suspendido: el evento no se ve ni se vende (D-8). */
+  orgSuspended: boolean;
 }
 
-type EventDbRow = Omit<AdminEventRow, "localName"> & {
+type EventDbRow = Omit<AdminEventRow, "localName" | "orgSuspended"> & {
   partner: { business_name: string | null; first_name: string | null; last_name: string | null } | null;
-  organizations: { name: string | null } | null;
+  // Toda la fila: suspended_at llega con la migración del checkout y, si aún
+  // no existe, pedirla por nombre rompería la consulta.
+  organizations: { name: string | null; status: string | null; suspended_at?: string | null } | null;
 };
 
 export function useAdminEvents(uid: string | null, page: number, pageSize: number) {
@@ -205,7 +211,7 @@ export function useAdminEvents(uid: string | null, page: number, pageSize: numbe
         supabase
           .from("events")
           .select(
-            "id, title, city, date_start, status, price_cents, tickets_sold, capacity, partner:profiles!events_partner_id_fkey(business_name, first_name, last_name), organizations(name)",
+            "id, title, city, date_start, date_end, status, price_cents, tickets_sold, capacity, org_id, partner:profiles!events_partner_id_fkey(business_name, first_name, last_name), organizations(*)",
             { count: "exact" },
           )
           .order("date_start", { ascending: false })
@@ -218,6 +224,10 @@ export function useAdminEvents(uid: string | null, page: number, pageSize: numbe
         return {
           ...e,
           localName: partner?.business_name || organizations?.name || persona || null,
+          orgSuspended: !!organizations && orgSuspendida({
+            status: organizations.status,
+            suspended_at: organizations.suspended_at ?? null,
+          }),
         };
       });
       return { rows, total: count ?? rows.length };
@@ -286,7 +296,8 @@ export function useAdminSupportInbox(uid: string | null, filter: InboxFilter, li
 /**
  * Tiempo real del panel, una sola vez (en AdminDashboard): un mensaje o un
  * cambio en cualquier conversación refresca bandeja y contador; un cambio en
- * cualquier solicitud de reembolso, la cola y sus contadores.
+ * cualquier solicitud de reembolso, la cola, sus contadores y la búsqueda de
+ * Pedidos (el estado del reembolso de cada entrada).
  */
 export function useAdminRealtime(uid: string | null) {
   const soporte = uid ? qk.admin.supportInbox(uid) : null;
@@ -307,6 +318,13 @@ export function useAdminRealtime(uid: string | null) {
     tabla: "refund_requests",
     eventos: ["*"],
     queryKey: uid ? qk.admin.refundQueue(uid) : null,
+  });
+  // El estado del reembolso de cada entrada en Pedidos (Stripe confirma por webhook).
+  useRealtimeInvalidate({
+    canal: uid ? "admin-refund-orders" : null,
+    tabla: "refund_requests",
+    eventos: ["*"],
+    queryKey: uid ? qk.admin.orders(uid) : null,
   });
 }
 
@@ -426,7 +444,7 @@ export function useAdminRefundQueue(uid: string | null, queue: RefundQueue, page
 // Auditoría
 // ============================================================================
 
-export type AuditKind = "user_roles" | "profiles" | "refund_requests" | "organizations";
+export type AuditKind = "user_roles" | "profiles" | "refund_requests" | "organizations" | "partner_settlements";
 
 export interface AuditRow {
   id: string;
@@ -477,7 +495,9 @@ export function auditUserIds(r: AuditRow): string[] {
         ? r.target_id
         : r.target_kind === "refund_requests"
           ? fila?.requester_user_id
-          : fila?.owner_id;
+          : r.target_kind === "partner_settlements"
+            ? null
+            : fila?.owner_id;
   if (typeof objetivo === "string") ids.push(objetivo);
   return ids;
 }
@@ -515,6 +535,305 @@ export function useAuditLogs(uid: string | null, kind: AuditKind, limit: number)
     },
     enabled: !!uid,
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================================
+// Locales: sus organizaciones y la suspensión (admin_partner_orgs)
+// ============================================================================
+
+export interface AdminPartnerOrg {
+  org_id: string;
+  owner_id: string;
+  name: string;
+  /** active | suspended | closed */
+  status: string;
+  /** Columnas de la migración del checkout (Ola 2); null si aún no existen. */
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  created_at: string;
+}
+
+/** Suspendida: suspended_at (admin_set_org_suspension) o el estado 'suspended'. */
+export const orgSuspendida = (o: { status: string | null; suspended_at: string | null }): boolean =>
+  !!o.suspended_at || o.status === "suspended";
+
+/** Organizaciones de los locales de la página de Locales que se está viendo. */
+export function useAdminPartnerOrgs(uid: string | null, ownerIds: string[]) {
+  const ids = [...new Set(ownerIds)].sort();
+  return useQuery({
+    queryKey: qk.admin.partnerOrgsFor(uid ?? "", ids.join(",")),
+    queryFn: async (): Promise<AdminPartnerOrg[]> => {
+      const { data, error } = await conTimeout(
+        rpcAdmin<AdminPartnerOrg[]>("admin_partner_orgs", { _owner_ids: ids }),
+        "admin_partner_orgs",
+      );
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!uid && ids.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================================
+// Liquidaciones (admin_settlement_overview, admin_org_settlements)
+// ============================================================================
+
+export interface SettlementOverviewRow {
+  org_id: string;
+  org_name: string;
+  org_status: string;
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  owner_id: string | null;
+  owner_email: string | null;
+  owner_name: string | null;
+  paid_orders: number;
+  gross_cents: number;
+  refunded_cents: number;
+  fee_cents: number;
+  net_cents: number;
+  settled_cents: number;
+  /** neto − liquidado; negativo si Pasify ha transferido de más. */
+  pending_cents: number;
+  settlements_count: number;
+  last_paid_at: string | null;
+  /**
+   * Pedidos cobrados con el Stripe del propio local (cargo con destino): ese
+   * dinero ya le llegó, pero el neto de partner_balance_v lo incluye.
+   */
+  connect_orders: number;
+}
+
+export interface SettlementOverview {
+  rows: SettlementOverviewRow[];
+  total: number;
+  /**
+   * De todo el filtro, no solo de la página. `pending` es lo que se debe: la
+   * suma de los pendientes positivos (lo transferido de más no resta).
+   */
+  totals: { net: number; settled: number; pending: number };
+}
+
+export interface SettlementOverviewParams {
+  search: string;
+  onlyPending: boolean;
+  page: number;
+  pageSize: number;
+}
+
+type SettlementOverviewDbRow = SettlementOverviewRow & {
+  total_count: number | string;
+  total_net_cents: number | string;
+  total_settled_cents: number | string;
+  total_pending_cents: number | string;
+};
+
+export function useAdminSettlementOverview(uid: string | null, p: SettlementOverviewParams) {
+  return useQuery({
+    queryKey: qk.admin.settlementOverview(uid ?? "", {
+      search: p.search,
+      onlyPending: p.onlyPending,
+      page: p.page,
+      pageSize: p.pageSize,
+    }),
+    queryFn: async (): Promise<SettlementOverview> => {
+      const { data, error } = await conTimeout(
+        rpcAdmin<SettlementOverviewDbRow[]>("admin_settlement_overview", {
+          _search: p.search.trim() || null,
+          _only_pending: p.onlyPending,
+          _limit: p.pageSize,
+          _offset: p.page * p.pageSize,
+        }),
+        "admin_settlement_overview",
+      );
+      if (error) throw error;
+      const filas = data ?? [];
+      const primera = filas[0];
+      return {
+        rows: filas.map((r) => ({
+          ...r,
+          paid_orders: num(r.paid_orders),
+          gross_cents: num(r.gross_cents),
+          refunded_cents: num(r.refunded_cents),
+          fee_cents: num(r.fee_cents),
+          net_cents: num(r.net_cents),
+          settled_cents: num(r.settled_cents),
+          pending_cents: num(r.pending_cents),
+          settlements_count: num(r.settlements_count),
+          connect_orders: num(r.connect_orders),
+        })),
+        total: primera ? num(primera.total_count) : 0,
+        totals: {
+          net: primera ? num(primera.total_net_cents) : 0,
+          settled: primera ? num(primera.total_settled_cents) : 0,
+          pending: primera ? num(primera.total_pending_cents) : 0,
+        },
+      };
+    },
+    enabled: !!uid,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+export interface SettlementRow {
+  id: string;
+  org_id: string;
+  amount_cents: number;
+  currency: string;
+  paid_at: string;
+  bank_reference: string | null;
+  note: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+/** Historial de una organización (se pide al desplegar su fila). */
+export function useAdminOrgSettlements(uid: string | null, orgId: string | null) {
+  return useQuery({
+    queryKey: qk.admin.orgSettlements(uid ?? "", orgId ?? ""),
+    queryFn: async (): Promise<SettlementRow[]> => {
+      const { data, error } = await conTimeout(
+        rpcAdmin<SettlementRow[]>("admin_org_settlements", { _org_id: orgId }),
+        "admin_org_settlements",
+      );
+      if (error) throw error;
+      return (data ?? []).map((s) => ({ ...s, amount_cents: num(s.amount_cents) }));
+    },
+    enabled: !!uid && !!orgId,
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================================
+// Pedidos (admin_search_orders) y asistentes de un evento
+// ============================================================================
+
+export interface AdminOrderTicket {
+  id: string;
+  status: string;
+  /** 8 primeros caracteres del QR: lo que teclea el portero. */
+  door_code: string;
+  tier_name: string | null;
+  amount_paid_cents: number;
+  currency: string;
+  holder_name: string | null;
+  holder_email: string | null;
+  transferred: boolean;
+  paid_at: string | null;
+  used_at: string | null;
+  refund_id: string | null;
+  refund_status: RefundStatus6 | null;
+  refund_amount_cents: number | null;
+  refund_reason_code: string | null;
+  refund_note: string | null;
+  refund_failure: string | null;
+  refund_updated_at: string | null;
+}
+
+export interface AdminOrderRow {
+  order_id: string;
+  /** Como orderReference: 8 primeros caracteres del id, en mayúsculas. */
+  reference: string;
+  /** Por qué ha salido: id, reference, door_code, stripe, email o name (separados por comas). */
+  matched_by: string;
+  status: string;
+  /** false = pago de prueba de Stripe; null = desconocido. */
+  livemode: boolean | null;
+  created_at: string;
+  paid_at: string | null;
+  refunded_at: string | null;
+  subtotal_cents: number;
+  fees_cents: number;
+  total_cents: number;
+  refunded_cents: number;
+  currency: string;
+  stripe_payment_intent_id: string | null;
+  tickets_email_sent_at: string | null;
+  buyer_user_id: string | null;
+  buyer_email: string;
+  buyer_first_name: string | null;
+  buyer_last_name: string | null;
+  buyer_phone: string | null;
+  event_id: string | null;
+  event_title: string | null;
+  event_date_start: string | null;
+  event_date_end: string | null;
+  event_status: string | null;
+  venue_name: string | null;
+  event_city: string | null;
+  org_id: string | null;
+  org_name: string | null;
+  tickets: AdminOrderTicket[];
+}
+
+/** Lo mínimo que hay que teclear para buscar (el servidor no busca con menos). */
+export const MIN_BUSQUEDA_PEDIDOS = 3;
+
+export function useAdminOrderSearch(uid: string | null, q: string, limit = 25) {
+  const texto = q.trim();
+  return useQuery({
+    queryKey: qk.admin.orderSearch(uid ?? "", `${limit}:${texto}`),
+    queryFn: async (): Promise<AdminOrderRow[]> => {
+      const { data, error } = await conTimeout(
+        rpcAdmin<AdminOrderRow[]>("admin_search_orders", { _q: texto, _limit: limit }),
+        "admin_search_orders",
+      );
+      if (error) throw error;
+      return (data ?? []).map((o) => ({
+        ...o,
+        subtotal_cents: num(o.subtotal_cents),
+        fees_cents: num(o.fees_cents),
+        total_cents: num(o.total_cents),
+        refunded_cents: num(o.refunded_cents),
+        tickets: Array.isArray(o.tickets)
+          ? o.tickets.map((t) => ({
+              ...t,
+              amount_paid_cents: num(t.amount_paid_cents),
+              refund_amount_cents: t.refund_amount_cents == null ? null : num(t.refund_amount_cents),
+            }))
+          : [],
+      }));
+    },
+    enabled: !!uid && texto.length >= MIN_BUSQUEDA_PEDIDOS,
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  });
+}
+
+export interface AdminAttendee {
+  ticket_id: string;
+  order_id: string | null;
+  status: string;
+  buyer_first_name: string | null;
+  buyer_last_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  amount_paid_cents: number;
+  currency: string;
+  paid_at: string | null;
+  used_at: string | null;
+  scanned_by_name: string | null;
+  tier_name: string | null;
+}
+
+/** partner_event_attendees acepta al admin (con emails y teléfonos). */
+export function useAdminEventAttendees(uid: string | null, eventId: string | null) {
+  return useQuery({
+    queryKey: qk.admin.eventAttendees(uid ?? "", eventId ?? ""),
+    queryFn: async (): Promise<AdminAttendee[]> => {
+      const { data, error } = await conTimeout(
+        rpcAdmin<AdminAttendee[]>("partner_event_attendees", { _event_id: eventId }),
+        "partner_event_attendees",
+      );
+      if (error) throw error;
+      return (data ?? []).map((a) => ({ ...a, amount_paid_cents: num(a.amount_paid_cents) }));
+    },
+    enabled: !!uid && !!eventId,
     staleTime: 30_000,
   });
 }
