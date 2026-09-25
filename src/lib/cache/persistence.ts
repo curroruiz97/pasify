@@ -25,8 +25,13 @@ import { MAX_PERSIST_AGE_MS, debePersistir, perteneceA, vigente } from "./policy
  * fin; el perfil pasa a ser uno solo (qk.me.profile) y deja de existir
  * ["me", uid, "profile", "city"]. Con lo de la v2 una entrada de un evento
  * cancelado seguía saliendo con su QR hasta el primer refresco.
+ *
+ * v4: cada entrada de la cartera lleva su pedido (order_id, para «Reenviar
+ * email»), la política de su tipo (transferible y plazo de devolución) y la
+ * transferencia pendiente si la hay; el calendario guarda una sola lista
+ * (qk.public.calendarEvents(null)) y filtra la ciudad al leer.
  */
-export const CACHE_SCHEMA = 3;
+export const CACHE_SCHEMA = 4;
 const PREFIJO = `v${CACHE_SCHEMA}:`;
 const ESPERA_ESCRITURA_MS = 1000;
 /** Caché global de antes (sin separar por usuario): se borra al arrancar. */

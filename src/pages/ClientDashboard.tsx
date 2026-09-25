@@ -8,13 +8,19 @@ import { useCurrentUserId } from "@/lib/cache/session";
 import { useSessionState } from "@/lib/useSessionState";
 import { RefreshIndicator } from "@/components/ui/refresh-indicator";
 import {
+  TODA_ESPANA,
+  enCiudad,
+  useCiudadElegida,
   useClientShowcase,
-  useMyCity,
   useMyProfile,
   useMyTickets,
   usePublicPartners,
   type WalletTicketRow,
 } from "@/hooks/queries/clientData";
+import { useFavoritePartners } from "@/hooks/useFavoritePartners";
+import CitySelector from "@/components/shared/CitySelector";
+import { AccionesEntrada } from "@/components/client/AccionesEntrada";
+import { loginPathWithNext } from "@/lib/eventLinks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,11 +52,7 @@ import { es } from "date-fns/locale";
 import type { FavEvent } from "@/hooks/useFavorites";
 import SupportChat from "@/components/support/SupportChat";
 import ProfileSheet from "@/components/client/ProfileSheet";
-// `Ticket` a secas es el icono de lucide-react: el tipo va renombrado.
-import TicketQRModal, {
-  type Ticket as WalletTicket,
-  type TicketEventInfo,
-} from "@/components/client/TicketQRModal";
+import TicketQRModal from "@/components/client/TicketQRModal";
 import { TICKETS_UPDATED_EVENT } from "@/hooks/usePendingCheckoutResume";
 import {
   DEFAULT_EVENT_TIMEZONE,
@@ -86,15 +88,6 @@ import { useRefundRequests, type RefundRequest } from "@/hooks/useRefundRequests
 import { Sentry } from "@/lib/sentry";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { RotateCcw } from "lucide-react";
 
@@ -250,7 +243,13 @@ const ClientDashboard = () => {
 
   const uid = useCurrentUserId();
   const userId = uid ?? "";
-  const userCity = useMyCity(uid).data?.city ?? "";
+  // Una sola ciudad (B2-10): la del perfil, que filtra los locales y los
+  // próximos eventos de Inicio y el Calendario. null = «Toda España». Antes
+  // la home decía «tu zona» y enseñaba los locales de toda España.
+  const { ciudad, cambiarCiudad, cargando: cargandoCiudad } = useCiudadElegida();
+  const userCity = ciudad ?? "";
+  const [selectorCiudadAbierto, setSelectorCiudadAbierto] = useState(false);
+  const abrirSelectorCiudad = useCallback(() => setSelectorCiudadAbierto(true), []);
   const perfil = useMyProfile(uid).data ?? null;
   const nombrePerfil = [perfil?.first_name, perfil?.last_name].filter(Boolean).join(" ").trim();
 
@@ -271,6 +270,23 @@ const ClientDashboard = () => {
   const favoritos = useFavorites();
   const { events: favEvents, toggle: toggleFav } = favoritos;
   const [favTab, setFavTab] = useSessionState<"list" | "calendar">("cliente.favoritos.vista", "list");
+  // Favoritos: eventos o locales (B2-03).
+  const [favSeccion, setFavSeccion] = useSessionState<"eventos" | "locales">("cliente.favoritos.seccion", "eventos");
+
+  // Locales favoritos: una sola consulta para toda la pantalla (tarjetas de
+  // Inicio y sección «Locales»). Sin sesión, el corazón lleva al login.
+  const localesFavoritos = useFavoritePartners();
+  const { sinSesion: favLocalesSinSesion, toggle: toggleLocalFav } = localesFavoritos;
+  const alternarLocalFavorito = useCallback(
+    (p: Partner) => {
+      if (favLocalesSinSesion) {
+        navigate(loginPathWithNext(`/p/${p.id}`));
+        return;
+      }
+      void toggleLocalFav(p);
+    },
+    [favLocalesSinSesion, toggleLocalFav, navigate],
+  );
   const [verFavPasados, setVerFavPasados] = useState(false);
   // Próximos (en fecha) y Pasados (ya terminados, misma regla que el servidor
   // para dejar de vender). Solo los próximos cuentan en el menú.
@@ -345,7 +361,9 @@ const ClientDashboard = () => {
   const partnersQuery = usePublicPartners();
   const partners = (partnersQuery.data as Partner[] | undefined) ?? SIN_LOCALES;
   const partnersSinRed = partnersQuery.isPending && partnersQuery.fetchStatus === "paused";
-  const loading = partnersQuery.isPending && !partnersQuery.isError && !partnersSinRed;
+  // Mientras llega la ciudad del perfil (primera vez, sin nada guardado) no se
+  // pintan los de toda España para quitarlos un instante después.
+  const loading = (partnersQuery.isPending && !partnersQuery.isError && !partnersSinRed) || cargandoCiudad;
   const partnersFallo = partnersQuery.data === undefined && (partnersQuery.isError || partnersSinRed);
   // Búsqueda y categoría sobreviven a cambiar de pestaña y a recargar.
   const [search, setSearch] = useSessionState("cliente.busqueda", "");
@@ -452,10 +470,13 @@ const ClientDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, postCheckoutSessionId, postCheckoutOrderId]);
 
-  // Búsqueda sin acentos ni mayúsculas ("mas alla" encuentra "Más Allá").
+  // Búsqueda sin acentos ni mayúsculas ("mas alla" encuentra "Más Allá"),
+  // dentro de la ciudad elegida (enCiudad: "Palma" encuentra "Palma de
+  // Mallorca"; sin ciudad, toda España).
   const filtered = useMemo(() => {
     const q = normalizeForSearch(search);
     return partners.filter((p) => {
+      if (!enCiudad(p.city, ciudad)) return false;
       if (activeCat !== "all" && p.business_category !== activeCat) return false;
       if (q) {
         const categoria = CATEGORY_LABEL[p.business_category ?? ""] ?? p.business_category ?? "";
@@ -464,7 +485,7 @@ const ClientDashboard = () => {
       }
       return true;
     });
-  }, [partners, search, activeCat]);
+  }, [partners, search, activeCat, ciudad]);
 
   // Mobile Settings/Help sheets — state lifted al padre para que
   // ambos triggers (header drawer + tab bar drawer) compartan el estado.
@@ -515,12 +536,16 @@ const ClientDashboard = () => {
         <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:flex md:flex-col">
           <div className="flex flex-col items-start gap-3 border-b border-border p-5">
             <PasifyBrand size={84} />
-            {userCity && (
-              <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                {userCity}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={abrirSelectorCiudad}
+              aria-label={`Tu ciudad: ${ciudad ?? TODA_ESPANA}. Cambiar`}
+              className="-mx-1 inline-flex min-h-[32px] items-center gap-1 rounded-full px-1 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              <MapPin className="h-3 w-3" />
+              {ciudad ?? TODA_ESPANA}
+              <ChevronDown className="h-3 w-3" />
+            </button>
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
             <NavTree<View> tree={navTree} section={vistaActiva} onSelect={setView} />
@@ -560,14 +585,24 @@ const ClientDashboard = () => {
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
         {vistaActiva === "home" && (
           <>
-            {/* Search */}
+            {/* Ciudad (una sola, la del perfil) y búsqueda */}
             <div className="pt-4">
+              <button
+                type="button"
+                onClick={abrirSelectorCiudad}
+                aria-label={`Tu ciudad: ${ciudad ?? TODA_ESPANA}. Cambiar`}
+                className="mb-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground transition hover:border-primary/40"
+              >
+                <MapPin className="h-4 w-4 text-primary" />
+                {ciudad ?? TODA_ESPANA}
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Busca locales, ciudades, categorías..."
+                  placeholder={ciudad ? `Busca locales o categorías en ${ciudad}…` : "Busca locales, ciudades, categorías..."}
                   aria-label="Buscar locales"
                   className="h-13 rounded-full pl-11 text-base"
                   style={{ height: "52px" }}
@@ -600,11 +635,11 @@ const ClientDashboard = () => {
               </div>
             </div>
 
-            {/* Próximos eventos de verdad (calendario público), sin filtros activos. */}
-            {!hayFiltros && (
+            {/* Próximos eventos de verdad (calendario público) de la ciudad, sin filtros activos. */}
+            {!hayFiltros && !cargandoCiudad && (
               <div className="mt-8">
                 <UpcomingEventsStrip
-                  city={userCity || null}
+                  city={ciudad}
                   onOpen={(id) => navigate(`/e/${id}`)}
                   onSeeAll={() => navigate("/calendar")}
                 />
@@ -647,19 +682,34 @@ const ClientDashboard = () => {
                   title={
                     hayFiltros ? (
                       <>Nada coincide con tu <span style={serifAccent}>búsqueda</span>.</>
+                    ) : ciudad ? (
+                      <>Aún no hay <span style={serifAccent}>locales</span> en {ciudad}.</>
                     ) : (
-                      <>Aún no hay <span style={serifAccent}>locales</span> en tu zona.</>
+                      <>Aún no hay <span style={serifAccent}>locales</span> en Pasify.</>
                     )
                   }
                   subtitle={
                     hayFiltros
-                      ? "Prueba con otra ciudad o cambia la categoría arriba."
-                      : "Pasify está creciendo cada semana. Vuelve pronto para descubrir los próximos locales."
+                      ? ciudad
+                        ? `Buscamos solo en ${ciudad}. Prueba con otra búsqueda, otra categoría o toda España.`
+                        : "Prueba con otra búsqueda o cambia la categoría arriba."
+                      : ciudad
+                        ? "Pasify está creciendo cada semana. Mientras tanto, mira lo que hay en el resto de España."
+                        : "Pasify está creciendo cada semana. Vuelve pronto para descubrir los próximos locales."
                   }
                   action={
                     hayFiltros
                       ? { label: "Limpiar filtros", onClick: () => { setSearch(""); setActiveCat("all"); } }
-                      : undefined
+                      : ciudad
+                        ? { label: "Ver toda España", onClick: () => void cambiarCiudad(null) }
+                        : undefined
+                  }
+                  secondaryAction={
+                    hayFiltros && ciudad
+                      ? { label: "Buscar en toda España", onClick: () => void cambiarCiudad(null), variant: "ghost" }
+                      : !hayFiltros && ciudad
+                        ? { label: "Cambiar ciudad", onClick: abrirSelectorCiudad, variant: "ghost" }
+                        : undefined
                   }
                   compact
                 />
@@ -675,7 +725,13 @@ const ClientDashboard = () => {
                   )}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map((p) => (
-                      <PartnerCard key={p.id} partner={p} onClick={() => navigate(`/p/${p.id}`)} />
+                      <PartnerCard
+                        key={p.id}
+                        partner={p}
+                        onClick={() => navigate(`/p/${p.id}`)}
+                        favorito={localesFavoritos.ids.has(p.id)}
+                        onToggleFavorito={() => alternarLocalFavorito(p)}
+                      />
                     ))}
                   </div>
                 </>
@@ -729,10 +785,78 @@ const ClientDashboard = () => {
           <div className="pt-6">
             <h1 className="mb-1 text-2xl font-bold tracking-tight">Favoritos</h1>
             <p className="mb-4 text-sm text-muted-foreground">
-              Los eventos que has guardado. Pulsa el corazón para quitar.
+              Los eventos y locales que has guardado. Pulsa el corazón para quitar.
             </p>
 
-            {favoritos.loading ? (
+            {/* Eventos / Locales (B2-03) */}
+            <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Qué favoritos ver">
+              <PestanaFavoritos
+                activa={favSeccion === "eventos"}
+                onClick={() => setFavSeccion("eventos")}
+                icono={<CalendarDays className="h-4 w-4" />}
+                texto="Eventos"
+                cuenta={favoritos.hasData ? favEvents.length : null}
+              />
+              <PestanaFavoritos
+                activa={favSeccion === "locales"}
+                onClick={() => setFavSeccion("locales")}
+                icono={<StoreIcon className="h-4 w-4" />}
+                texto="Locales"
+                cuenta={localesFavoritos.hasData ? localesFavoritos.locales.length : null}
+              />
+            </div>
+
+            {favSeccion === "locales" ? (
+              localesFavoritos.loading ? (
+                <PasifyEmptyState
+                  icon={<Heart className="h-7 w-7" />}
+                  eyebrow="Cargando"
+                  title="Cargando tus locales…"
+                  spin
+                  compact
+                />
+              ) : !localesFavoritos.hasData && (localesFavoritos.isError || localesFavoritos.offline) ? (
+                <ErrorDeCarga
+                  sinConexion={localesFavoritos.offline || !isOnline}
+                  que="tus locales"
+                  reintentando={localesFavoritos.isFetching}
+                  onRetry={() => void localesFavoritos.refetch()}
+                />
+              ) : localesFavoritos.locales.length === 0 ? (
+                <PasifyEmptyState
+                  icon={<StoreIcon className="h-7 w-7" />}
+                  eyebrow="Sin locales"
+                  title={<>Aún no has guardado ningún <span style={serifAccent}>local</span>.</>}
+                  subtitle="Pulsa el corazón de un local para tenerlo siempre a mano."
+                  action={{ label: "Descubrir locales", onClick: () => setView("home") }}
+                />
+              ) : (
+                <>
+                  {(localesFavoritos.isError || !isOnline) && (
+                    <AvisoRefresco
+                      sinConexion={!isOnline}
+                      texto="No hemos podido actualizar tus locales: ves los últimos guardados."
+                      reintentando={localesFavoritos.isFetching}
+                      onRetry={() => void localesFavoritos.refetch()}
+                    />
+                  )}
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    Locales · {localesFavoritos.locales.length}
+                  </h2>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {localesFavoritos.locales.map((p) => (
+                      <PartnerCard
+                        key={p.id}
+                        partner={p}
+                        onClick={() => navigate(`/p/${p.id}`)}
+                        favorito
+                        onToggleFavorito={() => alternarLocalFavorito(p)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )
+            ) : favoritos.loading ? (
               <PasifyEmptyState
                 icon={<Heart className="h-7 w-7" />}
                 eyebrow="Cargando"
@@ -751,7 +875,7 @@ const ClientDashboard = () => {
               <PasifyEmptyState
                 icon={<Heart className="h-7 w-7" />}
                 eyebrow="Sin favoritos"
-                title={<>Aún no has guardado <span style={serifAccent}>nada</span>.</>}
+                title={<>Aún no has guardado ningún <span style={serifAccent}>evento</span>.</>}
                 subtitle="Cuando guardes un evento con el corazón, aparecerá aquí."
                 action={{ label: "Descubrir locales", onClick: () => setView("home") }}
               />
@@ -1002,6 +1126,7 @@ const ClientDashboard = () => {
                       <TicketCard
                         key={t.id}
                         ticket={t}
+                        uid={userId}
                         onOpenQR={() => setOpenTicketId(t.id)}
                         refundStatus={refundStatusForTicket(t.id)}
                         onRequestRefund={refundRequestRefund}
@@ -1066,6 +1191,12 @@ const ClientDashboard = () => {
       </div>
 
       {/* Sheets globales — abiertos desde el drawer y desde el perfil */}
+      <CitySelector
+        open={selectorCiudadAbierto}
+        onOpenChange={setSelectorCiudadAbierto}
+        selectedCity={ciudad}
+        onCityChange={(c) => void cambiarCiudad(c)}
+      />
       <SettingsSheet
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -1425,96 +1556,151 @@ const FavoritePosterCard = ({
   );
 };
 
-// Tarjeta de local. Sin corazón de favoritos: guardaba el id del perfil en
-// partner_favorites.org_id (FK a organizations), fallaba siempre con 23503 sin
-// avisar y cada tarjeta lanzaba su propia consulta. Vuelve en la Ola 2 con la
-// organización del local bien resuelta.
-const PartnerCard = ({ partner, onClick }: { partner: Partner; onClick: () => void }) => {
+/** Pestaña «Eventos» / «Locales» de Favoritos (44 px de alto como mínimo). */
+const PestanaFavoritos = ({
+  activa,
+  onClick,
+  icono,
+  texto,
+  cuenta,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  icono: React.ReactNode;
+  texto: string;
+  /** null mientras no se sabe. */
+  cuenta: number | null;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={activa}
+    className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition ${
+      activa
+        ? "border-primary bg-primary text-primary-foreground"
+        : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+    }`}
+  >
+    {icono}
+    {cuenta === null ? texto : `${texto} · ${cuenta}`}
+  </button>
+);
+
+// Tarjeta de local. La tarjeta entera abre la ficha (/p/:id); el corazón es un
+// botón hermano (no anidado: un botón dentro de otro no es válido ni
+// accesible). Los favoritos salen de UNA consulta de la pantalla
+// (useFavoritePartners): antes cada tarjeta lanzaba la suya y guardaba el id
+// en partner_favorites.org_id, que fallaba siempre con 23503 (B2-03).
+const PartnerCard = ({
+  partner,
+  onClick,
+  favorito,
+  onToggleFavorito,
+}: {
+  partner: Partner;
+  onClick: () => void;
+  favorito: boolean;
+  onToggleFavorito: () => void;
+}) => {
   const name = partner.business_name ?? "Local";
   const initial = (name.trim()[0] ?? "?").toUpperCase();
   const cover = partner.cover_image_url;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/10"
-    >
-      {/* Cover */}
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
-        {cover ? (
-          <img
-            src={cover}
-            alt=""
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(232,84,42,0.85) 0%, rgba(184,56,26,0.95) 100%)",
-            }}
-          >
-            <span style={{ fontSize: 64, fontWeight: 800, color: "#F4EEE2", letterSpacing: "-0.04em" }}>
-              {initial}
-            </span>
-          </div>
-        )}
-
-        {/* Bottom gradient */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
-          style={{ background: "linear-gradient(to top, rgba(10,10,10,0.85) 0%, transparent 100%)" }}
-        />
-
-        {/* Category badge top-right */}
-        {partner.business_category && (
-          <div
-            className="absolute right-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider"
-            style={{
-              background: "rgba(232,84,42,0.95)",
-              color: "#fff",
-              borderColor: "rgba(255,255,255,0.2)",
-            }}
-          >
-            {CATEGORY_LABEL[partner.business_category] ?? partner.business_category}
-          </div>
-        )}
-
-        {/* Avatar circle bottom-left over cover */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-2.5">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2"
-            style={{
-              background: partner.avatar_url ? "#0F0F0F" : "#E8542A",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 16,
-              borderColor: "#F4EEE2",
-            }}
-          >
-            {partner.avatar_url ? (
-              <img src={partner.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              initial
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold leading-tight text-white drop-shadow-md">
-              {name}
+    <article className="group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/10">
+      <button type="button" onClick={onClick} aria-label={`Ver ${name}`} className="block w-full text-left">
+        {/* Cover */}
+        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+          {cover ? (
+            <img
+              src={cover}
+              alt=""
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className="flex h-full w-full items-center justify-center"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(232,84,42,0.85) 0%, rgba(184,56,26,0.95) 100%)",
+              }}
+            >
+              <span style={{ fontSize: 64, fontWeight: 800, color: "#F4EEE2", letterSpacing: "-0.04em" }}>
+                {initial}
+              </span>
             </div>
-            {partner.city && (
-              <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-white/85 drop-shadow">
-                <MapPin className="h-3 w-3" />
-                {partner.city}
+          )}
+
+          {/* Bottom gradient */}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
+            style={{ background: "linear-gradient(to top, rgba(10,10,10,0.85) 0%, transparent 100%)" }}
+          />
+
+          {/* Category badge top-left (arriba a la derecha va el corazón) */}
+          {partner.business_category && (
+            <div
+              className="absolute left-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider"
+              style={{
+                background: "rgba(232,84,42,0.95)",
+                color: "#fff",
+                borderColor: "rgba(255,255,255,0.2)",
+              }}
+            >
+              {CATEGORY_LABEL[partner.business_category] ?? partner.business_category}
+            </div>
+          )}
+
+          {/* Avatar circle bottom-left over cover */}
+          <div className="absolute bottom-3 left-3 flex items-center gap-2.5">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2"
+              style={{
+                background: partner.avatar_url ? "#0F0F0F" : "#E8542A",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 16,
+                borderColor: "#F4EEE2",
+              }}
+            >
+              {partner.avatar_url ? (
+                <img src={partner.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initial
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold leading-tight text-white drop-shadow-md">
+                {name}
               </div>
-            )}
+              {partner.city && (
+                <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-white/85 drop-shadow">
+                  <MapPin className="h-3 w-3" />
+                  {partner.city}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Corazón top-right: hermano de la tarjeta, no dentro del botón */}
+      <button
+        type="button"
+        onClick={onToggleFavorito}
+        aria-pressed={favorito}
+        aria-label={favorito ? `Quitar ${name} de favoritos` : `Guardar ${name} en favoritos`}
+        className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full backdrop-blur transition hover:scale-110"
+        style={{ background: "rgba(10,10,10,0.45)" }}
+      >
+        <Heart
+          className="h-4 w-4"
+          fill={favorito ? "#E8542A" : "transparent"}
+          stroke={favorito ? "#E8542A" : "#FFFFFF"}
+        />
+      </button>
+    </article>
   );
 };
 
@@ -1537,33 +1723,36 @@ const useCountdown = (event: { date_start: string; date_end?: string | null } | 
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, [start]);
-  if (!event || !start) return { label: "—", state: "none" as const };
+  if (!event || !start) return { label: "—", state: "none" as const, now };
   const t = new Date(start).getTime();
-  if (Number.isNaN(t)) return { label: "—", state: "none" as const };
-  if (isEventOver(event, now)) return { label: "Finalizado", state: "past" as const };
+  if (Number.isNaN(t)) return { label: "—", state: "none" as const, now };
+  if (isEventOver(event, now)) return { label: "Finalizado", state: "past" as const, now };
   const diff = t - now;
-  if (diff <= 0) return { label: "Está ocurriendo", state: "live" as const };
+  if (diff <= 0) return { label: "Está ocurriendo", state: "live" as const, now };
   const min = Math.floor(diff / 60_000);
   const days = Math.floor(min / (60 * 24));
   const hours = Math.floor((min % (60 * 24)) / 60);
   const minutes = min % 60;
-  if (days >= 2) return { label: `En ${days}d ${hours}h`, state: "future" as const };
-  if (days === 1) return { label: `Mañana · ${hours}h ${minutes}m`, state: "soon" as const };
-  if (hours >= 1) return { label: `En ${hours}h ${minutes}m`, state: "soon" as const };
-  return { label: `En ${minutes} min`, state: "imminent" as const };
+  if (days >= 2) return { label: `En ${days}d ${hours}h`, state: "future" as const, now };
+  if (days === 1) return { label: `Mañana · ${hours}h ${minutes}m`, state: "soon" as const, now };
+  if (hours >= 1) return { label: `En ${hours}h ${minutes}m`, state: "soon" as const, now };
+  return { label: `En ${minutes} min`, state: "imminent" as const, now };
 };
 
 const TicketCard = ({
   ticket,
+  uid,
   onOpenQR,
   refundStatus,
   onRequestRefund,
 }: {
-  ticket: WalletTicket & { event: TicketEventInfo | null };
+  ticket: WalletTicketRow;
+  /** Usuario de la cartera (el comprador puede pedir que se le reenvíe el email). */
+  uid: string;
   onOpenQR: () => void;
   /** Solicitud de reembolso de esta entrada (si hay). */
   refundStatus: RefundRequest | null;
-  onRequestRefund: (ticketId: string, reason: string) => Promise<unknown> | unknown;
+  onRequestRefund: (ticketId: string, reason: string) => Promise<unknown>;
 }) => {
   const event = ticket.event;
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
@@ -1571,19 +1760,17 @@ const TicketCard = ({
   const time = event ? formatEventTime(event.date_start) : "";
   const countdown = useCountdown(event);
   const { toast } = useToast();
-  const refundState = refundStatus?.status ?? null;
   // Evento cancelado por el local: sin QR ni código, el importe se devuelve
   // solo (una entrada ya usada sigue siendo "usada").
   const cancelled = ticket.status !== "used" && event?.status === "cancelled";
-  const canRefund =
-    !refundStatus &&
-    !cancelled &&
-    ticket.status !== "used" &&
-    ticket.status !== "refunded" &&
-    countdown.state !== "past";
-  const [refundOpen, setRefundOpen] = useState(false);
-  const [refundReason, setRefundReason] = useState("");
   const [savingIcs, setSavingIcs] = useState(false);
+  // Enviada a otra persona y aún sin aceptar: sigue siendo del usuario.
+  const transferenciaPendiente =
+    ticket.status === "paid" &&
+    !cancelled &&
+    countdown.state !== "past" &&
+    !!ticket.transferencia_pendiente &&
+    Date.parse(ticket.transferencia_pendiente.caduca) > countdown.now;
 
   const statusLabel =
     ticket.status === "used"
@@ -1594,6 +1781,8 @@ const TicketCard = ({
       ? "Reembolsado"
       : countdown.state === "past"
       ? "Caducado"
+      : transferenciaPendiente
+      ? "Transferencia pendiente"
       : "Válido";
   const statusColor =
     ticket.status === "used"
@@ -1865,95 +2054,17 @@ const TicketCard = ({
           </>
         )}
 
-        <div className="mt-2 space-y-2">
-          {/* Refund link */}
-          {canRefund && (
-            <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className="mx-auto block min-h-[44px] px-2 text-[10px] uppercase text-muted-foreground transition hover:text-orange-500"
-                  style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
-                >
-                  ¿No puedes asistir? Solicita reembolso
-                </button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Solicitar reembolso</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Cuéntanos por qué necesitas el reembolso. El equipo de Pasify lo revisará en menos de 48 horas.
-                  </p>
-                  <Textarea
-                    placeholder="Motivo (enfermedad, cambio de planes…)"
-                    value={refundReason}
-                    onChange={(e) => setRefundReason(e.target.value)}
-                    rows={4}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setRefundOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (!refundReason.trim()) {
-                        toast({
-                          title: "Falta motivo",
-                          description: "Por favor, cuéntanos brevemente por qué necesitas el reembolso.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                      void Promise.resolve(
-                        onRequestRefund(ticket.id, refundReason.trim())
-                      ).catch(() => {
-                        /* el hook ya muestra toast en caso de error */
-                      });
-                      setRefundOpen(false);
-                      setRefundReason("");
-                    }}
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Enviar solicitud
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-
-          {refundState === "pending" && (
-            <div
-              className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-center text-[10px] uppercase text-orange-400"
-              style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
-            >
-              Reembolso solicitado · En revisión
-            </div>
-          )}
-          {(refundState === "approved" ||
-            refundState === "processing" ||
-            refundState === "refunded") && (
-            <div
-              className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-center text-[10px] uppercase text-emerald-400"
-              style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
-            >
-              Reembolso aprobado
-            </div>
-          )}
-          {refundState === "rejected" && (
-            <div
-              className="rounded-xl border border-muted bg-muted/10 px-3 py-2 text-center text-[10px] uppercase text-muted-foreground"
-              style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
-            >
-              Reembolso denegado
-            </div>
-          )}
-        </div>
+        {/* Enviar a un amigo, reenviar el email, devolución según la política
+            del tipo y el estado de la solicitud (AccionesEntrada). */}
+        <AccionesEntrada
+          ticket={ticket}
+          uid={uid}
+          refund={refundStatus}
+          onRequestRefund={onRequestRefund}
+          past={countdown.state === "past"}
+          cancelled={cancelled}
+          ahora={countdown.now}
+        />
       </div>
     </article>
   );

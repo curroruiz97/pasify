@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
+  Heart,
   MapPin,
   CalendarDays,
   List as ListIcon,
@@ -18,10 +19,11 @@ import { EventListCard } from "@/components/event/EventListCard";
 import { MonthGrid } from "@/components/event/MonthGrid";
 import { isEventOver } from "@/components/tickets/ticketUtils";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
+import { useFavoritePartners } from "@/hooks/useFavoritePartners";
 import type { PublicPartner } from "@/hooks/queries/clientData";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
-import { sharePartnerLink } from "@/lib/eventLinks";
+import { loginPathWithNext, sharePartnerLink } from "@/lib/eventLinks";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -123,6 +125,8 @@ const PublicPartnerPage = () => {
   // card para mostrar el spinner solo en la que el usuario pulsó.
   // `checkoutSheet` es el selector de tipo/cantidad: se renderiza abajo.
   const { checkout: buyTicket, pendingId, checkoutSheet } = useTicketCheckout();
+  // Corazón del local (B2-03): la misma lista de favoritos que Inicio.
+  const localesFavoritos = useFavoritePartners();
 
   const partnerQuery = useQuery({
     queryKey: qk.public.partner(id),
@@ -257,6 +261,23 @@ const PublicPartnerPage = () => {
 
   const initial = (partner.business_name?.[0] ?? "?").toUpperCase();
   const categoryLabel = partner.business_category ? CATEGORY_LABEL[partner.business_category] ?? partner.business_category : null;
+  const esFavorito = localesFavoritos.isFav(id);
+  const nombreLocal = partner.business_name ?? "este local";
+  // Sin sesión, al login, que vuelve a esta ficha.
+  const alternarFavorito = () => {
+    if (localesFavoritos.sinSesion) {
+      navigate(loginPathWithNext(`/p/${id}`));
+      return;
+    }
+    void localesFavoritos.toggle({
+      id,
+      business_name: partner.business_name,
+      business_category: partner.business_category,
+      city: partner.city,
+      avatar_url: partner.avatar_url,
+      cover_image_url: partner.cover_image_url,
+    });
+  };
   const dayEvents = selectedDay ? eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [] : [];
 
   // Error de carga de los eventos: no es lo mismo que "no hay eventos".
@@ -317,6 +338,22 @@ const PublicPartnerPage = () => {
           aria-label="Volver"
         >
           <ArrowLeft className="h-5 w-5" />
+        </button>
+
+        {/* Guardar en favoritos (sin sesión lleva al login) */}
+        <button
+          type="button"
+          onClick={alternarFavorito}
+          aria-pressed={esFavorito}
+          aria-label={esFavorito ? `Quitar ${nombreLocal} de favoritos` : `Guardar ${nombreLocal} en favoritos`}
+          className="absolute right-16 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
+          style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
+        >
+          <Heart
+            className="h-5 w-5"
+            fill={esFavorito ? "#E8542A" : "transparent"}
+            stroke={esFavorito ? "#E8542A" : "currentColor"}
+          />
         </button>
 
         {/* Compartir: enlace de la web pública, con vista previa en WhatsApp */}

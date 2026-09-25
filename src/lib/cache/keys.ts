@@ -22,6 +22,8 @@ export const qk = {
     tickets: (uid: string) => ["me", uid, "tickets"] as const,
     refunds: (uid: string) => ["me", uid, "refunds"] as const,
     favorites: (uid: string) => ["me", uid, "favorites"] as const,
+    /** Locales guardados con el corazón (partner_favorites + public_partners). */
+    favoritePartners: (uid: string) => ["me", uid, "favorite-partners"] as const,
     loyalty: (uid: string) => ["me", uid, "loyalty"] as const,
     support: (uid: string, mode: string, scope: string | null) => ["me", uid, "support", mode, scope] as const,
     /** Modo demo de la app del cliente (flag client_showcase). Solo en memoria. */

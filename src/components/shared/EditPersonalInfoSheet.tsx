@@ -10,9 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Globe2, Loader2, MapPin } from "lucide-react";
+import { SpanishCitySelect } from "@/components/ui/spanish-city-select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { TODA_ESPANA, type MyProfile } from "@/hooks/queries/clientData";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { qk } from "@/lib/cache/keys";
 
@@ -23,6 +26,12 @@ interface EditPersonalInfoSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Se llama tras guardar con éxito, por si el padre quiere refrescar displayName. */
   onSaved?: (data: { firstName: string; lastName: string; phone: string }) => void;
+  /**
+   * Enseña la ciudad (la que filtra Inicio y el Calendario). Por defecto, solo
+   * a los clientes: en un local, profiles.city es la ciudad pública de su ficha
+   * y se cambia desde los ajustes del local.
+   */
+  showCity?: boolean;
 }
 
 /**
@@ -39,12 +48,19 @@ interface EditPersonalInfoSheetProps {
  *    vuelva a habilitar, haya éxito, error o timeout,
  *  - mensajes de error visibles en vez de fallar en silencio.
  *
- * Al guardar invalida el perfil de la caché (qk.me.profile): la hoja de perfil
- * del cliente y la cabecera enseñan el nombre nuevo sin recargar.
+ * Al guardar actualiza el perfil de la caché (qk.me.profile): la hoja de
+ * perfil del cliente, la cabecera y los filtros de ciudad de Inicio y del
+ * Calendario cambian sin recargar.
+ *
+ * Ciudad (B2-10), solo para clientes: SpanishCitySelect o «Toda España»
+ * (profiles.city vacía). Con Google o Apple la cuenta nace sin ciudad y antes
+ * no había dónde ponerla.
  */
-const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfoSheetProps) => {
+const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved, showCity }: EditPersonalInfoSheetProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { effectiveRole } = useAuth();
+  const conCiudad = showCity ?? effectiveRole === "client";
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,6 +69,9 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  // "espana" = Toda España (sin ciudad); "ciudad" = la de SpanishCitySelect.
+  const [modoCiudad, setModoCiudad] = useState<"espana" | "ciudad">("espana");
+  const [city, setCity] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +94,7 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
         }
 
         const { data, error } = await withTimeout(
-          supabase.from("profiles").select("first_name, last_name, phone").eq("id", user.id).maybeSingle(),
+          supabase.from("profiles").select("first_name, last_name, phone, city").eq("id", user.id).maybeSingle(),
           NETWORK_TIMEOUT_MS,
           "profiles.select"
         );
@@ -86,6 +105,9 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
         setFirstName(data?.first_name ?? "");
         setLastName(data?.last_name ?? "");
         setPhone(data?.phone ?? "");
+        const ciudad = data?.city?.trim() ?? "";
+        setCity(ciudad);
+        setModoCiudad(ciudad ? "ciudad" : "espana");
       } catch (err: any) {
         console.error("[EditPersonalInfoSheet] load error:", err);
         if (!cancelled) {
@@ -106,6 +128,15 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
   }, [open]);
 
   const handleSave = async () => {
+    // «Una ciudad» sin elegir ninguna: mejor avisar que guardar «Toda España» sin querer.
+    if (conCiudad && modoCiudad === "ciudad" && !city.trim()) {
+      toast({
+        title: "Elige tu ciudad",
+        description: `Busca tu ciudad o marca «${TODA_ESPANA}».`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const {
@@ -121,13 +152,19 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
         return;
       }
 
+      const nombre = firstName.trim() || null;
+      const apellidos = lastName.trim() || null;
+      // Solo si se ha enseñado (undefined = no se toca): en un local es la
+      // ciudad pública de su ficha.
+      const ciudad = conCiudad ? (modoCiudad === "ciudad" ? city.trim() || null : null) : undefined;
       const { error } = await withTimeout(
         supabase
           .from("profiles")
           .update({
-            first_name: firstName.trim() || null,
-            last_name: lastName.trim() || null,
+            first_name: nombre,
+            last_name: apellidos,
             phone: phone.trim() || null,
+            ...(ciudad !== undefined ? { city: ciudad } : {}),
           })
           .eq("id", user.id),
         NETWORK_TIMEOUT_MS,
@@ -136,6 +173,18 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
 
       if (error) throw error;
 
+      // Al momento en la cabecera, la hoja de perfil y los filtros de ciudad;
+      // el refresco confirma lo guardado.
+      queryClient.setQueryData<MyProfile | null>(qk.me.profile(user.id), (prev) =>
+        prev
+          ? {
+              ...prev,
+              first_name: nombre,
+              last_name: apellidos,
+              ...(ciudad !== undefined ? { city: ciudad } : {}),
+            }
+          : prev
+      );
       void queryClient.invalidateQueries({ queryKey: qk.me.profile(user.id) });
 
       toast({
@@ -168,7 +217,9 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
         >
           <SheetTitle>Editar perfil</SheetTitle>
-          <SheetDescription className="sr-only">Edita tu nombre, apellidos y teléfono.</SheetDescription>
+          <SheetDescription className="sr-only">
+            {conCiudad ? "Edita tu nombre, apellidos, teléfono y ciudad." : "Edita tu nombre, apellidos y teléfono."}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -214,6 +265,37 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
                   placeholder="Teléfono"
                 />
               </div>
+              {conCiudad && (
+                <fieldset className="space-y-2">
+                  <legend className="mb-2 text-sm font-medium leading-none">Tu ciudad</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <OpcionCiudad
+                      activa={modoCiudad === "espana"}
+                      onClick={() => setModoCiudad("espana")}
+                      icono={<Globe2 className="h-4 w-4" />}
+                      texto={TODA_ESPANA}
+                    />
+                    <OpcionCiudad
+                      activa={modoCiudad === "ciudad"}
+                      onClick={() => setModoCiudad("ciudad")}
+                      icono={<MapPin className="h-4 w-4" />}
+                      texto="Una ciudad"
+                    />
+                  </div>
+                  {modoCiudad === "ciudad" && (
+                    <SpanishCitySelect
+                      id="edit-city"
+                      value={city}
+                      onValueChange={setCity}
+                      placeholder="Busca tu ciudad"
+                    />
+                  )}
+                  <p className="text-[12px] leading-relaxed text-muted-foreground">
+                    Inicio y el Calendario te enseñan los locales y eventos de tu ciudad
+                    {modoCiudad === "espana" ? ": ahora, los de toda España." : "."}
+                  </p>
+                </fieldset>
+              )}
             </div>
           )}
         </div>
@@ -235,5 +317,32 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
     </Sheet>
   );
 };
+
+/** Botón de «Toda España» / «Una ciudad» (44 px de alto como mínimo). */
+const OpcionCiudad = ({
+  activa,
+  onClick,
+  icono,
+  texto,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  icono: React.ReactNode;
+  texto: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={activa}
+    className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium transition ${
+      activa
+        ? "border-primary bg-primary/10 text-foreground"
+        : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+    }`}
+  >
+    {icono}
+    {texto}
+  </button>
+);
 
 export default EditPersonalInfoSheet;
