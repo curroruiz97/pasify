@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, dashboardPathForRole, signOutLocal } from '@/hooks/useAuth';
 import LoaderOne from '@/components/ui/loader-one';
-import AuthErrorScreen from '@/components/auth/AuthErrorScreen';
+import AuthErrorScreen, { CuentaSinAcceso } from '@/components/auth/AuthErrorScreen';
 import { isDoorLocked } from '@/lib/doorLock';
 
 interface ProtectedRouteProps {
@@ -40,6 +40,10 @@ const DEV_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW === 
  *  - Si la primera carga de roles falla (red/timeout) NO redirigimos a
  *    ciegas (antes mandaba al partner al panel de cliente): se muestra
  *    "Reintentar".
+ *
+ *  - Roles cargados y vacíos (p. ej. un local al que el admin ha retirado el
+ *    acceso): pantalla de cuenta sin acceso con el contacto de soporte y
+ *    "Cerrar sesión". Antes no se pintaba nada: pantalla negra sin salida.
  */
 const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   const {
@@ -79,6 +83,12 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     if (!requireRole) return; // ruta protegida sin rol específico
     // Roles aún desconocidos (primera carga o error): no se decide nada.
     if (!rolesLoaded) return;
+    // Sin ningún rol no hay panel al que mandarle: se queda en la pantalla de
+    // cuenta sin acceso.
+    if (userRoles.length === 0) {
+      concedidoARef.current = null;
+      return;
+    }
 
     if (tieneAcceso) {
       concedidoARef.current = user.id;
@@ -163,6 +173,17 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
       );
     }
     return <LoaderOne />;
+  }
+
+  if (userRoles.length === 0) {
+    return (
+      <CuentaSinAcceso
+        onSignOut={async () => {
+          await signOutLocal();
+          navigate('/login', { replace: true });
+        }}
+      />
+    );
   }
 
   // Render guard final: si el usuario es super-admin y tiene el rol, se renderiza.

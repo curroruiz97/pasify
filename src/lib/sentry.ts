@@ -15,6 +15,9 @@ import { Capacitor } from "@capacitor/core";
  * Release tag: inyectado en build time por vite.config.ts como
  * `__PASIFY_RELEASE__` (formato `pasify@<sha12>`). Permite agrupar
  * errores por release y subir source maps en CD.
+ *
+ * Sin Session Replay: grababa la pantalla del usuario al fallar (nombres,
+ * emails, entradas) y la política de privacidad no lo contempla.
  */
 declare const __PASIFY_RELEASE__: string;
 
@@ -40,7 +43,7 @@ export const initSentry = () => {
       release,
       tracesSampleRate: env === "production" ? 0.2 : 1.0,
       replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: env === "production" ? 1.0 : 0,
+      replaysOnErrorSampleRate: 0,
     };
 
     if (isNative) {
@@ -48,10 +51,7 @@ export const initSentry = () => {
     } else {
       Sentry.init({
         ...commonOpts,
-        integrations: [
-          Sentry.browserTracingIntegration(),
-          Sentry.replayIntegration(),
-        ],
+        integrations: [Sentry.browserTracingIntegration()],
       });
     }
     sentryActivo = true;

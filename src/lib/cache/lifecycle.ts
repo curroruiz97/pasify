@@ -7,17 +7,20 @@ import { queryClient } from "./queryClient";
 import { perteneceA } from "./policy";
 import {
   borrarCacheGuardada,
+  borrarCachesDeOtrosUsuarios,
   limpiarCachesAntiguas,
   persistirCache,
   restaurarCache,
   type Persistencia,
 } from "./persistence";
-import { useCurrentUserId, useSessionReady } from "./session";
+import { leerSesionGuardada, useCurrentUserId, useSessionReady } from "./session";
 
 /** Lo más que se retiene el splash esperando a la caché guardada. */
 const RESTAURAR_TIMEOUT_MS = 1500;
 /** Red de seguridad: pase lo que pase, la app se pinta. */
 const ARRANQUE_TIMEOUT_MS = 4000;
+/** Cuánto vale el aviso de cierre voluntario (signOutLocal) si la sesión no llega a irse. */
+const CIERRE_VOLUNTARIO_MS = 60_000;
 
 interface Activa {
   userId: string | null;
@@ -51,16 +54,44 @@ function tomarCierreForzado(): string | null {
   }
 }
 
+let cierreVoluntario: { userId: string; at: number } | null = null;
+
+/**
+ * El usuario cierra sesión porque quiere (signOutLocal). Solo entonces se
+ * borran sus borradores de formularios: si la sesión caduca o la revoca el
+ * servidor, se conservan para cuando vuelva a entrar.
+ */
+export function anotarCierreVoluntario(userId: string): void {
+  cierreVoluntario = { userId, at: Date.now() };
+}
+
+function esCierreVoluntario(userId: string): boolean {
+  const c = cierreVoluntario;
+  return !!c && c.userId === userId && Date.now() - c.at < CIERRE_VOLUNTARIO_MS;
+}
+
 /**
  * Lo que se borra del dispositivo cuando ya no hay sesión: filtros y
- * búsquedas guardados de la pestaña (pueden llevar nombres), borradores de
- * formularios y el bloqueo del modo puerta. El bloqueo solo se quita aquí, con
- * la sesión ya borrada: si cerrar sesión falla, la puerta sigue cerrada.
+ * búsquedas guardados de la pestaña (pueden llevar nombres) y el bloqueo del
+ * modo puerta; si la salida es voluntaria, también los borradores de
+ * formularios del usuario. El bloqueo solo se quita aquí, con la sesión ya
+ * borrada: si cerrar sesión falla, la puerta sigue cerrada.
  */
-function limpiarAlQuedarSinSesion() {
+function limpiarAlQuedarSinSesion(userIdSaliente: string | null, voluntario: boolean) {
   clearSessionUiState();
-  clearDrafts();
+  if (voluntario && userIdSaliente) clearDrafts(userIdSaliente);
   clearDoorLock();
+}
+
+/**
+ * Arranque sin sesión: lo guardado de usuarios que ya no están en este
+ * dispositivo (un cierre que no llegó a limpiar, un cambio de cuenta de una
+ * versión anterior) sobra. Solo si el dispositivo confirma que no hay ninguna
+ * sesión guardada: una lectura que no responde no es "sin sesión".
+ */
+async function borrarCachesHuerfanas(): Promise<void> {
+  if ((await leerSesionGuardada()) !== null) return;
+  await borrarCachesDeOtrosUsuarios(null);
 }
 
 /**
@@ -69,9 +100,10 @@ function limpiarAlQuedarSinSesion() {
  *  - Arranque: restaura lo guardado del usuario ANTES de pintar la app (el
  *    splash se mantiene unos milisegundos): la primera pantalla sale ya con
  *    datos en vez de encadenar loaders. Devuelve `true` cuando ya se puede
- *    pintar.
- *  - Cambio de cuenta: fuera de memoria todo lo que no sea del usuario nuevo
- *    (lo del anterior sigue guardado para cuando vuelva, multi-cuenta).
+ *    pintar. Sin sesión, borra lo guardado de otros usuarios.
+ *  - Cambio de cuenta: fuera de memoria y del dispositivo todo lo que no sea
+ *    del usuario nuevo. Ya no hay multi-cuenta: cambiar de cuenta es cerrar
+ *    sesión y entrar con otra.
  *  - Cierre de sesión: fuera de memoria y BORRADO del dispositivo, y fuera el
  *    bloqueo del modo puerta.
  *
@@ -103,19 +135,25 @@ export function useCacheLifecycle(): boolean {
     // borrar), no se toca nada: la puerta sigue bloqueada.
     const cerrado = anterior ? null : tomarCierreForzado();
     if (cerrado && userId === null) {
-      limpiarAlQuedarSinSesion();
+      // Solo signOutLocal anota un cierre forzado: era voluntario.
+      limpiarAlQuedarSinSesion(cerrado, true);
     }
 
     if (anterior) {
       // Ya, sin esperar a nada: ni un render con datos de otra cuenta.
       queryClient.removeQueries({ predicate: (q) => !perteneceA(q.queryKey, userId) });
       if (userId === null) {
-        limpiarAlQuedarSinSesion();
+        const saliente = anterior.userId;
+        limpiarAlQuedarSinSesion(saliente, !!saliente && esCierreVoluntario(saliente));
+        cierreVoluntario = null;
       } else {
         // Cambio de cuenta: filtros y búsquedas de la pestaña (pueden llevar nombres).
         clearSessionUiState();
       }
     }
+
+    // En segundo plano: no retrasa la primera pantalla y nunca toca lo público (anon).
+    if (!anterior && userId === null) void borrarCachesHuerfanas();
 
     void (async () => {
       if (cerrado && userId === null) await borrarCacheGuardada(cerrado);
@@ -123,7 +161,8 @@ export function useCacheLifecycle(): boolean {
         // Primero que deje de escribir (y termine lo que tenga en curso):
         // si no, podría volver a guardar lo que vamos a borrar.
         await anterior.persistencia?.dispose();
-        if (userId === null && anterior.userId !== null) await borrarCacheGuardada(anterior.userId);
+        // Fuera del dispositivo lo del usuario que sale, cierre o cambio de cuenta.
+        if (anterior.userId !== null && anterior.userId !== userId) await borrarCacheGuardada(anterior.userId);
       }
       try {
         await withTimeout(restaurarCache(queryClient, userId), RESTAURAR_TIMEOUT_MS, "cache.restaurar");

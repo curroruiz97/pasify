@@ -6,8 +6,8 @@ import { withTimeout } from '@/lib/withTimeout';
 import { captureError, getErrorMessage, setSentryTag, setSentryUser } from '@/lib/sentry';
 import { queryClient } from '@/lib/cache/queryClient';
 import { qk } from '@/lib/cache/keys';
-import { getSessionSnapshot, noteSession } from '@/lib/cache/session';
-import { anotarCierreForzado } from '@/lib/cache/lifecycle';
+import { getSessionSnapshot, noteSession, resolverSesion, subscribeSession } from '@/lib/cache/session';
+import { anotarCierreForzado, anotarCierreVoluntario } from '@/lib/cache/lifecycle';
 
 /**
  * Pasify auth hook · super-admin/dev mode.
@@ -65,6 +65,20 @@ import { anotarCierreForzado } from '@/lib/cache/lifecycle';
  *  - Una instancia que se monta cuando la sesión ya se conoce (todas menos la
  *    de App en el arranque) empieza ya con sesión y roles: sin un render en
  *    "cargando".
+ *
+ * Sin red (src/lib/cache/session.ts):
+ *
+ *  - Cada instancia sigue también la sesión publicada en session.ts: al
+ *    arrancar sin cobertura y con el token caducado, allí se publica la
+ *    sesión guardada "sin verificar" (~2 s) y la app enseña lo guardado del
+ *    usuario en vez de mandarle al login.
+ *  - Un INITIAL_SESSION null de auth-js que no es un cierre de sesión (no ha
+ *    podido renovar el token sin red) no echa al usuario: `resolverSesion`.
+ *
+ * Cuenta sin rol: `rolesLoaded` con `userRoles` vacío es una cuenta sin
+ * ningún panel (p. ej. un local al que el admin ha retirado el acceso). Las
+ * rutas lo tratan aparte (CuentaSinAcceso); `dashboardPathForRole(null)` ya no
+ * manda al panel de cliente, sino a /login.
  */
 
 const ACTIVE_ROLE_KEY = 'pasify.activeRole';
@@ -81,14 +95,18 @@ const ROLE_PRIORITY: Record<string, number> = {
   client: 1,
 };
 
-// Límite para leer la sesión y pedir los roles: una promesa colgada (bridge
-// nativo de Capacitor, red móvil) no puede dejar la app en el loader para siempre.
+// Límite para pedir los roles: una promesa colgada (bridge nativo de
+// Capacitor, red móvil) no puede dejar la app en el loader para siempre. La
+// sesión la lee session.ts, con su propio límite (~2 s).
 const AUTH_TIMEOUT_MS = 10_000;
 
+// Sin rol no hay panel: antes devolvía /client-dashboard y ProtectedRoute no
+// pintaba nada (pantalla negra sin salida).
 const dashboardPathFor = (role: string | null | undefined): string => {
   if (role === 'admin') return '/admin';
   if (role === 'partner') return '/partner-dashboard';
-  return '/client-dashboard';
+  if (role === 'client') return '/client-dashboard';
+  return '/login';
 };
 
 /**
@@ -114,8 +132,12 @@ export const resolveInitialDashboard = (
   return dashboardPathFor(top);
 };
 
+// Solo roles que la app conoce: uno desconocido llevaría a una ruta que no
+// existe (y /login, con sesión, volvería a redirigir a sí misma).
 const sortRolesByPrivilege = (roles: string[]): string[] =>
-  [...roles].sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0));
+  roles
+    .filter((r) => r in ROLE_PRIORITY)
+    .sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0));
 
 const readStoredRole = (): string | null => {
   try {
@@ -187,7 +209,8 @@ const leerRolesGuardados = (userId: string): RolesResult | null => {
   ) {
     return null;
   }
-  return { roles: sortRolesByPrivilege(d.roles), isSuperAdmin: d.isSuperAdmin };
+  const roles = sortRolesByPrivilege(d.roles);
+  return roles.length > 0 ? { roles, isSuperAdmin: d.isSuperAdmin } : null;
 };
 
 /** Rol activo para unos roles (sin efectos: no toca localStorage). */
@@ -305,10 +328,16 @@ function recargarEnLogin() {
  *
  * Nunca se anuncia un SIGNED_OUT a mano: un refresco en curso podría volver a
  * guardar la sesión y la app seguiría dentro, ya sin el bloqueo de la puerta.
+ *
+ * Es la salida voluntaria (botón "Cerrar sesión", borrar la cuenta, olvidar el
+ * PIN de la puerta): solo entonces se borran también los borradores del
+ * usuario (anotarCierreVoluntario). Si la sesión caduca o la revoca el
+ * servidor, se conservan para cuando vuelva a entrar.
  */
 export const signOutLocal = async (): Promise<{ error: Error | null }> => {
   writeStoredRole(null);
   const userId = getSessionSnapshot().userId;
+  if (userId) anotarCierreVoluntario(userId);
   const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
 
   if (!sinRed) {
@@ -367,8 +396,12 @@ export const useAuth = () => {
   // Espejo de `rolesState`: qué usuario tiene los roles ya cargados.
   const rolesRef = useRef<RolesState>(inicial?.roles ?? ROLES_VACIOS);
   // Carga de roles en curso en esta instancia (evita la doble llamada
-  // INITIAL_SESSION + getSession, o SIGNED_IN + INITIAL_SESSION al arrancar).
+  // SIGNED_IN + INITIAL_SESSION al arrancar).
   const cargaRolesRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
+  // Última sesión aplicada en esta instancia (la de session.ts puede ir por
+  // delante: la sesión guardada "sin verificar", o la salida tras comprobar
+  // que ya no hay sesión en el dispositivo).
+  const sesionAplicadaRef = useRef<Session | null>(inicial?.session ?? null);
 
   const guardarRoles = useCallback((next: RolesState) => {
     const prev = rolesRef.current;
@@ -446,11 +479,15 @@ export const useAuth = () => {
   );
 
   /**
-   * Aplica una sesión recibida de auth-js. Idempotente por `user.id`: se
-   * puede llamar con cada evento sin efectos secundarios si nada cambió.
+   * Aplica una sesión recibida de auth-js (o publicada en session.ts).
+   * Idempotente por `user.id`: se puede llamar con cada evento sin efectos
+   * secundarios si nada cambió.
    */
   const aplicarSesion = useCallback(
-    (event: AuthChangeEvent, nextSession: Session | null) => {
+    (event: AuthChangeEvent, recibida: Session | null) => {
+      // Un INITIAL_SESSION null sin red no es un cierre de sesión.
+      const nextSession = resolverSesion(event, recibida);
+      sesionAplicadaRef.current = nextSession;
       noteSession(nextSession);
       const nextUser = nextSession?.user ?? null;
       const uid = nextUser?.id ?? null;
@@ -516,46 +553,33 @@ export const useAuth = () => {
   useEffect(() => {
     mountedRef.current = true;
     let vivo = true;
-    let eventoRecibido = false;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      eventoRecibido = true;
       if (!vivo) return;
-      console.log('Auth state changed:', event, nextSession?.user?.id);
       aplicarSesion(event, nextSession);
     });
 
-    // Red de seguridad por si INITIAL_SESSION no llegara (lock de auth-js o
-    // storage nativo colgados): leemos la sesión con límite de tiempo para no
-    // dejar la app en el splash para siempre. Si ya llegó algún evento, este
-    // resultado se ignora (podría ser más antiguo). Los roles no se piden dos
-    // veces: aplicarSesion es idempotente por user.id.
-    void (async () => {
-      try {
-        const { data, error } = await withTimeout(
-          supabase.auth.getSession(),
-          AUTH_TIMEOUT_MS,
-          'auth.getSession',
-        );
-        if (!vivo || eventoRecibido) return;
-        if (error) {
-          console.error('Error getting session:', error);
-          setLoading(false);
-          return;
-        }
-        aplicarSesion('INITIAL_SESSION', data.session);
-      } catch (err) {
-        if (!vivo) return;
-        console.error('Error checking session:', err);
-        captureError(err, { where: 'useAuth.getSession' });
-        if (!eventoRecibido) setLoading(false);
-      }
-    })();
+    // La sesión publicada en session.ts: la del arranque (también la guardada
+    // "sin verificar" si auth-js no contesta sin red, en ~2 s) y la salida si
+    // el dispositivo confirma que ya no hay sesión. Antes cada instancia leía
+    // además getSession() con 10 s de límite: sin red, 10 s de splash.
+    const seguirSesionPublicada = (forzar: boolean) => {
+      const snap = getSessionSnapshot();
+      if (!vivo || !snap.ready) return;
+      if (!forzar && mismaSesion(snap.session, sesionAplicadaRef.current)) return;
+      aplicarSesion(snap.session || forzar ? 'INITIAL_SESSION' : 'SIGNED_OUT', snap.session);
+    };
+    const bajaSesionPublicada = subscribeSession(() => seguirSesionPublicada(false));
+    // Al montar con la sesión ya conocida: roles al momento (de la caché) y su
+    // carga o revalidación, sin esperar al INITIAL_SESSION de auth-js (sin
+    // red, con el token caducado, tarda ~50 s).
+    seguirSesionPublicada(true);
 
     return () => {
       vivo = false;
       mountedRef.current = false;
       subscription.unsubscribe();
+      bajaSesionPublicada();
     };
   }, [aplicarSesion]);
 

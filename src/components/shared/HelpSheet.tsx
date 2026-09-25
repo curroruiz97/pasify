@@ -88,7 +88,7 @@ const CLIENT_FAQ: FAQItem[] = [
   },
   {
     q: "¿Puedo pedir una devolución?",
-    a: "Las devoluciones dependen de la política de cada local. Escríbenos con el número de tu entrada y lo gestionamos con el organizador.",
+    a: "Si el evento se cancela, te devolvemos el importe de la entrada. Para cualquier otro caso, en Tickets abre la entrada y pulsa «Solicitar reembolso» antes de que empiece el evento: revisamos la solicitud y te contestamos.",
     tag: "Pagos",
   },
   {

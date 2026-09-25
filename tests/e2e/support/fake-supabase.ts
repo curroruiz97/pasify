@@ -62,11 +62,13 @@ export interface OpcionesSupabaseFalso {
   showcase?: boolean;
   /**
    * Cuándo se siembra la sesión en localStorage: en cada carga ("siempre", por
-   * defecto) o solo en la primera de la pestaña ("una-vez"). Para comprobar
-   * que cerrar sesión la borra de verdad hace falta "una-vez": si no, cada
-   * recarga la vuelve a poner.
+   * defecto), solo en la primera de la pestaña ("una-vez") o nunca (se entra
+   * desde el login). Para comprobar que cerrar sesión la borra de verdad hace
+   * falta "una-vez": si no, cada recarga la vuelve a poner.
    */
-  sembrarSesion?: "siempre" | "una-vez";
+  sembrarSesion?: "siempre" | "una-vez" | "nunca";
+  /** Roles que devuelve get_user_roles. Por defecto, un local (["partner"]). */
+  roles?: string[];
 }
 
 export interface SupabaseFalso {
@@ -86,6 +88,8 @@ export interface SupabaseFalso {
    * llega al servidor. Para el modo avión de verdad, `context.setOffline(true)`.
    */
   sinRed: boolean;
+  /** Peticiones que se han intentado con `sinRed` ("GET /rest/v1/events"), en orden. */
+  intentosSinRed: string[];
 }
 
 type Fila = Record<string, unknown>;
@@ -499,7 +503,7 @@ type Args = Record<string, unknown>;
 
 /** RPC que usa el panel. Las que faltan devuelven null y se apuntan en `sinMock`. */
 const crearRpcs = (datos: Datos, opciones: OpcionesSupabaseFalso): Record<string, (args: Args) => unknown> => ({
-  get_user_roles: () => ["partner"],
+  get_user_roles: () => opciones.roles ?? ["partner"],
   is_super_admin: () => false,
   tenant_for_user: () => [datos.tenant],
   partner_onboarding_status: () => [datos.estadoOnboarding],
@@ -663,7 +667,10 @@ function responderAuth(ruta: string, req: Request, url: URL, datos: Datos, sinMo
   switch (ruta) {
     case "/auth/v1/user":
       return { json: datos.usuario };
+    // Login, renovación del token y enlace de recuperación con token_hash
+    // (verifyOtp): todos abren la misma sesión.
     case "/auth/v1/token":
+    case "/auth/v1/verify":
       return { json: datos.sesion };
     case "/auth/v1/logout":
       return { status: 204 };
@@ -693,20 +700,23 @@ export async function instalarSupabaseFalso(
     peticiones: [],
     retrasoMs: 0,
     sinRed: false,
+    intentosSinRed: [],
   };
 
-  await page.addInitScript(
-    ({ clave: claveSesion, sesion, unaVez }) => {
-      if (window.top !== window) return;
-      if (unaVez) {
-        // sessionStorage sobrevive a las recargas de la pestaña.
-        if (window.sessionStorage.getItem("e2e.sesion-sembrada")) return;
-        window.sessionStorage.setItem("e2e.sesion-sembrada", "1");
-      }
-      window.localStorage.setItem(claveSesion, JSON.stringify(sesion));
-    },
-    { clave: CLAVE_SESION, sesion: datos.sesion, unaVez: opciones.sembrarSesion === "una-vez" },
-  );
+  if (opciones.sembrarSesion !== "nunca") {
+    await page.addInitScript(
+      ({ clave: claveSesion, sesion, unaVez }) => {
+        if (window.top !== window) return;
+        if (unaVez) {
+          // sessionStorage sobrevive a las recargas de la pestaña.
+          if (window.sessionStorage.getItem("e2e.sesion-sembrada")) return;
+          window.sessionStorage.setItem("e2e.sesion-sembrada", "1");
+        }
+        window.localStorage.setItem(claveSesion, JSON.stringify(sesion));
+      },
+      { clave: CLAVE_SESION, sesion: datos.sesion, unaVez: opciones.sembrarSesion === "una-vez" },
+    );
+  }
 
   // Todo lo que no sea la propia app ni el Supabase falso se corta aquí.
   await page.route(
@@ -724,7 +734,11 @@ export async function instalarSupabaseFalso(
   await page.route(
     (url) => url.origin === ORIGEN_SUPABASE,
     async (route: Route) => {
-      if (falso.sinRed) return route.abort("internetdisconnected");
+      if (falso.sinRed) {
+        const req = route.request();
+        if (req.method() !== "OPTIONS") falso.intentosSinRed.push(`${req.method()} ${new URL(req.url()).pathname}`);
+        return route.abort("internetdisconnected");
+      }
       pendientes++;
       try {
         const req = route.request();

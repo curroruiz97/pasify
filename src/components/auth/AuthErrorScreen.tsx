@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SUPPORT_EMAIL } from "@/components/auth/authErrors";
 
 /**
  * Pantalla completa de "no hemos podido comprobar tu acceso" con Reintentar.
@@ -8,6 +9,9 @@ import { useState } from "react";
  * redirecciones a ciegas: un fallo de red NO es "no tienes acceso", así que
  * se ofrece reintentar en vez de mandar al usuario a otra pantalla.
  *
+ * Sin `onRetry` (cuenta sin acceso: nada que reintentar), "Cerrar sesión" es
+ * el botón principal. `contactEmail` añade el correo de soporte.
+ *
  * Mismo fondo que LoaderOne para que el paso loader → error → loader no
  * parpadee.
  */
@@ -16,11 +20,28 @@ interface AuthErrorScreenProps {
   description: string;
   /** Mensaje técnico para soporte (se pinta pequeño y en mono). */
   detail?: string | null;
-  onRetry: () => unknown;
+  onRetry?: () => unknown;
   onSignOut?: () => unknown;
+  /** Correo de soporte que se enseña como enlace. */
+  contactEmail?: string;
 }
 
-const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut }: AuthErrorScreenProps) => {
+const botonPrincipal = (ocupado: boolean): React.CSSProperties => ({
+  marginTop: "1.5rem",
+  padding: "0.875rem 1.75rem",
+  minWidth: "11rem",
+  background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+  color: "white",
+  border: "none",
+  borderRadius: "999px",
+  fontWeight: 600,
+  fontSize: "0.95rem",
+  cursor: ocupado ? "default" : "pointer",
+  opacity: ocupado ? 0.7 : 1,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
+});
+
+const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut, contactEmail }: AuthErrorScreenProps) => {
   const [accion, setAccion] = useState<"reintentar" | "salir" | null>(null);
 
   const ejecutar = async (tipo: "reintentar" | "salir", fn: () => unknown) => {
@@ -36,6 +57,8 @@ const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut }: Aut
       setAccion(null);
     }
   };
+
+  const textoSalir = accion === "salir" ? "Cerrando sesión…" : "Cerrar sesión";
 
   return (
     <div
@@ -73,6 +96,22 @@ const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut }: Aut
       <p style={{ color: "rgba(244,238,226,0.7)", fontSize: "0.9rem", maxWidth: "26rem", lineHeight: 1.5 }}>
         {description}
       </p>
+      {contactEmail ? (
+        <a
+          href={`mailto:${contactEmail}`}
+          style={{
+            marginTop: "0.9rem",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            color: "#FF7A4D",
+            textDecoration: "underline",
+            textUnderlineOffset: "4px",
+            wordBreak: "break-all",
+          }}
+        >
+          {contactEmail}
+        </a>
+      ) : null}
       {detail ? (
         <p
           style={{
@@ -87,28 +126,27 @@ const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut }: Aut
           {detail}
         </p>
       ) : null}
-      <button
-        type="button"
-        onClick={() => void ejecutar("reintentar", onRetry)}
-        disabled={accion !== null}
-        style={{
-          marginTop: "1.5rem",
-          padding: "0.875rem 1.75rem",
-          minWidth: "11rem",
-          background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-          color: "white",
-          border: "none",
-          borderRadius: "999px",
-          fontWeight: 600,
-          fontSize: "0.95rem",
-          cursor: accion ? "default" : "pointer",
-          opacity: accion ? 0.7 : 1,
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35), 0 12px 30px -10px rgba(232,84,42,0.55)",
-        }}
-      >
-        {accion === "reintentar" ? "Reintentando…" : "Reintentar"}
-      </button>
-      {onSignOut ? (
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={() => void ejecutar("reintentar", onRetry)}
+          disabled={accion !== null}
+          style={botonPrincipal(accion !== null)}
+        >
+          {accion === "reintentar" ? "Reintentando…" : "Reintentar"}
+        </button>
+      ) : null}
+      {onSignOut && !onRetry ? (
+        <button
+          type="button"
+          onClick={() => void ejecutar("salir", onSignOut)}
+          disabled={accion !== null}
+          style={botonPrincipal(accion !== null)}
+        >
+          {textoSalir}
+        </button>
+      ) : null}
+      {onSignOut && onRetry ? (
         <button
           type="button"
           onClick={() => void ejecutar("salir", onSignOut)}
@@ -125,11 +163,24 @@ const AuthErrorScreen = ({ title, description, detail, onRetry, onSignOut }: Aut
             cursor: accion ? "default" : "pointer",
           }}
         >
-          {accion === "salir" ? "Cerrando sesión…" : "Cerrar sesión"}
+          {textoSalir}
         </button>
       ) : null}
     </div>
   );
 };
+
+/**
+ * Cuenta sin ningún panel (roles ya cargados y vacíos): p. ej. un local al
+ * que el admin ha retirado el acceso. Antes era una pantalla negra sin salida.
+ */
+export const CuentaSinAcceso = ({ onSignOut }: { onSignOut: () => unknown }) => (
+  <AuthErrorScreen
+    title="Tu cuenta no tiene acceso"
+    description="Esta cuenta no tiene ningún panel activo en Pasify. Si crees que es un error, escríbenos y lo revisamos."
+    contactEmail={SUPPORT_EMAIL}
+    onSignOut={onSignOut}
+  />
+);
 
 export default AuthErrorScreen;

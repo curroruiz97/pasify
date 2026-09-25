@@ -6,9 +6,11 @@ import { useAuth } from "@/hooks/useAuth";
 /**
  * PanelSwitcher · floating overlay top-right.
  *
- * Visible SOLO cuando el usuario autenticado tiene 2+ roles (`userRoles.length >= 2`).
- * Permite saltar entre /admin, /partner-dashboard y /client-dashboard cambiando
- * el `activeRole` persistido en localStorage (vía `useAuth.setActiveRole`).
+ * Cambia de PANEL (rol), no de cuenta: solo lo ve el super-admin con el flag
+ * VITE_ENABLE_SUPER_ADMIN_SWITCHER (canSwitchPanels) y 2+ roles. Salta entre
+ * /admin, /partner-dashboard y /client-dashboard cambiando el `activeRole`
+ * persistido en localStorage (vía `useAuth.setActiveRole`). Ya no hay
+ * multi-cuenta: cambiar de cuenta es cerrar sesión y entrar con otra.
  *
  * Estilo Pasify: cápsula cream con grain implícito, mono uppercase labels,
  * accent terracota en el role activo, sombra cálida en hover.
@@ -16,8 +18,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 const ROLE_META: Record<string, { label: string; Icon: typeof Shield; path: string; accent: string }> = {
   admin:   { label: "Admin",   Icon: Shield,     path: "/admin",              accent: "#E8542A" },
-  partner: { label: "Partner", Icon: Building2,  path: "/partner-dashboard",  accent: "#B8381A" },
-  client:  { label: "Client",  Icon: User,       path: "/client-dashboard",   accent: "#FF7A4D" },
+  partner: { label: "Local",   Icon: Building2,  path: "/partner-dashboard",  accent: "#B8381A" },
+  client:  { label: "Cliente", Icon: User,       path: "/client-dashboard",   accent: "#FF7A4D" },
 };
 
 const FONT_MONO: React.CSSProperties = {

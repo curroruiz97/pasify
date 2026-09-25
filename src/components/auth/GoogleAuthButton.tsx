@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { anotarOAuthEnCurso, sanitizeNextPath, tomarOAuthEnCurso } from "@/lib/redirect-url";
 
 interface GoogleAuthButtonProps {
   label?: string;
   /** Override del redirect URL dopo OAuth (solo web). Default: origin corrente. */
   redirectTo?: string;
   className?: string;
+  /** Ruta de la app a la que volver al entrar (`?next=`). */
+  next?: string | null;
+  /** Qué hacer al entrar (app nativa). Por defecto, ir a `next` o a "/" (RootRoute elige el panel). */
+  onSuccess?: () => void | Promise<void>;
 }
 
 const WEB_CLIENT_ID =
@@ -22,12 +28,22 @@ let googleAuthInitialized = false;
 
 /**
  * Bottone OAuth Google.
- *   - Web: usa supabase.auth.signInWithOAuth (redirect flow)
- *   - iOS/Android (Capacitor): usa il plugin capacitor-google-auth per il
- *     dialog nativo → id_token → supabase.auth.signInWithIdToken.
+ *   - Web: usa supabase.auth.signInWithOAuth (redirect flow). La vuelta es a
+ *     la raíz: el destino (`next`) viaja en sessionStorage y lo recoge
+ *     RootRoute (App.tsx).
+ *   - Android (Capacitor): usa il plugin capacitor-google-auth per il
+ *     dialog nativo → id_token → supabase.auth.signInWithIdToken, y al entrar
+ *     navega (a `next` o a "/"). Antes se quedaba girando para siempre.
  */
-export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, className }: GoogleAuthButtonProps) => {
+export const GoogleAuthButton = ({
+  label = "Continuar con Google",
+  redirectTo,
+  className,
+  next,
+  onSuccess,
+}: GoogleAuthButtonProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const isNative = Capacitor.isNativePlatform();
   // En iOS no se ofrece acceso con Google. El plugin nativo arrastra al binario
@@ -55,7 +71,9 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
   }, [isNative, isIOS]);
 
   const handleClick = async () => {
+    if (loading) return;
     setLoading(true);
+    let dentro = false;
     try {
       if (isNative) {
         // Native flow — dialog Google nativo
@@ -68,8 +86,10 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
           token: idToken,
         });
         if (error) throw error;
+        dentro = true;
       } else {
-        // Web flow — redirect a Google, poi callback
+        // Web flow — redirect a Google, poi callback. A la vuelta, `next`.
+        anotarOAuthEnCurso(next);
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
@@ -87,6 +107,8 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
       // primera pantalla de la app. Traducimos a algo accionable y dejamos el
       // detalle técnico en consola y en Sentry.
       console.error("Google auth error:", err);
+      // En la web no se ha salido hacia Google: fuera lo apuntado para la vuelta.
+      if (!isNative) tomarOAuthEnCurso();
 
       const raw = err instanceof Error ? err.message : String(err ?? "");
       const cancelado = /12501|canceled|cancelled|popup_closed/i.test(raw);
@@ -99,8 +121,13 @@ export const GoogleAuthButton = ({ label = "Continuar con Google", redirectTo, c
         description,
         variant: cancelado ? "default" : "destructive",
       });
+    } finally {
       setLoading(false);
     }
+
+    if (!dentro) return;
+    if (onSuccess) await onSuccess();
+    else navigate(sanitizeNextPath(next) ?? "/", { replace: true });
   };
 
   if (isIOS) return null;

@@ -13,7 +13,7 @@
       "destination": "/api/p/:id"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
   ],

@@ -3,22 +3,32 @@ import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 
 interface NetworkStatus {
   isOnline: boolean;
+  /** true unos segundos tras recuperar la conexión (para "vuelves a tener conexión"). */
   wasOffline: boolean;
 }
+
+/** Cuánto dura `wasOffline` tras volver la conexión. */
+const AVISO_VUELTA_MS = 5000;
 
 export const useNetworkStatus = (): NetworkStatus => {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [wasOffline, setWasOffline] = useState(false);
+  // Se ha perdido la conexión desde el último aviso de vuelta. Antes nunca
+  // volvía a false: cualquier "online" posterior (volver a la app con red)
+  // repetía el aviso y la recarga de datos.
   const wasOfflineRef = useRef(false);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     const handleOnline = () => {
       setIsOnline(true);
-      if (wasOfflineRef.current) {
-        setWasOffline(true);
-        // Reset wasOffline after a short delay so consumers can react
-        setTimeout(() => setWasOffline(false), 5000);
-      }
+      if (!wasOfflineRef.current) return;
+      wasOfflineRef.current = false;
+      setWasOffline(true);
+      // Reset wasOffline after a short delay so consumers can react
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setWasOffline(false), AVISO_VUELTA_MS);
     };
 
     const handleOffline = () => {
@@ -40,13 +50,10 @@ export const useNetworkStatus = (): NetworkStatus => {
       import("@capacitor/app")
         .then(({ App }) =>
           App.addListener("appStateChange", ({ isActive }) => {
-            if (isActive) {
-              // Re-check network when app comes to foreground
-              setIsOnline(navigator.onLine);
-              if (navigator.onLine && wasOfflineRef.current) {
-                handleOnline();
-              }
-            }
+            if (!isActive) return;
+            // Re-check network when app comes to foreground
+            if (navigator.onLine) handleOnline();
+            else handleOffline();
           })
         )
         .then((handle) => {
@@ -59,6 +66,7 @@ export const useNetworkStatus = (): NetworkStatus => {
 
     return () => {
       disposed = true;
+      if (timer) clearTimeout(timer);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       void appListener?.remove();

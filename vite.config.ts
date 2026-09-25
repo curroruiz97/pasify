@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { execSync } from "node:child_process";
@@ -75,8 +75,47 @@ const supabaseEnvGuard = () => ({
   },
 });
 
+/**
+ * Source maps a Sentry por release (`pasify@<sha12>`, el mismo que lee
+ * sentry.ts). Solo en `vite build` y solo si están SENTRY_AUTH_TOKEN,
+ * SENTRY_ORG y SENTRY_PROJECT (en Vercel: Settings → Environment Variables).
+ * Sin ellas, o sin el paquete `@sentry/vite-plugin` instalado, se omite con
+ * un aviso y el build sigue igual. Los .map se suben y se borran de `dist`:
+ * nunca se publican junto al bundle. (Vite acepta plugins asíncronos: esta
+ * promesa va tal cual en `plugins`.)
+ */
+const sentryPlugins = async (command: string): Promise<PluginOption[]> => {
+  const { SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT } = process.env;
+  if (command !== "build" || !SENTRY_AUTH_TOKEN || !SENTRY_ORG || !SENTRY_PROJECT) return [];
+  // Especificador en variable: el paquete es opcional y ni tsc ni el bundler
+  // de la config deben exigirlo.
+  const paquete = "@sentry/vite-plugin";
+  try {
+    const { sentryVitePlugin } = (await import(/* @vite-ignore */ paquete)) as {
+      sentryVitePlugin: (options: Record<string, unknown>) => PluginOption;
+    };
+    return [
+      // Mapas solo si se suben: "hidden" no los enlaza desde el JS.
+      { name: "pasify-sourcemaps-sentry", config: () => ({ build: { sourcemap: "hidden" } }) },
+      sentryVitePlugin({
+        org: SENTRY_ORG,
+        project: SENTRY_PROJECT,
+        authToken: SENTRY_AUTH_TOKEN,
+        release: { name: `pasify@${GIT_SHA}` },
+        sourcemaps: { assets: "./dist/**", filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+        telemetry: false,
+      }),
+    ];
+  } catch (err) {
+    console.warn(
+      `[sentry] Source maps sin subir: instala @sentry/vite-plugin (npm i -D @sentry/vite-plugin). ${String(err)}`,
+    );
+    return [];
+  }
+};
+
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode, command }) => ({
   define: {
     // Inyectado en build time; sentry.ts lo lee como `__PASIFY_RELEASE__`.
     __PASIFY_RELEASE__: JSON.stringify(`pasify@${GIT_SHA}`),
@@ -85,30 +124,17 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
-  // Para activar upload de source maps a Sentry por release:
-  //   1. `npm install -D @sentry/vite-plugin`
-  //   2. Descomenta el import y el plugin de abajo.
-  //   3. Configura SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT en Vercel.
-  // El plugin sólo se activa si las 3 env vars están presentes; si no, no-op.
-  //
-  // import { sentryVitePlugin } from "@sentry/vite-plugin";
-  // const sentryPlugin = (process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
-  //   ? sentryVitePlugin({
-  //       org: process.env.SENTRY_ORG,
-  //       project: process.env.SENTRY_PROJECT,
-  //       authToken: process.env.SENTRY_AUTH_TOKEN,
-  //       release: { name: `pasify@${GIT_SHA}` },
-  //       sourcemaps: { assets: "./dist/**" },
-  //     })
-  //   : null;
-
   plugins: [
     supabaseEnvGuard(),
     react(),
     mode === "development" && componentTagger(),
-    // sentryPlugin,
+    sentryPlugins(command),
     VitePWA({
       registerType: "autoUpdate",
+      // Sin script inyectado en index.html: main.tsx registra el service
+      // worker solo en la web. El registerSW.js inyectado lo registraba
+      // también en la app Android justo después de que main.tsx lo quitara.
+      injectRegister: false,
       workbox: {
         // Force new SW to activate immediately + take control of all clients
         skipWaiting: true,
