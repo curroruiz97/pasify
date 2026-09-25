@@ -29,6 +29,7 @@ export default defineConfig({
     "**/partner-cache.spec.ts",
     "**/door-pin.spec.ts",
     "**/cuentas.spec.ts",
+    "**/client-shell.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

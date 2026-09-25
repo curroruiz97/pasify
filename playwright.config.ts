@@ -79,7 +79,14 @@ export default defineConfig({
   testDir: "./tests/e2e",
   // El panel de local y la puerta van con playwright.partner.config.ts
   // (Supabase simulado con datos): los mismos tres specs de su testMatch.
-  testIgnore: ["**/partner-shell.spec.ts", "**/partner-cache.spec.ts", "**/door-pin.spec.ts"],
+  // Specs con el Supabase simulado: van con playwright.partner.config.ts.
+  testIgnore: [
+    "**/partner-shell.spec.ts",
+    "**/partner-cache.spec.ts",
+    "**/door-pin.spec.ts",
+    "**/cuentas.spec.ts",
+    "**/client-shell.spec.ts",
+  ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
   fullyParallel: true,

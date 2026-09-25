@@ -41,6 +41,8 @@ export interface RefundContext {
     reason_code: string | null;
     created_at: string;
     updated_at: string;
+    /** `retries`: un elemento por cada «Reintentar» del admin (admin_retry_refund). */
+    metadata: { retries?: unknown } | null;
   };
   ticket: {
     id: string;
@@ -98,7 +100,7 @@ export async function loadRefundContext(
   const { data: rr } = await supabaseAdmin
     .from("refund_requests")
     .select(
-      "id, status, ticket_id, requester_user_id, requester_email, currency, decision_note, stripe_refund_id, auto_approved, reason_code, created_at, updated_at",
+      "id, status, ticket_id, requester_user_id, requester_email, currency, decision_note, stripe_refund_id, auto_approved, reason_code, created_at, updated_at, metadata",
     )
     .eq("id", requestId)
     .maybeSingle();
@@ -123,6 +125,21 @@ export async function loadRefundContext(
 
   return { rr, ticket, order, event } as RefundContext;
 }
+
+/** Intento actual de una solicitud: 0 el primero, +1 por cada «Reintentar». */
+const refundAttempt = (metadata: RefundContext["rr"]["metadata"]): number =>
+  Array.isArray(metadata?.retries) ? metadata.retries.length : 0;
+
+/**
+ * Clave de idempotencia del reembolso en Stripe. El primer intento conserva
+ * la clave de siempre (un reembolso retomado tras un despliegue no cambia de
+ * clave); cada reintento añade su número.
+ */
+const refundIdempotencyKey = (rr: RefundContext["rr"]): string => {
+  const base = `refund-${rr.id}-${Date.parse(rr.created_at)}`;
+  const attempt = refundAttempt(rr.metadata);
+  return attempt > 0 ? `${base}-${attempt}` : base;
+};
 
 /** ¿Es una solicitud atascada en 'processing' que hay que retomar? */
 export const isStaleProcessing = (ctx: RefundContext, now = Date.now()): boolean =>
@@ -276,7 +293,10 @@ async function createOrAdoptRefund(
             pasify_order_id: order.id,
           },
         },
-        { idempotencyKey: `refund-${rr.id}-${Date.parse(rr.created_at)}` },
+        // El número de intento va en la clave: tras un «Reintentar» del admin,
+        // Stripe tiene que ver una petición nueva y no devolver durante 24 h
+        // el resultado guardado del intento que falló.
+        { idempotencyKey: refundIdempotencyKey(rr) },
       ));
     if (existing) log.warn("refund_adopted_existing", { stripe_refund_id: existing.id });
   } catch (stripeErr) {
