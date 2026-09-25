@@ -17,7 +17,6 @@ import {
   Calendar,
   ScanLine,
   CreditCard,
-  MessageCircle,
   Plus,
   Ticket,
   Undo2,

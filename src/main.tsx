@@ -3,6 +3,7 @@
 
 import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
+import { MotionConfig } from "framer-motion";
 import App from "./App.tsx";
 import "./index.css";
 import "./i18n/config";
@@ -278,6 +279,10 @@ createRoot(document.getElementById("root")!).render(
       </div>
     }
   >
-    <App />
+    {/* prefers-reduced-motion: framer-motion respeta la preferencia del
+        sistema en toda la app, también en la transición entre páginas. */}
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>
   </Sentry.ErrorBoundary>
 );

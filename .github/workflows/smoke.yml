@@ -134,6 +134,11 @@ jobs:
             send-push
             send-sms
             notify-admin-message
+            decide-refund
+            cancel-checkout
+            resend-tickets-email
+            reconcile-pending-orders
+            retake-stale-refunds
           )
           failed=0
           for fn in "${fns[@]}"; do

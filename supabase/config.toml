@@ -130,3 +130,8 @@ verify_jwt = false
 # con la cabecera x-pasify-internal (migración 20260927110000).
 [functions.reconcile-pending-orders]
 verify_jwt = false
+
+# Retoma reembolsos atascados: pg_cron + pg_net cada 10 min con la cabecera
+# x-pasify-internal (migración 20260928160000).
+[functions.retake-stale-refunds]
+verify_jwt = false

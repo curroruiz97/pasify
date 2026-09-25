@@ -32,6 +32,7 @@ export default defineConfig({
     "**/client-shell.spec.ts",
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
+    "**/a11y.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

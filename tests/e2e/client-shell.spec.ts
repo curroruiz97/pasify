@@ -507,6 +507,10 @@ async function menuLateral(page: Page): Promise<Locator> {
   const arbol = page.locator("aside nav");
   for (const grupo of await arbol.locator("button[aria-expanded]").all()) {
     if ((await grupo.getAttribute("aria-expanded")) !== "true") await grupo.click();
+    // Plegado, el grupo tiene visibility: hidden y la recupera un fotograma
+    // después de abrirse: hasta entonces innerText no ve sus filas.
+    const hijos = page.locator(`[id="${await grupo.getAttribute("aria-controls")}"]`);
+    await expect(hijos.getByRole("button").first()).toBeVisible();
   }
   return arbol;
 }

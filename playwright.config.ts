@@ -88,6 +88,7 @@ export default defineConfig({
     "**/client-shell.spec.ts",
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
+    "**/a11y.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },

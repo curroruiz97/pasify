@@ -129,6 +129,11 @@ async function desplegarGrupos(arbol: Locator) {
   for (const grupo of await arbol.locator("button[aria-expanded]").all()) {
     if ((await grupo.getAttribute("aria-expanded")) !== "true") await grupo.click();
     await expect(grupo).toHaveAttribute("aria-expanded", "true");
+    // Plegado, el grupo tiene visibility: hidden (NavTree lo saca del Tab y del
+    // lector) y la recupera un fotograma después de abrirse: hasta entonces sus
+    // filas no tienen texto visible y allInnerTexts() no las cuenta.
+    const hijos = arbol.page().locator(`[id="${await grupo.getAttribute("aria-controls")}"]`);
+    await expect(hijos.getByRole("button").first()).toBeVisible();
   }
 }
 

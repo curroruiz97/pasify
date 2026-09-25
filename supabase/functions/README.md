@@ -1,6 +1,6 @@
 # Pasify · Edge functions
 
-31 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
+32 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
 `_shared/` es código común: no es una función y no se despliega sola.
 
 - **Despliegue:** solo por `.github/workflows/deploy-production.yml`, después de
@@ -57,27 +57,28 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 
 | Función | Autorización | Qué hace · quién la llama |
 |---|---|---|
-| `delete-own-account` | sesión | Borra la cuenta de quien llama; si es local, antes cierra su actividad (`partner_close_account`). `SettingsSheet.tsx` |
+| `delete-own-account` | sesión | Borra la cuenta de quien llama: 409 a los admins, con un reembolso en curso o si es un local con ventas futuras (antes cierra su actividad con `partner_close_account`); borra sus ficheros de Storage y revoca Sign in with Apple si hay secretos y código. `SettingsSheet.tsx` |
 | `delete-user` | admin | Borra la cuenta de otro usuario. Sin llamador en el repo |
 | `admin-cancel-partner-subscription` | admin | Cancela la suscripción de un local. Sin llamador en el repo |
-| `gdpr-export-data` | sesión | ZIP con los datos del usuario en el bucket `gdpr-exports` y URL firmada. Sin llamador en el repo |
-| `notify-new-registration` | sesión (el recién registrado) | Aviso a los admins de un registro nuevo (máx. 3 por hora). `RegisterClient.tsx` |
-| `verify-captcha` | pública | Valida un token de Cloudflare Turnstile. Sin llamador en el repo |
+| `gdpr-export-data` | sesión | JSON con los datos del usuario (columnas explícitas, sin tokens ni secretos), 5 al día. «Descargar mis datos» en `SettingsSheet.tsx` |
+| `notify-new-registration` | sesión (el recién registrado) | Email de bienvenida a la cuenta nueva (cliente o local, según sus roles). `RegisterClient.tsx` |
+| `verify-captcha` | pública (límite por IP) | Valida un token de Cloudflare Turnstile del alta y de «¿Olvidaste tu contraseña?» (solo web y con `VITE_TURNSTILE_SITE_KEY`). En producción, sin secreto falla cerrado (503) |
 
 ### Avisos (solo servidor → servidor)
 
 | Función | Autorización | Qué hace |
 |---|---|---|
-| `dispatch-notification` | servicio | Reparte una fila de `notifications` por push, email o SMS según las preferencias del usuario. La lanza `_shared/notify.ts` |
+| `dispatch-notification` | servicio | Envía los avisos pendientes de `notification_dispatches` por email, push o SMS según las preferencias (horas de silencio en la zona del usuario). Al momento desde `_shared/notify.ts` y en lotes cada minuto con `pg_cron` |
 | `send-push` | servicio | Push de FCM a uno o varios tokens |
 | `send-sms` | servicio | SMS por Twilio |
-| `notify-admin-message` | servicio | Email al admin cuando llega un mensaje nuevo |
+| `notify-admin-message` | servicio | Email a los admins cuando un usuario abre una conversación sin leer (trigger de `support_messages` con `pg_net`) |
+| `retake-stale-refunds` | servicio | Retoma los reembolsos atascados en `processing` y los aprobados sin lanzar (lotes de 10). `pg_cron` + `pg_net` cada 10 min |
 
 ### Salud
 
 | Función | Autorización | Qué hace |
 |---|---|---|
-| `health-check` | pública | Estado de la base de datos, Stripe, Resend y FCM; guarda la foto en `service_status_snapshots`. La llaman `deploy-production.yml` y `smoke.yml` |
+| `health-check` | pública (completo con la cabecera interna) | Estado de la base de datos, Stripe, Resend (dominio incluido), FCM y la cola de avisos; guarda la foto en `service_status_snapshots` y avisa a los admins al cambiar de estado. Cada 15 min con `pg_cron`; también `deploy-production.yml` y `smoke.yml` |
 
 "Sin llamador en el repo" quiere decir que nada en `src/`, `api/`, las otras
 funciones ni las migraciones la invoca; puede llamarla un servicio externo o
@@ -159,6 +160,9 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 | `pasify-cleanup-old-notifs` | domingos 04:00 | `cron_cleanup_old_notifications()` |
 | `pasify-cleanup-logs` | domingos 05:00 | `cron_cleanup_logs()` |
 | `pasify-reconcile-pending-orders` | cada 10 min | `POST` a `reconcile-pending-orders` con `pg_net`; solo si Vault tiene `pasify_internal_secret` (luego `SELECT public.schedule_reconcile_pending_orders();`) |
+| `pasify-dispatch-notifications` | cada minuto | `POST` a `dispatch-notification` (lotes) con `pg_net`; mismo requisito (`SELECT public.schedule_dispatch_notifications();`) |
+| `pasify-health-check` | cada 15 min | `POST` a `health-check` (completo) con `pg_net`; mismo requisito (`SELECT public.schedule_health_check();`) |
+| `pasify-retake-stale-refunds` | cada 10 min | `POST` a `retake-stale-refunds` con `pg_net`; mismo requisito (`SELECT public.schedule_retake_stale_refunds();`) |
 
 Horas en UTC (las de `pg_cron`).
 

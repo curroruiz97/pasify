@@ -53,13 +53,14 @@ desplegar.
 | `VITE_PUBLIC_WEB_URL` (o `VITE_APP_BASE_URL`) | URL pública de la web: enlaces para compartir (`/e/…`, `/p/…`, referidos) y URL de vuelta de Stripe desde la app nativa | `https://pasifyy.vercel.app` |
 | `VITE_SENTRY_DSN` | Errores a Sentry; vacía, sin Sentry | DSN del proyecto |
 | `VITE_ENABLE_SUPER_ADMIN_SWITCHER` | `true`: el super-admin puede saltar entre paneles | según se quiera |
+| `VITE_TURNSTILE_SITE_KEY` | Clave pública de Cloudflare Turnstile: captcha en el alta y en «¿Olvidaste tu contraseña?» (solo web). Vacía, sin captcha. Antes, el secreto `TURNSTILE_SECRET_KEY` en Supabase: si no, el alta web falla con 503 | site key del widget |
 
 `VITE_DEV_PREVIEW` solo tiene efecto en `npm run dev`. El resto de `VITE_*`
 de `.env.example` (`VITE_SUPABASE_PROJECT_ID`, `VITE_STRIPE_*`,
 `VITE_MAPBOX_PUBLIC_TOKEN`, `VITE_GOOGLE_OAUTH_CLIENT_ID`,
-`VITE_FCM_VAPID_KEY`, `VITE_POSTHOG_*`, `VITE_TURNSTILE_SITE_KEY`,
-`VITE_APP_NAME`, `VITE_DEFAULT_LOCALE`, `VITE_SUPPORT_EMAIL`) no las lee
-ningún fichero de `src/`: no hace falta configurarlas.
+`VITE_FCM_VAPID_KEY`, `VITE_POSTHOG_*`, `VITE_APP_NAME`,
+`VITE_DEFAULT_LOCALE`, `VITE_SUPPORT_EMAIL`) no las lee ningún fichero de
+`src/`: no hace falta configurarlas.
 
 ### 2.2 Las de `api/` (Open Graph)
 
