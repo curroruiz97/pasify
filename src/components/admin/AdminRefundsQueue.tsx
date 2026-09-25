@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { format } from "date-fns";
 import { es as esDate } from "date-fns/locale";
 import { AlertTriangle, Check, Loader2, Play, RefreshCw, RotateCcw, X as XIcon } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -27,6 +25,7 @@ import {
   type RefundQueue,
   type RefundStatus6,
 } from "./adminQueries";
+import { decidirReembolso, lanzarProcessRefund, type Aviso } from "./adminActions";
 
 /* ============================================================================
    Cola de reembolsos del admin (B5-5)
@@ -38,6 +37,10 @@ import {
                         reembolso en Stripe (> 10 min) → Retomar.
      - En curso:        aprobada o en Stripe, esperando.
      - Histórico:       refunded / rejected.
+   Aprobar y Denegar van por la edge function decide-refund: aprobar ejecuta
+   el reembolso en Stripe y denegar envía al comprador el email con el
+   motivo. Si decide-refund aún no está desplegada, sigue el camino anterior
+   (RPC decide_refund + process-refund) y lo avisa.
    Reintentar pasa la solicitud a 'approved' (admin_retry_refund) y llama a
    process-refund; Retomar solo llama a process-refund, que ejecuta una
    aprobada o retoma una 'processing' atascada.
@@ -89,34 +92,6 @@ const motivoFallo = (raw: string | null): string | null => {
   return MOTIVOS_STRIPE[texto] ?? (texto.length > 220 ? `${texto.slice(0, 220)}…` : texto);
 };
 
-/** Códigos de error de process-refund (errorResponse de la edge function). */
-const ERRORES_PROCESS_REFUND: Record<string, string> = {
-  ticket_not_refundable: "La entrada ya no se puede devolver: está usada, transferida o sin pagar.",
-  order_not_refundable: "El pedido ya no admite reembolsos.",
-  nothing_to_refund: "No hay importe que devolver.",
-  no_payment_intent: "El pedido no tiene un pago de Stripe asociado.",
-  already_processing: "Ya se está tramitando: espera a que Stripe conteste.",
-  already_refunded: "La solicitud ya tiene un reembolso en Stripe.",
-  invalid_status: "La solicitud ya no está aprobada.",
-  stripe_refund_failed: "Stripe ha rechazado el reembolso: lo tienes en «Con incidencia» con el motivo.",
-  stripe_unavailable: "Stripe no ha contestado: podrás retomarlo en unos minutos.",
-  forbidden: "No tienes permiso para lanzar este reembolso.",
-  request_not_found: "La solicitud ya no existe.",
-};
-
-async function lanzarProcessRefund(requestId: string): Promise<string | null> {
-  const { error } = await supabase.functions.invoke("process-refund", { body: { request_id: requestId } });
-  if (!error) return null;
-  let codigo: string | null = null;
-  if (error instanceof FunctionsHttpError) {
-    const body = (await (error.context as Response).json().catch(() => null)) as
-      | { error?: { message?: string; code?: string } | string }
-      | null;
-    codigo = typeof body?.error === "string" ? body.error : body?.error?.message ?? null;
-  }
-  return (codigo && ERRORES_PROCESS_REFUND[codigo]) || "Stripe no ha podido tramitarlo ahora. Vuelve a intentarlo en unos minutos.";
-}
-
 const euros = (cents: number, currency: string) =>
   `${(cents / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency === "EUR" ? "€" : currency}`;
 
@@ -143,6 +118,9 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
     if (!uid) return;
     void queryClient.invalidateQueries({ queryKey: qk.admin.refundQueue(uid) });
     void queryClient.invalidateQueries({ queryKey: qk.admin.kpis(uid) });
+    // El estado de cada entrada en Pedidos y los reembolsos de Liquidaciones.
+    void queryClient.invalidateQueries({ queryKey: qk.admin.orders(uid) });
+    void queryClient.invalidateQueries({ queryKey: qk.admin.settlements(uid) });
   };
 
   const cambiarCola = (q: RefundQueue) => {
@@ -160,19 +138,13 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
     }
   };
 
+  const avisar = (a: Aviso) =>
+    toast({ title: a.titulo, description: a.descripcion, variant: a.ok ? undefined : "destructive" });
+
+  // decide-refund: aprueba y ejecuta el reembolso en Stripe en una llamada.
   const aprobar = (r: AdminRefundRow) =>
     conBusy(r.id, async () => {
-      const { error } = await supabase.rpc("decide_refund", { _request_id: r.id, _decision: "approve" });
-      if (error) {
-        toast({ title: "No se ha podido aprobar", description: mensajeDecision(error.message), variant: "destructive" });
-        return;
-      }
-      const fallo = await lanzarProcessRefund(r.id);
-      toast(
-        fallo
-          ? { title: "Aprobado, pero sin reembolsar todavía", description: fallo, variant: "destructive" }
-          : { title: "Reembolso aprobado", description: "Stripe lo está tramitando." },
-      );
+      avisar(await decidirReembolso(r.id, "approve", null));
     });
 
   const reintentar = (r: AdminRefundRow) =>
@@ -200,16 +172,13 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
       );
     });
 
+  // decide-refund: deniega y envía al comprador el email con el motivo.
   const denegar = async (r: AdminRefundRow, nota: string) => {
     setBusyId(r.id);
     try {
-      const { error } = await supabase.rpc("decide_refund", { _request_id: r.id, _decision: "reject", _note: nota });
-      if (error) {
-        toast({ title: "No se ha podido denegar", description: mensajeDecision(error.message), variant: "destructive" });
-        return false;
-      }
-      toast({ title: "Reembolso denegado", description: "El motivo queda guardado en la solicitud." });
-      return true;
+      const aviso = await decidirReembolso(r.id, "reject", nota);
+      avisar(aviso);
+      return aviso.ok;
     } finally {
       setBusyId(null);
       refrescar();
@@ -332,14 +301,6 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
       />
     </div>
   );
-};
-
-/** decide_refund lanza mensajes en inglés o técnicos: los habituales, en claro. */
-const mensajeDecision = (m: string) => {
-  if (/ya decidida/i.test(m)) return "Otra persona ya la ha decidido. La lista se ha actualizado.";
-  if (/motivo/i.test(m)) return "Escribe el motivo de la denegación (5 caracteres o más).";
-  if (/sin permisos/i.test(m)) return "No tienes permiso para decidir esta solicitud.";
-  return m;
 };
 
 const RefundRow = ({
@@ -508,7 +469,7 @@ const RejectDialog = ({
             {request
               ? `${request.event_title ?? "Evento"} · ${euros(request.amount_cents, request.currency)}. `
               : ""}
-            Explica el motivo: queda guardado en la solicitud. El aviso por email al comprador aún no está disponible.
+            Explica el motivo: se lo enviamos al comprador por email y queda guardado en la solicitud.
           </DialogDescription>
         </DialogHeader>
         <Textarea

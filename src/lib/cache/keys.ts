@@ -75,6 +75,21 @@ export const qk = {
     audit: (uid: string, kind: string, limit: number) => ["admin", uid, "audit", kind, limit] as const,
     adminIds: (uid: string) => ["admin", uid, "admin-ids"] as const,
     killSwitches: (uid: string) => ["admin", uid, "ai-kill-switches"] as const,
+    /** Prefijo de los eventos del admin (todas las páginas). */
+    eventsAll: (uid: string) => ["admin", uid, "events"] as const,
+    /** Prefijo de las organizaciones de los locales (Locales: suspensión). */
+    partnerOrgs: (uid: string) => ["admin", uid, "partner-orgs"] as const,
+    partnerOrgsFor: (uid: string, ownerIds: string) => ["admin", uid, "partner-orgs", ownerIds] as const,
+    /** Prefijo de Liquidaciones: resumen por organización e historiales. */
+    settlements: (uid: string) => ["admin", uid, "settlements"] as const,
+    settlementOverview: (uid: string, params: Record<string, string | number | boolean | null>) =>
+      ["admin", uid, "settlements", "overview", params] as const,
+    orgSettlements: (uid: string, orgId: string) => ["admin", uid, "settlements", "org", orgId] as const,
+    /** Prefijo de la búsqueda de pedidos (datos de compradores: solo memoria). */
+    orders: (uid: string) => ["admin", uid, "orders"] as const,
+    orderSearch: (uid: string, q: string) => ["admin", uid, "orders", "search", q] as const,
+    /** Asistentes de un evento (partner_event_attendees). */
+    eventAttendees: (uid: string, eventId: string) => ["admin", uid, "attendees", eventId] as const,
   },
   public: {
     all: () => ["public"] as const,

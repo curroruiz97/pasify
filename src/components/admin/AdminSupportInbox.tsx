@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es as esDate } from "date-fns/locale";
-import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, RefreshCw, RotateCcw, UserCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, Receipt, RefreshCw, RotateCcw, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import SupportChat from "@/components/support/SupportChat";
@@ -44,7 +44,14 @@ const nombreAdmin = (c: InboxConversation, uid: string | null): string | null =>
   return [a?.first_name, a?.last_name].filter(Boolean).join(" ") || a?.email || "otro admin";
 };
 
-export const AdminSupportInbox = ({ uid }: { uid: string | null }) => {
+export const AdminSupportInbox = ({
+  uid,
+  onBuscarPedidos,
+}: {
+  uid: string | null;
+  /** Abre Pedidos buscando las compras de quien escribe (por su email). */
+  onBuscarPedidos?: (email: string) => void;
+}) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filtro, setFiltro] = useState<InboxFilter>("open");
@@ -253,7 +260,18 @@ export const AdminSupportInbox = ({ uid }: { uid: string | null }) => {
                   {seleccion.status === "closed" ? "Cerrada" : "Abierta"} ·{" "}
                   {nombreAdmin(seleccion, uid) ? `Asignada a ${nombreAdmin(seleccion, uid)}` : "Sin asignar"}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {onBuscarPedidos && seleccion.client?.email && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onBuscarPedidos(seleccion.client?.email ?? "")}
+                      title="Buscar en Pedidos las compras de este email"
+                    >
+                      <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                      Sus pedidos
+                    </Button>
+                  )}
                   {seleccion.assigned_admin_id !== uid && seleccion.status !== "closed" && (
                     <Button
                       variant="outline"
