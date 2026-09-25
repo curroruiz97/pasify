@@ -77,8 +77,9 @@ if (SUPABASE.real) {
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  // El panel de local va con playwright.partner.config.ts (Supabase simulado con datos).
-  testIgnore: ["**/partner-shell.spec.ts", "**/partner-cache.spec.ts"],
+  // El panel de local y la puerta van con playwright.partner.config.ts
+  // (Supabase simulado con datos): los mismos tres specs de su testMatch.
+  testIgnore: ["**/partner-shell.spec.ts", "**/partner-cache.spec.ts", "**/door-pin.spec.ts"],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
   fullyParallel: true,

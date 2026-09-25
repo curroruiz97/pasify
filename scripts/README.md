@@ -1,11 +1,17 @@
-# Pasify · Scripts de Deploy (Windows)
+# Pasify · Scripts (Windows)
 
-Scripts PowerShell para deployar el backend Pasify desde Windows.
+Scripts PowerShell para preparar el backend de Pasify desde Windows.
 Todo está en `scripts/` y se ejecuta desde la raíz del repo.
+
+> **El despliegue a producción NO se hace desde aquí.** Migraciones y edge
+> functions llegan a producción por un único camino: el workflow
+> `.github/workflows/deploy-production.yml` (tests de BD → migraciones →
+> funciones) al hacer push a `main`. Ver [CI/CD](#cicd).
 
 ## Pre-requisitos
 
-1. **Supabase CLI** instalado:
+1. **Supabase CLI** instalado, en la misma versión que el CI (2.117.0, fijada
+   en `.github/workflows/db-tests.yml` y `deploy-production.yml`):
    ```powershell
    scoop install supabase    # vía Scoop
    # o
@@ -20,9 +26,10 @@ Todo está en `scripts/` y se ejecuta desde la raíz del repo.
 
 3. **Cuenta Supabase con acceso al proyecto** `ixkyfwzkknehvsqpopof`. Si es la cuenta del dueño del proyecto Pasify, perfecto. Si no, el Owner debe añadirte como miembro de la organization.
 
-## Flujo (3 pasos)
+Los `.ps1` se guardan en UTF-8 **con BOM**: PowerShell 5.1 lee un UTF-8 sin BOM
+como ANSI y los acentos y emojis rompen el script.
 
-### Paso 1 · Login & Link
+## Paso 1 · Login & Link
 
 ```powershell
 .\scripts\01-login-and-link.ps1
@@ -34,7 +41,7 @@ Todo está en `scripts/` y se ejecuta desde la raíz del repo.
 
 > **Si tu cuenta NO tiene acceso al proyecto** verás `Your account does not have the necessary privileges`. Pide al Owner que te añada como miembro: Dashboard → Project Settings → Team → Invite member.
 
-### Paso 2 · Configurar secrets
+## Paso 2 · Configurar secrets
 
 ```powershell
 # Copia el template a un archivo no commiteable
@@ -54,25 +61,31 @@ notepad secrets.env
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` → checkout + webhook
 - `RESEND_API_KEY`, `EMAIL_FROM` → emails transaccionales
 
-El resto (Twilio, FCM, OpenAI, Turnstile) puedes añadirlos cuando vayas activando esos módulos. Las edge functions degradan elegantemente a "fallback" (log-only) si las keys faltan.
+El resto (Twilio, FCM, Turnstile) puedes añadirlos cuando vayas activando esos módulos. Las edge functions degradan elegantemente a "fallback" (log-only) si las keys faltan.
 
-### Paso 3 · Deploy de todas las edge functions
+## Desplegar una función a mano (solo emergencias)
+
+Lo normal es el workflow: Actions → **Deploy · producción** → Run workflow, con
+el nombre de la función (pasa por los tests de BD y queda registrado). Si de
+verdad hay que hacerlo desde tu máquina:
 
 ```powershell
-.\scripts\03-deploy-all.ps1
+supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
-Itera `supabase/functions/*` (excluyendo `_shared`) y deploya cada función. Reporta éxitos/fallos al final.
-
-**Solo una función:**
-```powershell
-supabase functions deploy stripe-webhook
-```
+`--no-verify-jwt` siempre: la app llama con la publishable key
+(`sb_publishable_…`), que no es un JWT, y sin el flag el gateway rechaza toda
+llamada sin sesión. `supabase/config.toml` también lo fija para cada función.
 
 **Verificar deploys:**
 ```powershell
 supabase functions list
 ```
+
+**Retirar una función:** borra su carpeta y su entrada de `supabase/config.toml`
+en un PR y, después, `supabase functions delete <nombre>` en producción. El
+workflow **CI · funciones en producción vs repo** avisa de lo que quede
+publicado sin carpeta.
 
 ## Configurar webhook Stripe
 
@@ -107,43 +120,23 @@ Estás ejecutando una línea de bash en CMD (que la interpreta como comando). Us
 - Shift + Click derecho en la carpeta `pasify-main` → "Abrir ventana de PowerShell aquí"
 - O en la barra de direcciones del Explorer escribe `powershell` y Enter
 
-### Re-deploy una función tras cambio
-```powershell
-supabase functions deploy stripe-webhook
-```
-
 ### Ver logs de una función
 Dashboard → Edge Functions → seleccionar función → tab "Logs".
 Filtrar por `level=error` o por `function=stripe-webhook`.
 
-## Paso 4 (opcional) · Limpieza legacy Students Life
+## CI/CD
 
-Las rutas y referencias a las páginas Students Life (Social, Chats, Badges, etc.) ya están
-desconectadas de `App.tsx` pero los archivos siguen en disco como código muerto.
+| Workflow | Cuándo | Qué hace |
+|---|---|---|
+| `ci.yml` | PR y push a `main` | Lint, typecheck (sin errores nuevos), i18n, `vite build`, E2E del panel de local, gitleaks |
+| `db-tests.yml` | Cada PR a `main` (y desde el despliegue) | `supabase start` + todos los `tests/db/*.sql` |
+| `deploy-production.yml` | Push a `main` con cambios en `supabase/` o `tests/db/` | Tests de BD → `supabase db push` (sin `--include-all`) → edge functions; tipos regenerados |
+| `functions-drift.yml` | Tras cada despliegue, a diario y a mano | Funciones publicadas vs carpetas de `supabase/functions/` |
+| `smoke.yml` | Deploy de Vercel en producción | Web 200, health-check y funciones protegidas con 401/403 sin sesión |
 
-Para eliminarlos del disco:
-
-```powershell
-# Primero revisa qué se va a borrar (sin tocar nada)
-.\scripts\04-cleanup-legacy.ps1 -DryRun
-
-# Luego ejecuta el borrado real
-.\scripts\04-cleanup-legacy.ps1
-```
-
-Elimina:
-- 5 páginas: Social, Chats, ChatConversation, Badges, UserProfile
-- 3 carpetas: `components/social`, `components/chat`, `components/quiz`
-- 3 componentes: UploadSheet, AdminChats, PartnerSocialProfile
-- 11 hooks: useQuiz*, useChat, useTypingIndicator, useOnlinePresence, useGlobalTyping, useUnreadMessages, useUnreadNotifications, useNotificationSound
-
-Después: `npm run typecheck` para verificar que no aparecen errores TypeScript nuevos, `npm run typecheck:baseline` para sacar del baseline los errores de los ficheros borrados, y `git status` antes del commit.
-
-## CI/CD (automático)
-
-Una vez configurado todo lo anterior, los pushes a `main`/`staging` deployan automáticamente vía GitHub Actions. Ver `.github/workflows/deploy-edge-functions.yml`.
-
-Necesitas configurar en GitHub repo Settings:
-- **Secrets**: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD_PRODUCTION`, etc.
-- **Variables**: `SUPABASE_PROJECT_REF_PRODUCTION=ixkyfwzkknehvsqpopof`, `APP_BASE_URL=https://pasify.es`, etc.
-- **Environments**: crear `production` y `staging` con reviewers obligatorios.
+Configuración en GitHub (Settings):
+- **Secrets**: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD_PRODUCTION`, `SUPABASE_ANON_KEY`.
+- **Variables**: `SUPABASE_PROJECT_REF_PRODUCTION=ixkyfwzkknehvsqpopof`.
+- **Environment `production`** con revisores obligatorios (migraciones y funciones esperan aprobación).
+- **Protección de `main`**: checks obligatorios `Lint + Typecheck + Build`, `DB · tests (tests/db/*.sql)` y `E2E · panel de local (Supabase simulado)`.
+- **Integración de GitHub de Supabase**: sin despliegue automático, o migraciones y funciones llegan por dos caminos.

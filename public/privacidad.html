@@ -2,13 +2,20 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Política de Privacidad · Pasify</title>
-<meta name="description" content="Política de privacidad de Pasify: qué datos tratamos, para qué, con qué base legal y cómo ejercer tus derechos.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Política de privacidad · Pasify</title>
+<meta name="description" content="Política de privacidad de Pasify: quién trata tus datos, cuáles, para qué, con quién se comparten, cuánto tiempo se guardan y cómo ejercer tus derechos.">
+<!--
+  ÚNICA política de privacidad de Pasify. La enlazan Google Play, App Store,
+  la web y la app (src/pages/Privacidad.tsx la muestra tal cual, sin copiar el
+  texto). Si cambia algo de lo que hace la app (proveedores, permisos, datos,
+  plazos), se cambia aquí y en ningún otro sitio.
+  Los [PENDIENTE: …] son datos que el repositorio no permite confirmar.
+-->
 <style>
   :root{
-    --bg:#0b0b0f; --card:#14141b; --text:#e9e9ef; --muted:#a0a0b0;
-    --accent:#7c5cff; --line:#26263a;
+    --bg:#0F0F0F; --card:#171513; --text:#F4EEE2; --muted:#A39B8E;
+    --accent:#FF7A4D; --line:#2A2521;
   }
   *{box-sizing:border-box}
   body{
@@ -16,24 +23,28 @@
     font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:820px;margin:0 auto;padding:48px 24px 96px}
+  .wrap{
+    max-width:820px;margin:0 auto;
+    padding:calc(40px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
   header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:36px}
   .brand{font-weight:700;letter-spacing:-.02em;font-size:20px;color:var(--accent)}
   h1{font-size:34px;line-height:1.15;letter-spacing:-.02em;margin:18px 0 8px}
   .meta{color:var(--muted);font-size:14px;margin:0}
   h2{font-size:20px;letter-spacing:-.01em;margin:44px 0 10px;padding-top:8px}
-  h3{font-size:16px;margin:26px 0 6px;color:#cfcfe0}
-  p,li{color:#d5d5e2}
+  h3{font-size:16px;margin:26px 0 6px;color:#E6DDCF}
+  p,li{color:#DCD4C6}
   a{color:var(--accent)}
   ul{padding-left:20px;margin:8px 0 0}
   li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:15px}
+  .table{overflow-x:auto;margin-top:12px}
+  table{width:100%;border-collapse:collapse;font-size:15px;min-width:520px}
   th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
-  th{background:#1a1a26;color:#fff;font-weight:600}
+  th{background:#1F1B18;color:#fff;font-weight:600}
   .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:18px 0}
   .note p{margin:0;color:var(--muted);font-size:15px}
+  .pending{color:#E8B04C}
   footer{margin-top:56px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
-  code{background:#1a1a26;padding:2px 6px;border-radius:5px;font-size:14px}
 </style>
 </head>
 <body>
@@ -41,145 +52,190 @@
 
 <header>
   <div class="brand">Pasify</div>
-  <h1>Política de Privacidad</h1>
-  <p class="meta">Última actualización: 4 de agosto de 2026</p>
+  <h1>Política de privacidad</h1>
+  <p class="meta">Última actualización: 25 de septiembre de 2026</p>
 </header>
 
-<p>Esta política explica qué datos personales tratamos en Pasify, con qué finalidad, con qué base legal, con quién los compartimos y cómo puedes ejercer tus derechos. Se aplica a la aplicación móvil Pasify, a la web <a href="https://pasify.es">pasify.es</a> y a los paneles de gestión para locales, salas y promotores.</p>
+<p>Esta política explica qué datos personales trata Pasify, para qué, con qué base legal, con quién se comparten, cuánto tiempo se guardan y cómo puedes ejercer tus derechos. Se aplica a la app Pasify (Android e iOS), a la web de Pasify y al panel para locales, salas y promotores.</p>
 
-<h2>1. Responsable del tratamiento</h2>
+<h2>1. Quién es el responsable</h2>
 <ul>
-  <li><strong>Responsable:</strong> Pasify — AVENUE DIGITAL GROUP, S.L.</li>
-  <li><strong>NIF/CIF:</strong> B70829601</li>
+  <li><strong>Responsable:</strong> AVENUE DIGITAL GROUP, S.L. (Pasify)</li>
+  <li><strong>NIF:</strong> B70829601</li>
   <li><strong>Domicilio:</strong> Plaza Mayor, 23 - 1.º A, 47001 Valladolid (Valladolid), España</li>
-  <li><strong>Contacto de privacidad:</strong> <a href="mailto:hola@pasify.es">hola@pasify.es</a></li>
+  <li><strong>Contacto para todo lo relativo a tus datos:</strong> <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a></li>
 </ul>
-<h2>2. A quién se aplica</h2>
-<p>Distinguimos tres tipos de usuarios, porque los datos que tratamos de cada uno son distintos:</p>
+
+<h2>2. El local organizador y Pasify</h2>
+<p>Cuando compras una entrada, el <strong>local o promotor que organiza el evento</strong> ve los datos de tu compra: tu nombre, tu email, tu teléfono si lo diste, el tipo de entrada y si ya has entrado. Los necesita para gestionar el acceso y el aforo, atender incidencias y cumplir sus obligaciones, y puede exportar esa lista.</p>
 <ul>
-  <li><strong>Asistentes:</strong> personas que compran entradas, hacen check-in con QR, pagan con el sistema cashless o acumulan puntos de fidelidad.</li>
-  <li><strong>Locales, salas y promotores:</strong> negocios que venden entradas, gestionan aforo, reservas, listas de RRPP, TPV y equipo.</li>
-  <li><strong>Visitantes de la web:</strong> quien navega por pasify.es sin tener cuenta.</li>
+  <li>Sobre los datos de los compradores de sus eventos, el <strong>organizador es el responsable del tratamiento</strong> y <strong>Pasify actúa como encargado</strong> (artículo 28 del RGPD): los trata por cuenta del organizador, solo para prestarle el servicio.</li>
+  <li>Pasify es responsable de tu cuenta de Pasify y de lo que hacemos por nuestra cuenta: cobrar a través de Stripe, emitir y enviar las entradas, prevenir el fraude, dar soporte y cumplir nuestras obligaciones legales.</li>
+  <li>Para cualquier duda sobre lo que hace un organizador con tus datos puedes dirigirte a él o escribirnos y te ponemos en contacto.</li>
 </ul>
 
-<h2>3. Datos que tratamos</h2>
+<h2>3. Qué datos tratamos</h2>
 
-<h3>3.1 Datos de cuenta</h3>
+<h3>3.1 Tu cuenta</h3>
 <ul>
-  <li>Correo electrónico, nombre y apellidos, y contraseña (almacenada siempre cifrada mediante hash; nunca en texto plano).</li>
-  <li>Opcionalmente teléfono y fecha de nacimiento, cuando el local exige verificación de edad para acceder al evento.</li>
+  <li>Nombre, apellidos, email, contraseña (guardada solo como hash, nunca en claro), ciudad y país; el teléfono, si lo das.</li>
+  <li>Si entras con Google o con Apple, el nombre y el email que nos pasa esa cuenta.</li>
+  <li>Tu foto de perfil, si subes una. Se guarda con un enlace público: quien tenga el enlace puede verla.</li>
 </ul>
 
-<h3>3.2 Datos de compra y entradas</h3>
+<h3>3.2 Compras y entradas</h3>
 <ul>
-  <li>Entradas adquiridas, evento, local, fecha, importe y estado (válida, usada, devuelta).</li>
-  <li>Código QR asociado a cada entrada y registro de check-in (momento y punto de acceso en el que se validó).</li>
-  <li>Historial de compras, favoritos, devoluciones y puntos de fidelidad.</li>
+  <li>Pedidos y entradas: evento, tipo de entrada, cantidad, importe, fecha y estado (pagada, usada, cancelada, reembolsada).</li>
+  <li>El nombre, el email y el teléfono indicados al comprar, y los del titular de cada entrada.</li>
+  <li>El código QR y el código corto de cada entrada, y un enlace privado para verla sin iniciar sesión.</li>
+  <li>Cada validación en la puerta: cuándo se escaneó y con qué resultado.</li>
+  <li>Las solicitudes de reembolso y los mensajes que las acompañan.</li>
+  <li>Tus puntos de Pasify y tus códigos para invitar a amigos, si los usas.</li>
 </ul>
 
-<h3>3.3 Datos de pago</h3>
+<h3>3.3 Pagos</h3>
 <ul>
-  <li>Los pagos se procesan íntegramente a través de <strong>Stripe</strong>. <strong>Pasify no almacena ni tiene acceso a los números de tarjeta completos.</strong></li>
-  <li>Conservamos únicamente el identificador de la transacción, el importe, la divisa, el estado del pago y los cuatro últimos dígitos y marca de la tarjeta que Stripe nos devuelve, a efectos de soporte, devoluciones y obligaciones contables.</li>
-  <li>En el sistema cashless conservamos el saldo, las recargas y los consumos realizados dentro del local.</li>
+  <li>Los pagos los procesa <strong>Stripe</strong>. Pasify no ve ni guarda el número de tu tarjeta.</li>
+  <li>Guardamos los identificadores del pago en Stripe, el importe, la moneda, el estado y la comisión de Pasify, para soporte, reembolsos y contabilidad.</li>
 </ul>
 
-<h3>3.4 Datos de los negocios</h3>
+<h3>3.4 Si eres un local, sala o promotor</h3>
 <ul>
-  <li>Datos de la organización, marca y local: nombre comercial, datos fiscales, dirección, aforo y configuración de la cuenta.</li>
-  <li>Datos del equipo con acceso al panel (nombre, correo y rol) y de la suscripción contratada.</li>
-  <li>Datos de ventas, liquidaciones y métricas agregadas del negocio.</li>
+  <li>Datos de tu organización y de tus locales: nombre comercial, razón social, NIF, dirección, datos de contacto y aforo.</li>
+  <li>Tus eventos, sus tipos de entrada y las imágenes que subes (logo, portada, cartel).</li>
+  <li>La cuenta de cobro en Stripe a la que llega el dinero de tus ventas y el saldo de cada local.</li>
+  <li>Qué acciones se hacen en el panel y quién las hace (registro de actividad), por seguridad.</li>
 </ul>
 
-<h3>3.5 Datos técnicos y permisos del dispositivo</h3>
+<h3>3.5 Soporte</h3>
 <ul>
-  <li>Identificadores técnicos, tipo de dispositivo, sistema operativo, versión de la app, dirección IP (anonimizada) y registros de errores.</li>
-  <li><strong>Cámara:</strong> la app solicita permiso de cámara únicamente para escanear códigos QR en el control de acceso. Las imágenes se procesan en el propio dispositivo, en tiempo real, y <strong>no se almacenan ni se envían a nuestros servidores</strong>.</li>
-  <li><strong>Micrófono:</strong> solo se solicita si grabas una nota de voz en el chat de soporte. La grabación se envía como mensaje y no se activa el micrófono en ningún otro momento.</li>
-  <li><strong>Fotos:</strong> para elegir una imagen de perfil o la portada de un evento usamos el selector de fotos del sistema Android. La app <strong>no pide acceso a tu galería</strong>: solo recibe el archivo concreto que tú seleccionas.</li>
-  <li><strong>Notificaciones:</strong> si las autorizas, usamos un identificador de dispositivo para enviarte avisos sobre tus entradas y eventos.</li>
-  <li><strong>Informes de fallos:</strong> cuando la app falla enviamos a Sentry un informe técnico con el mensaje de error, la traza, el modelo de dispositivo, la versión del sistema y la versión de la app, asociado a tu identificador de usuario para poder reproducir la incidencia. No incluye el contenido de tus mensajes ni datos de pago.</li>
+  <li>Los mensajes que envías y recibes en el chat de soporte.</li>
 </ul>
 
-<h3>3.6 Datos que no tratamos</h3>
-<p>Pasify no recoge datos de categorías especiales (salud, ideología, origen étnico, orientación sexual, biometría) ni realiza seguimiento publicitario de terceros. La aplicación no contiene publicidad.</p>
+<h3>3.6 Datos técnicos y de errores</h3>
+<ul>
+  <li>Cuando la app o la web fallan, enviamos a <strong>Sentry</strong> un informe técnico: el error, dónde ocurrió, el modelo de dispositivo, el sistema operativo y la versión de la app. Va <strong>asociado a tu identificador de usuario de Pasify</strong> (no a tu nombre ni a tu email) para poder reproducir el fallo. No grabamos tu sesión ni tu pantalla.</li>
+  <li>Registros técnicos de los servidores (por ejemplo, las peticiones que llegan de Stripe).</li>
+</ul>
 
-<h2>4. Finalidades y bases legales</h2>
+<h3>3.7 En tu dispositivo</h3>
+<ul>
+  <li>La app y la web guardan en tu dispositivo tu sesión y una copia de datos de la app para abrir más rápido. Al cerrar sesión se borran.</li>
+  <li>No usamos cookies de publicidad ni de analítica.</li>
+</ul>
+
+<h3>3.8 Lo que no tratamos</h3>
+<p>No pedimos datos de categorías especiales (salud, ideología, origen, orientación sexual, biometría), no hacemos publicidad ni seguimiento publicitario y no vendemos datos a nadie.</p>
+
+<h2>4. Permisos del dispositivo</h2>
+<ul>
+  <li><strong>Cámara:</strong> solo para escanear los códigos QR de las entradas en la puerta del evento (la usa el local). Las imágenes se procesan en el propio dispositivo y no se guardan ni se envían.</li>
+  <li><strong>Fotos:</strong> para subir tu foto de perfil o las imágenes de tu local o evento eliges el archivo con el selector del sistema; Pasify solo recibe ese archivo y no lee tu galería.</li>
+  <li><strong>Micrófono:</strong> la app no lo usa.</li>
+  <li><strong>Carrete:</strong> la app no guarda entradas ni imágenes en tu carrete. Si un local exporta un listado, el fichero se abre con la hoja de compartir del sistema.</li>
+  <li><strong>Ubicación:</strong> la app no la usa.</li>
+  <li><strong>Notificaciones:</strong> hoy la app no envía notificaciones push; los avisos llegan dentro de la app y por email.</li>
+</ul>
+
+<h2>5. Para qué los usamos y con qué base legal</h2>
+<div class="table">
 <table>
   <thead>
     <tr><th>Finalidad</th><th>Base legal (art. 6 RGPD)</th></tr>
   </thead>
   <tbody>
-    <tr><td>Crear y mantener tu cuenta y prestarte el servicio</td><td>Ejecución del contrato</td></tr>
-    <tr><td>Vender entradas, emitir el QR y validarlo en la puerta</td><td>Ejecución del contrato</td></tr>
-    <tr><td>Procesar pagos, cashless, devoluciones y liquidaciones</td><td>Ejecución del contrato y obligación legal</td></tr>
-    <tr><td>Enviarte comunicaciones transaccionales (confirmación de compra, cambios en el evento, recordatorios)</td><td>Ejecución del contrato e interés legítimo</td></tr>
-    <tr><td>Programa de puntos y ventajas de fidelidad</td><td>Ejecución del contrato</td></tr>
-    <tr><td>Comunicaciones comerciales y novedades</td><td>Consentimiento (revocable en cualquier momento)</td></tr>
-    <tr><td>Prevención del fraude, reventa y duplicado de entradas</td><td>Interés legítimo</td></tr>
-    <tr><td>Métricas agregadas para mejorar el producto</td><td>Interés legítimo</td></tr>
-    <tr><td>Facturación y obligaciones fiscales y contables</td><td>Obligación legal</td></tr>
+    <tr><td>Crear y mantener tu cuenta y darte el servicio</td><td>Ejecución del contrato</td></tr>
+    <tr><td>Vender entradas, cobrarlas, emitir el QR, enviarlo por email y validarlo en la puerta</td><td>Ejecución del contrato</td></tr>
+    <tr><td>Gestionar cancelaciones, reembolsos y el saldo de los locales</td><td>Ejecución del contrato</td></tr>
+    <tr><td>Emails y avisos sobre tus compras, tus eventos y tu cuenta</td><td>Ejecución del contrato</td></tr>
+    <tr><td>Puntos de Pasify e invitaciones a amigos</td><td>Ejecución del contrato</td></tr>
+    <tr><td>Atenderte en el soporte</td><td>Ejecución del contrato e interés legítimo</td></tr>
+    <tr><td>Seguridad, prevención del fraude y registro de actividad del panel</td><td>Interés legítimo</td></tr>
+    <tr><td>Detectar y corregir errores de la app (Sentry)</td><td>Interés legítimo</td></tr>
+    <tr><td>Facturación y obligaciones contables y fiscales</td><td>Obligación legal</td></tr>
   </tbody>
 </table>
+</div>
+<p>No enviamos comunicaciones comerciales.</p>
 
-<h2>5. Con quién compartimos tus datos</h2>
-<p>No vendemos ni cedemos tus datos personales. Trabajamos con los siguientes encargados del tratamiento, todos con contrato de encargo (DPA) firmado:</p>
+<h2>6. Con quién compartimos los datos</h2>
+<ul>
+  <li><strong>El organizador del evento</strong>, con lo descrito en el apartado 2.</li>
+  <li><strong>Proveedores que trabajan por encargo nuestro</strong>, con las garantías de su contrato de encargo del tratamiento (DPA):</li>
+</ul>
+<div class="table">
 <table>
   <thead>
-    <tr><th>Proveedor</th><th>Para qué</th><th>Ubicación</th></tr>
+    <tr><th>Proveedor</th><th>Para qué</th><th>Dónde</th></tr>
   </thead>
   <tbody>
-    <tr><td>Supabase Inc.</td><td>Base de datos y autenticación</td><td>Unión Europea</td></tr>
-    <tr><td>Vercel Inc.</td><td>Alojamiento de la aplicación</td><td>UE / EE. UU.</td></tr>
-    <tr><td>Stripe Payments Europe, Ltd.</td><td>Pagos, cashless y suscripciones</td><td>Unión Europea</td></tr>
-    <tr><td>Functional Software, Inc. (Sentry)</td><td>Informes de fallos y diagnóstico</td><td>EE. UU.</td></tr>
+    <tr><td>Supabase, Inc.</td><td>Base de datos, autenticación, archivos (imágenes) y funciones del servidor</td><td><span class="pending">[PENDIENTE: región del proyecto de Supabase, en Project Settings → General]</span></td></tr>
+    <tr><td>Vercel, Inc.</td><td>Alojamiento de la web</td><td>EE. UU. y red global</td></tr>
+    <tr><td>Stripe (Stripe Payments Europe, Ltd. y Stripe, Inc.)</td><td>Pagos, reembolsos y cuentas de cobro de los locales</td><td>Irlanda y EE. UU.</td></tr>
+    <tr><td>Resend</td><td>Envío de los emails con las entradas y los avisos</td><td>EE. UU.</td></tr>
+    <tr><td>Functional Software, Inc. (Sentry)</td><td>Informes de errores, con tu identificador de usuario</td><td>EE. UU.</td></tr>
   </tbody>
 </table>
-<p>Cuando compras una entrada, el <strong>local o promotor organizador del evento</strong> accede a los datos estrictamente necesarios para gestionar el acceso y el aforo (nombre, tipo de entrada y estado del check-in). En ese tratamiento el organizador actúa como responsable independiente respecto a su propia relación contigo.</p>
-
-<h2>6. Transferencias internacionales</h2>
-<p>Nuestros datos se alojan preferentemente en la Unión Europea. Cuando algún proveedor trate datos fuera del Espacio Económico Europeo, la transferencia se ampara en las Cláusulas Contractuales Tipo aprobadas por la Comisión Europea o en el marco Data Privacy Framework.</p>
-
-<h2>7. Plazos de conservación</h2>
+</div>
 <ul>
-  <li><strong>Datos de cuenta:</strong> mientras la cuenta esté activa. Tras solicitar su eliminación, se borran en un máximo de 30 días.</li>
-  <li><strong>Entradas y registros de check-in:</strong> hasta 12 meses después del evento, para resolver incidencias y reclamaciones.</li>
-  <li><strong>Datos de facturación y pagos:</strong> 6 años, conforme a la normativa mercantil y fiscal española.</li>
-  <li><strong>Datos de marketing:</strong> hasta que retires el consentimiento.</li>
-  <li><strong>Registros técnicos y de error:</strong> 90 días.</li>
+  <li><strong>Recursos de terceros que carga la web:</strong> las tipografías se descargan de <strong>Google Fonts</strong> (Google) y el calendario de eventos muestra imágenes de ejemplo servidas por <strong>Unsplash</strong>. Al cargarlas, tu navegador les envía tu dirección IP y los datos técnicos de cualquier petición web.</li>
+  <li><strong>Google y Apple</strong>, solo si eliges iniciar sesión con sus cuentas. Ellos tratan esos datos como responsables, según sus propias políticas.</li>
+  <li><strong>Stripe</strong> trata además, como responsable, los datos que exige la ley para abrir y verificar las cuentas de cobro de los locales.</li>
+  <li><strong>Autoridades</strong> (juzgados, Agencia Tributaria…), cuando una ley nos obligue.</li>
 </ul>
 
-<h2>8. Seguridad</h2>
+<h2>7. Transferencias internacionales</h2>
+<p>Varios de estos proveedores son empresas de Estados Unidos o tratan datos allí (Vercel, Stripe, Resend, Sentry, Google, Unsplash y, según la región del proyecto, Supabase). Esas transferencias se amparan en el Marco de Privacidad de Datos UE-EE. UU. cuando el proveedor está adherido a él y, si no, en las cláusulas contractuales tipo aprobadas por la Comisión Europea que incluye su contrato de encargo.</p>
+
+<h2>8. Cuánto tiempo guardamos los datos</h2>
 <ul>
-  <li>Cifrado en tránsito mediante TLS 1.3 y cifrado en reposo AES-256.</li>
-  <li>Contraseñas almacenadas con hash bcrypt; nunca en texto plano.</li>
-  <li>Seguridad a nivel de fila (Row Level Security) en base de datos y control de acceso por roles.</li>
-  <li>Los datos de tarjeta se gestionan íntegramente en la infraestructura certificada PCI-DSS de Stripe.</li>
+  <li><strong>Tu cuenta:</strong> mientras esté activa. Si la borras desde la app, se borra en ese momento.</li>
+  <li><strong>Pedidos, entradas, validaciones en la puerta y pagos:</strong> se conservan también después de borrar la cuenta, sin vínculo con ella, durante el plazo que exige la normativa mercantil y fiscal (6 años, artículo 30 del Código de Comercio). Siguen incluyendo el nombre, el email y el teléfono indicados en la compra porque son el justificante de la operación y el registro del organizador del evento. Ver <a href="#borrado">qué pasa al borrar la cuenta</a>.</li>
+  <li><strong>Avisos de la app:</strong> los leídos se borran a los 90 días.</li>
+  <li><strong>Registro de actividad del panel:</strong> 1 año.</li>
+  <li><strong>Avisos de pago recibidos de Stripe:</strong> 180 días.</li>
+  <li><strong>Informes de errores en Sentry:</strong> <span class="pending">[PENDIENTE: plazo de retención configurado en el proyecto de Sentry]</span>.</li>
+  <li><strong>Copias de seguridad de la base de datos:</strong> lo borrado desaparece de ellas cuando se renuevan, según el ciclo de Supabase <span class="pending">[PENDIENTE: plazo de las copias de seguridad del plan contratado]</span>.</li>
 </ul>
 
-<h2>9. Tus derechos</h2>
-<p>Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y portabilidad, así como retirar el consentimiento prestado.</p>
+<h3 id="borrado">Qué pasa al borrar tu cuenta</h3>
 <ul>
-  <li>Desde tu perfil en la app puedes consultar y modificar tus datos, revisar tus compras y eliminar tu cuenta (Ajustes → Eliminar cuenta).</li>
-  <li>Si ya no tienes la app instalada, puedes solicitar el borrado desde <a href="/eliminar-cuenta.html">esta página</a>, que detalla qué datos se eliminan y cuáles se conservan por obligación legal.</li>
-  <li>Para el resto de solicitudes, escríbenos a <a href="mailto:hola@pasify.es">hola@pasify.es</a>. Responderemos en el plazo máximo de un mes.</li>
-  <li>Si consideras que no hemos atendido correctamente tu solicitud, puedes reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es" rel="noopener">aepd.es</a>).</li>
+  <li><strong>Se borran:</strong> tu perfil y tus datos de acceso, tus favoritos, tus avisos y preferencias, tus puntos y códigos de invitación, tus solicitudes de reembolso y tus conversaciones de soporte como comprador.</li>
+  <li><strong>Tu foto de perfil:</strong> el archivo, si subiste uno, no se borra solo con la cuenta; lo borramos cuando nos lo pides por email.</li>
+  <li><strong>Se conservan, sin vínculo con tu cuenta:</strong> los pedidos y las entradas que compraste (con los datos de la compra), sus validaciones en la puerta y los pagos, por las obligaciones contables y fiscales del apartado anterior. Las entradas para eventos futuros siguen siendo válidas con el QR y el enlace del email.</li>
+  <li><strong>Si eres un local:</strong> no se puede borrar la cuenta mientras tengas eventos futuros con entradas vendidas (primero hay que cancelarlos y reembolsar). Al borrarla, se cancelan tus eventos futuros sin ventas y tu organización queda cerrada; sus datos, sus eventos pasados, sus ventas y sus conversaciones de soporte se conservan sin vínculo con tu cuenta, por las mismas obligaciones.</li>
+</ul>
+<p>Todos los detalles, también cómo pedirlo sin tener la app, están en <a href="/eliminar-cuenta.html">Eliminar tu cuenta</a>.</p>
+
+<h2>9. Seguridad</h2>
+<ul>
+  <li>Todas las conexiones van cifradas (HTTPS).</li>
+  <li>La base de datos restringe por filas qué puede leer cada usuario (Row Level Security) y cada rol del panel.</li>
+  <li>Las contraseñas se guardan solo como hash.</li>
+  <li>Los datos de tarjeta nunca pasan por Pasify: los gestiona Stripe.</li>
 </ul>
 
-<h2>10. Menores de edad</h2>
-<p>Pasify está dirigida a mayores de 18 años, dado que muchos de los eventos se celebran en locales de ocio nocturno con restricción de edad. No recogemos conscientemente datos de menores. Si detectas una cuenta de un menor, escríbenos a <a href="mailto:hola@pasify.es">hola@pasify.es</a> y la eliminaremos.</p>
+<h2>10. Tus derechos</h2>
+<p>Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y portabilidad.</p>
+<ul>
+  <li>En la app: puedes ver y cambiar tus datos en tu perfil; en <strong>Ajustes → Privacidad y datos</strong> puedes pedir una copia de tus datos y <strong>eliminar tu cuenta</strong>.</li>
+  <li>Sin la app, o para cualquier otra solicitud: escribe a <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a> desde el email de tu cuenta. Respondemos en el plazo máximo de un mes.</li>
+  <li>Si compraste en un evento y quieres ejercerlos frente al organizador, puedes dirigirte a él o a nosotros.</li>
+  <li>Si crees que no hemos atendido bien tu solicitud, puedes reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es" rel="noopener">aepd.es</a>).</li>
+</ul>
 
-<h2>11. Pasify como encargado del tratamiento</h2>
-<p>Cuando un local, sala o promotor utiliza Pasify para gestionar los datos de sus propios clientes, Pasify actúa como <strong>encargado del tratamiento</strong> en los términos del artículo 28 del RGPD, tratando esos datos únicamente conforme a las instrucciones del negocio y con las garantías del contrato de encargo correspondiente.</p>
+<h2>11. Menores</h2>
+<p>Pasify está dirigida a mayores de 18 años: muchos eventos son de ocio nocturno con restricción de edad, y además cada organizador fija la edad mínima de sus eventos. No recogemos conscientemente datos de menores. Si detectas la cuenta de un menor, escríbenos a <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a> y la eliminaremos.</p>
 
 <h2>12. Cambios en esta política</h2>
-<p>Podemos actualizar esta política para reflejar cambios legales o del servicio. Si el cambio es sustancial, te avisaremos por correo electrónico o dentro de la app con al menos 30 días de antelación. La fecha de la última actualización figura al principio de este documento.</p>
+<p>Si cambia algo de lo que hace Pasify con tus datos, actualizaremos esta página y la fecha del principio. Si el cambio es importante, te avisaremos dentro de la app o por email antes de que se aplique.</p>
 
 <h2>13. Contacto</h2>
-<p>Para cualquier duda sobre esta política o sobre el tratamiento de tus datos: <a href="mailto:hola@pasify.es">hola@pasify.es</a></p>
+<p>Para cualquier duda sobre esta política o sobre tus datos: <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a>.</p>
 
 <footer>
-  © 2026 Pasify · <a href="https://pasify.es">pasify.es</a>
+  AVENUE DIGITAL GROUP, S.L. · NIF B70829601 · Plaza Mayor, 23 - 1.º A, 47001 Valladolid ·
+  <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a>
 </footer>
 
 </div>

@@ -89,7 +89,9 @@ BEGIN
   IF v_order.qty <> 3 THEN RAISE EXCEPTION 'FAIL General no vendió su cupo: %', row_to_json(v_order); END IF;
   v_text := NULL;
   BEGIN
-    PERFORM public.create_ticket_order(v_event, v_general, 1, NULL, 'o1-otro@pasify.test', 'Otro', 'Más');
+    -- Con cuenta: sin ella el pedido no llega a mirar el cupo
+    -- (buyer_user_required, migración 20260925110100).
+    PERFORM public.create_ticket_order(v_event, v_general, 1, v_client, 'o1-otro@pasify.test', 'Otro', 'Más');
   EXCEPTION WHEN raise_exception THEN
     v_text := SQLERRM;
   END;

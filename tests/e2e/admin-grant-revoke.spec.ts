@@ -6,7 +6,8 @@ import { test, expect } from "@playwright/test";
  * Verifica que:
  *  1. Las RPCs admin_* NO son ejecutables por `anon` (mig 0047 — REVOKE
  *     FROM PUBLIC + GRANT solo a authenticated/service_role).
- *  2. La whitelist anon SÍ funciona (accept_invitation/global_search/etc.).
+ *  2. La whitelist anon SÍ funciona (get_app_setting_bool) y lo que salió de
+ *     ella no: global_search es solo de service_role desde 20260925110200.
  *  3. Las policies con `(SELECT auth.uid())` cacheado (mig 0050) siguen
  *     filtrando bien — se valida indirectamente: SELECT anon sobre
  *     `partner_subscriptions` con un org_id falso devuelve 0 filas.
@@ -93,7 +94,8 @@ test.describe("Whitelist anon (mig 0047)", () => {
     expect(resp.status()).toBe(200);
   });
 
-  test("global_search SÍ ejecutable por anon", async ({ request }) => {
+  // Ya no está en la lista: solo service_role (20260925110200_permissions_hardening).
+  test("global_search rechaza anon", async ({ request }) => {
     const resp = await request.post(
       `${SUPABASE_URL}/rest/v1/rpc/global_search`,
       {
@@ -104,7 +106,7 @@ test.describe("Whitelist anon (mig 0047)", () => {
         data: { _q: "test", _limit: 5 },
       },
     );
-    expect(resp.status()).toBe(200);
+    expect([401, 403, 404]).toContain(resp.status());
   });
 });
 

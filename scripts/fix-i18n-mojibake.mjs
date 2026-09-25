@@ -66,8 +66,32 @@ const W1252_REVERSE = {
 /** Detecta sequencias `U+00C2|U+00C3 + (0x80..0xFF | Win1252 special)`. */
 const MOJIBAKE_RE = /[ÂÃ]([-ÿ€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ])/g;
 
+/**
+ * Lo mismo con los caracteres de 3 bytes que empiezan por 0xE2 (… ’ “ ” – — €):
+ * `â€¦` en vez de `…`. El patrón de 2 bytes no los ve; así se coló un `â€¦` en
+ * es.json con el check en verde.
+ */
+const CONT_CHARS = "\\u0080-\\u00BF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+const MOJIBAKE3_RE = new RegExp(`\\u00E2([${CONT_CHARS}])([${CONT_CHARS}])`, "g");
+
+function contByte(ch) {
+  const code = ch.charCodeAt(0);
+  const b = code >= 0x80 && code <= 0xff ? code : W1252_REVERSE[ch];
+  return b != null && b >= 0x80 && b <= 0xbf ? b : null;
+}
+
+function fixMojibake3(s) {
+  return s.replace(MOJIBAKE3_RE, (m, c2, c3) => {
+    const b2 = contByte(c2);
+    const b3 = contByte(c3);
+    if (b2 == null || b3 == null) return m;
+    const codepoint = ((0xe2 & 0x0f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f);
+    return codepoint >= 0x2000 && codepoint <= 0x2fff ? String.fromCodePoint(codepoint) : m;
+  });
+}
+
 export function fixMojibake(s) {
-  return s.replace(MOJIBAKE_RE, (m, second) => {
+  return fixMojibake3(s).replace(MOJIBAKE_RE, (m, second) => {
     const b1 = m.charCodeAt(0);
     const code = second.charCodeAt(0);
     const b2 = code >= 0x80 && code <= 0xFF ? code : W1252_REVERSE[second];
@@ -83,6 +107,7 @@ export const FORBIDDEN_PATTERNS = [
   /[Ã][-¿]/g, // Ãx
   /[Â][-¿]/g, // Âx
   /[Ã](€|‰|Ÿ|š|„|œ|–|ˆ|‡|Ž|Œ|‚|ƒ|…|†|˜|™|ž|Š|‹|”|“|’|‘|•|—|›)/g, // ÃŸ, Ã‰, etc.
+  /â(€|‚)/g, // â€¦, â€™, â‚¬… (3 bytes)
 ];
 
 export function findRemainingMojibake(s) {

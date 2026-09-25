@@ -71,6 +71,10 @@ BEGIN
   VALUES (v_event, 'VIP', 2500, 5, 4) RETURNING id INTO v_tier_vip;
 
   RESET ROLE;
+  -- El aforo lo recalcula un trigger con la suma de los tipos (2 + 5 = 7,
+  -- migración 20260926150000). La prueba de event_sold_out necesita un aforo
+  -- menor que esa suma: se fija a mano después de crear los tipos.
+  UPDATE public.events SET capacity = 3 WHERE id = v_event;
   SELECT count(*) INTO v_count FROM public.partner_subscriptions WHERE org_id = v_org AND status = 'active' AND plan_code = 'free';
   IF v_count <> 1 THEN RAISE EXCEPTION 'FAIL la organización nueva no tiene plan gratuito'; END IF;
   SELECT price_cents INTO v_count FROM public.events WHERE id = v_event;

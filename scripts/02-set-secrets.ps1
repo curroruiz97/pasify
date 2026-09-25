@@ -1,4 +1,4 @@
-# Pasify · Paso 2 — Configurar Supabase secrets para edge functions
+﻿# Pasify · Paso 2 — Configurar Supabase secrets para edge functions
 #
 # 1. Copia secrets.template.env → secrets.env (NO commitear ese archivo)
 # 2. Rellena las keys reales (Stripe, Resend, FCM, etc.)
