@@ -1,188 +1,180 @@
-# Pasify · Deploy en Vercel (dominio temporal)
+# Pasify · Despliegue de la web en Vercel
 
-Guía paso a paso para desplegar Pasify en `https://pasifyy.vercel.app` antes de pasar al dominio definitivo `pasify.es`.
+Vercel sirve la web (`dist/`, la SPA) y las dos funciones de `api/`. La base de
+datos y las edge functions **no** salen desde aquí: van por
+`.github/workflows/deploy-production.yml` (tests de BD → migraciones →
+funciones; ver [README](./README.md#cicd)).
 
----
-
-## 1 · Variables de entorno en Vercel
-
-Ve a **Vercel Dashboard → tu proyecto → Settings → Environment Variables** y añade estas variables para los environments `Production`, `Preview` y `Development`:
-
-### 1.1 Cliente (VITE_*) — embebidas en el bundle
-
-| Key | Value | Sensible |
-| --- | --- | --- |
-| `VITE_SUPABASE_PROJECT_ID` | `ixkyfwzkknehvsqpopof` | No |
-| `VITE_SUPABASE_URL` | `https://ixkyfwzkknehvsqpopof.supabase.co` | No |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_yZbJzRlZfQY0iMtloEr86Q_uSUiuxNY` | No |
-| `VITE_APP_BASE_URL` | `https://pasifyy.vercel.app` | No |
-| `VITE_PUBLIC_WEB_URL` | `https://pasifyy.vercel.app` | No |
-| `VITE_APP_NAME` | `Pasify` | No |
-| `VITE_DEFAULT_LOCALE` | `es` | No |
-| `VITE_SUPPORT_EMAIL` | `hola@pasify.es` | No |
-| `VITE_DEV_PREVIEW` | `false` | No |
-| `VITE_STRIPE_TEST_MODE` | `true` (mientras pruebas) | No |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | `pk_test_...` (de dashboard.stripe.com) | No |
-
-Opcionales (deja vacíos hasta que los provisionéis):
-- `VITE_MAPBOX_PUBLIC_TOKEN`
-- `VITE_GOOGLE_OAUTH_CLIENT_ID`
-- `VITE_FCM_VAPID_KEY`
-- `VITE_SENTRY_DSN`
-- `VITE_POSTHOG_KEY`
-- `VITE_TURNSTILE_SITE_KEY`
-
-### 1.2 Serverless functions (Node runtime, `/api/*`)
-
-| Key | Value | Sensible |
-| --- | --- | --- |
-| `SITE_URL` | `https://pasifyy.vercel.app` | No |
-| `SUPABASE_URL` | `https://ixkyfwzkknehvsqpopof.supabase.co` | No |
-| `SUPABASE_ANON_KEY` | `sb_publishable_yZbJzRlZfQY0iMtloEr86Q_uSUiuxNY` | No |
-
-Estas tres alimentan `/api/e/[id].ts` que renderiza Open Graph para WhatsApp/Telegram/Twitter cuando alguien comparte `https://pasifyy.vercel.app/e/<event-id>`.
-
-> 💡 Marcando "All environments" cuando añades una variable, se aplica a Production + Preview + Development. Útil para los valores que no cambian entre entornos (project id, URL pública).
+Hoy la web está en `https://pasifyy.vercel.app`; el paso a `pasify.es` está en
+la sección 6.
 
 ---
 
-## 2 · Supabase · Site URL + Redirect URLs
+## 1 · Cómo sale a producción
 
-**Sin este paso, los emails de password reset, las callbacks de Google OAuth y la confirmación de email redirigen a `localhost:3000` y NO funcionan.**
+- El proyecto de Vercel está conectado al repo de GitHub: **cada push a `main`
+  se despliega en producción**; cada PR tiene su preview en `*.vercel.app`.
+- `vercel.json` fija el build (`npm run build`), la salida (`dist`) y el
+  framework (Vite). Las dependencias se instalan con npm desde
+  `package-lock.json`.
+- El CI compila con Node 20: usa la misma versión en Vercel (Settings →
+  General → Node.js Version).
+- El build se aborta si `VITE_SUPABASE_URL` o `VITE_SUPABASE_PUBLISHABLE_KEY`
+  faltan o son un placeholder (guardia de `vite.config.ts`). `.env.production`,
+  versionado, trae los valores públicos de producción; las variables del
+  dashboard de Vercel mandan sobre él.
+- El release de Sentry es el SHA del commit (`VERCEL_GIT_COMMIT_SHA`).
 
-1. Abre [Supabase Dashboard → Authentication → URL Configuration](https://supabase.com/dashboard/project/ixkyfwzkknehvsqpopof/auth/url-configuration).
-2. En **Site URL** pon:
-   ```
-   https://pasifyy.vercel.app
-   ```
-3. En **Redirect URLs**, añade (uno por línea):
-   ```
-   https://pasifyy.vercel.app
-   https://pasifyy.vercel.app/**
-   https://pasifyy.vercel.app/#/**
-   https://*.vercel.app/**
-   http://localhost:8080
-   http://localhost:8080/**
-   ```
-   El `https://*.vercel.app/**` cubre las URLs de preview de Vercel (`pasifyy-xxx-curroruiz97s-projects.vercel.app`) que cambian con cada PR.
+`vercel.json` también define:
 
-4. Guarda.
-
-Cuando pases a `pasify.es` definitivo, añades esa URL a la lista y opcionalmente cambias Site URL a `https://pasify.es`. No borres las URLs de Vercel: vienen bien para staging.
-
----
-
-## 3 · Google OAuth (si lo usas)
-
-Si activas "Continuar con Google" hay que actualizar el redirect en Google Cloud Console:
-
-1. [console.cloud.google.com → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) → abre tu OAuth Client ID.
-2. En **Authorized JavaScript origins** añade:
-   - `https://pasifyy.vercel.app`
-3. En **Authorized redirect URIs** añade:
-   - `https://ixkyfwzkknehvsqpopof.supabase.co/auth/v1/callback`
-
-(El callback va a Supabase, no a tu dominio. Pasify pasa por Supabase como broker.)
+- Reescrituras: `/e/:id` → `/api/e/:id`, `/p/:id` → `/api/p/:id` y todo lo que
+  no sea `api/` ni `assets/` → `/index.html` (la SPA usa `HashRouter`).
+- Caché: `/assets/*` y los estáticos, un año `immutable`; `index.html` y
+  `sw.js`, `max-age=0, must-revalidate` (el service worker se actualiza);
+  `manifest.webmanifest`, una hora.
+- Cabeceras: `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`,
+  `X-Frame-Options: SAMEORIGIN`.
 
 ---
 
-## 4 · Stripe webhook endpoint
+## 2 · Variables de entorno en Vercel
 
-1. [dashboard.stripe.com → Developers → Webhooks → Add endpoint](https://dashboard.stripe.com/test/webhooks)
-2. URL del endpoint:
-   ```
-   https://ixkyfwzkknehvsqpopof.supabase.co/functions/v1/stripe-webhook
-   ```
-   (apunta al edge function de Supabase, no a Vercel)
-3. Eventos a suscribir:
-   - `checkout.session.completed`
-   - `checkout.session.expired`
-   - `payment_intent.succeeded`
-   - `charge.refunded`
-   - `account.updated`
-   - `payout.paid`
-   - `payout.failed`
-   - `customer.subscription.created`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-4. Una vez creado, copia el **Signing secret** (empieza con `whsec_...`) y guárdalo en `secrets.env` como `STRIPE_WEBHOOK_SECRET`. Re-ejecuta `.\scripts\02-set-secrets.ps1` para empujarlo al proyecto Supabase.
+Settings → Environment Variables, para Production y Preview. Las `VITE_*` se
+meten en el bundle en el build: no son secretas y cambiarlas exige volver a
+desplegar.
 
----
+### 2.1 Las que lee la web
 
-## 5 · Edge functions Supabase
+| Variable | Para qué | Producción |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Cliente de Supabase (también `/api`) | `https://ixkyfwzkknehvsqpopof.supabase.co` |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Clave pública del cliente (también `/api`) | la de `.env.production` (`sb_publishable_…`) |
+| `VITE_PUBLIC_WEB_URL` (o `VITE_APP_BASE_URL`) | URL pública de la web: enlaces para compartir (`/e/…`, `/p/…`, referidos) y URL de vuelta de Stripe desde la app nativa | `https://pasifyy.vercel.app` |
+| `VITE_SENTRY_DSN` | Errores a Sentry; vacía, sin Sentry | DSN del proyecto |
+| `VITE_ENABLE_SUPER_ADMIN_SWITCHER` | `true`: el super-admin puede saltar entre paneles | según se quiera |
 
-Ver `scripts/README.md` y ejecutar:
+`VITE_DEV_PREVIEW` solo tiene efecto en `npm run dev`. El resto de `VITE_*`
+de `.env.example` (`VITE_SUPABASE_PROJECT_ID`, `VITE_STRIPE_*`,
+`VITE_MAPBOX_PUBLIC_TOKEN`, `VITE_GOOGLE_OAUTH_CLIENT_ID`,
+`VITE_FCM_VAPID_KEY`, `VITE_POSTHOG_*`, `VITE_TURNSTILE_SITE_KEY`,
+`VITE_APP_NAME`, `VITE_DEFAULT_LOCALE`, `VITE_SUPPORT_EMAIL`) no las lee
+ningún fichero de `src/`: no hace falta configurarlas.
 
-```powershell
-.\scripts\01-login-and-link.ps1   # una vez (ya hecho)
-.\scripts\02-set-secrets.ps1      # tras editar secrets.env
-.\scripts\03-deploy-all.ps1       # despliega las 23+ funciones
-```
+### 2.2 Las de `api/` (Open Graph)
 
-Sin las edge functions:
-- Checkout Stripe **no funciona** (Calendar.tsx Participar y PartnerSubscribe muestran toast "Checkout próximamente").
-- Refund processing **no funciona**.
-- Emails transaccionales **no salen**.
-- Push notifications **no se reparten**.
+`api/e/[id].ts` y `api/p/[id].ts` sirven las tarjetas de vista previa
+(WhatsApp, Telegram, redes) de `/e/<evento>` y `/p/<local>`; a un navegador lo
+mandan directo a la página de la app.
 
-El frontend ya degrada con mensajes de "próximamente" cuando el function devuelve 404 — no crashea.
+| Variable | Para qué |
+|---|---|
+| `SITE_URL` | URL de la web a la que redirigen (`https://pasifyy.vercel.app`) |
+| `SUPABASE_URL` · `SUPABASE_ANON_KEY` | Solo si faltan las `VITE_SUPABASE_*` de arriba, que se leen primero |
 
----
+### 2.3 Build (opcionales)
 
-## 6 · Build settings en Vercel
-
-Vercel auto-detecta Vite. La configuración correcta (ya en `vercel.json`):
-
-| Setting | Value |
-| --- | --- |
-| Framework Preset | Vite |
-| Build Command | `npm run build` |
-| Output Directory | `dist` |
-| Install Command | `npm install` |
-| Node.js Version | 20.x |
-
-Vercel también respeta `vercel.json` que ya tiene:
-- SPA fallback (`/((?!api/).*)` → `/index.html`)
-- Cache headers agresivos en `/assets/*` (1 año immutable)
-- Cache `no-store` en `index.html` y `sw.js` (Service Worker actualizable)
-- Headers de seguridad básicos (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`)
-- Rewrite `/e/:id` → `/api/e/:id` para Open Graph cards
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`: suben los source maps al
+  release. Hace falta además `@sentry/vite-plugin`, que no está en
+  `package.json`: sin él, el build avisa y sigue sin subirlos.
+- `VITE_BASE_PATH`: base de Vite (por defecto `/`).
 
 ---
 
-## 7 · Después del deploy · checklist de smoke test
+## 3 · Supabase Auth: Site URL y Redirect URLs
 
-Cuando Vercel termine el build (~1-2 min):
+Sin esto, los emails de recuperar contraseña, el alta con Google y la
+confirmación de email vuelven a `localhost`.
 
-1. Abre `https://pasifyy.vercel.app` → debe cargar la landing Pasify con grain + warm shadows.
-2. Click en login → introduce credenciales → debe redirigir al dashboard correspondiente.
-3. Ve a `/calendar` → debe listar el evento "Saturday loco" (o el que hayas creado).
-4. Como partner, intenta crear un evento → debe aparecer en Mis eventos.
-5. Como cliente, click en "Participar" → si el edge `stripe-create-checkout` no está desplegado verás toast "Checkout próximamente" (no crash).
-6. PanelSwitcher (cuenta multi-rol) → debe funcionar el cambio entre Admin/Partner/Client.
+[Authentication → URL Configuration](https://supabase.com/dashboard/project/ixkyfwzkknehvsqpopof/auth/url-configuration):
 
-Si algo rompe:
-- Mira la consola del navegador (F12 → Console).
-- Revisa **Vercel Dashboard → Deployments → tu último deploy → Functions** para logs del serverless `/api/e/[id]`.
-- Revisa **Supabase Dashboard → Logs** para errores RLS / edge function.
+- **Site URL:** `https://pasifyy.vercel.app`
+- **Redirect URLs:**
+  ```
+  https://pasifyy.vercel.app
+  https://pasifyy.vercel.app/**
+  https://pasifyy.vercel.app/#/**
+  https://*.vercel.app/**
+  http://localhost:8080
+  http://localhost:8080/**
+  ```
+  `https://*.vercel.app/**` cubre las previews de los PR.
 
 ---
 
-## 8 · Cuando pases al dominio definitivo (`pasify.es`)
+## 4 · Google OAuth
 
-Search-replace estos valores:
+En [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials),
+en el OAuth Client ID web:
 
-| Variable / archivo | Valor temporal | Valor definitivo |
-| --- | --- | --- |
-| Vercel env `VITE_APP_BASE_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` |
-| Vercel env `VITE_PUBLIC_WEB_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` |
+- **Authorized JavaScript origins:** `https://pasifyy.vercel.app`
+- **Authorized redirect URIs:** `https://ixkyfwzkknehvsqpopof.supabase.co/auth/v1/callback`
+
+El callback es de Supabase, no de Vercel. Los client IDs de Google están en
+`src/components/auth/GoogleAuthButton.tsx`.
+
+---
+
+## 5 · Stripe: webhooks
+
+Los dos endpoints apuntan a la edge function, no a Vercel:
+`https://ixkyfwzkknehvsqpopof.supabase.co/functions/v1/stripe-webhook`.
+
+- **Endpoint de la plataforma** (su signing secret en el secreto
+  `STRIPE_WEBHOOK_SECRET`): `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
+  `checkout.session.async_payment_failed`, `charge.refunded`,
+  `refund.updated`, `charge.dispute.created`, `charge.dispute.closed`,
+  `customer.subscription.created`, `customer.subscription.updated`,
+  `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+- **Endpoint de Connect** (eventos de las cuentas de los locales; secreto
+  `STRIPE_CONNECT_WEBHOOK_SECRET`): `account.updated`, `payout.paid`,
+  `payout.failed`.
+
+La función prueba la firma con los dos secretos y es idempotente: un evento
+repetido no duplica nada.
+
+Los secretos se cargan con `supabase secrets set` o
+`scripts/02-set-secrets.ps1` (ver [scripts/README.md](./scripts/README.md)).
+Lista completa en [supabase/functions/README.md](./supabase/functions/README.md#secretos).
+
+---
+
+## 6 · Paso al dominio definitivo (`pasify.es`)
+
+| Dónde | Hoy | Después |
+|---|---|---|
+| Vercel → Domains | — | `pasify.es` y `www.pasify.es`, con los registros DNS que indique Vercel |
+| Vercel env `VITE_PUBLIC_WEB_URL` / `VITE_APP_BASE_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` (y volver a desplegar) |
 | Vercel env `SITE_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` |
-| Supabase Auth Site URL | `https://pasifyy.vercel.app` | `https://pasify.es` |
-| Supabase Auth Redirect URLs | añadir `https://pasify.es/**` | mantener ambos durante migración |
-| Vercel Domains → Add domain | — | `pasify.es` + `www.pasify.es` |
-| DNS de `pasify.es` | — | apuntar a Vercel (CNAME / A records que te indique Vercel) |
-| `secrets.env` → `APP_BASE_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` → re-deploy edge functions |
-| Copy de `PartnerChoosePlan.tsx`, `PartnerSubscribe.tsx`, `PartnerManage.tsx` | `pasifyy.vercel.app` | `pasify.es` (search/replace global) |
-| `src/lib/openWebAuth.ts` fallback hardcoded | `pasifyy.vercel.app` | `pasify.es` |
+| `.env.production` | `https://pasifyy.vercel.app` | `https://pasify.es` (lo usan los builds de Android) |
+| Supabase Auth → Site URL | `https://pasifyy.vercel.app` | `https://pasify.es` |
+| Supabase Auth → Redirect URLs | — | añadir `https://pasify.es/**` y `https://pasify.es/#/**`; mantener las de Vercel |
+| Secreto de edge functions `APP_BASE_URL` | `https://pasifyy.vercel.app` | `https://pasify.es` |
+| Google OAuth → JavaScript origins | `https://pasifyy.vercel.app` | añadir `https://pasify.es` |
 
-> El switch global lleva ~10 min y se puede automatizar con un script `sed` o un commit que cambie todas las ocurrencias a la vez.
+Quedan valores por defecto con el dominio temporal (solo se usan si falta la
+variable): `src/lib/redirect-url.ts`, `api/e/[id].ts`, `api/p/[id].ts`,
+`supabase/functions/_shared/email-templates.ts`; y
+`supabase/functions/_shared/urls.ts` acepta los dos dominios como vuelta de
+Stripe. `smoke.yml` prueba `https://pasifyy.vercel.app` por defecto y
+`public/eliminar-cuenta.html` lo tiene como canonical.
+
+---
+
+## 7 · Después de un despliegue
+
+`smoke.yml` corre solo cuando Vercel confirma el despliegue de producción: la
+home responde 200 con «pasify», `health-check` contesta y las funciones
+protegidas dan 401/403 sin sesión. A mano:
+
+1. `https://pasifyy.vercel.app` carga la home.
+2. Entrar con una cuenta de cada rol lleva a su panel (`/#/client-dashboard`,
+   `/#/partner-dashboard`, `/#/admin`).
+3. `/#/calendar` lista los eventos publicados.
+4. Un enlace `https://pasifyy.vercel.app/e/<id>` abre el evento (y en
+   WhatsApp muestra su tarjeta).
+
+Si algo falla: la consola del navegador; Vercel → Deployments → el despliegue
+→ Functions para los logs de `/api`; Supabase → Logs para la base de datos y
+las edge functions.
