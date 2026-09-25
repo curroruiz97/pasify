@@ -3,6 +3,9 @@
 // Soporta Stripe Connect (destination charges); Pasify cobra application_fee.
 //
 // Flujo:
+//   0) En producción solo con clave live de Stripe (assertLivePayments) y
+//      siempre con sesión: sin comprador no hay límite por persona y una
+//      reserva anónima retenía plazas 47 minutos.
 //   1) Valida payload y URLs de vuelta (allowlist de orígenes propios).
 //   2) `create_ticket_order` (SQL, service role) bloquea filas, valida stock,
 //      aforo, ventana de venta y límites, y crea el pedido + entradas
@@ -15,14 +18,16 @@
 // Errores: { error: <código>, message: <texto para el usuario> }
 //   409 event_not_available | tier_not_available | sale_not_started | sale_ended | tier_sold_out | event_sold_out
 //   400 invalid_payload | invalid_qty | qty_exceeds_per_user_max | buyer_email_required | invalid_return_url | amount_below_minimum
+//   401 auth_required · 503 payments_unavailable
 //   429 rate_limit_exceeded · 502 payment_provider_error · 500 order_create_failed | order_link_failed | internal_error
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import type Stripe from "npm:stripe@14";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser } from "../_shared/supabase.ts";
-import { requireStripe, DEFAULT_APPLICATION_FEE_PCT, STRIPE_TEST_MODE } from "../_shared/stripe.ts";
-import { enforceRateLimit, clientIp, RateLimitError } from "../_shared/rate-limit.ts";
+import { HttpError } from "../_shared/internal-auth.ts";
+import { requireStripe, assertLivePayments, DEFAULT_APPLICATION_FEE_PCT, STRIPE_TEST_MODE } from "../_shared/stripe.ts";
+import { enforceRateLimit, RateLimitError } from "../_shared/rate-limit.ts";
 import { APP_URL, DEFAULT_TIMEZONE, formatEventDateTime } from "../_shared/email-templates.ts";
 import { logger } from "../_shared/logger.ts";
 
@@ -79,6 +84,7 @@ const ORDER_ERRORS: Record<string, { status: number; message: string }> = {
   invalid_qty: { status: 400, message: "La cantidad de entradas no es válida." },
   qty_exceeds_per_user_max: { status: 400, message: "Has superado el máximo de entradas por persona para este tipo de entrada." },
   buyer_email_required: { status: 400, message: "Necesitamos un email válido para enviarte las entradas." },
+  buyer_user_required: { status: 401, message: "Inicia sesión para comprar tus entradas." },
 };
 
 function fail(status: number, code: string, message: string): Response {
@@ -161,11 +167,23 @@ Deno.serve(async (req) => {
   const log = logger.child({ function: "stripe-create-checkout" });
 
   try {
-    const user = await requireUser(req).catch(() => null);
-    const ip = clientIp(req);
+    // En producción con una clave de Stripe que no es live no se reserva
+    // nada: 503 payments_unavailable (ver _shared/stripe.ts).
+    assertLivePayments();
+
+    // Solo con sesión (la app ya la exige antes de llegar aquí).
+    let user: { id: string; email: string | null };
+    try {
+      user = await requireUser(req);
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        return fail(401, "auth_required", "Inicia sesión para comprar tus entradas.");
+      }
+      throw err;
+    }
 
     try {
-      await enforceRateLimit({ key: `checkout:${user?.id ?? ip}`, max: 20, windowSec: 3600 });
+      await enforceRateLimit({ key: `checkout:${user.id}`, max: 20, windowSec: 3600 });
     } catch (err) {
       if (err instanceof RateLimitError) {
         return fail(429, "rate_limit_exceeded", "Demasiados intentos de compra. Espera unos minutos y vuelve a probar.");
@@ -228,7 +246,7 @@ Deno.serve(async (req) => {
       _event_id: eventId,
       _tier_id: tierId,
       _qty: qty,
-      _buyer_user_id: user?.id ?? null,
+      _buyer_user_id: user.id,
       _buyer_email: buyerEmail,
       _buyer_first_name: cleanText(body.buyer?.first_name, 100),
       _buyer_last_name: cleanText(body.buyer?.last_name, 100),
@@ -251,7 +269,7 @@ Deno.serve(async (req) => {
       return fail(500, "order_create_failed", "No hemos podido reservar tus entradas. Inténtalo de nuevo.");
     }
 
-    const olog = logger.child({ function: "stripe-create-checkout", order_id: order.order_id, user_id: user?.id });
+    const olog = logger.child({ function: "stripe-create-checkout", order_id: order.order_id, user_id: user.id });
 
     // 2) Checkout Session con el precio que devuelve la BD.
     const tz = order.timezone || DEFAULT_TIMEZONE;
@@ -293,7 +311,7 @@ Deno.serve(async (req) => {
         tier_id: tierId,
         qty: String(order.qty),
         request_id: order.request_id,
-        buyer_user_id: user?.id ?? "",
+        buyer_user_id: user.id,
       },
       payment_intent_data: {
         description: `Pasify · ${order.event_title} · ${order.qty} × ${order.tier_name}`.slice(0, 500),
@@ -360,6 +378,11 @@ Deno.serve(async (req) => {
       expires_at: new Date(expiresAt * 1000).toISOString(),
     });
   } catch (err) {
+    // Errores conocidos (payments_unavailable…): su código y su texto tal cual.
+    if (err instanceof HttpError) {
+      log.warn("checkout_rejected", { code: err.code, status: err.status });
+      return fail(err.status, err.code, err.message);
+    }
     log.error("stripe-create-checkout failed", { error: err instanceof Error ? err.message : String(err) });
     return fail(500, "internal_error", "Ha ocurrido un error inesperado. Inténtalo de nuevo.");
   }

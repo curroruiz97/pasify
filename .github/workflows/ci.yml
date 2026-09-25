@@ -61,12 +61,16 @@ jobs:
     timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
+      # Historial completo: gitleaks revisa los commits del PR (base..head) y
+      # con un clon superficial no los encuentra.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Bloquea el PR si encuentra un secreto o datos sensibles.
       - name: Detect secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
