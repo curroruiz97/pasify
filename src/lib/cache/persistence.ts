@@ -15,8 +15,12 @@ import { MAX_PERSIST_AGE_MS, debePersistir, perteneceA, vigente } from "./policy
  *
  * Sube CACHE_SCHEMA cuando cambie la forma de algún dato guardado: lo de
  * versiones anteriores se descarta al arrancar.
+ *
+ * v2: la v1 podía llevar datos de terceros (solicitudes de reembolso de otros
+ * usuarios en "mis reembolsos" y el nombre y email del comprador original de
+ * las entradas recibidas por transferencia). Al subir se borran al arrancar.
  */
-export const CACHE_SCHEMA = 1;
+export const CACHE_SCHEMA = 2;
 const PREFIJO = `v${CACHE_SCHEMA}:`;
 const ESPERA_ESCRITURA_MS = 1000;
 /** Caché global de antes (sin separar por usuario): se borra al arrancar. */

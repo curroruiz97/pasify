@@ -16,6 +16,8 @@ import { IDS, instalarSupabaseFalso, type SupabaseFalso } from "./support/fake-s
  */
 
 const EVENTO = "Concierto E2E";
+/** Entrada del usuario en la caché guardada: `v<CACHE_SCHEMA>:<uid>` (persistence.ts), sea cual sea el esquema. */
+const CACHE_DEL_USUARIO = expect.stringMatching(new RegExp(`^v\\d+:${IDS.usuario}$`));
 
 test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -83,7 +85,7 @@ test("volver a una sección ya vista la pinta al instante y no vuelve a pedir", 
 test("al recargar, lo guardado en el dispositivo sale sin esperar a la red", async ({ page }) => {
   const { supabase, errores } = await abrirEventos(page);
   await ocultarPestana(page);
-  await expect.poll(() => clavesGuardadas(page)).toContain(`v1:${IDS.usuario}`);
+  await expect.poll(() => clavesGuardadas(page)).toContainEqual(CACHE_DEL_USUARIO);
 
   // Red muy lenta: sin caché, el panel se quedaría ~8 s en el loader.
   supabase.retrasoMs = 8_000;
@@ -97,10 +99,10 @@ test("al recargar, lo guardado en el dispositivo sale sin esperar a la red", asy
 test("cerrar sesión borra la caché del dispositivo", async ({ page }) => {
   const { errores } = await abrirEventos(page);
   await ocultarPestana(page);
-  await expect.poll(() => clavesGuardadas(page)).toContain(`v1:${IDS.usuario}`);
+  await expect.poll(() => clavesGuardadas(page)).toContainEqual(CACHE_DEL_USUARIO);
 
   await page.locator("aside").getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect.poll(() => clavesGuardadas(page)).not.toContain(`v1:${IDS.usuario}`);
+  await expect.poll(() => clavesGuardadas(page)).not.toContainEqual(CACHE_DEL_USUARIO);
   expect(errores).toEqual([]);
 });
 

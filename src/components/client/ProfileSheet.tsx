@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutLocal } from "@/hooks/useAuth";
 import {
   Sheet,
   SheetContent,
@@ -95,7 +96,7 @@ export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut({ scope: 'local' });
+    await signOutLocal();
     navigate("/");
   };
 

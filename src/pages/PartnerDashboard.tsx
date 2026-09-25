@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutLocal } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -344,7 +345,7 @@ const PartnerDashboard = () => {
     try {
       // scope local: cierra esta sesión, no las de otros dispositivos del local.
       const { error } = await withTimeout(
-        supabase.auth.signOut({ scope: "local" }),
+        signOutLocal(),
         8_000,
         "auth.signOut"
       );
