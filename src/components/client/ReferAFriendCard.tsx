@@ -16,7 +16,9 @@ import { WEB_BASE } from "@/lib/redirect-url";
  *
  *   - Llama RPC `get_or_create_my_referral_code()` al montar.
  *   - Permite copiar o compartir el código + canjear códigos ajenos via RPC
- *     `redeem_referral_code(_code)`, que da 500 puntos a cada uno.
+ *     `redeem_referral_code(_code)`. El canje deja el referido pendiente: los
+ *     500 puntos para cada uno llegan con la primera compra de pago de la
+ *     cuenta invitada (grant_referral_on_first_purchase, Ola 2).
  *   - Muestra contador de invitados ya canjeados (SELECT count
  *     referral_claims WHERE referrer_user_id = me).
  *
@@ -104,7 +106,7 @@ export const ReferAFriendCard = () => {
   // Hoja de compartir nativa (app), Web Share (web) o, si no hay, portapapeles.
   const share = async () => {
     if (!code) return;
-    const text = `Únete a Pasify con mi código ${code} y los dos sumamos ${PUNTOS_POR_INVITACION} Pasify Points.`;
+    const text = `Únete a Pasify con mi código ${code}: con tu primera compra, los dos sumamos ${PUNTOS_POR_INVITACION} Pasify Points.`;
     const url = referralLink(code);
     try {
       if (Capacitor.isNativePlatform()) {
@@ -138,8 +140,8 @@ export const ReferAFriendCard = () => {
       const { error } = await supabase.rpc("redeem_referral_code", { _code: clean });
       if (error) throw error;
       toast({
-        title: `¡${PUNTOS_POR_INVITACION} Pasify Points para los dos!`,
-        description: "Has canjeado el código correctamente.",
+        title: "Código canjeado",
+        description: `Con tu primera compra, los dos sumaréis ${PUNTOS_POR_INVITACION} Pasify Points.`,
       });
       setRedeemInput("");
       // El saldo de Puntos tiene que moverse ya, no al próximo refresco.
@@ -191,7 +193,8 @@ export const ReferAFriendCard = () => {
               Trae a un amigo a Pasify
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Comparte tu código. Cuando se registre y lo canjee, los dos sumáis {PUNTOS_POR_INVITACION} Pasify Points.
+              Comparte tu código. Cuando tu amigo lo canjee y haga su primera compra, los dos sumáis{" "}
+              {PUNTOS_POR_INVITACION} Pasify Points.
             </p>
           </div>
         </div>

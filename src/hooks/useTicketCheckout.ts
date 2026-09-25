@@ -229,6 +229,19 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
     title: "Demasiados intentos",
     description: "Espera unos minutos antes de volver a intentarlo.",
   },
+  // 409: el local está suspendido (admin_set_org_suspension). No se vende nada.
+  org_suspended: {
+    title: "Venta no disponible",
+    description: "Este local no puede vender entradas ahora mismo.",
+    after: "close",
+    fixed: true,
+  },
+  // 409: el tipo dejó de ser gratis entre abrir el selector y reservar.
+  tier_not_free: {
+    title: "El precio ha cambiado",
+    description: "Esta entrada ya no es gratis. Revisa el precio y vuelve a intentarlo.",
+    after: "refresh",
+  },
 };
 
 /** `free`: tipo a 0 € (los textos genéricos hablan de reserva, no de pago). */

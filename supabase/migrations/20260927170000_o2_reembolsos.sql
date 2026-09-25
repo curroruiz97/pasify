@@ -480,7 +480,7 @@ BEGIN
       v_recipient, 'tickets', 'refund_requested',
       'Nueva solicitud de reembolso',
       left(format('%s · %s · «%s»', COALESCE(v_event.title, 'Evento'), v_amount, v_reason), 280),
-      '/#/partner-dashboard/eventos',
+      '/#/partner-dashboard/reembolsos',
       jsonb_build_object('refund_request_id', v_request_id, 'event_id', v_event.id, 'ticket_id', _ticket_id),
       'high'
     );

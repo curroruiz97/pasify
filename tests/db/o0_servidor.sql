@@ -668,7 +668,11 @@ BEGIN
     AND p.oid NOT IN ('public.get_feature_flag(text,uuid)'::regprocedure,
                       'public.public_partner_rows()'::regprocedure,
                       'public.resolve_whitelabel_host(text)'::regprocedure,
-                      'public.live_payments_required()'::regprocedure);
+                      'public.live_payments_required()'::regprocedure,
+                      -- Ola 2: la RLS de lectura pública de events usa org_can_sell
+                      -- y la página del evento consulta event_availability.
+                      'public.org_can_sell(uuid)'::regprocedure,
+                      'public.event_availability(uuid)'::regprocedure);
   IF v_text IS NOT NULL THEN RAISE EXCEPTION 'FAIL SECURITY DEFINER ejecutables por anon fuera de la lista blanca: %', v_text; END IF;
   IF NOT (has_function_privilege('anon', 'public.get_feature_flag(text,uuid)', 'EXECUTE')
           AND has_function_privilege('anon', 'public.public_partner_rows()', 'EXECUTE')

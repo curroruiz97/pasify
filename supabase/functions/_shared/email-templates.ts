@@ -273,6 +273,13 @@ export function ticketPurchasedEmail(opts: {
   const addressLine = [address, venue && !cityInAddress ? city : ""].filter(Boolean).join(", ");
   const ref = orderReference(opts.orderId);
   const firstName = oneLine(opts.firstName);
+  // Entradas gratis (create_free_ticket_order): ni «compra» ni «total pagado».
+  const free = opts.totalCents <= 0;
+  const money = (cents: number) => (cents <= 0 ? "Gratis" : formatMoney(cents, currency));
+  const intro = free
+    ? `tu reserva está confirmada. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`
+    : `gracias por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`;
+  const totalLabel = free ? "Total" : "Total pagado";
 
   const mono = "font-family:'Geist Mono',ui-monospace,monospace;";
   const eyebrow = `${mono}font-size:11px;text-transform:uppercase;letter-spacing:0.18em;`;
@@ -323,7 +330,7 @@ export function ticketPurchasedEmail(opts: {
   const summaryRows = [...groups.values()].map((g) => `
     <tr>
       <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;color:#1A1612;">${g.count} × ${esc(g.tier)}</td>
-      <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;text-align:right;${mono}color:#1A1612;">${esc(formatMoney(g.cents, currency))}</td>
+      <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;text-align:right;${mono}color:#1A1612;">${esc(money(g.cents))}</td>
     </tr>`).join("");
 
   const showQrText = single
@@ -334,7 +341,7 @@ export function ticketPurchasedEmail(opts: {
     title: `${single ? "Tu entrada está" : "Tus entradas están"} <span style="font-family:'Instrument Serif',serif;font-style:italic;color:#E8542A;font-weight:400;">${single ? "lista" : "listas"}</span>.`,
     preheader: `${single ? "1 entrada" : `${n} entradas`} · ${title}${when ? ` · ${when}` : ""}`,
     body: `
-      <p>${firstName ? `Hola ${esc(firstName)}, gracias` : "Gracias"} por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:</p>
+      <p>${firstName ? `Hola ${esc(firstName)}, ${esc(intro)}` : esc(intro.charAt(0).toUpperCase() + intro.slice(1))}</p>
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="panel" style="margin:20px 0;background:#FDF3EE;border:1px solid #F3C9B8;border-radius:14px;">
         <tr>
           <td style="padding:16px 18px;">
@@ -352,8 +359,8 @@ export function ticketPurchasedEmail(opts: {
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 0 0;">
         ${summaryRows}
         <tr>
-          <td class="ink" style="padding:12px 0 0 0;font-weight:600;color:#1A1612;">Total pagado</td>
-          <td style="padding:12px 0 0 0;text-align:right;${mono}font-weight:600;font-size:16px;color:#E8542A;">${esc(formatMoney(opts.totalCents, currency))}</td>
+          <td class="ink" style="padding:12px 0 0 0;font-weight:600;color:#1A1612;">${totalLabel}</td>
+          <td style="padding:12px 0 0 0;text-align:right;${mono}font-weight:600;font-size:16px;color:#E8542A;">${esc(money(opts.totalCents))}</td>
         </tr>
       </table>
       <p class="muted" style="margin:16px 0 0 0;font-size:13px;color:#5C544A;">Referencia del pedido: <span style="${mono}letter-spacing:0.06em;">${esc(ref)}</span></p>
@@ -374,7 +381,7 @@ export function ticketPurchasedEmail(opts: {
   const text = [
     firstName ? `Hola ${firstName},` : "Hola,",
     "",
-    `Gracias por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`,
+    intro.charAt(0).toUpperCase() + intro.slice(1),
     "",
     ...[title, when, placeLine, addressLine].filter(Boolean),
     "",
@@ -382,7 +389,7 @@ export function ticketPurchasedEmail(opts: {
     "",
     showQrText,
     "",
-    `Total pagado: ${formatMoney(opts.totalCents, currency)}`,
+    `${totalLabel}: ${money(opts.totalCents)}`,
     `Referencia del pedido: ${ref}`,
     "",
     "Cada QR es personal y solo se valida una vez: no reenvíes este correo.",

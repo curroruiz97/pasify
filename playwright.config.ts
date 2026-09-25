@@ -86,6 +86,8 @@ export default defineConfig({
     "**/door-pin.spec.ts",
     "**/cuentas.spec.ts",
     "**/client-shell.spec.ts",
+    "**/checkout-back.spec.ts",
+    "**/transferencia.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },

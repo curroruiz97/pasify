@@ -16,7 +16,14 @@ import { requireServiceRole, safeErrorResponse } from "../_shared/internal-auth.
 import { APP_URL } from "../_shared/email-templates.ts";
 
 /** Tipos que ya tienen un email propio y más completo. */
-const KINDS_WITH_OWN_EMAIL = new Set(["ticket_paid"]);
+// Avisos cuyo email ya lo envía su propio flujo (order-paid, refund.ts,
+// stripe-webhook): aquí solo van a la app, sin un segundo email genérico.
+const KINDS_WITH_OWN_EMAIL = new Set([
+  "ticket_paid",
+  "refund_decided",
+  "event_cancelled_refund",
+  "payout_arrived",
+]);
 
 interface NotifRow {
   id: string;

@@ -166,6 +166,7 @@ const LegacyPartnerRedirect = () => {
  *   /e/<id>       → /e/<id>        (página del evento)
  *   /p/<id>       → /p/<id>        (ficha del local)
  *   /entrada/<id> → /entrada/<id>  (entrada pública; solo viaja su `?k=`)
+ *   /transferencia → /transferencia (aceptar una entrada; solo viaja `?token=`)
  *   cualquier otra → /
  *
  * Nunca lleva tokens de sesión: antes cualquier URL con access_token y
@@ -190,6 +191,11 @@ function rutaDeEnlace(url: string): string {
     query = u.search.replace(/^\?/, "");
   }
   ruta = ruta.replace(/^\/+/, "/").replace(/\/+$/, "");
+  // Aceptar una entrada transferida: solo viaja su `?token=`.
+  if (ruta === "/transferencia") {
+    const token = new URLSearchParams(query).get("token");
+    return token ? `/transferencia?token=${encodeURIComponent(token)}` : "/";
+  }
   const m = ruta.match(/^\/(e|p|entrada)\/([^/]+)$/);
   if (!m) return "/";
   const [, tipo, idCodificado] = m;

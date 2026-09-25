@@ -689,8 +689,9 @@ test.describe("web", () => {
       await main.getByRole("button", { name: /Tu ciudad/ }).click();
       const selector = page.getByRole("dialog");
       await expect(selector.getByRole("heading", { name: "Elige tu ciudad" })).toBeVisible();
-      // Solo España: ni banderas ni países.
-      await expect(selector.getByText(/Francia|France|Italia|Portugal/)).toHaveCount(0);
+      // Solo España: ni banderas ni países. Con límites de palabra: «Portugalete»
+      // (Bizkaia) es un municipio español y está en la lista.
+      await expect(selector.getByText(/\b(Francia|France|Italia|Portugal)\b/)).toHaveCount(0);
       await selector.getByRole("button", { name: /Toda España/ }).click();
       await expect(tarjetaLocal("Club Mar E2E")).toBeVisible();
       await expect.poll(() => estado.cambiosPerfil.some((c) => "city" in c && c.city === null)).toBe(true);

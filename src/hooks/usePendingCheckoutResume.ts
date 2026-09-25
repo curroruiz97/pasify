@@ -45,15 +45,15 @@ import { toast } from "sonner";
  * desde Stripe se encontraba "agotado" (o el maximo por persona gastado) por
  * su propia reserva. `cancelCheckoutOrder` llama a `cancel-checkout` con el
  * JWT del comprador y libera las plazas en el acto. La usan:
- *   - la app nativa, al volver a primer plano con el pedido aun pendiente
- *     (aqui abajo);
  *   - /ticket/gracias, el cancel_url de la app, si Safari tiene la sesion;
  *   - en la web, la pagina de la que salio la compra (useTicketCheckout):
  *     el cancel_url de Stripe o el "atras" del navegador vuelven a ella, y la
  *     marca de sessionStorage (`rememberWebCheckout`) dice que pedido era.
  * Si el pago ya estaba hecho, el servidor responde `already_paid` y se trata
  * como una compra confirmada. Si la llamada falla, en silencio: la reserva
- * caduca sola como antes.
+ * caduca sola como antes. En la app nativa NO se anula al volver a primer
+ * plano (el pago puede seguir en curso en el navegador del sistema): si el
+ * comprador reintenta, stripe-create-checkout resuelve antes sus pendientes.
  */
 
 const KEY = "pasify.pending_checkout";
@@ -443,9 +443,9 @@ export function useCheckoutConfirmation(sessionId: string | null, orderId: strin
  * /ticket/success (pagado) o en la pagina de la compra (useTicketCheckout,
  * que anula lo abandonado).
  *
- * Al volver a la app: pagado → aviso y cartera; caducado → aviso; aun
- * pendiente → el comprador ha vuelto sin pagar y se anula el pedido
- * (`cancel-checkout`) para liberar sus plazas.
+ * Al volver a la app: pagado → aviso y cartera; caducado → aviso; aún
+ * pendiente → nada (el pago puede seguir en curso en el navegador; ver la
+ * rama 'pending' de abajo).
  */
 export function usePendingCheckoutResume() {
   const comprobando = useRef(false);
@@ -517,33 +517,15 @@ export function usePendingCheckoutResume() {
           return;
         }
 
-        // 'pending': ha vuelto a la app sin pagar (cancelado en Stripe o
-        // abandonado). Se anula ya para liberar sus plazas: antes quedaban
-        // retenidas ~47 min y el propio comprador se encontraba "agotado" al
-        // reintentar. Si en realidad ya había pagado, el servidor responde
-        // already_paid. Sin sesión no se puede anular: caduca sola.
-        if (!session || !pending.orderId) return;
-        const cancel = await cancelCheckoutOrder(pending.orderId);
-        if (!cancel.ok) {
-          // Sin red o fallo del servidor: se reintenta en el próximo resume.
-          if (!cancelIsRetryable(cancel)) await capacitorStorage.removeItem(KEY);
-          console.warn("[pending-checkout] no se pudo anular", cancel);
-          return;
-        }
-        await capacitorStorage.removeItem(KEY);
-        if (cancel.status === "already_paid") {
-          // Que el pedido quede pagado y con sus entradas aunque el webhook no
-          // haya llegado (misma RPC idempotente que el webhook).
-          await confirmCheckoutSession(pending.sessionId, pending.orderId).catch(() => undefined);
-          avisarPagada(true);
-          return;
-        }
-        if (cancel.status === "cancelled") {
-          toast("Pago cancelado", {
-            description: "No se ha cobrado nada. Puedes volver a intentarlo cuando quieras.",
-          });
-        }
-        // not_pending: ya estaba caducado o anulado; nada que contar.
+        // 'pending': aún sin pagar. NO se anula al volver a la app: el pago va
+        // en el navegador del sistema y el comprador puede volver a Pasify a
+        // mitad (esperando la verificación del banco); anularlo caducaría la
+        // sesión de Stripe con el pago en curso. Se mantiene la marca y se
+        // vuelve a mirar en el próximo regreso. Sus plazas no bloquean a
+        // nadie: si reintenta la compra, stripe-create-checkout resuelve antes
+        // sus pedidos pendientes, y la conciliación del servidor libera los
+        // abandonados. La anulación explícita la hace el cancel_url de Stripe
+        // (/ticket/gracias, cancelCheckoutOrder).
       } catch (err) {
         // Silencioso a proposito: esto corre en segundo plano cada vez que la
         // app vuelve a primer plano. Un toast rojo aqui seria ruido para el
