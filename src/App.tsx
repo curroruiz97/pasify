@@ -38,6 +38,7 @@ const PartnerSuccess = lazy(() => import("./pages/PartnerSuccess"));
 const TicketSuccess = lazy(() => import("./pages/TicketSuccess"));
 const TicketReturn = lazy(() => import("./pages/TicketReturn"));
 const PublicTicket = lazy(() => import("./pages/PublicTicket"));
+const AcceptTransfer = lazy(() => import("./pages/AcceptTransfer"));
 const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
@@ -487,6 +488,11 @@ const App = () => {
               {/* Entrada pública (enlace "Ver entrada" del email). Sin sesión:
                   la llave es el token `?k=`. Ver PublicTicket.tsx. */}
               <Route path="/entrada/:ticketId" element={<PublicTicket />} />
+
+              {/* Aceptar una entrada enviada (enlace del email de la
+                  transferencia). Pública: sin sesión manda al login con
+                  `next`. Ver AcceptTransfer.tsx. */}
+              <Route path="/transferencia" element={<AcceptTransfer />} />
 
               <Route path="/soporte" element={<Soporte />} />
               <Route path="/privacidad" element={<Privacidad />} />

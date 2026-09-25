@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Minus, Plus, ShieldCheck, Ticket as TicketIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Gift,
+  Loader2,
+  Minus,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  Ticket as TicketIcon,
+} from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
@@ -7,7 +16,10 @@ import {
   formatEventDateTime,
   formatEventTime,
   formatPriceCents,
+  isFreeTier,
   tierAvailability,
+  tierRefundLabel,
+  tierTransferLabel,
   type TierAvailability,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
@@ -16,11 +28,18 @@ import {
  * Pasify · selector de entradas.
  *
  * Bottom sheet que abre `useTicketCheckout` antes de mandar al usuario a
- * Stripe: lista los tipos activos del evento (nombre, descripción, precio y
- * estado de venta), deja elegir cantidad dentro de los límites del tipo y
- * enseña el total que se va a cobrar. Se abre SIEMPRE, aunque solo haya un
- * tipo, para que el usuario confirme precio y cantidad antes de pagar: el
- * precio anunciado en la tarjeta es un "Desde".
+ * Stripe: lista los tipos activos del evento (nombre, descripción, precio,
+ * estado de venta y condiciones de devolución y transferencia), deja elegir
+ * cantidad dentro de los límites del tipo y enseña el total que se va a
+ * cobrar. Se abre SIEMPRE, aunque solo haya un tipo, para que el usuario
+ * confirme precio, cantidad y condiciones antes de pagar: el precio
+ * anunciado en la tarjeta es un "Desde".
+ *
+ * Disponibilidad: la del servidor (`event_availability`, con las reservas en
+ * curso) si se sabe. Nunca se enseñan cifras: «Últimas entradas» o «Agotado».
+ *
+ * Tipos a 0 €: «Conseguir gratis», sin pasar por Stripe (el servidor emite
+ * las entradas en el acto).
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -53,10 +72,31 @@ const availabilityLabel = (a: TierAvailability): string | null => {
         .join(", ");
       return when ? `Aún no a la venta · desde ${when}` : "Aún no a la venta";
     }
+    case "available":
+      return a.lowStock ? "Últimas entradas" : null;
     default:
       return null;
   }
 };
+
+/**
+ * Condiciones del tipo antes de pagar: devolución y transferencia. En un
+ * tipo gratis no hay nada que devolver: solo la transferencia.
+ */
+export const TierConditions = ({ tier, className }: { tier: TierOption; className?: string }) => (
+  <span className={cn("flex flex-wrap gap-x-3 gap-y-1 text-[11px] leading-snug", className)}>
+    {!isFreeTier(tier) && (
+      <span className="inline-flex items-center gap-1">
+        <RotateCcw aria-hidden="true" className="h-3 w-3 shrink-0" />
+        {tierRefundLabel(tier.refundable_until_hours_before)}
+      </span>
+    )}
+    <span className="inline-flex items-center gap-1">
+      <ArrowLeftRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+      {tierTransferLabel(tier.transfer_allowed)}
+    </span>
+  </span>
+);
 
 export const TierPickerSheet = ({
   open,
@@ -108,14 +148,15 @@ export const TierPickerSheet = ({
   const effectiveQty = maxQty > 0 ? Math.min(Math.max(1, qty), maxQty) : 0;
   const currency = selected?.tier.currency ?? tiers[0]?.currency ?? "EUR";
   const total = selected ? selected.tier.price_cents * effectiveQty : 0;
+  const free = !!selected && isFreeTier(selected.tier);
   const canConfirm = !!selected && maxQty > 0 && !submitting && !refreshing;
 
+  // Nunca la cifra de lo que queda: si lo que limita es el stock (o quedan
+  // pocas), «Últimas entradas»; si no, el máximo por persona o por compra.
   const qtyHint = (() => {
     if (!selected || !selectedAvailability) return null;
-    const { remaining } = selectedAvailability;
-    if (remaining != null && remaining <= maxQty) {
-      return remaining === 1 ? "Queda 1 entrada" : `Quedan ${remaining}`;
-    }
+    const { remaining, lowStock } = selectedAvailability;
+    if (lowStock || (remaining != null && remaining <= maxQty)) return "Últimas entradas";
     if (selected.tier.per_user_max === maxQty) return `Máx. ${maxQty} por persona`;
     return `Máx. ${maxQty} por compra`;
   })();
@@ -163,6 +204,7 @@ export const TierPickerSheet = ({
             const available = availability.kind === "available";
             const isSelected = available && tier.id === selectedId;
             const statusLabel = availabilityLabel(availability);
+            const lowStock = availability.kind === "available" && availability.lowStock;
             return (
               <button
                 key={tier.id}
@@ -207,12 +249,18 @@ export const TierPickerSheet = ({
                       )}
                       {statusLabel && (
                         <span
-                          className="mt-2 inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground"
+                          className={cn(
+                            "mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                            lowStock
+                              ? "border-orange-500/50 text-orange-500"
+                              : "border-border text-muted-foreground"
+                          )}
                           style={{ ...mono, letterSpacing: "0.14em" }}
                         >
                           {statusLabel}
                         </span>
                       )}
+                      <TierConditions tier={tier} className="mt-2 text-muted-foreground" />
                     </div>
                   </div>
                   <div
@@ -222,9 +270,7 @@ export const TierPickerSheet = ({
                     )}
                     style={mono}
                   >
-                    {tier.price_cents <= 0
-                      ? "Gratis"
-                      : formatPriceCents(tier.price_cents, tier.currency)}
+                    {isFreeTier(tier) ? "Gratis" : formatPriceCents(tier.price_cents, tier.currency)}
                   </div>
                 </div>
               </button>
@@ -298,7 +344,7 @@ export const TierPickerSheet = ({
               className="text-2xl font-bold leading-none tracking-tight text-foreground"
               style={mono}
             >
-              {formatPriceCents(total, currency)}
+              {free ? "Gratis" : formatPriceCents(total, currency)}
             </div>
           </div>
 
@@ -323,7 +369,7 @@ export const TierPickerSheet = ({
             {submitting ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Preparando el pago…
+                {free ? "Reservando tus entradas…" : "Preparando el pago…"}
               </>
             ) : refreshing ? (
               <>
@@ -332,6 +378,11 @@ export const TierPickerSheet = ({
               </>
             ) : !firstAvailableId ? (
               "No hay entradas disponibles"
+            ) : free ? (
+              <>
+                <Gift className="h-5 w-5" />
+                Conseguir gratis
+              </>
             ) : (
               <>
                 <TicketIcon className="h-5 w-5" />
@@ -348,7 +399,9 @@ export const TierPickerSheet = ({
 
           <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] leading-snug text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-            Pago seguro con Stripe. Tus entradas con código QR aparecerán en Mis entradas.
+            {free
+              ? "Sin pago. Tus entradas con código QR aparecerán en Mis entradas."
+              : "Pago seguro con Stripe. Tus entradas con código QR aparecerán en Mis entradas."}
           </p>
         </div>
       </SheetContent>

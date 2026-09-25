@@ -94,3 +94,12 @@ export function loginPathWithNext(next: string = currentAppPath()): string {
   const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/calendar";
   return `/login?next=${encodeURIComponent(safe)}`;
 }
+
+// ---------------------------------------------------------------- transferencias
+
+/**
+ * Ruta de la app para aceptar una entrada enviada (página AcceptTransfer).
+ * El email de la transferencia enlaza a `${WEB_BASE}/#/transferencia?token=…`.
+ */
+export const transferPath = (token: string): string =>
+  `/transferencia?token=${encodeURIComponent(token)}`;

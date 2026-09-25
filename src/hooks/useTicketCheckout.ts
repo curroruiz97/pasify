@@ -1,38 +1,60 @@
 import { createElement, useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { buildExternalReturnUrl } from "@/lib/redirect-url";
 import { loginPathWithNext } from "@/lib/eventLinks";
-import { recordPendingCheckout } from "@/hooks/usePendingCheckoutResume";
+import {
+  cancelCheckoutOrder,
+  cancelIsRetryable,
+  forgetWebCheckout,
+  readWebCheckout,
+  recordPendingCheckout,
+  rememberWebCheckout,
+} from "@/hooks/usePendingCheckoutResume";
 import { TierPickerSheet } from "@/components/tickets/TierPickerSheet";
+import { fetchEventTiers } from "@/components/tickets/tierData";
 import {
   MAX_TICKETS_PER_ORDER,
+  isFreeTier,
   parseEdgeError,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
 
 /**
  * useTicketCheckout — hook único de compra de entradas, compartido por
- * `Calendar.tsx`, `PublicPartnerPage.tsx` y cualquier superficie con un botón
- * "Comprar entradas".
+ * `Calendar.tsx`, `PublicPartnerPage.tsx`, `PublicEvent.tsx` y cualquier
+ * superficie con un botón "Comprar entradas".
  *
  * Flujo:
  *   1. Evento demo (`id` empieza por `demo-`) → toast informativo y salir.
  *   2. Sin sesión → `/login?next=<ruta actual>` (loginPathWithNext): desde
  *      el login se puede ir a crear cuenta sin perder la vuelta al evento.
- *   3. Carga los tipos de entrada ACTIVOS del evento y abre el selector
+ *   3. Carga los tipos de entrada ACTIVOS del evento con su disponibilidad
+ *      real (`event_availability`, ver tierData.ts) y abre el selector
  *      (`TierPickerSheet`) SIEMPRE, aunque solo haya un tipo: el precio de la
- *      tarjeta es un "Desde" y el usuario tiene que confirmar tipo, cantidad
- *      y total antes de pagar. Sin tipos activos → "Venta no disponible".
+ *      tarjeta es un "Desde" y el usuario tiene que confirmar tipo, cantidad,
+ *      total y condiciones antes de pagar. Sin tipos activos → "Venta no
+ *      disponible".
  *   4. Al confirmar: POST a `stripe-create-checkout` con `tier_id` y `qty`.
  *      Los rechazos del servidor (agotado, fuera de ventana, límite por
  *      persona…) se traducen a toasts en español y, si procede, se recarga la
  *      disponibilidad en el propio selector.
- *   5. Redirige a Stripe Checkout. En nativo Capacitor lo abre en el
+ *   5. Tipo a 0 €: el servidor responde `{ free: true, order_id }` con el
+ *      pedido ya pagado y sus entradas emitidas. Sin Stripe: a
+ *      `/ticket/success?order_id=…&free=1` (también en la app nativa).
+ *   6. Si no, redirige a Stripe Checkout. En nativo Capacitor lo abre en el
  *      navegador del sistema y la app se queda aquí; antes guardamos la
- *      sesión (`recordPendingCheckout`) para confirmarla al volver.
+ *      sesión (`recordPendingCheckout`) para confirmarla o anularla al volver.
+ *      En web se apunta el pedido en esta pestaña (`rememberWebCheckout`).
+ *
+ * Volver sin pagar (web, B1-04): el cancel_url de Stripe es la página de la
+ * que salió la compra (con `?order_id=`) y el "atrás" del navegador vuelve a
+ * ella. Al montarse (o al restaurarse de la bfcache) el hook anula ese pedido
+ * con `cancel-checkout` para liberar las plazas en el acto; si ya estaba
+ * pagado (`already_paid`), lleva a la confirmación. En silencio si falla: la
+ * reserva caduca sola, como antes.
  *
  * Devuelve `{ checkout, pendingId, checkoutSheet }`:
  *   - `pendingId`: evento con una operación en curso (cargando tipos o
@@ -54,44 +76,37 @@ export interface TicketCheckoutInput {
   qty?: number;
 }
 
-const TIER_COLUMNS =
-  "id, name, description, price_cents, currency, capacity, sold, per_user_max, sale_starts_at, sale_ends_at, sort_order";
+export interface UseTicketCheckoutOptions {
+  /**
+   * La venta de un evento ha cambiado por algo que la página no ve: el
+   * servidor dice que ya no se vende (retirado, local suspendido…) o se ha
+   * liberado una reserva al volver sin pagar. La página puede recargarlo.
+   * `eventId` es null si no se sabe de qué evento era.
+   */
+  onEventChanged?: (eventId: string | null) => void;
+}
 
 const NO_TIERS: TierOption[] = [];
 
 /** Si el navegador no ha salido hacia Stripe en este tiempo, desbloqueamos. */
 const REDIRECT_WATCHDOG_MS = 15_000;
 
-async function fetchActiveTiers(eventId: string): Promise<TierOption[]> {
-  const { data, error } = await supabase
-    .from("ticket_tiers")
-    .select(TIER_COLUMNS)
-    .eq("event_id", eventId)
-    .eq("status", "active")
-    .order("sort_order", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description ?? null,
-    price_cents: t.price_cents ?? 0,
-    currency: t.currency || "EUR",
-    capacity: t.capacity ?? null,
-    sold: t.sold ?? 0,
-    per_user_max: t.per_user_max ?? MAX_TICKETS_PER_ORDER,
-    sale_starts_at: t.sale_starts_at ?? null,
-    sale_ends_at: t.sale_ends_at ?? null,
-    sort_order: t.sort_order ?? 0,
-  }));
-}
-
-/** Ruta actual del HashRouter sin query: la edge function añade
- *  `?order_id=` al `cancel_url` y una query previa lo rompería. */
+/** Ruta actual del HashRouter sin query: la de vuelta si se cancela el pago. */
 function currentRoutePath(): string {
   const hash = window.location.hash;
   if (!hash.startsWith("#/")) return "/calendar";
   return hash.slice(1).split("?")[0] || "/calendar";
 }
+
+/** Confirmación de un pedido que ya estaba pagado al volver atrás. */
+function successPath(orderId: string, sessionId: string | null): string {
+  const params = new URLSearchParams({ order_id: orderId });
+  if (sessionId) params.set("session_id", sessionId);
+  return `/ticket/success?${params.toString()}`;
+}
+
+/** Pedidos ya atendidos en esta carga de la página: cada vuelta se trata una vez. */
+const releasedOrders = new Set<string>();
 
 // ---------------------------------------------------------------- errores
 
@@ -102,6 +117,8 @@ type CheckoutErrorCopy = {
   after?: AfterError;
   /** Nuestro texto siempre, aunque el servidor mande el suyo. */
   fixed?: boolean;
+  /** El evento ya no se vende: la página que lo enseña puede recargarlo. */
+  eventGone?: boolean;
 };
 
 const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
@@ -109,21 +126,25 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
     title: "Evento no disponible",
     description: "Este evento ya no está a la venta.",
     after: "close",
+    eventGone: true,
   },
   event_not_published: {
     title: "Evento no disponible",
     description: "Este evento ya no está a la venta.",
     after: "close",
+    eventGone: true,
   },
   event_not_found: {
     title: "Evento no disponible",
     description: "No encontramos este evento. Puede que se haya retirado.",
     after: "close",
+    eventGone: true,
   },
   event_sold_out: {
     title: "Evento agotado",
     description: "Se han vendido todas las entradas de este evento.",
     after: "close",
+    eventGone: true,
   },
   tier_not_available: {
     title: "Entrada no disponible",
@@ -162,13 +183,13 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
     after: "refresh",
   },
   invalid_payload: {
-    title: "No se pudo iniciar el pago",
+    title: "No se pudo completar la compra",
     description: "Revisa tu selección e inténtalo de nuevo.",
     after: "refresh",
   },
   buyer_email_required: {
     title: "Falta tu email",
-    description: "Añade un email a tu cuenta para poder comprar entradas.",
+    description: "Añade un email a tu cuenta para poder conseguir entradas.",
     after: "close",
   },
   amount_below_minimum: {
@@ -186,13 +207,13 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
   },
   unauthorized: {
     title: "Sesión caducada",
-    description: "Vuelve a iniciar sesión para comprar tus entradas.",
+    description: "Vuelve a iniciar sesión para conseguir tus entradas.",
     after: "close",
   },
   // 401 de stripe-create-checkout: la sesión caducó entre abrir el selector y pagar.
   auth_required: {
     title: "Sesión caducada",
-    description: "Vuelve a iniciar sesión para comprar tus entradas.",
+    description: "Vuelve a iniciar sesión para conseguir tus entradas.",
     after: "close",
     fixed: true,
   },
@@ -210,7 +231,8 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
   },
 };
 
-function describeCheckoutError(httpStatus: number, body: unknown): CheckoutErrorCopy {
+/** `free`: tipo a 0 € (los textos genéricos hablan de reserva, no de pago). */
+function describeCheckoutError(httpStatus: number, body: unknown, free: boolean): CheckoutErrorCopy {
   const { codes, message } = parseEdgeError(body);
   const knownCode = codes.find((c) => CHECKOUT_ERRORS[c]);
   const known = knownCode ? CHECKOUT_ERRORS[knownCode] : undefined;
@@ -229,23 +251,42 @@ function describeCheckoutError(httpStatus: number, body: unknown): CheckoutError
   }
   if (httpStatus === 404) {
     // 404 sin código ni texto: la función no está desplegada.
-    return {
-      title: "Pago no disponible",
-      description: "El sistema de pago no está disponible ahora mismo. Inténtalo en unos minutos.",
-    };
+    return free
+      ? {
+          title: "Reserva no disponible",
+          description: "No podemos reservar entradas ahora mismo. Inténtalo en unos minutos.",
+        }
+      : {
+          title: "Pago no disponible",
+          description: "El sistema de pago no está disponible ahora mismo. Inténtalo en unos minutos.",
+        };
   }
-  return {
-    title: "No se pudo iniciar el pago",
-    description: "Ha fallado el servidor de pagos. No se te ha cobrado nada: inténtalo de nuevo en unos minutos.",
-  };
+  return free
+    ? {
+        title: "No se pudo completar la reserva",
+        description: "Ha fallado el servidor. Inténtalo de nuevo en unos minutos.",
+      }
+    : {
+        title: "No se pudo iniciar el pago",
+        description: "Ha fallado el servidor de pagos. No se te ha cobrado nada: inténtalo de nuevo en unos minutos.",
+      };
 }
 
 // ---------------------------------------------------------------- hook
 
 type PickerState = { event: TicketCheckoutInput; tiers: TierOption[] };
 
-export const useTicketCheckout = () => {
+/** Respuesta 200 de `stripe-create-checkout`: pago en Stripe o reserva gratis. */
+type CheckoutResponse = {
+  url?: string;
+  order_id?: string;
+  session_id?: string;
+  free?: boolean;
+};
+
+export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [picker, setPicker] = useState<PickerState | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -254,6 +295,13 @@ export const useTicketCheckout = () => {
   // Guard de reentrada síncrono: el estado de React llega tarde para un doble toque.
   const busyRef = useRef(false);
   const watchdogRef = useRef<number | undefined>(undefined);
+  // Referencias estables para los listeners (pageshow) y el efecto de montaje.
+  const navigateRef = useRef(navigate);
+  const onEventChangedRef = useRef(options.onEventChanged);
+  useEffect(() => {
+    navigateRef.current = navigate;
+    onEventChangedRef.current = options.onEventChanged;
+  });
 
   const unlock = useCallback(() => {
     busyRef.current = false;
@@ -265,18 +313,77 @@ export const useTicketCheckout = () => {
     }
   }, []);
 
+  /**
+   * El comprador ha vuelto de Stripe sin pagar (web): se anula el pedido para
+   * liberar sus plazas. `orderIdFromUrl` es el `?order_id=` del cancel_url; sin
+   * él (botón atrás), el pedido apuntado en esta pestaña.
+   */
+  const releaseAbandonedCheckout = useCallback(async (orderIdFromUrl: string | null) => {
+    // En la app la vuelta es otra (usePendingCheckoutResume).
+    if (Capacitor.isNativePlatform()) return;
+    const marker = readWebCheckout();
+    const orderId = orderIdFromUrl ?? marker?.orderId ?? null;
+    if (!orderId || releasedOrders.has(orderId)) return;
+    releasedOrders.add(orderId);
+    const sameOrder = !!marker && marker.orderId === orderId;
+
+    const res = await cancelCheckoutOrder(orderId);
+    if (!res.ok) {
+      console.warn("[useTicketCheckout] no se pudo anular el pedido abandonado", res);
+      // Transitorio: la marca se queda para la próxima vuelta a la página.
+      if (cancelIsRetryable(res)) releasedOrders.delete(orderId);
+      else forgetWebCheckout(orderId);
+      return;
+    }
+    forgetWebCheckout(orderId);
+    if (res.status === "already_paid") {
+      // Pagado de verdad: a la confirmación, con la sesión de Stripe si la
+      // tenemos (la página la confirma y emite las entradas si hace falta).
+      navigateRef.current(successPath(orderId, sameOrder ? marker.sessionId : null));
+      return;
+    }
+    if (res.status === "cancelled") {
+      toast("Pago cancelado", {
+        description: "No se ha cobrado nada. Puedes volver a intentarlo cuando quieras.",
+      });
+      onEventChangedRef.current?.(sameOrder ? marker.eventId : null);
+    }
+    // not_pending: ya había caducado o se había anulado; nada que contar.
+  }, []);
+
+  // Al montar: vuelta por el cancel_url (`?order_id=`) o por el botón atrás
+  // con recarga (la marca de esta pestaña). El parámetro sale de la URL:
+  // recargar o compartir la página no debe repetirlo.
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    const params = new URLSearchParams(location.search);
+    const fromUrl = params.get("order_id");
+    if (fromUrl) {
+      params.delete("order_id");
+      const search = params.toString();
+      navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
+    }
+    void releaseAbandonedCheckout(fromUrl);
+    // Solo al montar: Stripe vuelve siempre con una carga nueva de la página;
+    // la restauración desde la bfcache la atiende el `pageshow` de abajo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Volver con "atrás" desde Stripe puede restaurar la página desde la
-  // bfcache con el botón aún en "Preparando el pago…". Lo desbloqueamos.
+  // bfcache con el botón aún en "Preparando el pago…". Lo desbloqueamos y
+  // anulamos el pedido que se quedó a medias.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) unlock();
+      if (!e.persisted) return;
+      unlock();
+      void releaseAbandonedCheckout(null);
     };
     window.addEventListener("pageshow", onPageShow);
     return () => {
       window.removeEventListener("pageshow", onPageShow);
       if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
     };
-  }, [unlock]);
+  }, [unlock, releaseAbandonedCheckout]);
 
   // Sin sesión: al login, que vuelve aquí al terminar (también si desde allí
   // crea cuenta o entra con Google/Apple).
@@ -310,8 +417,8 @@ export const useTicketCheckout = () => {
           return;
         }
 
-        // 2) Tipos de entrada activos del evento
-        const tiers = await fetchActiveTiers(input.id);
+        // 2) Tipos de entrada activos del evento, con la disponibilidad real
+        const tiers = await fetchEventTiers(input.id);
         if (tiers.length === 0) {
           toast.error("Venta no disponible", {
             description:
@@ -320,7 +427,7 @@ export const useTicketCheckout = () => {
           return;
         }
 
-        // 3) Selector: el usuario confirma tipo, cantidad y total.
+        // 3) Selector: el usuario confirma tipo, cantidad, total y condiciones.
         setPicker({ event: input, tiers });
         setPickerOpen(true);
       } catch (e) {
@@ -339,9 +446,13 @@ export const useTicketCheckout = () => {
   const refreshTiers = useCallback(async (eventId: string) => {
     setRefreshing(true);
     try {
-      const tiers = await fetchActiveTiers(eventId);
+      const tiers = await fetchEventTiers(eventId);
       setPicker((prev) => (prev && prev.event.id === eventId ? { ...prev, tiers } : prev));
-      if (tiers.length === 0) setPickerOpen(false);
+      if (tiers.length === 0) {
+        // Ya no queda nada a la venta (evento retirado, local suspendido…).
+        setPickerOpen(false);
+        onEventChangedRef.current?.(eventId);
+      }
     } catch (e) {
       console.warn("[useTicketCheckout] no se pudo recargar la disponibilidad", e);
     } finally {
@@ -353,6 +464,7 @@ export const useTicketCheckout = () => {
     async (tier: TierOption, qty: number) => {
       if (!picker || busyRef.current) return;
       const eventId = picker.event.id;
+      const free = isFreeTier(tier);
 
       busyRef.current = true;
       setSubmitting(true);
@@ -407,7 +519,8 @@ export const useTicketCheckout = () => {
               // En nativo el pago ocurre en Safari/Chrome, sin sesión: vuelve a
               // /ticket/gracias, que confirma el pedido sin sesión y manda de
               // vuelta a la app (también si se cancela: allí llega solo con
-              // order_id). En web, /ticket/success enseña ya las entradas.
+              // order_id). En web, /ticket/success enseña ya las entradas, y
+              // si se cancela se vuelve a esta página, que anula el pedido.
               success_url: buildExternalReturnUrl(native ? "/ticket/gracias" : "/ticket/success"),
               cancel_url: buildExternalReturnUrl(native ? "/ticket/gracias" : currentRoutePath()),
             }),
@@ -424,19 +537,31 @@ export const useTicketCheckout = () => {
 
         if (!resp.ok) {
           console.warn("[useTicketCheckout] stripe-create-checkout rechazó la compra", resp.status, raw);
-          const copy = describeCheckoutError(resp.status, body);
+          const copy = describeCheckoutError(resp.status, body, free);
           toast.error(copy.title, { description: copy.description });
           if (copy.after === "close") setPickerOpen(false);
           else if (copy.after === "refresh") void refreshTiers(eventId);
+          if (copy.eventGone) onEventChangedRef.current?.(eventId);
           return;
         }
 
-        const data = (body ?? {}) as { url?: string; order_id?: string; session_id?: string };
+        const data = (body ?? {}) as CheckoutResponse;
+
+        // Tipo a 0 €: pedido ya pagado y entradas emitidas, sin Stripe.
+        if (data.free === true) {
+          if (typeof data.order_id !== "string" || !data.order_id) {
+            throw new Error("Respuesta inesperada del servidor (reserva sin pedido).");
+          }
+          setPickerOpen(false);
+          navigate(`/ticket/success?order_id=${encodeURIComponent(data.order_id)}&free=1`);
+          return;
+        }
+
         if (!data.url) throw new Error("Respuesta inesperada del servidor de pagos.");
 
         if (native) {
-          // Dejamos apuntada la sesión para confirmar la compra al volver a la
-          // app aunque el webhook de Stripe no llegue (usePendingCheckoutResume).
+          // Dejamos apuntada la sesión para confirmar la compra (o anularla si
+          // vuelve sin pagar) al volver a la app (usePendingCheckoutResume).
           if (data.session_id) await recordPendingCheckout(data.session_id, data.order_id);
           // Capacitor abre la URL externa en el navegador del sistema y la
           // WebView se queda en esta pantalla.
@@ -448,14 +573,19 @@ export const useTicketCheckout = () => {
           return;
         }
 
-        // Web: la página se va a Stripe. Dejamos el botón bloqueado para que
-        // un segundo toque no cree otro pedido mientras carga.
+        // Web: la página se va a Stripe. Apuntamos el pedido en esta pestaña
+        // (para anularlo si vuelve con "atrás") y dejamos el botón bloqueado
+        // para que un segundo toque no cree otro pedido mientras carga.
+        if (data.order_id) {
+          releasedOrders.delete(data.order_id);
+          rememberWebCheckout(data.order_id, data.session_id ?? null, eventId);
+        }
         leavingPage = true;
         watchdogRef.current = window.setTimeout(unlock, REDIRECT_WATCHDOG_MS);
         window.location.href = data.url;
       } catch (e) {
         console.error("[useTicketCheckout] checkout failed", e);
-        toast.error("No se pudo iniciar el pago", {
+        toast.error(free ? "No se pudo completar la reserva" : "No se pudo iniciar el pago", {
           description: "Comprueba tu conexión e inténtalo de nuevo.",
         });
       } finally {
@@ -466,7 +596,7 @@ export const useTicketCheckout = () => {
         }
       }
     },
-    [picker, goToLogin, refreshTiers, unlock]
+    [picker, goToLogin, refreshTiers, unlock, navigate]
   );
 
   const handleOpenChange = useCallback(
