@@ -59,6 +59,11 @@ verify_jwt = false
 [functions.process-refund]
 verify_jwt = false
 
+# El local (owner/admin/manager de la organización) o un admin decide una
+# solicitud de reembolso: permisos en el código y en la RPC decide_refund.
+[functions.decide-refund]
+verify_jwt = false
+
 [functions.partner-cancel-event]
 verify_jwt = false
 
