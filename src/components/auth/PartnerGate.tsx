@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { usePartnerSubscription } from "@/hooks/usePartnerSubscription";
 import { signOutLocal } from "@/hooks/useAuth";
 import { withTimeout } from "@/lib/withTimeout";
 import { captureError, getErrorMessage } from "@/lib/sentry";
 import LoaderOne from "@/components/ui/loader-one";
 import AuthErrorScreen from "@/components/auth/AuthErrorScreen";
+import { prepararCuentaDeLocal } from "@/components/auth/alta";
 
 const CLAIM_TIMEOUT_MS = 10_000;
 
@@ -25,8 +25,10 @@ type EstadoReclamo = "pendiente" | "reclamando" | "hecho" | "fallido";
  *   - acceso (active / trial vigente / grant de admin) → children.
  *   - sin organización o sin suscripción activa (incluye past_due, cancelled,
  *     trial caducado… heredados) → llama UNA vez a
- *     `rpc('claim_partner_free_plan')` (crea la org si falta; idempotente) y
- *     continúa. Solo si falla → pantalla de error con "Reintentar".
+ *     `rpc('complete_partner_signup')` (crea la org si falta, con los datos
+ *     del negocio del alta, y el plan; idempotente) y continúa. Es lo que
+ *     termina un alta de local hecha con «Confirm email», que no tuvo sesión
+ *     para crearlos. Solo si falla → pantalla de error con "Reintentar".
  *   - no se pudo comprobar (red, timeout) → "Reintentar". Un fallo de red
  *     NO es "sin plan": nunca dispara el claim.
  *   - NUNCA redirige a /partner/choose-plan ni muestra precios.
@@ -56,19 +58,17 @@ export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
   const reclamarPlanGratuito = useCallback(async () => {
     setReclamo({ estado: "reclamando", error: null });
     try {
-      const { error: rpcError } = await withTimeout(
-        Promise.resolve(supabase.rpc("claim_partner_free_plan")),
-        CLAIM_TIMEOUT_MS,
-        "rpc claim_partner_free_plan",
-      );
+      // Con un servidor anterior a la Ola 3, prepararCuentaDeLocal llama a
+      // claim_partner_free_plan como antes.
+      const rpcError = await withTimeout(prepararCuentaDeLocal(), CLAIM_TIMEOUT_MS, "rpc complete_partner_signup");
       if (rpcError) throw rpcError;
       // La RPC puede haber creado la organización: recargamos tenant +
       // suscripción. Qué se pinta después lo decide el estado del hook.
       await refetch();
       setReclamo({ estado: "hecho", error: null });
     } catch (err) {
-      console.error("[PartnerGate] claim_partner_free_plan:", err);
-      captureError(err, { where: "PartnerGate.claim_partner_free_plan", orgId });
+      console.error("[PartnerGate] complete_partner_signup:", err);
+      captureError(err, { where: "PartnerGate.complete_partner_signup", orgId });
       setReclamo({ estado: "fallido", error: getErrorMessage(err) });
     }
   }, [refetch, orgId]);

@@ -17,7 +17,9 @@ import { anotarCierreForzado, anotarCierreVoluntario } from '@/lib/cache/lifecyc
  *  - Usuarios normales tienen UN SOLO rol (client | partner | admin) enforced
  *    por RLS `user_roles_self_insert` (migración 20260513120000). El backend
  *    impide acumular roles vía RPC `claim_initial_role` que sólo permite
- *    reclamar si el usuario aún no tiene rol.
+ *    reclamar si el usuario aún no tiene rol. Única excepción: una cuenta de
+ *    cliente nueva y sin compras puede pasar a local desde Ajustes
+ *    (`convert_new_client_to_partner`); `refrescarRoles` lo aplica sin recargar.
  *
  *  - El "modo super-admin" es exclusivo de Francisco
  *    (francisco@avenuemedia.io + rol admin). La verificación canónica es
@@ -220,9 +222,14 @@ const rolActivoPara = ({ roles, isSuperAdmin }: RolesResult): string | null => {
   return canPersist && stored && roles.includes(stored) ? stored : roles[0] ?? null;
 };
 
-const fetchRoles = (userId: string): Promise<RolesResult> => {
+/**
+ * Roles de `userId` del servidor (compartiendo la petición en vuelo). Con
+ * `forzar` siempre sale una petición nueva: la que estuviera en vuelo pudo
+ * salir antes de un cambio de rol.
+ */
+const fetchRoles = (userId: string, { forzar = false }: { forzar?: boolean } = {}): Promise<RolesResult> => {
   const existente = rolesEnVuelo.get(userId);
-  if (existente) return existente;
+  if (existente && !forzar) return existente;
 
   const peticion = (async (): Promise<RolesResult> => {
     const [rolesRes, isSuperAdmin] = await Promise.all([
@@ -253,6 +260,33 @@ const fetchRoles = (userId: string): Promise<RolesResult> => {
   peticion.then(limpiar, limpiar);
   return peticion;
 };
+
+/** Aviso a todas las instancias del hook de que los roles de un usuario han cambiado. */
+const EVENTO_ROLES_REFRESCADOS = 'pasify:roles-refrescados';
+
+interface DetalleRolesRefrescados {
+  userId: string;
+  resultado: RolesResult;
+}
+
+/**
+ * Vuelve a pedir los roles al servidor, los guarda en la caché y los aplica
+ * en todas las instancias montadas de useAuth, sin recargar la app. Para
+ * cuando cambian en esta sesión (p. ej. un cliente que pasa a local desde
+ * Ajustes): los roles se cargan una vez por usuario y no se enterarían.
+ * Lanza si no se pueden leer.
+ */
+export async function refrescarRoles(userId: string): Promise<string[]> {
+  const resultado = await fetchRoles(userId, { forzar: true });
+  try {
+    window.dispatchEvent(
+      new CustomEvent<DetalleRolesRefrescados>(EVENTO_ROLES_REFRESCADOS, { detail: { userId, resultado } }),
+    );
+  } catch {
+    /* noop */
+  }
+  return resultado.roles;
+}
 
 // Enlace de recuperación de contraseña procesado por auth-js en ESTA carga
 // (evento PASSWORD_RECOVERY). Se escucha a nivel de módulo porque auth-js lo
@@ -599,6 +633,17 @@ export const useAuth = () => {
     window.addEventListener('pasify:role-changed', onRoleChanged);
     return () => window.removeEventListener('pasify:role-changed', onRoleChanged);
   }, []);
+
+  // refrescarRoles(): roles nuevos del mismo usuario (de cliente a local).
+  useEffect(() => {
+    const onRolesRefrescados = (e: Event) => {
+      const detalle = (e as CustomEvent<DetalleRolesRefrescados>).detail;
+      if (!detalle?.userId || !detalle.resultado || detalle.userId !== userIdRef.current) return;
+      aplicarRoles(detalle.userId, detalle.resultado);
+    };
+    window.addEventListener(EVENTO_ROLES_REFRESCADOS, onRolesRefrescados);
+    return () => window.removeEventListener(EVENTO_ROLES_REFRESCADOS, onRolesRefrescados);
+  }, [aplicarRoles]);
 
   // Derivados. Solo se exponen roles si pertenecen al usuario actual: durante
   // un cambio de cuenta nunca se ven (ni un render) los del anterior.

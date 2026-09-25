@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff, Mail, Lock, CircleAlert } from "lucide-react";
+import { Loader2, Eye, EyeOff, Mail, Lock, CircleAlert, MailWarning } from "lucide-react";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import AppleAuthButton from "@/components/auth/AppleAuthButton";
-import { esCuentaDesactivada, mensajeErrorAuth, SUPPORT_EMAIL } from "@/components/auth/authErrors";
+import { esCuentaDesactivada, esLimiteDePeticiones, mensajeErrorAuth, SUPPORT_EMAIL } from "@/components/auth/authErrors";
+import { ESPERA_REENVIO_S, reenviarEmailDeConfirmacion, useCuentaAtras } from "@/components/auth/confirmacionEmail";
 import { resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
 import { sanitizeNextPath, withNext } from "@/lib/redirect-url";
 
@@ -22,6 +23,63 @@ const AVISOS: Record<string, string> = {
 };
 
 class CuentaDesactivadaError extends Error {}
+
+/** Entrar con un email que aún no se ha confirmado («Confirm email» activado). */
+const esEmailSinConfirmar = (err: unknown): boolean => {
+  const e = (err && typeof err === "object" ? err : {}) as { code?: unknown; message?: unknown };
+  return e.code === "email_not_confirmed" || (typeof e.message === "string" && /email not confirmed/i.test(e.message));
+};
+
+/**
+ * Cuenta creada sin confirmar el email: se dice y se deja pedir otro enlace
+ * (el del alta caduca o se pierde en el spam).
+ */
+const AvisoEmailSinConfirmar = ({ email }: { email: string }) => {
+  const [espera, empezarEspera] = useCuentaAtras(0);
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  const reenviar = async () => {
+    if (enviando || espera > 0) return;
+    setEnviando(true);
+    setAviso(null);
+    try {
+      const { error } = await reenviarEmailDeConfirmacion(email);
+      if (error) throw error;
+      setAviso(`Te hemos enviado otro enlace a ${email}. Ábrelo y vuelve a entrar.`);
+      empezarEspera(ESPERA_REENVIO_S);
+    } catch (err) {
+      console.error("resend(signup):", err);
+      setAviso(mensajeErrorAuth(err));
+      if (esLimiteDePeticiones(err)) empezarEspera(ESPERA_REENVIO_S);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div
+      role="alert"
+      className="mb-5 space-y-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800"
+    >
+      <div className="flex items-start gap-2">
+        <MailWarning className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Todavía no has confirmado tu email. Abre el enlace que te enviamos al registrarte (mira también en spam).
+        </span>
+      </div>
+      {aviso && <p className="pl-6">{aviso}</p>}
+      <button
+        type="button"
+        onClick={() => void reenviar()}
+        disabled={enviando || espera > 0}
+        className="ml-6 font-semibold text-orange-700 underline underline-offset-2 disabled:no-underline disabled:opacity-60"
+      >
+        {enviando ? "Enviando…" : espera > 0 ? `Reenviar el enlace en ${espera} s` : "Reenviar el enlace"}
+      </button>
+    </div>
+  );
+};
 
 /**
  * Adónde ir tras entrar con email. Las cuentas antiguas sin rol lo reclaman
@@ -60,6 +118,8 @@ const Login = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Email de una cuenta que aún no ha confirmado su correo.
+  const [sinConfirmar, setSinConfirmar] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -70,6 +130,7 @@ const Login = () => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
+    setSinConfirmar(null);
 
     try {
       // NON fare mai signOut - signInWithPassword gestisce automaticamente il cambio sessione
@@ -92,6 +153,10 @@ const Login = () => {
           description: `No puede entrar en Pasify. Si crees que es un error, escríbenos a ${SUPPORT_EMAIL}.`,
           variant: "destructive",
         });
+        return;
+      }
+      if (esEmailSinConfirmar(error)) {
+        setSinConfirmar(formData.email.trim());
         return;
       }
       toast({
@@ -147,6 +212,8 @@ const Login = () => {
             <span>{aviso}</span>
           </div>
         )}
+
+        {sinConfirmar && <AvisoEmailSinConfirmar key={sinConfirmar} email={sinConfirmar} />}
 
         {/* Google (web y Android) y Apple (solo iOS): cada botón decide si se pinta. */}
         <GoogleAuthButton label="Continuar con Google" next={nextPath} />
