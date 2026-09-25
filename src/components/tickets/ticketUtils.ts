@@ -4,8 +4,8 @@
  * Funciones puras (sin React) que comparten el selector de entradas
  * (TierPickerSheet), la cartera (ClientDashboard + TicketQRModal), las
  * páginas de vuelta de Stripe (TicketSuccess, TicketReturn), la entrada
- * pública (PublicTicket) y las páginas públicas de venta (PublicEvent,
- * calendario y ficha del local).
+ * pública (PublicTicket), la de aceptar una entrada enviada (AcceptTransfer)
+ * y las páginas públicas de venta (PublicEvent, calendario y ficha del local).
  *
  * Fechas: un evento se muestra SIEMPRE en su hora local (Europe/Madrid por
  * defecto), no en la del dispositivo. Quien abre la entrada desde Londres
@@ -171,6 +171,13 @@ export function eventDayMonth(
 
 // ============================================================ tipos de entrada
 
+/** Disponibilidad real de un tipo según `event_availability` (cuenta las reservas en curso). */
+export interface TierLiveAvailability {
+  /** Plazas libres. null = sin límite. */
+  remaining: number | null;
+  soldOut: boolean;
+}
+
 export interface TierOption {
   id: string;
   name: string;
@@ -183,21 +190,68 @@ export interface TierOption {
   sale_starts_at: string | null;
   sale_ends_at: string | null;
   sort_order: number;
+  /**
+   * Hasta cuántas horas antes del evento se puede pedir la devolución.
+   * null = sin devolución, salvo que se cancele el evento.
+   */
+  refundable_until_hours_before: number | null;
+  /** ¿Se puede enviar a otra persona? */
+  transfer_allowed: boolean;
+  /**
+   * Lo que dice `event_availability`. Sin ella (la RPC ha fallado o no ha
+   * contestado) se estima con capacity − sold, que no cuenta las reservas en
+   * curso: puede decir que quedan cuando el servidor ya no vende.
+   */
+  live?: TierLiveAvailability | null;
 }
 
 export type TierAvailability =
-  | { kind: "available"; maxQty: number; remaining: number | null }
+  | {
+      kind: "available";
+      maxQty: number;
+      /** Solo para limitar la cantidad: en pantalla nunca se enseña la cifra. */
+      remaining: number | null;
+      /** Quedan pocas: «Últimas entradas». */
+      lowStock: boolean;
+    }
   | { kind: "sold_out" }
   | { kind: "not_started"; startsAt: string }
   | { kind: "ended" };
+
+/**
+ * «Últimas entradas» y nunca la cifra exacta: un contador público enseña las
+ * ventas del local y envejece mal. Misma regla que las tarjetas de evento
+ * (EventListCard): queda el 10 % del aforo del tipo o menos, y siempre con 5
+ * o menos (también si el tipo no tiene aforo propio y lo limita el evento).
+ */
+export const LOW_STOCK_RATIO = 0.1;
+export const LOW_STOCK_MIN = 5;
+
+export function isLowStock(remaining: number | null, capacity: number | null): boolean {
+  if (remaining == null || remaining <= 0) return false;
+  const threshold =
+    capacity != null && capacity > 0
+      ? Math.max(LOW_STOCK_MIN, Math.ceil(capacity * LOW_STOCK_RATIO))
+      : LOW_STOCK_MIN;
+  return remaining <= threshold;
+}
+
+/** Plazas libres del tipo: las del servidor si se saben; si no, capacity − sold. */
+function tierRemaining(tier: TierOption): number | null {
+  const live = tier.live;
+  if (live) {
+    if (live.soldOut) return 0;
+    return live.remaining == null ? null : Math.max(0, Math.floor(live.remaining));
+  }
+  return tier.capacity != null ? Math.max(0, tier.capacity - (tier.sold ?? 0)) : null;
+}
 
 /**
  * Misma regla que aplica `stripe-create-checkout` antes de cobrar: aforo del
  * tipo, ventana de venta y máximo por persona (y el tope de 10 por pedido).
  */
 export function tierAvailability(tier: TierOption, now: number = Date.now()): TierAvailability {
-  const remaining =
-    tier.capacity != null ? Math.max(0, tier.capacity - (tier.sold ?? 0)) : null;
+  const remaining = tierRemaining(tier);
   if (remaining === 0) return { kind: "sold_out" };
 
   const startsAt = tier.sale_starts_at ? Date.parse(tier.sale_starts_at) : NaN;
@@ -211,8 +265,31 @@ export function tierAvailability(tier: TierOption, now: number = Date.now()): Ti
     tier.per_user_max && tier.per_user_max > 0 ? tier.per_user_max : MAX_TICKETS_PER_ORDER;
   const maxQty = Math.min(perUser, remaining ?? MAX_TICKETS_PER_ORDER, MAX_TICKETS_PER_ORDER);
   if (maxQty < 1) return { kind: "sold_out" };
-  return { kind: "available", maxQty, remaining };
+  return { kind: "available", maxQty, remaining, lowStock: isLowStock(remaining, tier.capacity) };
 }
+
+/** Tipo a 0 €: se consigue sin pasar por Stripe. */
+export const isFreeTier = (tier: { price_cents: number | null | undefined }): boolean =>
+  (tier.price_cents ?? 0) <= 0;
+
+/**
+ * Política de devolución del tipo, tal como se enseña antes de pagar:
+ * «Sin devolución (salvo cancelación del evento)» o «Devolución hasta 48 h
+ * antes del evento» (en días si son días justos: «hasta 7 días antes»).
+ */
+export function tierRefundLabel(hoursBefore: number | null | undefined): string {
+  if (hoursBefore == null || !Number.isFinite(hoursBefore) || hoursBefore < 0) {
+    return "Sin devolución (salvo cancelación del evento)";
+  }
+  const h = Math.floor(hoursBefore);
+  if (h === 0) return "Devolución hasta el inicio del evento";
+  if (h >= 48 && h % 24 === 0) return `Devolución hasta ${h / 24} días antes del evento`;
+  return `Devolución hasta ${h} h antes del evento`;
+}
+
+/** «Transferible» solo si el tipo lo permite de forma explícita. */
+export const tierTransferLabel = (allowed: boolean | null | undefined): string =>
+  allowed === true ? "Transferible" : "No transferible";
 
 // ============================================================ titular
 

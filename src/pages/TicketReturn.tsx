@@ -1,7 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, RotateCcw, Smartphone, XCircle } from "lucide-react";
-import { TEST_PAYMENT_MESSAGE, useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import {
+  TEST_PAYMENT_MESSAGE,
+  cancelCheckoutOrder,
+  useCheckoutConfirmation,
+} from "@/hooks/usePendingCheckoutResume";
 
 /**
  * Pasify · destino de retorno de Stripe Checkout para la APP NATIVA.
@@ -19,7 +23,13 @@ import { TEST_PAYMENT_MESSAGE, useCheckoutConfirmation } from "@/hooks/usePendin
  *                  "enviado": sin sesión no podemos saber si salió.
  *   - pendiente  → seguimos comprobando, con reintento.
  *   - caducado   → no se ha cobrado nada.
- *   - cancelado  → Stripe vuelve aquí solo con `order_id` (cancel_url).
+ *   - cancelado  → Stripe vuelve aquí solo con `order_id` (cancel_url). Se
+ *                  anula el pedido (`cancel-checkout`) para liberar sus
+ *                  plazas en el acto, si este navegador tiene la sesión del
+ *                  comprador; si no, lo hace la app al volver a ella
+ *                  (usePendingCheckoutResume). Si el pago ya estaba hecho
+ *                  (`already_paid`), se enseña como pagado. En silencio si
+ *                  falla: la reserva caduca sola.
  *   - de prueba  → en producción un pago de modo prueba no emite entradas
  *                  (409 test_payment_not_accepted): se dice tal cual.
  *
@@ -94,9 +104,26 @@ const TicketReturn = () => {
   const sessionId = params.get("session_id");
   const orderId = params.get("order_id");
   // cancel_url de Stripe: llega solo con order_id (sin session_id).
-  const cancelled = !sessionId && !!orderId;
-  const { state, retry } = useCheckoutConfirmation(cancelled ? null : sessionId, orderId);
+  const cancelledReturn = !sessionId && !!orderId;
+  const { state, retry } = useCheckoutConfirmation(cancelledReturn ? null : sessionId, orderId);
   const platform = useMemo(detectPlatform, []);
+
+  // Vuelta sin pagar: se anula ya el pedido (idempotente, sin sesión no hace
+  // nada). Si resulta que estaba pagado, la página lo dice.
+  const [alreadyPaid, setAlreadyPaid] = useState(false);
+  useEffect(() => {
+    if (!cancelledReturn || !orderId) return;
+    let alive = true;
+    void cancelCheckoutOrder(orderId).then((res) => {
+      if (!res.ok && res.httpStatus !== 401) console.warn("[TicketReturn] no se pudo anular el pedido", res);
+      if (alive && res.ok && res.status === "already_paid") setAlreadyPaid(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cancelledReturn, orderId]);
+  const cancelled = cancelledReturn && !alreadyPaid;
+  const paid = state.phase === "paid" || (cancelledReturn && alreadyPaid);
 
   let icon: React.ReactNode;
   let tone: "ok" | "wait" | "bad" = "wait";
@@ -104,7 +131,13 @@ const TicketReturn = () => {
   let body: React.ReactNode;
   let action: React.ReactNode = null;
 
-  if (cancelled) {
+  if (cancelledReturn && alreadyPaid) {
+    tone = "ok";
+    icon = <CheckCircle2 className="h-9 w-9" />;
+    title = "Pago confirmado";
+    body = "Tu pago ya se había completado. Tus entradas están en la app Pasify, en Mis entradas.";
+    action = <ReturnToApp platform={platform} path="/client-dashboard?wallet=1" />;
+  } else if (cancelled) {
     tone = "bad";
     icon = <XCircle className="h-9 w-9" />;
     title = "Pago cancelado";
@@ -210,7 +243,7 @@ const TicketReturn = () => {
 
         {action}
 
-        {state.phase === "paid" && !cancelled && (
+        {paid && !cancelled && (
           <p className="mt-8 text-[13px] leading-relaxed text-white/35">
             Puedes cerrar esta ventana.
           </p>

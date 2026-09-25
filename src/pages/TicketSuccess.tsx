@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import QRCodeLib from "qrcode";
 import {
   CalendarDays,
@@ -16,8 +17,16 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
-import { TEST_PAYMENT_MESSAGE, useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import {
+  TEST_PAYMENT_MESSAGE,
+  forgetWebCheckout,
+  useCheckoutConfirmation,
+  type CheckoutConfirmationState,
+} from "@/hooks/usePendingCheckoutResume";
 import { loginPathWithNext } from "@/lib/eventLinks";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { withTimeout } from "@/lib/withTimeout";
 import {
   formatEventDateTime,
   formatPriceCents,
@@ -27,9 +36,9 @@ import {
 } from "@/components/tickets/ticketUtils";
 
 /**
- * TicketSuccess — vuelta de Stripe Checkout en WEB
- * (`/#/ticket/success?order_id=<uuid>&session_id=cs_…`).
+ * TicketSuccess — confirmación de una compra en WEB y de una reserva gratis.
  *
+ * Vuelta de Stripe Checkout (`/#/ticket/success?order_id=<uuid>&session_id=cs_…`):
  *   1) Pregunta a `confirm-checkout-session` con `{session_id, order_id}`,
  *      con o sin sesión: la función consulta a Stripe y, si está pagado,
  *      emite las entradas (misma RPC que el webhook, idempotente). Si Stripe
@@ -43,6 +52,13 @@ import {
  *      entradas ya están en la cartera y que también irán por email.
  *   5) Pago de modo prueba en producción (409 test_payment_not_accepted): no
  *      hay entradas ni se reintenta; se dice tal cual.
+ *
+ * Sin sesión de Stripe (`?order_id=<uuid>` a secas): el pedido se lee
+ * directamente con la sesión del comprador (RLS de ticket_orders y tickets).
+ * Es la vuelta de una reserva gratis (`&free=1`: el servidor la crea ya
+ * pagada, sin Stripe, también desde la app nativa) y la de un pago que ya
+ * estaba hecho cuando el comprador volvió atrás (cancel-checkout →
+ * already_paid). Mismas fases que con Stripe; sin sesión, "inicia sesión".
  *
  * En la app nativa la vuelta de Stripe es /ticket/gracias (TicketReturn).
  * Estética Pasify: dark, terracota, mono labels, itálica serif en el titular.
@@ -156,14 +172,115 @@ async function loadOrderTickets(orderId: string): Promise<OrderTicket[]> {
   );
 }
 
+/** Estados de pedido que ya implican cobro (o reserva gratis emitida). */
+const PAID_ORDER_STATUSES = new Set(["paid", "partial_refund", "refunded"]);
+/** Pedido aún pendiente (el webhook va por detrás): esperas entre lecturas. */
+const ORDER_RETRY_DELAYS_MS = [2000, 3000, 5000, 8000, 12000];
+const ORDER_TIMEOUT_MS = 15_000;
+
+/**
+ * Estado de un pedido leído con la sesión del comprador, sin Stripe: reserva
+ * gratis o pago confirmado al volver atrás. Mismas fases que
+ * `useCheckoutConfirmation` para que la página no distinga de dónde viene.
+ * `orderId` null → "idle" (no hace nada).
+ */
+function useOrderStatus(orderId: string | null) {
+  const [state, setState] = useState<CheckoutConfirmationState>(
+    orderId ? { phase: "checking" } : { phase: "idle" }
+  );
+  const [run, setRun] = useState(0);
+
+  useEffect(() => {
+    if (!orderId) {
+      setState({ phase: "idle" });
+      return;
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempt = 0;
+
+    const later = () => {
+      const delay = ORDER_RETRY_DELAYS_MS[attempt - 1];
+      if (delay === undefined) return false;
+      timer = window.setTimeout(() => void check(), delay);
+      return true;
+    };
+
+    const check = async () => {
+      attempt += 1;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        // Sin sesión la RLS no deja leer el pedido: que inicie sesión.
+        if (!session) {
+          setState({ phase: "unverifiable" });
+          return;
+        }
+        const { data, error } = await withTimeout(
+          supabase.from("ticket_orders").select("id, status").eq("id", orderId).maybeSingle(),
+          ORDER_TIMEOUT_MS,
+          "ticket_orders"
+        );
+        if (cancelled) return;
+        if (error) throw error;
+        if (!data) {
+          // No existe o es de otra cuenta.
+          setState({ phase: "error", httpStatus: 404, code: "order_not_found" });
+          return;
+        }
+        if (PAID_ORDER_STATUSES.has(data.status)) {
+          setState({ phase: "paid", orderId: data.id });
+          return;
+        }
+        if (data.status !== "pending") {
+          setState({ phase: "expired", orderId: data.id });
+          return;
+        }
+        const willRetry = later();
+        setState({ phase: "pending", exhausted: !willRetry });
+      } catch (err) {
+        if (cancelled) return;
+        console.warn("[TicketSuccess] no se pudo leer el pedido", err);
+        // Sin red o timeout: un par de reintentos antes de rendirse.
+        if (attempt < 3 && later()) return;
+        setState({ phase: "error", httpStatus: 0, code: "network_error" });
+      }
+    };
+
+    setState({ phase: "checking" });
+    void check();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [orderId, run]);
+
+  const retry = useCallback(() => setRun((n) => n + 1), []);
+  return { state, retry };
+}
+
 const TicketSuccess = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const uid = useCurrentUserId();
   const [searchParams] = useSearchParams();
   const orderIdParam = searchParams.get("order_id");
   const sessionId = searchParams.get("session_id");
+  // Reserva de entradas gratis: sin Stripe y sin pago.
+  const free = searchParams.get("free") === "1";
 
-  const { state, retry } = useCheckoutConfirmation(sessionId, orderIdParam);
+  const stripeConfirmation = useCheckoutConfirmation(sessionId, orderIdParam);
+  const directConfirmation = useOrderStatus(sessionId ? null : orderIdParam);
+  const { state, retry } = sessionId ? stripeConfirmation : directConfirmation;
   const [details, setDetails] = useState<Details>({ kind: "idle" });
+
+  // Ha llegado a la confirmación: la compra no está abandonada (la página de
+  // la que salió no debe anularla si el comprador vuelve atrás).
+  useEffect(() => {
+    if (orderIdParam) forgetWebCheckout(orderIdParam);
+  }, [orderIdParam]);
 
   const isPaid = state.phase === "paid";
   const paidOrderId = state.phase === "paid" ? state.orderId ?? orderIdParam : null;
@@ -228,18 +345,34 @@ const TicketSuccess = () => {
   const ticketCount = ready?.tickets.length ?? 0;
   const walletPath = `/client-dashboard?wallet=${encodeURIComponent(ready?.order.event_id ?? "1")}`;
 
+  // Entradas nuevas: la cartera (en caché, y guardada 30 días) tiene que
+  // pedirlas otra vez al abrirse aunque se haya visitado hace un momento.
+  const readyOrderId = ready?.order.id ?? null;
+  useEffect(() => {
+    if (readyOrderId && uid) void queryClient.invalidateQueries({ queryKey: qk.me.tickets(uid) });
+  }, [readyOrderId, uid, queryClient]);
+
   // ---------------------------------------------------------------- copy
+  // Leído del pedido, sin Stripe (reserva gratis o pago ya hecho al volver).
+  const direct = !sessionId && !!orderIdParam;
+  const noun = free ? "reserva" : "pago";
   const busy = state.phase === "checking" || (state.phase === "pending" && !state.exhausted);
   const tone: "ok" | "wait" | "bad" = isPaid ? "ok" : busy ? "wait" : "bad";
 
   const eyebrow = isPaid
-    ? "Compra confirmada"
+    ? free
+      ? "Reserva confirmada"
+      : "Compra confirmada"
     : state.phase === "checking"
-    ? "Procesando tu pago"
+    ? free
+      ? "Confirmando tu reserva"
+      : "Procesando tu pago"
     : state.phase === "pending"
     ? "Aún confirmando"
     : state.phase === "expired"
-    ? "Pago no completado"
+    ? free
+      ? "Reserva no completada"
+      : "Pago no completado"
     : state.phase === "unverifiable"
     ? "Pendiente de confirmar"
     : state.phase === "test_payment"
@@ -259,13 +392,21 @@ const TicketSuccess = () => {
       <>¡Tus entradas están {accent("listas")}!</>
     )
   ) : state.phase === "checking" ? (
-    <>Confirmando tu {accent("pago")}…</>
+    <>Confirmando tu {accent(noun)}…</>
   ) : state.phase === "pending" ? (
-    <>Estamos {accent("confirmando")} tu pago</>
+    <>Estamos {accent("confirmando")} tu {noun}</>
   ) : state.phase === "expired" ? (
-    <>La compra no se {accent("completó")}</>
+    free ? (
+      <>La reserva no se {accent("completó")}</>
+    ) : (
+      <>La compra no se {accent("completó")}</>
+    )
   ) : state.phase === "unverifiable" ? (
-    <>Inicia sesión para {accent("confirmar")}</>
+    direct ? (
+      <>Inicia sesión para {accent("verlas")}</>
+    ) : (
+      <>Inicia sesión para {accent("confirmar")}</>
+    )
   ) : state.phase === "test_payment" ? (
     <>Este pago no es {accent("válido")}</>
   ) : (
@@ -275,13 +416,14 @@ const TicketSuccess = () => {
   const errorStatus = state.phase === "error" ? state.httpStatus : 0;
   const subtitle: React.ReactNode = (() => {
     if (isPaid) {
+      const confirmed = free ? "Reserva confirmada." : "Pago confirmado.";
       // "Te hemos enviado un email" solo si el servidor lo ha registrado: el
       // envío puede fallar, o salir más tarde, con el pago ya confirmado.
       if (ready?.order.tickets_email_sent_at) {
         const email = ready.order.buyer_email;
         return (
           <>
-            Pago confirmado. Te hemos enviado un email
+            {confirmed} Te hemos enviado un email
             {email ? (
               <>
                 {" "}a <span className="text-foreground">{email}</span>
@@ -293,31 +435,52 @@ const TicketSuccess = () => {
       }
       switch (details.kind) {
         case "ready":
-          return "Pago confirmado. Tus entradas ya están en tu cartera. Te las enviaremos también por email.";
+          return `${confirmed} Tus entradas ya están en tu cartera. Te las enviaremos también por email.`;
         case "no_session":
-          return "Pago confirmado. Inicia sesión con la cuenta con la que compraste para ver tus entradas en Mis entradas. Te las enviaremos también por email.";
+          return `${confirmed} Inicia sesión con la cuenta con la que ${free ? "reservaste" : "compraste"} para ver tus entradas en Mis entradas. Te las enviaremos también por email.`;
         case "not_visible":
-          return "Pago confirmado. Las encontrarás en Mis entradas de la cuenta con la que hiciste la compra. Te las enviaremos también por email.";
+          return `${confirmed} Las encontrarás en Mis entradas de la cuenta con la que hiciste la ${free ? "reserva" : "compra"}. Te las enviaremos también por email.`;
         default:
-          return "Pago confirmado.";
+          return confirmed;
       }
     }
     switch (state.phase) {
       case "checking":
-        return "Estamos comprobando el pago con Stripe. Suele tardar unos segundos.";
+        return direct
+          ? free
+            ? "Estamos preparando tus entradas. Suele tardar unos segundos."
+            : "Estamos comprobando tu pedido. Suele tardar unos segundos."
+          : "Estamos comprobando el pago con Stripe. Suele tardar unos segundos.";
       case "pending":
+        if (direct) {
+          return state.exhausted
+            ? `Todavía no hemos podido confirmar tu ${noun}. Si se completa, tus entradas aparecerán en Mis entradas. Puedes volver a comprobarlo.`
+            : `Estamos terminando de confirmar tu ${noun}. Seguimos comprobándolo automáticamente; no cierres esta página.`;
+        }
         return state.exhausted
           ? "Stripe todavía no ha confirmado el pago. Si se completa, tus entradas aparecerán en Mis entradas. Puedes volver a comprobarlo."
           : "Stripe todavía no nos ha confirmado el pago. Seguimos comprobándolo automáticamente; no cierres esta página.";
       case "expired":
-        return "La sesión de pago caducó y no se ha realizado ningún cargo. Puedes volver a intentarlo cuando quieras.";
+        if (free) {
+          return "No hemos podido completar la reserva y no se ha emitido ninguna entrada. Puedes volver a intentarlo cuando quieras.";
+        }
+        return direct
+          ? "Este pedido no se completó y no se ha realizado ningún cargo. Puedes volver a intentarlo cuando quieras."
+          : "La sesión de pago caducó y no se ha realizado ningún cargo. Puedes volver a intentarlo cuando quieras.";
       case "unverifiable":
-        return "Sin sesión no podemos comprobar el pago desde aquí. Inicia sesión con la cuenta de la compra: si el pago se completó, tus entradas estarán en Mis entradas.";
+        return direct
+          ? `Inicia sesión con la cuenta con la que hiciste la ${free ? "reserva" : "compra"} para ver tus entradas.`
+          : "Sin sesión no podemos comprobar el pago desde aquí. Inicia sesión con la cuenta de la compra: si el pago se completó, tus entradas estarán en Mis entradas.";
       case "test_payment":
         return TEST_PAYMENT_MESSAGE;
       case "idle":
         return "No hemos recibido la referencia de tu compra. Si has pagado, tus entradas aparecerán en Mis entradas.";
       default:
+        if (direct) {
+          return errorStatus === 404
+            ? "No encontramos este pedido en tu cuenta. Si lo hiciste con otra, tus entradas estarán en Mis entradas de esa cuenta; si no, escríbenos a soporte."
+            : `No hemos podido comprobar tu ${noun} ahora mismo. Si se completó, tus entradas aparecerán en Mis entradas.`;
+        }
         return errorStatus === 404 || errorStatus === 403 || errorStatus === 400
           ? "No encontramos este pedido. Si has pagado, tus entradas aparecerán en Mis entradas; si no, escríbenos a soporte."
           : "No hemos podido comprobar el pago ahora mismo. Si se completó, tus entradas aparecerán en Mis entradas.";
@@ -556,7 +719,9 @@ const TicketSuccess = () => {
                 )}
                 <SummaryItem icon={<Receipt className="h-4 w-4" />} label="Total">
                   <span style={mono}>
-                    {formatPriceCents(ready.order.total_cents, ready.order.currency)}
+                    {ready.order.total_cents > 0
+                      ? formatPriceCents(ready.order.total_cents, ready.order.currency)
+                      : "Gratis"}
                   </span>
                 </SummaryItem>
               </div>
