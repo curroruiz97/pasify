@@ -8,6 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { MapPin, Search, Check } from "lucide-react";
 import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/countries";
+import { normalizeForSearch } from "@/data/spanish-cities";
 import { useTranslation } from "react-i18next";
 
 interface CitySelectorProps {
@@ -43,10 +44,12 @@ const CitySelector = ({
   const activeCountry = externalCountry ?? internalCountry;
   const cities = getCitiesForCountry(activeCountry);
 
+  // Sin acentos ni mayúsculas: "malaga" encuentra Málaga y "cadiz", Cádiz.
+  const consulta = normalizeForSearch(searchQuery);
   const filteredCities = cities.filter(
     (city) =>
-      city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      city.province.toLowerCase().includes(searchQuery.toLowerCase())
+      normalizeForSearch(city.name).includes(consulta) ||
+      normalizeForSearch(city.province).includes(consulta)
   );
 
   const handleCountryChange = (countryCode: string) => {

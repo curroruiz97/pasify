@@ -18,11 +18,12 @@ import { SupportChat } from "@/components/support/SupportChat";
  *   - 4 sugerencias premium iniciales (mesa, cena, traslado, backstage)
  *   - (el contenido del chat y la persistencia son idénticos al soporte)
  *
- * Gate de premium: por ahora la entrada al Concierge es solo desde
- * `ClientDashboard` (nav del cliente), y ese nav es accesible a todo
- * cliente logueado. Cuando exista un plan "premium del cliente" se
- * podrá restringir aquí. La diferenciación hoy es de UX y atención
- * (el staff prioriza estas conversaciones).
+ * SOLO MODO DEMO (D-7): promete cosas (backstage, traslados, "una persona
+ * organiza tu noche") que no existen como servicio. ClientDashboard solo lo
+ * enseña con el flag client_showcase, en la web y con la franja "DEMO · datos
+ * ficticios"; fuera de la demo no está en el menú y su URL lleva a Inicio. El
+ * chat de Soporte sigue existiendo aparte, sin promesas. Ojo: el chat de aquí
+ * es el de soporte de verdad (los mensajes llegan al equipo).
  */
 
 const serif = {

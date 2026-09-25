@@ -7,15 +7,19 @@ import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
 import { useSessionState } from "@/lib/useSessionState";
 import { RefreshIndicator } from "@/components/ui/refresh-indicator";
-import { useMyCity, useMyTickets, usePublicPartners, type WalletTicketRow } from "@/hooks/queries/clientData";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  useClientShowcase,
+  useMyCity,
+  useMyProfile,
+  useMyTickets,
+  usePublicPartners,
+  type WalletTicketRow,
+} from "@/hooks/queries/clientData";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   MessageCircle,
   Ticket,
-  ArrowLeft,
   Home,
   Calendar,
   Search,
@@ -28,10 +32,16 @@ import {
   Sun,
   Waves,
   Store as StoreIcon,
+  Utensils,
+  Theater,
   Heart,
   LogOut,
+  WifiOff,
+  AlertTriangle,
+  Ban,
+  ChevronDown,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import type { FavEvent } from "@/hooks/useFavorites";
 import SupportChat from "@/components/support/SupportChat";
@@ -42,25 +52,38 @@ import TicketQRModal, {
   type TicketEventInfo,
 } from "@/components/client/TicketQRModal";
 import { TICKETS_UPDATED_EVENT } from "@/hooks/usePendingCheckoutResume";
-import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
+import {
+  DEFAULT_EVENT_TIMEZONE,
+  eventDayMonth,
+  eventPriceLabel,
+  formatEventDateTime,
+  formatEventTime,
+  formatPriceCents,
+  isEventOver,
+} from "@/components/tickets/ticketUtils";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useFavoritePartners } from "@/hooks/useFavoritePartners";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { MonthGrid } from "@/components/event/MonthGrid";
 import { CalendarDays, List as ListIcon } from "lucide-react";
 import Wordmark from "@/components/Wordmark";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { downloadIcs } from "@/lib/ics";
-import { ClientLoyalty } from "@/components/client/ClientLoyalty";
+import { publicEventUrl } from "@/lib/eventLinks";
+import { isNativeApp } from "@/lib/platform";
+import { normalizeForSearch } from "@/data/spanish-cities";
+import { ClientLoyalty, PUNTOS_TEXTO_HONESTO } from "@/components/client/ClientLoyalty";
 import { SmartHomeStrip } from "@/components/client/SmartHomeStrip";
 import { ClientLiveExperience } from "@/components/client/ClientLiveExperience";
 import { ClientConcierge } from "@/components/client/ClientConcierge";
+import { ClientDemoBanner } from "@/components/client/ClientDemoBanner";
+import { UpcomingEventsStrip } from "@/components/client/UpcomingEventsStrip";
 import { Crown, Radio, Gem, Menu, MoreHorizontal, HelpCircle, Settings, ChevronRight } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { useRefundRequests, type RefundRequest } from "@/hooks/useRefundRequests";
-import { Sentry, getErrorMessage } from "@/lib/sentry";
+import { Sentry } from "@/lib/sentry";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import {
@@ -76,6 +99,22 @@ import { useToast } from "@/hooks/use-toast";
 import { RotateCcw } from "lucide-react";
 
 type View = "home" | "support" | "wallet" | "favorites" | "loyalty" | "live" | "concierge";
+
+/**
+ * VISTAS MAQUETA — SOLO EN MODO DEMO (D-7).
+ *
+ * "En vivo" (asistentes y fotos inventados, pulsera cashless) y el Concierge
+ * "Premium" (promete backstage y traslados) no tienen nada real detrás. No se
+ * borran, pero solo existen cuando se cumplen a la vez:
+ *   - la cuenta es de demo: flag `client_showcase` de get_feature_flag con el
+ *     uid del usuario (tenant_overrides), apagado para todos por defecto;
+ *   - estamos en la web: en la app nativa, nunca (isNativeApp);
+ *   - y van debajo de la franja "DEMO · datos ficticios".
+ * Sin demo desaparecen del menú y sus URL (/client-dashboard/live…) llevan a
+ * Inicio. Lo mismo para las recomendaciones inventadas de la home
+ * (SmartHomeStrip): fuera de la demo, la home enseña eventos de verdad.
+ */
+const VISTAS_DEMO: ReadonlySet<View> = new Set<View>(["live", "concierge"]);
 
 /** Icona Calendar con badge contatore arancione (per nav "Favoritos"). */
 const EventsIcon = ({ count }: { count?: number }) => (
@@ -107,6 +146,8 @@ type Partner = {
 // esos locales). Ahora si no hay partners aprobados se muestra un empty
 // state explícito vía <PasifyEmptyState>.
 
+// Mismas categorías que eligen los locales (PartnerOnboardingWizard y
+// PartnerSettingsBlock), restaurantes y teatros incluidos.
 const CATEGORIES = [
   { id: "all", label: "Todos", Icon: PartyPopper },
   { id: "discoteca", label: "Discotecas", Icon: Disc3 },
@@ -116,6 +157,8 @@ const CATEGORIES = [
   { id: "festival", label: "Festivales", Icon: PartyPopper },
   { id: "rooftop", label: "Rooftops", Icon: Sun },
   { id: "beachclub", label: "Beach Clubs", Icon: Waves },
+  { id: "restaurante", label: "Restaurantes", Icon: Utensils },
+  { id: "teatro", label: "Teatros", Icon: Theater },
   { id: "otro", label: "Otros", Icon: StoreIcon },
 ];
 
@@ -127,11 +170,36 @@ const isView = (value: string | undefined): value is View =>
 const SIN_ENTRADAS: WalletTicketRow[] = [];
 const SIN_LOCALES: Partner[] = [];
 
+const serifAccent = {
+  fontFamily: "'Instrument Serif', Georgia, serif",
+  fontStyle: "italic" as const,
+  fontWeight: 400,
+  color: "#FF7A4D",
+};
+
+// Día de un evento en SU zona horaria (Europe/Madrid), con el formato de las
+// claves de MonthGrid (yyyy-MM-dd). Con la hora del móvil, un evento a las
+// 00:30 en Madrid caía en otro día visto desde Canarias o Londres.
+const diaEventoFmt = new Intl.DateTimeFormat("es-ES", {
+  timeZone: DEFAULT_EVENT_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const claveDiaEvento = (iso: string): string | null => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const partes = diaEventoFmt.formatToParts(d);
+  const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
+  return `${parte("year")}-${parte("month")}-${parte("day")}`;
+};
+
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isOnline } = useNetworkStatus();
   const handleLogout = async () => {
     await signOutLocal();
     navigate("/");
@@ -183,53 +251,102 @@ const ClientDashboard = () => {
   const uid = useCurrentUserId();
   const userId = uid ?? "";
   const userCity = useMyCity(uid).data?.city ?? "";
-  const { events: favEvents, ids: favIds, toggle: toggleFav } = useFavorites();
+  const perfil = useMyProfile(uid).data ?? null;
+  const nombrePerfil = [perfil?.first_name, perfil?.last_name].filter(Boolean).join(" ").trim();
+
+  // Modo demo (ver VISTAS_DEMO): nunca en la app; en la web, solo la cuenta de demo.
+  const enApp = isNativeApp();
+  const showcaseQuery = useClientShowcase(uid, !enApp);
+  const showcase = !enApp && showcaseQuery.data === true;
+  // ¿Ya se sabe? Mientras llega la primera respuesta, una URL de maqueta
+  // enseña Inicio en vez de mandar fuera a la cuenta de demo antes de tiempo.
+  const showcaseDecidido = enApp || showcaseQuery.data !== undefined || showcaseQuery.fetchStatus !== "fetching";
+  const esVistaDemo = VISTAS_DEMO.has(view);
+  const vistaActiva: View = esVistaDemo && !showcase ? "home" : view;
+  // Enlace guardado a una maqueta sin modo demo: a Inicio, sin dejarla en el historial.
+  useEffect(() => {
+    if (esVistaDemo && showcaseDecidido && !showcase) navigate("/client-dashboard", { replace: true });
+  }, [esVistaDemo, showcaseDecidido, showcase, navigate]);
+
+  const favoritos = useFavorites();
+  const { events: favEvents, toggle: toggleFav } = favoritos;
   const [favTab, setFavTab] = useSessionState<"list" | "calendar">("cliente.favoritos.vista", "list");
+  const [verFavPasados, setVerFavPasados] = useState(false);
+  // Próximos (en fecha) y Pasados (ya terminados, misma regla que el servidor
+  // para dejar de vender). Solo los próximos cuentan en el menú.
+  const { favProximos, favPasados } = useMemo(() => {
+    const ahora = Date.now();
+    const proximos: FavEvent[] = [];
+    const pasados: FavEvent[] = [];
+    for (const e of favEvents) (isEventOver(e, ahora) ? pasados : proximos).push(e);
+    proximos.sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start));
+    pasados.sort((a, b) => Date.parse(b.date_start) - Date.parse(a.date_start));
+    return { favProximos: proximos, favPasados: pasados };
+  }, [favEvents]);
 
   // Entradas en la caché y guardadas en el dispositivo: la cartera se abre al
   // instante (también sin conexión) y se refresca detrás. Antes cada vez que
   // se entraba en Tickets salía "Sincronizando tu wallet…" y se pedía todo.
   //
   // Error explícito: NO se camufla un fallo (RLS / red / query mal formada)
-  // como "el usuario no tiene tickets"; el wallet enseña un aviso con
-  // Reintentar y, si había entradas guardadas, las sigue enseñando.
+  // como "el usuario no tiene tickets": sin entradas guardadas sale el error
+  // con Reintentar (y nada más); con entradas guardadas se siguen enseñando,
+  // con un aviso de cuándo se actualizaron por última vez.
   const ticketsQuery = useMyTickets(uid);
   const tickets = ticketsQuery.data ?? SIN_ENTRADAS;
-  const ticketsLoading = !!uid && ticketsQuery.isPending && !ticketsQuery.isError;
-  const ticketsError = ticketsQuery.error ? getErrorMessage(ticketsQuery.error) : null;
+  // Sin red React Query deja la consulta en pausa (no es un error ni "cargando").
+  const ticketsEnPausa = ticketsQuery.fetchStatus === "paused";
+  const ticketsSinRed = !!uid && ticketsQuery.isPending && ticketsEnPausa;
+  const ticketsLoading = !!uid && ticketsQuery.isPending && !ticketsQuery.isError && !ticketsSinRed;
+  const ticketsFallo = ticketsQuery.isError || ticketsSinRed;
+  // Con entradas guardadas: aviso si el último refresco falló o no hay red.
+  const avisoEntradas = ticketsQuery.isError || ticketsEnPausa || !isOnline;
   const refrescandoEntradas = ticketsQuery.isFetching && !ticketsQuery.isPending;
   const { refetch: refetchTickets } = ticketsQuery;
   const loadTickets = useCallback(() => refetchTickets(), [refetchTickets]);
   const invalidarEntradas = useCallback(() => {
     if (uid) void queryClient.invalidateQueries({ queryKey: qk.me.tickets(uid) });
   }, [uid, queryClient]);
+  // Reembolsadas: aparte, en una sección plegada (antes desaparecían).
+  const { entradasActivas, entradasReembolsadas } = useMemo(
+    () => ({
+      entradasActivas: tickets.filter((t) => t.status !== "refunded"),
+      entradasReembolsadas: tickets.filter((t) => t.status === "refunded"),
+    }),
+    [tickets],
+  );
+  const [verReembolsadas, setVerReembolsadas] = useState(false);
   // Compra recién pagada que se está confirmando (vuelta de Stripe).
   const [confirmandoCompra, setConfirmandoCompra] = useState(false);
 
-  const [openTicket, setOpenTicket] = useState<{ ticket: WalletTicket; event: TicketEventInfo | null } | null>(null);
+  // El QR abierto se lee siempre de la lista actual: si mientras está en
+  // pantalla llega un reembolso o la cancelación del evento, el modal lo
+  // refleja (y si la entrada deja de ser tuya, se cierra).
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const openTicket = openTicketId ? tickets.find((t) => t.id === openTicketId) ?? null : null;
   const [favMonthCursor, setFavMonthCursor] = useState<Date>(new Date());
   const [favSelectedDay, setFavSelectedDay] = useState<Date | null>(null);
 
   const favEventsByDay = useMemo(() => {
     const map = new Map<string, FavEvent[]>();
     favEvents.forEach((e) => {
-      try {
-        // chiave in LOCAL time (stessa di MonthGrid) per evitare drift UTC
-        const k = format(new Date(e.date_start), "yyyy-MM-dd");
-        if (!map.has(k)) map.set(k, []);
-        map.get(k)!.push(e);
-      } catch {
-        /* skip malformed */
-      }
+      const k = claveDiaEvento(e.date_start);
+      if (!k) return; // fecha mal formada
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(e);
     });
     return map;
   }, [favEvents]);
 
   // Locales de la home en la caché (y en el dispositivo). Sin fallback a
-  // demo: si no hay locales aprobados, empty state explícito más abajo.
+  // demo: si no hay locales aprobados, empty state explícito más abajo. Un
+  // fallo (o no tener red) sin nada guardado ya no se confunde con "aún no
+  // hay locales": sale el error con Reintentar.
   const partnersQuery = usePublicPartners();
   const partners = (partnersQuery.data as Partner[] | undefined) ?? SIN_LOCALES;
-  const loading = partnersQuery.isPending && !partnersQuery.isError;
+  const partnersSinRed = partnersQuery.isPending && partnersQuery.fetchStatus === "paused";
+  const loading = partnersQuery.isPending && !partnersQuery.isError && !partnersSinRed;
+  const partnersFallo = partnersQuery.data === undefined && (partnersQuery.isError || partnersSinRed);
   // Búsqueda y categoría sobreviven a cambiar de pestaña y a recargar.
   const [search, setSearch] = useSessionState("cliente.busqueda", "");
   const [activeCat, setActiveCat] = useSessionState("cliente.categoria", "all");
@@ -335,12 +452,14 @@ const ClientDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, postCheckoutSessionId, postCheckoutOrderId]);
 
+  // Búsqueda sin acentos ni mayúsculas ("mas alla" encuentra "Más Allá").
   const filtered = useMemo(() => {
+    const q = normalizeForSearch(search);
     return partners.filter((p) => {
       if (activeCat !== "all" && p.business_category !== activeCat) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const hay = `${p.business_name ?? ""} ${p.city ?? ""} ${p.business_category ?? ""}`.toLowerCase();
+      if (q) {
+        const categoria = CATEGORY_LABEL[p.business_category ?? ""] ?? p.business_category ?? "";
+        const hay = normalizeForSearch(`${p.business_name ?? ""} ${p.city ?? ""} ${categoria}`);
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -351,33 +470,43 @@ const ClientDashboard = () => {
   // ambos triggers (header drawer + tab bar drawer) compartan el estado.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const abrirAjustes = useCallback(() => setSettingsOpen(true), []);
 
-  // Tree de navegación — agrupa membership (Pasify Points + Concierge).
+  // Tree de navegación. Las maquetas (En vivo, Concierge) solo con modo demo;
+  // sin él, Pasify Points va suelto (un grupo de un solo hijo no tiene sentido).
+  const nodosMembresia: NavTreeNode<View>[] = showcase
+    ? [
+        { kind: "item", id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
+        {
+          kind: "group",
+          id: "membership",
+          label: "Mi membresía",
+          icon: <Crown className="h-5 w-5" />,
+          children: [
+            { id: "loyalty", label: "Pasify Points", icon: <Crown className="h-4 w-4" /> },
+            { id: "concierge", label: "Concierge", icon: <Gem className="h-4 w-4" /> },
+          ],
+        },
+      ]
+    : [{ kind: "item", id: "loyalty", label: "Pasify Points", icon: <Crown className="h-5 w-5" /> }];
   const navTree: NavTreeNode<View>[] = [
     { kind: "item", id: "home", label: "Inicio", icon: <Home className="h-5 w-5" /> },
-    { kind: "item", id: "favorites", label: "Favoritos", icon: <EventsIcon count={favIds.length} /> },
+    { kind: "item", id: "favorites", label: "Favoritos", icon: <EventsIcon count={favProximos.length} /> },
     { kind: "item", id: "wallet", label: "Tickets", icon: <Ticket className="h-5 w-5" /> },
-    { kind: "item", id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
-    {
-      kind: "group",
-      id: "membership",
-      label: "Mi membresía",
-      icon: <Crown className="h-5 w-5" />,
-      children: [
-        { id: "loyalty", label: "Pasify Points", icon: <Crown className="h-4 w-4" /> },
-        { id: "concierge", label: "Concierge", icon: <Gem className="h-4 w-4" /> },
-      ],
-    },
+    ...nodosMembresia,
     { kind: "item", id: "support", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
 
   // Bottom tab bar mobile — 4 entradas más usadas; el resto en el drawer "Más".
   const tabBarItems: { id: View; label: string; icon: React.ReactNode }[] = [
     { id: "home", label: "Inicio", icon: <Home className="h-5 w-5" /> },
-    { id: "favorites", label: "Favoritos", icon: <EventsIcon count={favIds.length} /> },
+    { id: "favorites", label: "Favoritos", icon: <EventsIcon count={favProximos.length} /> },
     { id: "wallet", label: "Tickets", icon: <Ticket className="h-5 w-5" /> },
     { id: "support", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
   ];
+
+  const hayFiltros = !!search.trim() || activeCat !== "all";
+  const abrirFavorito = (e: FavEvent) => navigate(`/e/${e.id}`);
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -394,10 +523,10 @@ const ClientDashboard = () => {
             )}
           </div>
           <nav className="flex-1 overflow-y-auto p-3">
-            <NavTree<View> tree={navTree} section={view} onSelect={setView} />
+            <NavTree<View> tree={navTree} section={vistaActiva} onSelect={setView} />
           </nav>
           <div className="border-t border-border p-2">
-            {userId && <ProfileSheet userId={userId} variant="row" />}
+            {userId && <ProfileSheet userId={userId} variant="row" onOpenSettings={abrirAjustes} />}
           </div>
           <div className="border-t border-border p-3">
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
@@ -410,17 +539,17 @@ const ClientDashboard = () => {
         {/* Mobile top app bar — primitiva compartida (MobileTopBar). */}
         <MobileTopBar
           role="client"
-          showBack={view !== "home"}
+          showBack={vistaActiva !== "home"}
           onBack={() => setView("home")}
           endSlot={
             <>
-              {userId && <ProfileSheet userId={userId} />}
+              {userId && <ProfileSheet userId={userId} onOpenSettings={abrirAjustes} />}
               <ClientDrawer
                 navTree={navTree}
-                view={view}
+                view={vistaActiva}
                 onSelect={setView}
                 onLogout={handleLogout}
-                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenSettings={abrirAjustes}
                 onOpenHelp={() => setHelpOpen(true)}
                 city={userCity}
               />
@@ -429,7 +558,7 @@ const ClientDashboard = () => {
         />
 
         <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
-        {view === "home" && (
+        {vistaActiva === "home" && (
           <>
             {/* Search */}
             <div className="pt-4">
@@ -439,12 +568,13 @@ const ClientDashboard = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Busca locales, ciudades, categorías..."
+                  aria-label="Buscar locales"
                   className="h-13 rounded-full pl-11 text-base"
                   style={{ height: "52px" }}
                 />
               </div>
 
-              {/* Category chips */}
+              {/* Category chips — 44 px de alto como mínimo (zona táctil). */}
               <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                 {CATEGORIES.map((c) => {
@@ -453,8 +583,10 @@ const ClientDashboard = () => {
                   return (
                     <button
                       key={c.id}
+                      type="button"
                       onClick={() => setActiveCat(c.id)}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      aria-pressed={active}
+                      className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-medium transition ${
                         active
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-card text-muted-foreground hover:border-primary/40"
@@ -468,9 +600,21 @@ const ClientDashboard = () => {
               </div>
             </div>
 
-            {/* Smart Home Recommender — solo cuando sin filtros activos */}
-            {!loading && !search.trim() && activeCat === "all" && partners.length > 0 && (
+            {/* Próximos eventos de verdad (calendario público), sin filtros activos. */}
+            {!hayFiltros && (
               <div className="mt-8">
+                <UpcomingEventsStrip
+                  city={userCity || null}
+                  onOpen={(id) => navigate(`/e/${id}`)}
+                  onSeeAll={() => navigate("/calendar")}
+                />
+              </div>
+            )}
+
+            {/* Recomendaciones inventadas: SOLO en modo demo y con la franja. */}
+            {showcase && !loading && !hayFiltros && partners.length > 0 && (
+              <div className="mt-8">
+                <ClientDemoBanner />
                 <SmartHomeStrip
                   partners={partners.slice(0, 8)}
                   onOpen={(id) => navigate(`/p/${id}`)}
@@ -489,43 +633,61 @@ const ClientDashboard = () => {
                   spin
                   compact
                 />
+              ) : partnersFallo ? (
+                <ErrorDeCarga
+                  sinConexion={partnersSinRed || !isOnline}
+                  que="los locales"
+                  reintentando={partnersQuery.isFetching}
+                  onRetry={() => void partnersQuery.refetch()}
+                />
               ) : filtered.length === 0 ? (
                 <PasifyEmptyState
                   icon={<Search className="h-7 w-7" />}
-                  eyebrow={search || activeCat !== "all" ? "Sin resultados" : "Sin locales"}
+                  eyebrow={hayFiltros ? "Sin resultados" : "Sin locales"}
                   title={
-                    search || activeCat !== "all" ? (
-                      <>Nada coincide con tu <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>búsqueda</span>.</>
+                    hayFiltros ? (
+                      <>Nada coincide con tu <span style={serifAccent}>búsqueda</span>.</>
                     ) : (
-                      <>Aún no hay <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>locales</span> en tu zona.</>
+                      <>Aún no hay <span style={serifAccent}>locales</span> en tu zona.</>
                     )
                   }
                   subtitle={
-                    search || activeCat !== "all"
+                    hayFiltros
                       ? "Prueba con otra ciudad o cambia la categoría arriba."
                       : "Pasify está creciendo cada semana. Vuelve pronto para descubrir los próximos locales."
                   }
                   action={
-                    search || activeCat !== "all"
+                    hayFiltros
                       ? { label: "Limpiar filtros", onClick: () => { setSearch(""); setActiveCat("all"); } }
                       : undefined
                   }
                   compact
                 />
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {filtered.map((p) => (
-                    <PartnerCard key={p.id} partner={p} onClick={() => navigate(`/p/${p.id}`)} />
-                  ))}
-                </div>
+                <>
+                  {(partnersQuery.isError || !isOnline) && (
+                    <AvisoRefresco
+                      sinConexion={!isOnline}
+                      texto="No hemos podido actualizar los locales: ves los últimos guardados."
+                      reintentando={partnersQuery.isFetching}
+                      onRetry={() => void partnersQuery.refetch()}
+                    />
+                  )}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map((p) => (
+                      <PartnerCard key={p.id} partner={p} onClick={() => navigate(`/p/${p.id}`)} />
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
           </>
         )}
 
-        {view === "live" && (
+        {vistaActiva === "live" && showcase && (
           <div>
+            <ClientDemoBanner />
             <h1 className="mb-1 text-3xl font-bold tracking-tight">En vivo</h1>
             <p className="mb-6 text-sm text-muted-foreground">
               Tu modo evento — line-up en directo, mapa interno, pagos con pulsera y muro de fotos.
@@ -534,8 +696,9 @@ const ClientDashboard = () => {
           </div>
         )}
 
-        {view === "concierge" && (
+        {vistaActiva === "concierge" && showcase && (
           <div>
+            <ClientDemoBanner />
             <h1 className="mb-1 text-3xl font-bold tracking-tight">Concierge</h1>
             <p className="mb-6 text-sm text-muted-foreground">
               Servicio premium: una persona organiza tu noche entera — mesas, restaurante, traslado, backstage.
@@ -544,17 +707,15 @@ const ClientDashboard = () => {
           </div>
         )}
 
-        {view === "loyalty" && (
+        {vistaActiva === "loyalty" && (
           <div>
             <h1 className="mb-1 text-3xl font-bold tracking-tight">Pasify Points</h1>
-            <p className="mb-6 text-sm text-muted-foreground">
-              Tu programa de fidelidad: gana puntos en cada evento, sube de nivel y canjea perks exclusivos.
-            </p>
+            <p className="mb-6 text-sm text-muted-foreground">{PUNTOS_TEXTO_HONESTO}</p>
             <ClientLoyalty />
           </div>
         )}
 
-        {view === "support" && (
+        {vistaActiva === "support" && (
           <div>
             <h1 className="mb-1 text-3xl font-bold tracking-tight">Soporte</h1>
             <p className="mb-6 text-sm text-muted-foreground">
@@ -564,28 +725,54 @@ const ClientDashboard = () => {
           </div>
         )}
 
-        {view === "favorites" && (
+        {vistaActiva === "favorites" && (
           <div className="pt-6">
             <h1 className="mb-1 text-2xl font-bold tracking-tight">Favoritos</h1>
             <p className="mb-4 text-sm text-muted-foreground">
               Los eventos que has guardado. Pulsa el corazón para quitar.
             </p>
 
-            {favEvents.length === 0 ? (
+            {favoritos.loading ? (
+              <PasifyEmptyState
+                icon={<Heart className="h-7 w-7" />}
+                eyebrow="Cargando"
+                title="Cargando tus favoritos…"
+                spin
+                compact
+              />
+            ) : !favoritos.hasData && (favoritos.isError || favoritos.offline) ? (
+              <ErrorDeCarga
+                sinConexion={favoritos.offline || !isOnline}
+                que="tus favoritos"
+                reintentando={favoritos.isFetching}
+                onRetry={() => void favoritos.refetch()}
+              />
+            ) : favEvents.length === 0 ? (
               <PasifyEmptyState
                 icon={<Heart className="h-7 w-7" />}
                 eyebrow="Sin favoritos"
-                title={<>Aún no has guardado <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>nada</span>.</>}
-                subtitle="Cuando marques un evento como favorito aparecerá aquí con calendario y cuenta atrás."
+                title={<>Aún no has guardado <span style={serifAccent}>nada</span>.</>}
+                subtitle="Cuando guardes un evento con el corazón, aparecerá aquí."
                 action={{ label: "Descubrir locales", onClick: () => setView("home") }}
               />
             ) : (
               <>
+                {(favoritos.isError || !isOnline) && (
+                  <AvisoRefresco
+                    sinConexion={!isOnline}
+                    texto="No hemos podido actualizar tus favoritos: ves los últimos guardados."
+                    reintentando={favoritos.isFetching}
+                    onRetry={() => void favoritos.refetch()}
+                  />
+                )}
+
                 {/* Tabs Lista / Calendario */}
                 <div className="mb-4 inline-flex rounded-full border border-border bg-card p-1">
                   <button
+                    type="button"
                     onClick={() => setFavTab("list")}
-                    className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    aria-pressed={favTab === "list"}
+                    className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${
                       favTab === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                     }`}
                   >
@@ -593,8 +780,10 @@ const ClientDashboard = () => {
                     Lista
                   </button>
                   <button
+                    type="button"
                     onClick={() => setFavTab("calendar")}
-                    className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    aria-pressed={favTab === "calendar"}
+                    className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${
                       favTab === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                     }`}
                   >
@@ -604,16 +793,54 @@ const ClientDashboard = () => {
                 </div>
 
                 {favTab === "list" && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {favEvents.map((e) => (
-                      <FavoritePosterCard
-                        key={e.id}
-                        event={e}
-                        onOpen={() => navigate(`/p/${e.partnerId}`)}
-                        onUnfav={() => toggleFav(e)}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                      Próximos · {favProximos.length}
+                    </h2>
+                    {favProximos.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground">
+                        No tienes favoritos próximos.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {favProximos.map((e) => (
+                          <FavoritePosterCard
+                            key={e.id}
+                            event={e}
+                            onOpen={() => abrirFavorito(e)}
+                            onUnfav={() => void toggleFav(e)}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {favPasados.length > 0 && (
+                      <section className="mt-8">
+                        <button
+                          type="button"
+                          onClick={() => setVerFavPasados((v) => !v)}
+                          aria-expanded={verFavPasados}
+                          className="flex min-h-[44px] w-full items-center justify-between rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                        >
+                          <span>Pasados · {favPasados.length}</span>
+                          <ChevronDown className={`h-4 w-4 transition ${verFavPasados ? "rotate-180" : ""}`} />
+                        </button>
+                        {verFavPasados && (
+                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {favPasados.map((e) => (
+                              <FavoritePosterCard
+                                key={e.id}
+                                event={e}
+                                past
+                                onOpen={() => abrirFavorito(e)}
+                                onUnfav={() => void toggleFav(e)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    )}
+                  </>
                 )}
 
                 {favTab === "calendar" && (
@@ -636,8 +863,9 @@ const ClientDashboard = () => {
                             <FavoritePosterCard
                               key={e.id}
                               event={e}
-                              onOpen={() => navigate(`/p/${e.partnerId}`)}
-                              onUnfav={() => toggleFav(e)}
+                              past={isEventOver(e)}
+                              onOpen={() => abrirFavorito(e)}
+                              onUnfav={() => void toggleFav(e)}
                             />
                           ))
                         )}
@@ -650,7 +878,7 @@ const ClientDashboard = () => {
           </div>
         )}
 
-        {view === "wallet" && (
+        {vistaActiva === "wallet" && (
           <Sentry.ErrorBoundary
             fallback={({ resetError }) => (
               <div className="mx-auto max-w-md py-12 text-center">
@@ -700,43 +928,6 @@ const ClientDashboard = () => {
               </div>
             )}
 
-            {/* Banner error explícito si falló el loader (RLS, network, etc.).
-                No camufla a "wallet vacío" — el usuario sabe que hubo un fallo
-                y puede reintentar. Si había entradas guardadas se siguen
-                viendo (y funcionan en la puerta). */}
-            {ticketsError && !ticketsLoading && (
-              <div
-                className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
-                style={{
-                  background: "rgba(232,84,42,0.08)",
-                  borderColor: "rgba(232,84,42,0.32)",
-                }}
-              >
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
-                  style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
-                >
-                  <Ticket className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-foreground">
-                    {tickets.length > 0 ? "No pudimos actualizar tus entradas" : "No pudimos cargar tu wallet"}
-                  </div>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-                    {tickets.length > 0 ? "Ves las últimas guardadas en este dispositivo; siguen valiendo en la puerta. " : ""}
-                    Detalles: <code className="font-mono text-[11px] text-orange-400">{ticketsError}</code>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void loadTickets()}
-                  className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-primary/40"
-                >
-                  Reintentar
-                </button>
-              </div>
-            )}
-
             {ticketsLoading ? (
               <PasifyEmptyState
                 icon={<Ticket className="h-7 w-7" />}
@@ -745,32 +936,108 @@ const ClientDashboard = () => {
                 subtitle="Estamos recuperando tus tickets más recientes."
                 spin
               />
+            ) : ticketsFallo && tickets.length === 0 ? (
+              // Uno u otro: sin entradas que enseñar, el error (con Reintentar)
+              // y no además "Aún no tienes entradas".
+              <ErrorDeCarga
+                sinConexion={ticketsSinRed || !isOnline}
+                que="tus entradas"
+                reintentando={ticketsQuery.isFetching}
+                onRetry={() => void loadTickets()}
+              />
             ) : tickets.length === 0 ? (
               <PasifyEmptyState
                 icon={<Ticket className="h-7 w-7" />}
                 eyebrow="Wallet vacío"
-                title={<>Aún no tienes <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic", fontWeight: 400, color: "#FF7A4D" }}>entradas</span>.</>}
+                title={<>Aún no tienes <span style={serifAccent}>entradas</span>.</>}
                 subtitle="Cuando compres una entrada aparecerá aquí con su QR, cuenta atrás y opción de añadirla al calendario."
                 action={{ label: "Descubrir locales", onClick: () => setView("home") }}
               />
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {tickets.map((t) => (
-                  <TicketCard
-                    key={t.id}
-                    ticket={t}
-                    onOpenQR={() => setOpenTicket({ ticket: t, event: t.event })}
-                    refundStatus={refundStatusForTicket(t.id)}
-                    onRequestRefund={refundRequestRefund}
-                  />
-                ))}
-              </div>
+              <>
+                {/* Entradas guardadas y un refresco que ha fallado (o sin red):
+                    se siguen enseñando, con la hora real de la última
+                    actualización. */}
+                {avisoEntradas && (
+                  <div
+                    role="status"
+                    className="mb-6 flex items-start gap-3 rounded-2xl border p-4"
+                    style={{
+                      background: "rgba(232,84,42,0.08)",
+                      borderColor: "rgba(232,84,42,0.32)",
+                    }}
+                  >
+                    <div
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+                      style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+                    >
+                      {ticketsEnPausa || !isOnline ? <WifiOff className="h-4 w-4" /> : <Ticket className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-foreground">
+                        {ticketsEnPausa || !isOnline ? "Sin conexión" : "No hemos podido actualizar tus entradas"}
+                      </div>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                        <ActualizadoHace momento={ticketsQuery.dataUpdatedAt} />
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadTickets()}
+                      disabled={ticketsQuery.isFetching}
+                      className="min-h-[44px] shrink-0 rounded-full border border-border bg-card px-4 text-xs font-medium hover:border-primary/40 disabled:opacity-60"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+
+                {entradasActivas.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground">
+                    No tienes entradas activas.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {entradasActivas.map((t) => (
+                      <TicketCard
+                        key={t.id}
+                        ticket={t}
+                        onOpenQR={() => setOpenTicketId(t.id)}
+                        refundStatus={refundStatusForTicket(t.id)}
+                        onRequestRefund={refundRequestRefund}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Reembolsadas: plegadas, sin QR, para que no desaparezcan sin rastro. */}
+                {entradasReembolsadas.length > 0 && (
+                  <section className="mt-8">
+                    <button
+                      type="button"
+                      onClick={() => setVerReembolsadas((v) => !v)}
+                      aria-expanded={verReembolsadas}
+                      className="flex min-h-[44px] w-full items-center justify-between rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                    >
+                      <span>Reembolsadas · {entradasReembolsadas.length}</span>
+                      <ChevronDown className={`h-4 w-4 transition ${verReembolsadas ? "rotate-180" : ""}`} />
+                    </button>
+                    {verReembolsadas && (
+                      <ul className="mt-3 space-y-2">
+                        {entradasReembolsadas.map((t) => (
+                          <EntradaReembolsada key={t.id} ticket={t} />
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )}
+              </>
             )}
 
             <TicketQRModal
               open={!!openTicket}
-              onClose={() => setOpenTicket(null)}
-              ticket={openTicket?.ticket ?? null}
+              onClose={() => setOpenTicketId(null)}
+              ticket={openTicket}
               event={openTicket?.event ?? null}
             />
           </div>
@@ -781,15 +1048,15 @@ const ClientDashboard = () => {
       {/* Bottom tab bar mobile — primitiva compartida (MobileBottomNav). */}
       <MobileBottomNav<View>
         items={tabBarItems}
-        activeId={view}
+        activeId={vistaActiva}
         onSelect={setView}
         drawerSlot={
           <ClientDrawer
             navTree={navTree}
-            view={view}
+            view={vistaActiva}
             onSelect={setView}
             onLogout={handleLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={abrirAjustes}
             onOpenHelp={() => setHelpOpen(true)}
             city={userCity}
             variant="tab"
@@ -798,13 +1065,13 @@ const ClientDashboard = () => {
       />
       </div>
 
-      {/* Sheets globales — abiertos desde el drawer */}
+      {/* Sheets globales — abiertos desde el drawer y desde el perfil */}
       <SettingsSheet
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         role="client"
         email={null}
-        displayName={userCity ? `Cliente · ${userCity}` : "Cliente Pasify"}
+        displayName={nombrePerfil || (userCity ? `Cliente · ${userCity}` : "Cliente Pasify")}
       />
       <HelpSheet
         open={helpOpen}
@@ -814,6 +1081,80 @@ const ClientDashboard = () => {
       />
     </div>
   );
+};
+
+// ============================================================================
+// Estados de carga: error sin datos y aviso de datos guardados
+// ============================================================================
+
+/** Sin nada que enseñar: error (o sin conexión) con Reintentar, nunca un "vacío". */
+const ErrorDeCarga = ({
+  sinConexion,
+  que,
+  reintentando,
+  onRetry,
+}: {
+  sinConexion: boolean;
+  /** "los locales", "tus favoritos"… */
+  que: string;
+  reintentando: boolean;
+  onRetry: () => void;
+}) => (
+  <PasifyEmptyState
+    icon={sinConexion ? <WifiOff className="h-7 w-7" /> : <AlertTriangle className="h-7 w-7" />}
+    eyebrow={sinConexion ? "Sin conexión" : "Error"}
+    title={`No hemos podido cargar ${que}`}
+    subtitle={
+      sinConexion
+        ? "Conéctate a internet y vuelve a intentarlo."
+        : "Ha fallado la conexión con Pasify. Vuelve a intentarlo en unos segundos."
+    }
+    action={{ label: reintentando ? "Reintentando…" : "Reintentar", onClick: onRetry }}
+    compact
+  />
+);
+
+/** Hay datos guardados pero el último refresco falló: se enseñan con este aviso. */
+const AvisoRefresco = ({
+  sinConexion,
+  texto,
+  reintentando,
+  onRetry,
+}: {
+  sinConexion: boolean;
+  texto: string;
+  reintentando: boolean;
+  onRetry: () => void;
+}) => (
+  <div role="status" className="mb-4 flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-2 text-sm">
+    {sinConexion ? (
+      <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+    ) : (
+      <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" />
+    )}
+    <span className="min-w-0 flex-1 text-muted-foreground">
+      {sinConexion ? "Sin conexión: ves lo último guardado." : texto}
+    </span>
+    <button
+      type="button"
+      onClick={onRetry}
+      disabled={reintentando}
+      className="min-h-[44px] shrink-0 rounded-full border border-border px-3 text-xs font-medium transition hover:border-primary/40 disabled:opacity-60"
+    >
+      Reintentar
+    </button>
+  </div>
+);
+
+/** "Actualizado hace 5 minutos" (dato real de la caché), al día cada minuto. */
+const ActualizadoHace = ({ momento }: { momento: number }) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  if (!momento) return <>Ves las últimas entradas guardadas en este dispositivo.</>;
+  return <>Actualizado {formatDistanceToNow(momento, { locale: es, addSuffix: true })}.</>;
 };
 
 // ============================================================================
@@ -960,121 +1301,142 @@ const CATEGORY_LABEL: Record<string, string> = {
   festival: "Festival",
   rooftop: "Rooftop",
   beachclub: "Beach Club",
+  restaurante: "Restaurante",
+  teatro: "Teatro",
   otro: "Otro",
 };
 
-// Card per evento favorito — stile poster identico a PartnerCard.
+// Card per evento favorito — stile poster identico a PartnerCard. La tarjeta
+// entera abre la página del evento (/e/:id); el corazón es un botón hermano
+// (no anidado: un botón dentro de otro no es válido ni accesible).
 const FavoritePosterCard = ({
   event,
   onOpen,
   onUnfav,
+  past = false,
 }: {
   event: FavEvent;
   onOpen: () => void;
   onUnfav: () => void;
+  /** Ya terminado: sin precio y con la etiqueta "Pasado". */
+  past?: boolean;
 }) => {
-  const date = new Date(event.date_start);
+  // Día y mes en la hora del evento (Europe/Madrid), no la del móvil.
+  const dayMonth = eventDayMonth(event.date_start);
+  const time = formatEventTime(event.date_start);
   const initial = (event.title?.[0] ?? "?").toUpperCase();
-  // "Desde X €" (precio mínimo de sus tipos) o "Gratis".
-  const priceLabel = eventPriceLabel(event.price_cents);
+  // "Desde X €" (precio mínimo de sus tipos) o "Gratis"; un evento pasado ya no se vende.
+  const priceLabel = past ? null : eventPriceLabel(event.price_cents);
   return (
-    <div
-      role="button"
-      onClick={onOpen}
-      className="group cursor-pointer overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10"
+    <article
+      className={`group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 ${
+        past ? "opacity-75" : ""
+      }`}
     >
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
-        {event.image_url ? (
-          <img
-            src={event.image_url}
-            alt={event.title}
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(232,84,42,0.85) 0%, rgba(184,56,26,0.95) 100%)",
-            }}
-          >
-            <span style={{ fontSize: 64, fontWeight: 800, color: "#F4EEE2", letterSpacing: "-0.04em" }}>
-              {initial}
-            </span>
-          </div>
-        )}
-
-        {/* Gradient bottom */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
-          style={{ background: "linear-gradient(to top, rgba(10,10,10,0.9) 0%, transparent 100%)" }}
-        />
-
-        {/* Date pill top-left */}
-        <div
-          className="absolute left-3 top-3 flex flex-col items-center rounded-md px-2 py-1 text-center"
-          style={{ background: "rgba(232,84,42,0.95)", color: "#fff" }}
-        >
-          <span className="text-[10px] font-bold uppercase leading-none tracking-wider">
-            {format(date, "MMM", { locale: es })}
-          </span>
-          <span className="mt-0.5 text-base font-bold leading-none">{format(date, "d", { locale: es })}</span>
-        </div>
-
-        {/* Heart top-right */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnfav();
-          }}
-          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur transition hover:scale-110"
-          style={{ background: "rgba(10,10,10,0.45)" }}
-          aria-label="Quitar de favoritos"
-        >
-          <Heart className="h-4 w-4" fill="#E8542A" stroke="#E8542A" />
-        </button>
-
-        {/* Title + venue bottom */}
-        <div className="absolute inset-x-0 bottom-0 p-3">
-          <div className="truncate text-sm font-bold leading-tight text-white drop-shadow-md md:text-base">
-            {event.title}
-          </div>
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="truncate text-[11px] text-white/85 drop-shadow">
-              {event.partnerName ?? event.city}
-              {event.partnerName && ` · ${event.city}`}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Ver ${event.title}`}
+        className="block w-full text-left"
+      >
+        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+          {event.image_url ? (
+            <img
+              src={event.image_url}
+              alt=""
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className="flex h-full w-full items-center justify-center"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(232,84,42,0.85) 0%, rgba(184,56,26,0.95) 100%)",
+              }}
+            >
+              <span style={{ fontSize: 64, fontWeight: 800, color: "#F4EEE2", letterSpacing: "-0.04em" }}>
+                {initial}
+              </span>
             </div>
-            {priceLabel && (
-              <div
-                className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold"
-                style={{ background: "rgba(232,84,42,0.95)", color: "#fff" }}
-              >
-                {priceLabel}
+          )}
+
+          {/* Gradient bottom */}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
+            style={{ background: "linear-gradient(to top, rgba(10,10,10,0.9) 0%, transparent 100%)" }}
+          />
+
+          {/* Date pill top-left */}
+          {dayMonth && (
+            <div
+              className="absolute left-3 top-3 flex flex-col items-center rounded-md px-2 py-1 text-center"
+              style={{ background: past ? "rgba(90,84,74,0.95)" : "rgba(232,84,42,0.95)", color: "#fff" }}
+            >
+              <span className="text-[10px] font-bold uppercase leading-none tracking-wider">{dayMonth.month}</span>
+              <span className="mt-0.5 text-base font-bold leading-none">{dayMonth.day}</span>
+            </div>
+          )}
+
+          {/* Title + venue bottom */}
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <div className="truncate text-sm font-bold leading-tight text-white drop-shadow-md md:text-base">
+              {event.title}
+            </div>
+            <div className="mt-0.5 flex items-center justify-between gap-2">
+              <div className="truncate text-[11px] text-white/85 drop-shadow">
+                {time && `${time} · `}
+                {event.partnerName ?? event.city}
+                {event.partnerName && event.city && ` · ${event.city}`}
               </div>
-            )}
+              {past ? (
+                <div
+                  className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold"
+                  style={{ background: "rgba(90,84,74,0.95)", color: "#fff" }}
+                >
+                  Pasado
+                </div>
+              ) : (
+                priceLabel && (
+                  <div
+                    className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold"
+                    style={{ background: "rgba(232,84,42,0.95)", color: "#fff" }}
+                  >
+                    {priceLabel}
+                  </div>
+                )
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </button>
+
+      {/* Heart top-right: hermano de la tarjeta, no dentro del botón */}
+      <button
+        type="button"
+        onClick={onUnfav}
+        className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full backdrop-blur transition hover:scale-110"
+        style={{ background: "rgba(10,10,10,0.45)" }}
+        aria-label={`Quitar ${event.title} de favoritos`}
+      >
+        <Heart className="h-4 w-4" fill="#E8542A" stroke="#E8542A" />
+      </button>
+    </article>
   );
 };
 
+// Tarjeta de local. Sin corazón de favoritos: guardaba el id del perfil en
+// partner_favorites.org_id (FK a organizations), fallaba siempre con 23503 sin
+// avisar y cada tarjeta lanzaba su propia consulta. Vuelve en la Ola 2 con la
+// organización del local bien resuelta.
 const PartnerCard = ({ partner, onClick }: { partner: Partner; onClick: () => void }) => {
   const name = partner.business_name ?? "Local";
   const initial = (name.trim()[0] ?? "?").toUpperCase();
   const cover = partner.cover_image_url;
-  const { isFavorite, toggle } = useFavoritePartners();
-  const fav = isFavorite(partner.id);
-
-  const handleFav = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    toggle(partner.id);
-  };
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className="group overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/10"
     >
@@ -1083,7 +1445,7 @@ const PartnerCard = ({ partner, onClick }: { partner: Partner; onClick: () => vo
         {cover ? (
           <img
             src={cover}
-            alt={name}
+            alt=""
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             loading="lazy"
           />
@@ -1106,33 +1468,6 @@ const PartnerCard = ({ partner, onClick }: { partner: Partner; onClick: () => vo
           className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
           style={{ background: "linear-gradient(to top, rgba(10,10,10,0.85) 0%, transparent 100%)" }}
         />
-
-        {/* Favorite heart top-left (span con role=button per evitare button>button) */}
-        <span
-          role="button"
-          tabIndex={0}
-          aria-label={fav ? "Quitar de favoritos" : "Añadir a favoritos"}
-          aria-pressed={fav}
-          onClick={handleFav}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") handleFav(e);
-          }}
-          className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full backdrop-blur-md transition hover:scale-110 active:scale-95"
-          style={{
-            background: fav ? "rgba(232,84,42,0.95)" : "rgba(10,10,10,0.55)",
-            border: `1px solid ${fav ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.18)"}`,
-            boxShadow: fav
-              ? "0 6px 18px -6px rgba(232,84,42,0.65), inset 0 1px 0 rgba(255,255,255,0.25)"
-              : "0 4px 12px -4px rgba(0,0,0,0.4)",
-          }}
-        >
-          <Heart
-            className="h-[18px] w-[18px] transition"
-            color="#fff"
-            fill={fav ? "#fff" : "transparent"}
-            strokeWidth={fav ? 2 : 2.2}
-          />
-        </span>
 
         {/* Category badge top-right */}
         {partner.business_category && (
@@ -1189,17 +1524,24 @@ const PartnerCard = ({ partner, onClick }: { partner: Partner; onClick: () => vo
 
 const ticketCardMono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-const useCountdown = (target: Date | string | null | undefined) => {
+/**
+ * Cuenta atrás de una entrada. "Pasado" con la misma regla que el servidor
+ * (isEventOver: hora de fin o, sin ella, 12 h después de empezar); antes una
+ * noche de 23:00 a 06:00 salía "Caducada" a las 03:00.
+ */
+const useCountdown = (event: { date_start: string; date_end?: string | null } | null) => {
   const [now, setNow] = useState<number>(() => Date.now());
+  const start = event?.date_start ?? null;
   useEffect(() => {
-    if (!target) return;
+    if (!start) return;
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
-  }, [target]);
-  if (!target) return { label: "—", state: "none" as const };
-  const t = new Date(target).getTime();
+  }, [start]);
+  if (!event || !start) return { label: "—", state: "none" as const };
+  const t = new Date(start).getTime();
+  if (Number.isNaN(t)) return { label: "—", state: "none" as const };
+  if (isEventOver(event, now)) return { label: "Finalizado", state: "past" as const };
   const diff = t - now;
-  if (diff <= -4 * 60 * 60 * 1000) return { label: "Finalizado", state: "past" as const };
   if (diff <= 0) return { label: "Está ocurriendo", state: "live" as const };
   const min = Math.floor(diff / 60_000);
   const days = Math.floor(min / (60 * 24));
@@ -1224,24 +1566,30 @@ const TicketCard = ({
   onRequestRefund: (ticketId: string, reason: string) => Promise<unknown> | unknown;
 }) => {
   const event = ticket.event;
-  const date = event ? new Date(event.date_start) : null;
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const dayMonth = event ? eventDayMonth(event.date_start) : null;
   const time = event ? formatEventTime(event.date_start) : "";
-  const countdown = useCountdown(date);
+  const countdown = useCountdown(event);
   const { toast } = useToast();
   const refundState = refundStatus?.status ?? null;
+  // Evento cancelado por el local: sin QR ni código, el importe se devuelve
+  // solo (una entrada ya usada sigue siendo "usada").
+  const cancelled = ticket.status !== "used" && event?.status === "cancelled";
   const canRefund =
     !refundStatus &&
+    !cancelled &&
     ticket.status !== "used" &&
     ticket.status !== "refunded" &&
     countdown.state !== "past";
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundReason, setRefundReason] = useState("");
+  const [savingIcs, setSavingIcs] = useState(false);
 
   const statusLabel =
     ticket.status === "used"
       ? "Usado"
+      : cancelled
+      ? "Cancelado"
       : ticket.status === "refunded"
       ? "Reembolsado"
       : countdown.state === "past"
@@ -1250,24 +1598,42 @@ const TicketCard = ({
   const statusColor =
     ticket.status === "used"
       ? "rgba(10,10,10,0.7)"
+      : cancelled
+      ? "rgba(90,84,74,0.95)"
       : ticket.status === "refunded"
       ? "rgba(232,176,76,0.95)"
       : countdown.state === "past"
       ? "rgba(140,140,140,0.95)"
       : "rgba(232,84,42,0.95)";
 
-  const handleIcs = (e: React.MouseEvent) => {
+  // .ics: descarga en la web; en la app, hoja de compartir del sistema
+  // (el `<a download>` de antes no hacía nada en iOS ni en Android).
+  const handleIcs = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!event || !date) return;
-    downloadIcs(`pasify-${ticket.id.slice(0, 8)}`, {
-      uid: ticket.id,
-      title: event.title ?? "Evento Pasify",
-      description: event.partner_name
-        ? `Pasify · ${event.partner_name}`
-        : "Tu entrada en Pasify",
-      location: event.venue_name ?? event.partner_name ?? undefined,
-      start: date,
-    });
+    if (!event || savingIcs) return;
+    setSavingIcs(true);
+    try {
+      await downloadIcs(`pasify-${ticket.id.slice(0, 8)}`, {
+        uid: ticket.id,
+        title: event.title ?? "Evento Pasify",
+        description: event.partner_name
+          ? `Pasify · ${event.partner_name}`
+          : "Tu entrada en Pasify",
+        location: event.venue_name ?? event.partner_name ?? undefined,
+        start: event.date_start,
+        end: event.date_end ?? undefined,
+        url: publicEventUrl(ticket.event_id),
+      });
+    } catch (err) {
+      console.warn("[cartera] no se pudo preparar el .ics", err);
+      toast({
+        title: "No se ha podido añadir al calendario",
+        description: "Vuelve a intentarlo en unos segundos.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingIcs(false);
+    }
   };
 
   const handleMaps = (e: React.MouseEvent) => {
@@ -1295,7 +1661,7 @@ const TicketCard = ({
           <img
             src={event.image_url}
             alt={event.title ?? "Evento"}
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${cancelled ? "grayscale" : ""}`}
             loading="lazy"
           />
         ) : (
@@ -1390,102 +1756,123 @@ const TicketCard = ({
           </div>
         )}
 
-        {/* Countdown */}
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <span
-            className="text-[10px] uppercase text-muted-foreground"
-            style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
+        {cancelled ? (
+          // Sin QR, sin código y sin cuenta atrás: esta entrada ya no vale.
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-2xl border px-3 py-3"
+            style={{ background: "rgba(184,56,26,0.10)", borderColor: "rgba(184,56,26,0.45)" }}
           >
-            Cuenta atrás
-          </span>
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase"
-            style={{
-              ...ticketCardMono,
-              letterSpacing: "0.14em",
-              color:
-                countdown.state === "live"
-                  ? "#4DB87A"
-                  : countdown.state === "past"
-                  ? "#8A8275"
-                  : countdown.state === "imminent" || countdown.state === "soon"
-                  ? "#E8B04C"
-                  : "#FF7A4D",
-            }}
-          >
-            {(countdown.state === "live" || countdown.state === "imminent") && (
-              <span className="relative inline-flex h-1.5 w-1.5">
-                <span
-                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-                  style={{
-                    background: countdown.state === "live" ? "#4DB87A" : "#E8B04C",
-                  }}
-                />
-                <span
-                  className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                  style={{
-                    background: countdown.state === "live" ? "#4DB87A" : "#E8B04C",
-                  }}
-                />
-              </span>
-            )}
-            {countdown.label}
-          </span>
-        </div>
-
-        {/* CTAs */}
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={onOpenQR}
-            className="group/btn flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white"
-            style={{
-              background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-              boxShadow:
-                "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 6px 16px -4px rgba(232,84,42,0.5), 0 14px 32px -10px rgba(184,56,26,0.5)",
-              letterSpacing: "-0.005em",
-            }}
-          >
-            <Ticket className="h-4 w-4" />
-            Ver mi QR
-            <span
-              aria-hidden="true"
-              className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
-            >
-              →
-            </span>
-          </button>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleIcs}
-              disabled={!event || !date}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
-            >
-              <CalendarDays className="h-3.5 w-3.5" />
-              CALENDARIO
-            </button>
-            <button
-              type="button"
-              onClick={handleMaps}
-              disabled={!event?.venue_name && !event?.partner_name}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              CÓMO LLEGAR
-            </button>
+            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-orange-400" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">Evento cancelado · te devolvemos el importe</div>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                El local ha cancelado el evento. No hace falta que hagas nada: el reembolso va a tu método de pago.
+              </p>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Countdown */}
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span
+                className="text-[10px] uppercase text-muted-foreground"
+                style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
+              >
+                Cuenta atrás
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase"
+                style={{
+                  ...ticketCardMono,
+                  letterSpacing: "0.14em",
+                  color:
+                    countdown.state === "live"
+                      ? "#4DB87A"
+                      : countdown.state === "past"
+                      ? "#8A8275"
+                      : countdown.state === "imminent" || countdown.state === "soon"
+                      ? "#E8B04C"
+                      : "#FF7A4D",
+                }}
+              >
+                {(countdown.state === "live" || countdown.state === "imminent") && (
+                  <span className="relative inline-flex h-1.5 w-1.5">
+                    <span
+                      className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                      style={{
+                        background: countdown.state === "live" ? "#4DB87A" : "#E8B04C",
+                      }}
+                    />
+                    <span
+                      className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                      style={{
+                        background: countdown.state === "live" ? "#4DB87A" : "#E8B04C",
+                      }}
+                    />
+                  </span>
+                )}
+                {countdown.label}
+              </span>
+            </div>
 
+            {/* CTAs */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={onOpenQR}
+                className="group/btn flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white"
+                style={{
+                  background: "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 6px 16px -4px rgba(232,84,42,0.5), 0 14px 32px -10px rgba(184,56,26,0.5)",
+                  letterSpacing: "-0.005em",
+                }}
+              >
+                <Ticket className="h-4 w-4" />
+                Ver mi QR
+                <span
+                  aria-hidden="true"
+                  className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
+                >
+                  →
+                </span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => void handleIcs(e)}
+                  disabled={!event || savingIcs}
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  CALENDARIO
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMaps}
+                  disabled={!event?.venue_name && !event?.partner_name}
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  CÓMO LLEGAR
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="mt-2 space-y-2">
           {/* Refund link */}
           {canRefund && (
             <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  className="mx-auto block text-[10px] uppercase text-muted-foreground transition hover:text-orange-500"
+                  className="mx-auto block min-h-[44px] px-2 text-[10px] uppercase text-muted-foreground transition hover:text-orange-500"
                   style={{ ...ticketCardMono, letterSpacing: "0.18em" }}
                 >
                   ¿No puedes asistir? Solicita reembolso
@@ -1569,6 +1956,36 @@ const TicketCard = ({
         </div>
       </div>
     </article>
+  );
+};
+
+/** Fila de la sección plegada "Reembolsadas": sin QR ni acciones. */
+const EntradaReembolsada = ({ ticket }: { ticket: WalletTicketRow }) => {
+  const event = ticket.event;
+  const cuando = event ? formatEventDateTime(event.date_start) : "";
+  return (
+    <li className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+      <RotateCcw className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-foreground">{event?.title ?? "Evento"}</div>
+        <div className="truncate text-[12px] text-muted-foreground">
+          {[cuando, ticket.tier_name].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+      <div className="shrink-0 text-right">
+        <div
+          className="text-[10px] font-bold uppercase text-orange-400"
+          style={{ ...ticketCardMono, letterSpacing: "0.16em" }}
+        >
+          Reembolsada
+        </div>
+        {ticket.amount_paid_cents > 0 && (
+          <div className="text-[12px] text-muted-foreground" style={ticketCardMono}>
+            {formatPriceCents(ticket.amount_paid_cents)}
+          </div>
+        )}
+      </div>
+    </li>
   );
 };
 

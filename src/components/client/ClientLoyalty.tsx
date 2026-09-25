@@ -12,8 +12,20 @@ import {
   TrendingUp,
   Trophy,
   Loader2,
+  RotateCcw,
+  WifiOff,
 } from "lucide-react";
 import { useLoyalty, type LoyaltyLevel, type LoyaltyMovement } from "@/hooks/useLoyalty";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
+
+/**
+ * Pasify Points (D-5): los puntos se siguen acumulando, pero hasta que exista
+ * el canje no se enseñan ventajas por nivel (descuentos, VIP…) ni una
+ * equivalencia en euros. Solo saldo, niveles, movimientos y el aviso de que
+ * pronto se podrán canjear.
+ */
+export const PUNTOS_TEXTO_HONESTO = "Acumulas puntos con cada compra. Pronto podrás canjearlos.";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const serif = {
@@ -53,8 +65,23 @@ const movementVisual = (m: LoyaltyMovement) => {
 };
 
 export const ClientLoyalty = () => {
-  const { balance, levels, movements, currentLevel, nextLevel, pointsToNext, progressPct, loading, error } =
-    useLoyalty();
+  const {
+    balance,
+    levels,
+    movements,
+    currentLevel,
+    nextLevel,
+    pointsToNext,
+    progressPct,
+    loading,
+    error,
+    hasData,
+    isFetching,
+    offline,
+    refetch,
+  } = useLoyalty();
+  const { isOnline } = useNetworkStatus();
+  const sinConexion = offline || !isOnline;
 
   const visualsByCode = useMemo(() => {
     const m = new Map<string, { icon: React.ReactNode; color: string }>();
@@ -70,25 +97,63 @@ export const ClientLoyalty = () => {
     );
   }
 
-  if (error) {
+  // Sin nada que enseñar: error (o falta de red) con Reintentar. Si hay saldo
+  // guardado, se enseña y el fallo va en un aviso pequeño (abajo): antes un
+  // refresco fallido tapaba el saldo con el mensaje técnico.
+  if (!hasData && (error || offline)) {
     return (
-      <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">
-        No pudimos cargar tus puntos: {error}
-      </div>
+      <PasifyEmptyState
+        icon={sinConexion ? <WifiOff className="h-7 w-7" /> : <Sparkles className="h-7 w-7" />}
+        eyebrow={sinConexion ? "Sin conexión" : "Error"}
+        title="No hemos podido cargar tus puntos"
+        subtitle={
+          sinConexion
+            ? "Conéctate a internet para ver tu saldo y tus movimientos."
+            : "Ha fallado la conexión con Pasify. Vuelve a intentarlo en unos segundos."
+        }
+        action={{ label: isFetching ? "Reintentando…" : "Reintentar", onClick: () => void refetch() }}
+        compact
+      />
     );
   }
+
+  const avisoRefresco = hasData && error && (
+    <div
+      role="status"
+      className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm"
+    >
+      {sinConexion ? (
+        <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <RotateCcw className="h-4 w-4 shrink-0 text-muted-foreground" />
+      )}
+      <span className="min-w-0 flex-1 text-muted-foreground">
+        {sinConexion
+          ? "Sin conexión: ves el último saldo guardado."
+          : "No hemos podido actualizar tus puntos: ves el último saldo guardado."}
+      </span>
+      <button
+        type="button"
+        onClick={() => void refetch()}
+        disabled={isFetching}
+        className="min-h-[44px] shrink-0 rounded-full border border-border px-3 text-xs font-medium transition hover:border-primary/40 disabled:opacity-60"
+      >
+        Reintentar
+      </button>
+    </div>
+  );
 
   // Si no hay levels seedados todavía (proyectos nuevos sin la mig 0021
   // aplicada), mostramos estado neutro.
   if (levels.length === 0 || !currentLevel) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center">
-        <Sparkles className="mx-auto mb-3 h-10 w-10 text-orange-500" />
-        <h3 className="text-xl font-semibold tracking-tight">Pasify Points</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          El programa de puntos se activará pronto. Mientras tanto, sigue comprando entradas — los
-          puntos se acumularán retroactivamente.
-        </p>
+      <div className="space-y-4">
+        {avisoRefresco}
+        <div className="rounded-2xl border border-border bg-card p-8 text-center">
+          <Sparkles className="mx-auto mb-3 h-10 w-10 text-orange-500" />
+          <h3 className="text-xl font-semibold tracking-tight">Pasify Points</h3>
+          <p className="mt-2 text-sm text-muted-foreground">{PUNTOS_TEXTO_HONESTO}</p>
+        </div>
       </div>
     );
   }
@@ -99,6 +164,8 @@ export const ClientLoyalty = () => {
 
   return (
     <div className="space-y-6">
+      {avisoRefresco}
+
       {/* Hero membership card */}
       <section
         className="relative overflow-hidden rounded-2xl p-6 text-white md:p-8"
@@ -266,24 +333,9 @@ export const ClientLoyalty = () => {
                       {t.min_points}+ pts
                     </span>
                   </div>
-                  {t.perks.length > 0 && (
-                    <ul className="mt-2 flex flex-wrap gap-1.5">
-                      {t.perks.map((p, idx) => (
-                        <li
-                          key={`${t.code}-perk-${idx}`}
-                          className="rounded-full px-2 py-0.5 text-[10px]"
-                          style={{
-                            ...mono,
-                            letterSpacing: "0.1em",
-                            background: "rgba(255,255,255,0.04)",
-                            color: isReached ? "#C9BFA8" : "rgba(244,238,226,0.4)",
-                          }}
-                        >
-                          {p}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {/* Las ventajas de cada nivel (t.perks) no se enseñan hasta
+                      que exista el canje (D-5): no se promete lo que aún no
+                      se puede dar. */}
                 </div>
               </li>
             );

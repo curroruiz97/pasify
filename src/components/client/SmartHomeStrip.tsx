@@ -34,8 +34,13 @@ interface Strip {
 }
 
 /**
- * SmartHomeStrip — carruseles de descubrimiento del cliente impulsados por IA mock.
- * Se inyecta arriba del grid de locales para dar la sensación de feed personalizado.
+ * SmartHomeStrip — carruseles de descubrimiento del cliente con recomendaciones
+ * INVENTADAS (no hay IA ni datos de amigos detrás).
+ *
+ * SOLO MODO DEMO (D-7): ClientDashboard la pinta únicamente con el flag
+ * client_showcase, en la web y debajo de la franja "DEMO · datos ficticios".
+ * Los motivos citan locales ficticios, nunca marcas reales, y los contadores
+ * son fijos (antes salían de Math.random y cambiaban en cada render).
  */
 export const SmartHomeStrip = ({ partners, onOpen }: Props) => {
   if (partners.length === 0) return null;
@@ -100,10 +105,11 @@ const buildStrips = (partners: Partner[]): Strip[] => {
 
   const becauseReasons = new Map<string, string>();
   because.forEach((p, i) => {
+    // Locales ficticios: la demo no puede citar marcas reales.
     const seeds = [
-      "Porque te gustó Pacha Ibiza",
-      "Porque has ido 3 veces a Razzmatazz",
-      "Similar a tu última visita a Sala Apolo",
+      "Porque te gustó Sala Órbita",
+      "Porque has ido 3 veces a Club Marea",
+      "Similar a tu última visita a Terraza Brisa",
       "Coincide con tu género (house · techno)",
     ];
     becauseReasons.set(p.id, seeds[i % seeds.length]);
@@ -184,13 +190,13 @@ const DiscoveryStrip = ({ strip, onOpen }: { strip: Strip; onOpen: (id: string) 
       className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden"
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
-      {strip.partners.map((p) => (
+      {strip.partners.map((p, i) => (
         <DiscoveryCard
           key={p.id}
           partner={p}
           accent={strip.accent}
           reason={strip.reasonByPartner?.get(p.id)}
-          friendsGoing={strip.kind === "friends" ? Math.floor(Math.random() * 3) + 1 : 0}
+          friendsGoing={strip.kind === "friends" ? (i % 3) + 1 : 0}
           onClick={() => onOpen(p.id)}
         />
       ))}

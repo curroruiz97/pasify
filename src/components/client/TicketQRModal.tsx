@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { PrivacyScreen } from "@capacitor-community/privacy-screen";
 import QRCodeLib from "qrcode";
-import { CheckCircle2, Clock, MapPin, Sun } from "lucide-react";
+import { Ban, CheckCircle2, Clock, MapPin, RotateCcw, Sun } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,9 @@ import {
  *   que PrivacyScreen intenta evitar: copias que se revenden varias veces.
  * - Fecha y hora siempre en la hora del evento (Europe/Madrid), no en la del
  *   móvil.
+ * - Entrada reembolsada o de un evento cancelado: ni QR ni código de puerta
+ *   (ya no vale), solo el aviso. Así también si el modal se abrió con datos
+ *   de antes del cambio.
  */
 
 export type Ticket = {
@@ -53,6 +56,10 @@ export type Ticket = {
 export type TicketEventInfo = {
   title: string;
   date_start: string;
+  /** Hora de fin, si el local la puso (isEventOver usa date_start + 12 h si no). */
+  date_end?: string | null;
+  /** Estado del evento: 'cancelled' = sin QR ni código, se devuelve el importe. */
+  status?: string | null;
   city: string;
   venue_name: string | null;
   image_url: string | null;
@@ -75,7 +82,13 @@ const noSelect: React.CSSProperties = {
 
 export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const qrToken = ticket?.qr_token ?? null;
+  const isUsed = ticket?.status === "used";
+  // Una entrada usada sigue siendo "usada" aunque luego se cancele el evento
+  // (la cancelación solo devuelve las pagadas sin usar).
+  const isRefunded = !isUsed && ticket?.status === "refunded";
+  const isCancelled = !isUsed && !isRefunded && event?.status === "cancelled";
+  const blocked = isRefunded || isCancelled;
+  const qrToken = ticket && !blocked ? ticket.qr_token : null;
 
   useEffect(() => {
     if (!open || !qrToken) {
@@ -109,7 +122,6 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
 
   if (!ticket) return null;
 
-  const isUsed = ticket.status === "used";
   const holder = ticketHolderName(ticket);
   const title = event?.title ?? "Evento";
   const when = event ? formatEventDateTime(event.date_start) : "";
@@ -142,12 +154,20 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
             <span
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider backdrop-blur"
               style={{
-                background: isUsed ? "rgba(10,10,10,0.4)" : "rgba(244,238,226,0.18)",
+                background: isUsed || blocked ? "rgba(10,10,10,0.4)" : "rgba(244,238,226,0.18)",
               }}
             >
               {isUsed ? (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5" /> Usada
+                </>
+              ) : isCancelled ? (
+                <>
+                  <Ban className="h-3.5 w-3.5" /> Evento cancelado
+                </>
+              ) : isRefunded ? (
+                <>
+                  <RotateCcw className="h-3.5 w-3.5" /> Reembolsada
                 </>
               ) : (
                 <>
@@ -187,7 +207,21 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
           <div className="absolute -left-3 top-0 h-6 w-6 rounded-full bg-card" />
           <div className="absolute -right-3 top-0 h-6 w-6 rounded-full bg-card" />
 
-          {qrDataUrl ? (
+          {blocked ? (
+            <div
+              role="status"
+              className="flex h-72 w-72 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center"
+              style={{ borderColor: "rgba(184,56,26,0.45)", color: "#B8381A" }}
+            >
+              {isCancelled ? <Ban className="h-10 w-10" /> : <RotateCcw className="h-10 w-10" />}
+              <p className="text-base font-bold leading-snug">
+                {isCancelled ? "Evento cancelado · te devolvemos el importe" : "Entrada reembolsada"}
+              </p>
+              <p className="text-[12px] font-medium leading-relaxed opacity-80" style={{ color: "#0F0F0F" }}>
+                Esta entrada ya no vale en la puerta.
+              </p>
+            </div>
+          ) : qrDataUrl ? (
             <div className="relative">
               <img
                 src={qrDataUrl}
@@ -225,7 +259,7 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
           >
             {ticket.tier_name || "Entrada"}
           </p>
-          {!isUsed && ticketDoorCode(qrToken) ? (
+          {!isUsed && !blocked && ticketDoorCode(qrToken) ? (
             <p className="mt-1 font-mono text-[11px] uppercase tracking-wider opacity-60">
               Código <span className="text-sm font-semibold opacity-100">{ticketDoorCode(qrToken)}</span>
             </p>
@@ -243,7 +277,7 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
 
         {/* Pie */}
         <div className="border-t border-border bg-card p-3">
-          {!isUsed && (
+          {!isUsed && !blocked && (
             <p className="mb-3 flex items-center justify-center gap-1.5 text-center text-[12px] text-muted-foreground">
               <Sun className="h-3.5 w-3.5 shrink-0" />
               Sube el brillo y muestra el código completo en la puerta.

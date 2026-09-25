@@ -48,6 +48,15 @@ const MAX_EDAD_MS = 45 * 60 * 1000;
 /** Evento de ventana que avisa a la cartera de que hay entradas nuevas. */
 export const TICKETS_UPDATED_EVENT = "pasify:tickets-updated";
 
+/**
+ * 409 de `confirm-checkout-session`: en producción, una sesión de Stripe de
+ * modo prueba no genera entradas. Reintentar no lo arregla.
+ */
+export const TEST_PAYMENT_NOT_ACCEPTED = "test_payment_not_accepted";
+/** Lo que ve el comprador en ese caso (páginas de vuelta y aviso de la app). */
+export const TEST_PAYMENT_MESSAGE =
+  "Este pago no es válido (modo de prueba). No se ha emitido ninguna entrada.";
+
 interface PendingCheckout {
   sessionId: string;
   orderId?: string;
@@ -184,6 +193,8 @@ export type CheckoutConfirmationState =
   | { phase: "expired"; orderId: string | null }
   /** El servidor no acepta la llamada sin sesion (401): no se puede comprobar aqui. */
   | { phase: "unverifiable" }
+  /** Pago de modo prueba en produccion (409 test_payment_not_accepted): sin entradas. */
+  | { phase: "test_payment" }
   | { phase: "error"; httpStatus: number; code: string | null };
 
 /** Esperas entre intentos (~70 s en total). Con pago con tarjeta Stripe suele
@@ -235,6 +246,10 @@ export function useCheckoutConfirmation(sessionId: string | null, orderId: strin
 
       if (res.httpStatus === 401) {
         setState({ phase: "unverifiable" });
+        return;
+      }
+      if (res.code === TEST_PAYMENT_NOT_ACCEPTED) {
+        setState({ phase: "test_payment" });
         return;
       }
       // Red caida, 5xx o rate limit: transitorio, reintentamos.
@@ -298,6 +313,13 @@ export function usePendingCheckoutResume() {
         const res = await confirmCheckoutSession(pending.sessionId, pending.orderId);
 
         if (!res.ok) {
+          // Pago de modo prueba en producción: no hay entradas y no las habrá.
+          // Aquí sí se avisa: el usuario acaba de pagar y espera su entrada.
+          if (res.code === TEST_PAYMENT_NOT_ACCEPTED) {
+            await capacitorStorage.removeItem(KEY);
+            toast.error("Pago no válido", { description: TEST_PAYMENT_MESSAGE });
+            return;
+          }
           // Pedido inexistente o que no es nuestro: reintentar no lo arregla.
           if (res.httpStatus === 400 || res.httpStatus === 403 || res.httpStatus === 404) {
             await capacitorStorage.removeItem(KEY);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -13,6 +14,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
+import { qk } from "@/lib/cache/keys";
 
 const NETWORK_TIMEOUT_MS = 8000;
 
@@ -36,9 +38,13 @@ interface EditPersonalInfoSheetProps {
  *  - try/catch/finally correcto para que el botón de guardar SIEMPRE se
  *    vuelva a habilitar, haya éxito, error o timeout,
  *  - mensajes de error visibles en vez de fallar en silencio.
+ *
+ * Al guardar invalida el perfil de la caché (qk.me.profile): la hoja de perfil
+ * del cliente y la cabecera enseñan el nombre nuevo sin recargar.
  */
 const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfoSheetProps) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -129,6 +135,8 @@ const EditPersonalInfoSheet = ({ open, onOpenChange, onSaved }: EditPersonalInfo
       );
 
       if (error) throw error;
+
+      void queryClient.invalidateQueries({ queryKey: qk.me.profile(user.id) });
 
       toast({
         title: "Perfil actualizado",

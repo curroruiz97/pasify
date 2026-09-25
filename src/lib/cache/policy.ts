@@ -31,6 +31,8 @@ function reglaPara(key: QueryKey): Regla {
       case "refunds":
       case "loyalty":
         return { maxAgeMs: 7 * DIA };
+      case "client-showcase": // modo demo: se pregunta en cada arranque, nunca se guarda
+        return null;
       default:
         return null; // soporte: conversación privada, solo memoria
     }

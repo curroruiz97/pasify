@@ -1,3 +1,5 @@
+import { saveOrShareFile } from "@/lib/saveOrShareFile";
+
 /**
  * Generador minimal de archivos .ics (iCalendar RFC5545) para
  * "Añadir al calendario" desde el wallet del cliente. Sin dependencias.
@@ -48,15 +50,17 @@ export const buildIcsContent = (event: IcsEvent): string => {
   return lines.join("\r\n");
 };
 
-export const downloadIcs = (filename: string, event: IcsEvent) => {
-  const content = buildIcsContent(event);
-  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".ics") ? filename : `${filename}.ics`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-};
+/**
+ * Guarda el .ics (web) o lo abre en la hoja de compartir del sistema (app),
+ * desde donde se añade al Calendario. Antes era un Blob + `<a download>`, que
+ * el WebView de iOS y Android ignora: el botón no hacía nada en el móvil
+ * (directriz 2.1(a) de Apple). Lanza si no se ha podido preparar el fichero;
+ * cerrar la hoja de compartir sin elegir no es un error.
+ */
+export const downloadIcs = (filename: string, event: IcsEvent): Promise<void> =>
+  saveOrShareFile({
+    filename: filename.endsWith(".ics") ? filename : `${filename}.ics`,
+    mimeType: "text/calendar;charset=utf-8",
+    data: buildIcsContent(event),
+    dialogTitle: "Añadir al calendario",
+  });

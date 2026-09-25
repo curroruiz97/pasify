@@ -4,6 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * useFavoritePartners · backend-backed (partner_favorites).
  * RLS asegura que cada user solo ve los suyos.
+ *
+ * SIN USO desde la Ola 1 del cliente (B2-03): el corazón de los locales está
+ * oculto. `toggle` recibe el id del PERFIL del local (el de public_partners)
+ * y lo guarda en partner_favorites.org_id, que es una FK a organizations:
+ * el INSERT falla siempre con 23503, el error se ignoraba y el corazón no
+ * cambiaba. Además cada tarjeta montaba el hook: una consulta por tarjeta.
+ * Arreglo completo en la Ola 2: resolver la organización del local y pasar a
+ * una sola consulta de React Query (qk.me) con cambio optimista.
  */
 export const useFavoritePartners = () => {
   const [partnerIds, setPartnerIds] = useState<Set<string>>(new Set());

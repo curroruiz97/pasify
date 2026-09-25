@@ -1,33 +1,52 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
 import { Check, Copy, Loader2, Share2, UserPlus, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { WEB_BASE } from "@/lib/redirect-url";
 
 /**
- * ReferAFriendCard — refer-a-friend real (mig 0052).
+ * ReferAFriendCard — invitar amigos (mig 0052).
  *
- * Antes era un CTA disabled con BetaBadge "Próximamente". Ahora:
  *   - Llama RPC `get_or_create_my_referral_code()` al montar.
- *   - Permite copiar el código + canjear códigos ajenos via RPC
- *     `redeem_referral_code(_code)` que otorga 500 points a ambos.
+ *   - Permite copiar o compartir el código + canjear códigos ajenos via RPC
+ *     `redeem_referral_code(_code)`, que da 500 puntos a cada uno.
  *   - Muestra contador de invitados ya canjeados (SELECT count
  *     referral_claims WHERE referrer_user_id = me).
+ *
+ * Sin equivalencia en euros ni "5 € para los dos" (D-5): los puntos aún no se
+ * pueden canjear por nada.
+ *
+ * El enlace va SIEMPRE a la web pública (WEB_BASE): desde la app nativa
+ * window.location.origin es `capacitor://localhost` y el enlace no servía
+ * fuera. El alta lee `?ref=` y guarda el código.
  *
  * Gate: si el usuario no está logueado, no renderizamos nada — la card
  * vive dentro de ClientLoyalty que ya requiere auth.
  */
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-const serif = {
-  fontFamily: "'Instrument Serif', Georgia, serif",
-  fontStyle: "italic" as const,
-  fontWeight: 400,
-};
+
+/** Puntos que da `redeem_referral_code` a cada uno (referral_claims.reward_points). */
+const PUNTOS_POR_INVITACION = 500;
+
+/** Enlace de invitación: alta en la web pública con el código. */
+const referralLink = (code: string): string =>
+  `${WEB_BASE}/#/register-client?ref=${encodeURIComponent(code)}`;
+
+const esCancelacion = (err: unknown) =>
+  err instanceof Error && /cancel|abort/i.test(`${err.name} ${err.message}`);
 
 export const ReferAFriendCard = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const uid = useCurrentUserId();
   const [code, setCode] = useState<string | null>(null);
   const [loadingCode, setLoadingCode] = useState(true);
   const [invitedCount, setInvitedCount] = useState(0);
@@ -37,6 +56,7 @@ export const ReferAFriendCard = () => {
   const [alreadyRedeemed, setAlreadyRedeemed] = useState(false);
 
   const load = useCallback(async () => {
+    if (!uid) return;
     setLoadingCode(true);
     try {
       const { data: codeData, error: codeErr } = await supabase.rpc(
@@ -45,29 +65,26 @@ export const ReferAFriendCard = () => {
       if (codeErr) throw codeErr;
       if (typeof codeData === "string") setCode(codeData);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Count invitados (referrer = me)
-        const { count } = await supabase
-          .from("referral_claims")
-          .select("id", { count: "exact", head: true })
-          .eq("referrer_user_id", user.id);
-        setInvitedCount(count ?? 0);
+      // Count invitados (referrer = me)
+      const { count } = await supabase
+        .from("referral_claims")
+        .select("id", { count: "exact", head: true })
+        .eq("referrer_user_id", uid);
+      setInvitedCount(count ?? 0);
 
-        // Detectar si YO ya canjeé un código ajeno
-        const { data: myClaim } = await supabase
-          .from("referral_claims")
-          .select("id")
-          .eq("referee_user_id", user.id)
-          .maybeSingle();
-        setAlreadyRedeemed(!!myClaim);
-      }
+      // Detectar si YO ya canjeé un código ajeno
+      const { data: myClaim } = await supabase
+        .from("referral_claims")
+        .select("id")
+        .eq("referee_user_id", uid)
+        .maybeSingle();
+      setAlreadyRedeemed(!!myClaim);
     } catch (err) {
       console.warn("[ReferAFriend] load failed", err);
     } finally {
       setLoadingCode(false);
     }
-  }, []);
+  }, [uid]);
 
   useEffect(() => {
     void load();
@@ -84,24 +101,29 @@ export const ReferAFriendCard = () => {
     }
   };
 
+  // Hoja de compartir nativa (app), Web Share (web) o, si no hay, portapapeles.
   const share = async () => {
     if (!code) return;
-    const text = `Únete a Pasify con mi código ${code} y los dos ganamos 5€ en Pasify Points.`;
-    const url = `${window.location.origin}/#/register-client?ref=${code}`;
-    if (typeof navigator !== "undefined" && "share" in navigator) {
-      try {
+    const text = `Únete a Pasify con mi código ${code} y los dos sumamos ${PUNTOS_POR_INVITACION} Pasify Points.`;
+    const url = referralLink(code);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({ title: "Pasify", text, url, dialogTitle: "Invitar a un amigo" });
+        return;
+      }
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
         await navigator.share({ title: "Pasify", text, url });
         return;
-      } catch {
-        /* user cancel or unsupported */
       }
+    } catch (err) {
+      // Cerrar la hoja de compartir no es un error.
+      if (esCancelacion(err)) return;
     }
-    // Fallback: copia el mensaje completo
     try {
       await navigator.clipboard.writeText(`${text} ${url}`);
-      toast({ title: "Mensaje copiado", description: "Pega y comparte donde quieras." });
+      toast({ title: "Invitación copiada", description: "Pégala y compártela donde quieras." });
     } catch {
-      toast({ title: "No se pudo compartir", variant: "destructive" });
+      toast({ title: "Copia este enlace", description: url });
     }
   };
 
@@ -116,10 +138,12 @@ export const ReferAFriendCard = () => {
       const { error } = await supabase.rpc("redeem_referral_code", { _code: clean });
       if (error) throw error;
       toast({
-        title: "¡500 Pasify Points para los dos!",
+        title: `¡${PUNTOS_POR_INVITACION} Pasify Points para los dos!`,
         description: "Has canjeado el código correctamente.",
       });
       setRedeemInput("");
+      // El saldo de Puntos tiene que moverse ya, no al próximo refresco.
+      if (uid) void queryClient.invalidateQueries({ queryKey: qk.me.loyalty(uid) });
       await load();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Código no válido";
@@ -161,13 +185,13 @@ export const ReferAFriendCard = () => {
               style={{ ...mono, letterSpacing: "0.22em" }}
             >
               <Zap className="h-3 w-3" />
-              Refer a friend
+              Invita a tus amigos
             </div>
             <h3 className="text-xl font-semibold tracking-tight text-foreground">
-              Trae un amigo, <span style={serif} className="text-orange-500">5€</span> para los dos
+              Trae a un amigo a Pasify
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Comparte tu código. Cuando se registre y canjee, los dos recibís 500 Pasify Points (≈ 5€).
+              Comparte tu código. Cuando se registre y lo canjee, los dos sumáis {PUNTOS_POR_INVITACION} Pasify Points.
             </p>
           </div>
         </div>
@@ -206,7 +230,7 @@ export const ReferAFriendCard = () => {
               </Button>
               <Button
                 size="sm"
-                onClick={share}
+                onClick={() => void share()}
                 disabled={!code}
                 className="text-white"
                 style={{
