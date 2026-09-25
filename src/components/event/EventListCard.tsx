@@ -2,19 +2,39 @@ import { Heart, Loader2, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useFavorites } from "@/hooks/useFavorites";
-import { formatPriceCents } from "@/components/tickets/ticketUtils";
+import { formatPriceCents, isEventOver } from "@/components/tickets/ticketUtils";
 
 export type EventCardData = {
   id: string;
   title: string;
   description: string | null;
   date_start: string;
+  /** Sin hora de fin, el evento se vende hasta 12 h después de empezar (isEventOver). */
+  date_end?: string | null;
   city: string;
   price_cents: number;
   capacity: number | null;
   tickets_sold: number;
   image_url: string | null;
 };
+
+/**
+ * "Últimas entradas" cuando queda el 10 % del aforo o menos (y siempre con 5
+ * o menos). Nunca se publican cifras de vendidas ni de aforo: son datos del
+ * local.
+ */
+const LAST_TICKETS_RATIO = 0.1;
+const LAST_TICKETS_MIN = 5;
+
+type StockLabel = "sold_out" | "last" | null;
+
+function stockLabel(capacity: number | null, sold: number | null): StockLabel {
+  if (!capacity || capacity <= 0) return null;
+  const remaining = capacity - (sold ?? 0);
+  if (remaining <= 0) return "sold_out";
+  if (remaining <= Math.max(LAST_TICKETS_MIN, Math.ceil(capacity * LAST_TICKETS_RATIO))) return "last";
+  return null;
+}
 
 interface Props {
   event: EventCardData;
@@ -66,26 +86,12 @@ export const EventListCard = ({
     });
   };
 
-  const capacity = event.capacity ?? 0;
-  const sold = event.tickets_sold ?? 0;
-  const soldPct = capacity > 0 ? Math.min(100, Math.round((sold / capacity) * 100)) : 0;
-  const remainingPct = 100 - soldPct;
-  const almostSoldOut = capacity > 0 && remainingPct <= 20;
-  const soldOut = capacity > 0 && sold >= capacity;
-
-  // Status pill copy + color
-  let statusLabel: string;
-  let statusColor: string;
-  if (soldOut) {
-    statusLabel = "Sold out";
-    statusColor = "#8A8275";
-  } else if (almostSoldOut) {
-    statusLabel = `Últimas · ${remainingPct}%`;
-    statusColor = "#E8B04C";
-  } else {
-    statusLabel = `${remainingPct}% disponible`;
-    statusColor = "#4DB87A";
-  }
+  const stock = stockLabel(event.capacity, event.tickets_sold);
+  const soldOut = stock === "sold_out";
+  // Misma regla que el servidor para dejar de vender.
+  const over = isEventOver(event);
+  const unavailable = soldOut || over;
+  const statusColor = soldOut ? "#8A8275" : "#E8B04C";
 
   return (
     <article
@@ -239,55 +245,29 @@ export const EventListCard = ({
             )}
           </div>
 
-          {/* Bottom: stats + CTA */}
+          {/* Bottom: aviso de disponibilidad + CTA */}
           <div className="mt-4 space-y-3">
-            {/* Tickets progress */}
-            {capacity > 0 && (
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span
-                    className="text-[10px] uppercase text-muted-foreground"
-                    style={{ ...mono, letterSpacing: "0.16em" }}
-                  >
-                    Tickets ·{" "}
-                    <span className="text-foreground">
-                      {sold}/{capacity}
-                    </span>
+            {/* Solo "Últimas entradas" o "Agotado": nunca cifras de vendidas ni
+                de aforo (antes salía "Tickets · 480/500" a cualquiera). */}
+            {stock && !over && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase"
+                style={{ ...mono, letterSpacing: "0.14em", color: statusColor }}
+              >
+                {stock === "last" && (
+                  <span className="relative inline-flex h-1.5 w-1.5" aria-hidden="true">
+                    <span
+                      className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                      style={{ background: statusColor }}
+                    />
+                    <span
+                      className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                      style={{ background: statusColor }}
+                    />
                   </span>
-                  <span
-                    className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase"
-                    style={{ ...mono, letterSpacing: "0.14em", color: statusColor }}
-                  >
-                    {almostSoldOut && !soldOut && (
-                      <span
-                        className="relative inline-flex h-1.5 w-1.5"
-                        aria-hidden="true"
-                      >
-                        <span
-                          className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-                          style={{ background: statusColor }}
-                        />
-                        <span
-                          className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                          style={{ background: statusColor }}
-                        />
-                      </span>
-                    )}
-                    {statusLabel}
-                  </span>
-                </div>
-                <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${soldPct}%`,
-                      background:
-                        "linear-gradient(90deg, #FF7A4D 0%, #E8542A 60%, #B8381A 100%)",
-                      boxShadow: "0 0 12px rgba(232,84,42,0.5)",
-                    }}
-                  />
-                </div>
-              </div>
+                )}
+                {soldOut ? "Agotado" : "Últimas entradas"}
+              </span>
             )}
 
             {/* Precio + CTA. El tipo de entrada y la cantidad se eligen en
@@ -310,13 +290,13 @@ export const EventListCard = ({
 
               <button
                 type="button"
-                disabled={soldOut || pending}
+                disabled={unavailable || pending}
                 onClick={(e) => {
                   // Detén la propagación: la card está dentro de un <article>
                   // que en el futuro puede ser clicable para abrir detalle.
                   e.preventDefault();
                   e.stopPropagation();
-                  if (soldOut || pending) return;
+                  if (unavailable || pending) return;
                   if (onBuyTicket) {
                     onBuyTicket(event.id);
                   } else if (import.meta.env.DEV) {
@@ -328,16 +308,22 @@ export const EventListCard = ({
                 }}
                 className="group/btn inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 md:text-sm"
                 style={{
-                  background: soldOut
+                  background: unavailable
                     ? "#3a3a3a"
                     : "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)",
-                  boxShadow: soldOut
+                  boxShadow: unavailable
                     ? "none"
                     : "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 6px 16px -4px rgba(232,84,42,0.5), 0 14px 32px -10px rgba(184,56,26,0.5)",
                   letterSpacing: "-0.005em",
                 }}
                 aria-label={
-                  soldOut ? "Entradas agotadas" : pending ? "Cargando entradas" : "Comprar entradas"
+                  over
+                    ? "Evento terminado"
+                    : soldOut
+                    ? "Entradas agotadas"
+                    : pending
+                    ? "Cargando entradas"
+                    : "Comprar entradas"
                 }
               >
                 {pending ? (
@@ -345,8 +331,8 @@ export const EventListCard = ({
                 ) : (
                   <Ticket className="h-4 w-4" />
                 )}
-                {soldOut ? "Agotado" : pending ? "Cargando…" : "Comprar entradas"}
-                {!soldOut && !pending && (
+                {over ? "Evento terminado" : soldOut ? "Agotado" : pending ? "Cargando…" : "Comprar entradas"}
+                {!unavailable && !pending && (
                   <span
                     aria-hidden="true"
                     className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"

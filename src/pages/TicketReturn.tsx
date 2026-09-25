@@ -15,7 +15,8 @@ import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
  * llamada sin sesión si casan, consulta a Stripe y, si está pagado, emite las
  * entradas. Así no dependemos solo del webhook ni de que el usuario vuelva a
  * abrir la app. Mensajes honestos según el estado real:
- *   - pagado     → entradas en la app (Mis entradas) y en el email.
+ *   - pagado     → entradas en la app (Mis entradas). Del email no decimos
+ *                  "enviado": sin sesión no podemos saber si salió.
  *   - pendiente  → seguimos comprobando, con reintento.
  *   - caducado   → no se ha cobrado nada.
  *   - cancelado  → Stripe vuelve aquí solo con `order_id` (cancel_url).
@@ -133,7 +134,7 @@ const TicketReturn = () => {
         tone = "ok";
         icon = <CheckCircle2 className="h-9 w-9" />;
         title = "Pago confirmado";
-        body = "Tus entradas están en la app Pasify (Mis entradas) y en tu email.";
+        body = "Tus entradas ya están en la app Pasify, en Mis entradas. Te las enviaremos también por email.";
         action = <ReturnToApp platform={platform} path="/client-dashboard?wallet=1" />;
         break;
       case "expired":

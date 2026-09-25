@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { buildExternalReturnUrl } from "@/lib/redirect-url";
+import { loginPathWithNext } from "@/lib/eventLinks";
 import { recordPendingCheckout } from "@/hooks/usePendingCheckoutResume";
 import { TierPickerSheet } from "@/components/tickets/TierPickerSheet";
 import {
@@ -19,7 +20,8 @@ import {
  *
  * Flujo:
  *   1. Evento demo (`id` empieza por `demo-`) → toast informativo y salir.
- *   2. Sin sesión → `/register-client?next=<ruta actual>`.
+ *   2. Sin sesión → `/login?next=<ruta actual>` (loginPathWithNext): desde
+ *      el login se puede ir a crear cuenta sin perder la vuelta al evento.
  *   3. Carga los tipos de entrada ACTIVOS del evento y abre el selector
  *      (`TierPickerSheet`) SIEMPRE, aunque solo haya un tipo: el precio de la
  *      tarjeta es un "Desde" y el usuario tiene que confirmar tipo, cantidad
@@ -254,12 +256,10 @@ export const useTicketCheckout = () => {
     };
   }, [unlock]);
 
-  const goToRegister = useCallback(() => {
-    // Conserva la ruta para volver tras registro
-    const currentPath = window.location.hash.startsWith("#/")
-      ? window.location.hash.slice(1)
-      : "/calendar";
-    navigate(`/register-client?next=${encodeURIComponent(currentPath)}`);
+  // Sin sesión: al login, que vuelve aquí al terminar (también si desde allí
+  // crea cuenta o entra con Google/Apple).
+  const goToLogin = useCallback(() => {
+    navigate(loginPathWithNext());
   }, [navigate]);
 
   const checkout = useCallback(
@@ -284,7 +284,7 @@ export const useTicketCheckout = () => {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) {
-          goToRegister();
+          goToLogin();
           return;
         }
 
@@ -311,7 +311,7 @@ export const useTicketCheckout = () => {
         setPendingId(null);
       }
     },
-    [goToRegister]
+    [goToLogin]
   );
 
   const refreshTiers = useCallback(async (eventId: string) => {
@@ -342,7 +342,7 @@ export const useTicketCheckout = () => {
         } = await supabase.auth.getSession();
         if (!session) {
           setPickerOpen(false);
-          goToRegister();
+          goToLogin();
           return;
         }
 
@@ -444,7 +444,7 @@ export const useTicketCheckout = () => {
         }
       }
     },
-    [picker, goToRegister, refreshTiers, unlock]
+    [picker, goToLogin, refreshTiers, unlock]
   );
 
   const handleOpenChange = useCallback(

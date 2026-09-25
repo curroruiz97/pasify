@@ -17,9 +17,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import { loginPathWithNext } from "@/lib/eventLinks";
 import {
   formatEventDateTime,
   formatPriceCents,
+  orderReference,
+  ticketDoorCode,
   ticketHolderName,
 } from "@/components/tickets/ticketUtils";
 
@@ -35,7 +38,9 @@ import {
  *      aquí mismo, más el botón "Ver en mi cartera".
  *   3) Pagado sin sesión → confirmación y aviso de iniciar sesión.
  *   4) Caducado / sin confirmar / error → mensaje honesto. Solo decimos "te
- *      hemos enviado un email" cuando el pago está confirmado.
+ *      hemos enviado un email" cuando el servidor lo ha registrado
+ *      (`ticket_orders.tickets_email_sent_at`); si no consta, que las
+ *      entradas ya están en la cartera y que también irán por email.
  *
  * En la app nativa la vuelta de Stripe es /ticket/gracias (TicketReturn).
  * Estética Pasify: dark, terracota, mono labels, itálica serif en el titular.
@@ -48,6 +53,8 @@ type OrderRow = {
   total_cents: number;
   currency: string;
   buyer_email: string;
+  /** Lo pone el servidor cuando el proveedor de email acepta el envío. */
+  tickets_email_sent_at: string | null;
 };
 
 type EventRow = {
@@ -66,6 +73,8 @@ type OrderTicket = {
   tier_id: string | null;
   tier_name: string | null;
   holder: string;
+  /** Código de puerta (ticketDoorCode). null en una entrada ya usada, como en la cartera. */
+  doorCode: string | null;
   qrDataUrl: string | null;
 };
 
@@ -138,6 +147,7 @@ async function loadOrderTickets(orderId: string): Promise<OrderTicket[]> {
         tier_id: r.tier_id,
         tier_name: r.tier_id ? tierNames.get(r.tier_id) ?? null : null,
         holder: ticketHolderName(r),
+        doorCode: r.status === "used" ? null : ticketDoorCode(r.qr_token),
         qrDataUrl,
       };
     })
@@ -178,7 +188,7 @@ const TicketSuccess = () => {
 
         const { data: order } = await supabase
           .from("ticket_orders")
-          .select("id, event_id, status, total_cents, currency, buyer_email")
+          .select("id, event_id, status, total_cents, currency, buyer_email, tickets_email_sent_at")
           .eq("id", paidOrderId)
           .maybeSingle();
         if (cancelled) return;
@@ -259,22 +269,32 @@ const TicketSuccess = () => {
   const errorStatus = state.phase === "error" ? state.httpStatus : 0;
   const subtitle: React.ReactNode = (() => {
     if (isPaid) {
-      const email = ready?.order.buyer_email;
-      return (
-        <>
-          Pago confirmado. Te hemos enviado un email
-          {email ? (
-            <>
-              {" "}a <span className="text-foreground">{email}</span>
-            </>
-          ) : null}{" "}
-          con tus entradas.
-          {details.kind === "no_session" &&
-            " Inicia sesión con la cuenta con la que compraste para verlas en Mis entradas."}
-          {details.kind === "not_visible" &&
-            " Las encontrarás en Mis entradas de la cuenta con la que hiciste la compra."}
-        </>
-      );
+      // "Te hemos enviado un email" solo si el servidor lo ha registrado: el
+      // envío puede fallar, o salir más tarde, con el pago ya confirmado.
+      if (ready?.order.tickets_email_sent_at) {
+        const email = ready.order.buyer_email;
+        return (
+          <>
+            Pago confirmado. Te hemos enviado un email
+            {email ? (
+              <>
+                {" "}a <span className="text-foreground">{email}</span>
+              </>
+            ) : null}{" "}
+            con tus entradas.
+          </>
+        );
+      }
+      switch (details.kind) {
+        case "ready":
+          return "Pago confirmado. Tus entradas ya están en tu cartera. Te las enviaremos también por email.";
+        case "no_session":
+          return "Pago confirmado. Inicia sesión con la cuenta con la que compraste para ver tus entradas en Mis entradas. Te las enviaremos también por email.";
+        case "not_visible":
+          return "Pago confirmado. Las encontrarás en Mis entradas de la cuenta con la que hiciste la compra. Te las enviaremos también por email.";
+        default:
+          return "Pago confirmado.";
+      }
     }
     switch (state.phase) {
       case "checking":
@@ -446,9 +466,17 @@ const TicketSuccess = () => {
                       <div className="aspect-square w-full max-w-[220px] animate-pulse rounded-xl bg-black/10" />
                     )}
                     {t.holder && <p className="mt-3 text-sm font-semibold">{t.holder}</p>}
-                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider opacity-50">
-                      Ref. {t.id.slice(0, 8)}
-                    </p>
+                    {/* Código de puerta: el mismo del email y de la cartera, por
+                        si el QR no se lee. */}
+                    {t.doorCode ? (
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider opacity-60">
+                        Código <span className="text-sm font-semibold opacity-100">{t.doorCode}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider opacity-50">
+                        Ref. {t.id.slice(0, 8)}
+                      </p>
+                    )}
                   </div>
                 </article>
               ))}
@@ -529,7 +557,7 @@ const TicketSuccess = () => {
                 className="border-t border-border pt-4 text-[10px] uppercase text-muted-foreground"
                 style={{ ...mono, letterSpacing: "0.18em" }}
               >
-                Pedido · {ready.order.id.slice(0, 8)}
+                Pedido · {orderReference(ready.order.id)}
               </div>
             </div>
           </article>
@@ -551,7 +579,8 @@ const TicketSuccess = () => {
           )}
 
           {((isPaid && details.kind === "no_session") || state.phase === "unverifiable") && (
-            <PrimaryButton onClick={() => navigate("/login")}>
+            // Vuelve aquí tras iniciar sesión, con el pedido en la URL.
+            <PrimaryButton onClick={() => navigate(loginPathWithNext())}>
               <LogIn className="h-5 w-5" />
               Iniciar sesión
             </PrimaryButton>

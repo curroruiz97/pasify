@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,25 +10,29 @@ import {
   MapPin,
   CalendarDays,
   List as ListIcon,
-  ChevronLeft,
-  ChevronRight,
+  Loader2,
+  RotateCcw,
+  Share2,
 } from "lucide-react";
 import { EventListCard } from "@/components/event/EventListCard";
+import { MonthGrid } from "@/components/event/MonthGrid";
+import { isEventOver } from "@/components/tickets/ticketUtils";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
-import {
-  addMonths,
-  endOfMonth,
-  format,
-  isSameDay,
-  isSameMonth,
-  startOfMonth,
-  startOfWeek,
-  endOfWeek,
-  addDays,
-} from "date-fns";
+import type { PublicPartner } from "@/hooks/queries/clientData";
+import { qk } from "@/lib/cache/keys";
+import { useCurrentUserId } from "@/lib/cache/session";
+import { sharePartnerLink } from "@/lib/eventLinks";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
+/**
+ * Ficha pública de un local: `/#/p/:id` (y `/p/:id`, que pasa por
+ * api/p/[id].ts para la vista previa en WhatsApp).
+ *
+ * Datos en caché pública (qk.public.partner / partnerEvents), guardada en el
+ * dispositivo: un local ya visitado se ve también sin conexión. La ficha sale
+ * al instante si el local ya estaba en la lista de locales.
+ */
 
 type Partner = {
   id: string;
@@ -44,6 +49,7 @@ type EventRow = {
   title: string;
   description: string | null;
   date_start: string;
+  date_end: string | null;
   city: string;
   price_cents: number;
   capacity: number | null;
@@ -63,18 +69,53 @@ const CATEGORY_LABEL: Record<string, string> = {
   otro: "Otro",
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const PARTNER_COLUMNS =
+  "id, business_name, business_category, business_description, city, avatar_url, cover_image_url";
+const EVENT_COLUMNS =
+  "id, title, description, date_start, date_end, city, price_cents, capacity, tickets_sold, image_url, status";
+
+const monoFont = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+
 // Nota: DEMO_PARTNERS y demoEventsFor eliminados (mayo 2026, hardening).
 // Antes se hardcoded Pacha/Razzmatazz/etc. con id "demo-*". En producción
-// real eso engañaba al usuario (mostraba locales que no existen). Si el
-// id no se encuentra en `profiles`, ahora la ruta /p/:id muestra empty
-// state explícito o redirige a /client-dashboard.
+// real eso engañaba al usuario (mostraba locales que no existen).
+
+/** null = el local no existe o no está aprobado. Un fallo de red lanza. */
+async function leerLocal(id: string): Promise<Partner | null> {
+  // `public_partners` (mig 0045) ya filtra approved + business_name NOT NULL
+  // y oculta los datos personales del perfil.
+  const { data, error } = await supabase
+    .from("public_partners")
+    .select(PARTNER_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Partner | null) ?? null;
+}
+
+async function leerEventosDelLocal(id: string): Promise<EventRow[]> {
+  const { data, error } = await supabase
+    .from("events")
+    .select(EVENT_COLUMNS)
+    .eq("partner_id", id)
+    .eq("status", "published")
+    .order("date_start", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as EventRow[];
+}
 
 const PublicPartnerPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: rawId } = useParams<{ id: string }>();
+  const id = rawId ?? "";
+  // Un id que no es un UUID (enlaces viejos "demo-1", recortados…) no se
+  // consulta: la base de datos solo devolvería un 400 (salían en los logs).
+  const validId = UUID_RE.test(id);
   const navigate = useNavigate();
-  const [partner, setPartner] = useState<Partner | null>(null);
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const userId = useCurrentUserId();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"list" | "calendar">("list");
   const [monthCursor, setMonthCursor] = useState<Date>(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -82,6 +123,68 @@ const PublicPartnerPage = () => {
   // card para mostrar el spinner solo en la que el usuario pulsó.
   // `checkoutSheet` es el selector de tipo/cantidad: se renderiza abajo.
   const { checkout: buyTicket, pendingId, checkoutSheet } = useTicketCheckout();
+
+  const partnerQuery = useQuery({
+    queryKey: qk.public.partner(id),
+    queryFn: () => leerLocal(id),
+    enabled: validId,
+    staleTime: 5 * 60_000,
+    // Si el local ya está en la lista de locales, la ficha sale al instante
+    // (también sin conexión). Con fecha 0: se refresca en cuanto hay red (la
+    // lista no trae la descripción) y no se guarda en el dispositivo hasta
+    // tener la ficha completa.
+    initialData: () => {
+      const lista = queryClient.getQueryData<PublicPartner[]>(qk.public.partners());
+      const p = lista?.find((x) => x.id === id);
+      return p ? { ...p, business_description: null } : undefined;
+    },
+    initialDataUpdatedAt: 0,
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: qk.public.partnerEvents(id),
+    queryFn: () => leerEventosDelLocal(id),
+    enabled: validId,
+    staleTime: 60_000,
+  });
+
+  const partner = partnerQuery.data;
+  const events = eventsQuery.data;
+  // Sin datos que enseñar: o ha fallado, o no hay red (la consulta queda en pausa).
+  const partnerFailed =
+    partner === undefined &&
+    (partnerQuery.isError || (partnerQuery.isPending && partnerQuery.fetchStatus === "paused"));
+  const eventsFailed =
+    events === undefined &&
+    (eventsQuery.isError || (eventsQuery.isPending && eventsQuery.fetchStatus === "paused"));
+
+  // Título de la pestaña: el del local mientras se ve su ficha.
+  useEffect(() => {
+    const previo = document.title;
+    return () => {
+      document.title = previo;
+    };
+  }, []);
+  useEffect(() => {
+    if (partner?.business_name) document.title = `${partner.business_name} · Pasify`;
+  }, [partner?.business_name]);
+
+  const upcomingEvents = useMemo(() => {
+    // Misma regla que el servidor: se ve (y se vende) hasta que termina.
+    const ahora = Date.now();
+    return (events ?? []).filter((e) => !isEventOver(e, ahora));
+  }, [events]);
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, EventRow[]>();
+    (events ?? []).forEach((e) => {
+      const k = format(new Date(e.date_start), "yyyy-MM-dd");
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(e);
+    });
+    return map;
+  }, [events]);
+
   const buyEvent = (e: EventRow) =>
     buyTicket({
       id: e.id,
@@ -90,64 +193,23 @@ const PublicPartnerPage = () => {
       place: partner?.business_name ?? e.city,
     });
 
-  useEffect(() => {
-    (async () => {
-      if (!id) return;
-      setLoading(true);
+  // Entrando por un enlace directo (WhatsApp, Instagram…) no hay pantalla
+  // anterior en la app: "Volver" lleva al inicio que toca en vez de sacarte.
+  const volver = () => {
+    if (location.key !== "default") {
+      navigate(-1);
+      return;
+    }
+    navigate(userId ? "/client-dashboard" : "/calendar");
+  };
 
-      // Demo partners eliminados — si el id es legacy "demo-*" caemos al
-      // empty state (partner=null tras el query).
-      // Leemos de `public_partners` (mig 0045) en vez de profiles directo:
-      // la view ya filtra approved + business_name NOT NULL y oculta PII.
-      const { data: p } = await supabase
-        .from("public_partners")
-        .select("id, business_name, business_category, business_description, city, avatar_url, cover_image_url")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (p) setPartner(p as Partner);
-
-      const { data: ev } = await supabase
-        .from("events")
-        .select("id, title, description, date_start, city, price_cents, capacity, tickets_sold, image_url, status")
-        .eq("partner_id", id)
-        .eq("status", "published")
-        .order("date_start", { ascending: true });
-      setEvents((ev ?? []) as EventRow[]);
-      setLoading(false);
-    })();
-  }, [id]);
-
-  const upcomingEvents = useMemo(() => {
-    const now = new Date();
-    return events.filter((e) => new Date(e.date_start) >= new Date(now.setHours(0, 0, 0, 0)));
-  }, [events]);
-
-  const eventsByDay = useMemo(() => {
-    const map = new Map<string, EventRow[]>();
-    events.forEach((e) => {
-      const k = format(new Date(e.date_start), "yyyy-MM-dd");
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(e);
-    });
-    return map;
-  }, [events]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
-
-  if (!partner) {
+  if (!validId || partner === null) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
         <Card>
           <CardContent className="py-10 text-center">
             <p className="text-muted-foreground mb-4">Local no encontrado.</p>
-            <Button onClick={() => navigate(-1)}>
+            <Button onClick={volver}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver
             </Button>
@@ -157,8 +219,74 @@ const PublicPartnerPage = () => {
     );
   }
 
+  if (partner === undefined) {
+    if (partnerFailed) {
+      return (
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+          <Card>
+            <CardContent className="py-10 text-center">
+              <p className="font-semibold text-foreground">No hemos podido cargar este local</p>
+              <p className="mt-2 mb-6 text-sm text-muted-foreground">
+                Revisa tu conexión y vuelve a intentarlo.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Button onClick={() => void partnerQuery.refetch()} disabled={partnerQuery.isFetching}>
+                  {partnerQuery.isFetching ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                  )}
+                  Reintentar
+                </Button>
+                <Button variant="outline" onClick={volver}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Volver
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <p className="text-muted-foreground">Cargando...</p>
+      </div>
+    );
+  }
+
   const initial = (partner.business_name?.[0] ?? "?").toUpperCase();
   const categoryLabel = partner.business_category ? CATEGORY_LABEL[partner.business_category] ?? partner.business_category : null;
+  const dayEvents = selectedDay ? eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [] : [];
+
+  // Error de carga de los eventos: no es lo mismo que "no hay eventos".
+  const eventsError = (
+    <Card>
+      <CardContent className="py-10 text-center">
+        <p className="font-semibold text-foreground">No hemos podido cargar los eventos</p>
+        <p className="mt-2 mb-6 text-sm text-muted-foreground">
+          Revisa tu conexión y vuelve a intentarlo.
+        </p>
+        <Button onClick={() => void eventsQuery.refetch()} disabled={eventsQuery.isFetching}>
+          {eventsQuery.isFetching ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCcw className="mr-2 h-4 w-4" />
+          )}
+          Reintentar
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  const eventsLoading = (
+    <Card>
+      <CardContent className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando eventos…
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -183,12 +311,22 @@ const PublicPartnerPage = () => {
 
         {/* Back button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={volver}
           className="absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
           style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
           aria-label="Volver"
         >
           <ArrowLeft className="h-5 w-5" />
+        </button>
+
+        {/* Compartir: enlace de la web pública, con vista previa en WhatsApp */}
+        <button
+          onClick={() => void sharePartnerLink(id, partner.business_name ?? "Local en Pasify")}
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
+          style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
+          aria-label="Compartir local"
+        >
+          <Share2 className="h-5 w-5" />
         </button>
 
         {/* Avatar + info overlay */}
@@ -252,17 +390,19 @@ const PublicPartnerPage = () => {
             >
               <ListIcon className="h-4 w-4" />
               Próximos eventos
-              <span
-                className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                style={{
-                  ...monoFont,
-                  letterSpacing: "0.08em",
-                  background: tab === "list" ? "rgba(232,84,42,0.18)" : "rgba(255,255,255,0.06)",
-                  color: tab === "list" ? "#FF7A4D" : "#8A8275",
-                }}
-              >
-                {upcomingEvents.length.toString().padStart(2, "0")}
-              </span>
+              {events !== undefined && (
+                <span
+                  className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    ...monoFont,
+                    letterSpacing: "0.08em",
+                    background: tab === "list" ? "rgba(232,84,42,0.18)" : "rgba(255,255,255,0.06)",
+                    color: tab === "list" ? "#FF7A4D" : "#8A8275",
+                  }}
+                >
+                  {upcomingEvents.length.toString().padStart(2, "0")}
+                </span>
+              )}
               <span
                 aria-hidden="true"
                 className="absolute inset-x-3 -bottom-px h-0.5 transition"
@@ -309,7 +449,9 @@ const PublicPartnerPage = () => {
 
         {tab === "list" && (
           <div className="space-y-4 pb-12">
-            {upcomingEvents.length === 0 ? (
+            {events === undefined ? (
+              eventsFailed ? eventsError : eventsLoading
+            ) : upcomingEvents.length === 0 ? (
               <Card>
                 <CardContent className="py-10 text-center text-muted-foreground">
                   Aún no hay eventos publicados.
@@ -320,7 +462,7 @@ const PublicPartnerPage = () => {
                 <EventListCard
                   key={e.id}
                   event={e}
-                  partnerId={partner.id}
+                  partnerId={id}
                   partnerName={partner.business_name ?? undefined}
                   onBuyTicket={() => buyEvent(e)}
                   pending={pendingId === e.id}
@@ -332,45 +474,51 @@ const PublicPartnerPage = () => {
 
         {tab === "calendar" && (
           <div className="pb-12">
-            <MonthGrid
-              cursor={monthCursor}
-              setCursor={setMonthCursor}
-              eventsByDay={eventsByDay}
-              selectedDay={selectedDay}
-              setSelectedDay={setSelectedDay}
-            />
+            {events === undefined ? (
+              eventsFailed ? eventsError : eventsLoading
+            ) : (
+              <>
+                <MonthGrid
+                  cursor={monthCursor}
+                  setCursor={setMonthCursor}
+                  eventsByDay={eventsByDay}
+                  selectedDay={selectedDay}
+                  setSelectedDay={setSelectedDay}
+                />
 
-            {selectedDay && (
-              <div className="mt-8 space-y-4">
-                <div
-                  className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-                  style={{ ...monoFont, letterSpacing: "0.2em" }}
-                >
-                  <span className="inline-block h-px w-6 bg-orange-500/70" />
-                  Día seleccionado
-                </div>
-                <h3 className="text-2xl font-semibold capitalize tracking-tight text-foreground">
-                  {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
-                </h3>
-                {(eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? []).length === 0 ? (
-                  <p
-                    className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground"
-                  >
-                    Sin eventos este día.
-                  </p>
-                ) : (
-                  (eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? []).map((e) => (
-                    <EventListCard
-                      key={e.id}
-                      event={e}
-                      partnerId={partner.id}
-                      partnerName={partner.business_name ?? undefined}
-                      onBuyTicket={() => buyEvent(e)}
-                      pending={pendingId === e.id}
-                    />
-                  ))
+                {selectedDay && (
+                  <div className="mt-8 space-y-4">
+                    <div
+                      className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+                      style={{ ...monoFont, letterSpacing: "0.2em" }}
+                    >
+                      <span className="inline-block h-px w-6 bg-orange-500/70" />
+                      Día seleccionado
+                    </div>
+                    <h3 className="text-2xl font-semibold capitalize tracking-tight text-foreground">
+                      {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
+                    </h3>
+                    {dayEvents.length === 0 ? (
+                      <p
+                        className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground"
+                      >
+                        Sin eventos este día.
+                      </p>
+                    ) : (
+                      dayEvents.map((e) => (
+                        <EventListCard
+                          key={e.id}
+                          event={e}
+                          partnerId={id}
+                          partnerName={partner.business_name ?? undefined}
+                          onBuyTicket={() => buyEvent(e)}
+                          pending={pendingId === e.id}
+                        />
+                      ))
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         )}
@@ -378,245 +526,6 @@ const PublicPartnerPage = () => {
 
       {/* Selector de entradas del hook de compra */}
       {checkoutSheet}
-    </div>
-  );
-};
-
-const monoFont = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
-
-// =============================================================
-// Sub-components
-// =============================================================
-
-const MonthGrid = ({
-  cursor,
-  setCursor,
-  eventsByDay,
-  selectedDay,
-  setSelectedDay,
-}: {
-  cursor: Date;
-  setCursor: (d: Date) => void;
-  eventsByDay: Map<string, EventRow[]>;
-  selectedDay: Date | null;
-  setSelectedDay: (d: Date | null) => void;
-}) => {
-  const monthStart = startOfMonth(cursor);
-  const monthEnd = endOfMonth(cursor);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-
-  const days: Date[] = [];
-  let d = gridStart;
-  while (d <= gridEnd) {
-    days.push(d);
-    d = addDays(d, 1);
-  }
-
-  const weekdayLabels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-  const monthEventCount = Array.from(eventsByDay.entries()).reduce((acc, [k, list]) => {
-    return isSameMonth(new Date(k), cursor) ? acc + list.length : acc;
-  }, 0);
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 md:p-6"
-      style={{
-        boxShadow:
-          "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 16px -8px rgba(0,0,0,0.4)",
-      }}
-    >
-      {/* Soft terracota glow top-right */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full"
-        style={{ background: "rgba(232,84,42,0.18)", filter: "blur(80px)" }}
-      />
-
-      {/* Header */}
-      <div className="relative mb-6 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div
-            className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-            style={{ ...monoFont, letterSpacing: "0.2em" }}
-          >
-            <span className="inline-block h-px w-5 bg-orange-500/70" />
-            Agenda · {monthEventCount.toString().padStart(2, "0")} eventos
-          </div>
-          <div className="truncate text-xl font-semibold capitalize tracking-tight text-foreground md:text-2xl">
-            {format(cursor, "MMMM", { locale: es })}{" "}
-            <span className="text-muted-foreground/80" style={monoFont}>
-              {format(cursor, "yyyy")}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCursor(new Date())}
-            className="hidden rounded-full border border-border px-3 py-1.5 text-[10px] uppercase text-muted-foreground transition hover:border-orange-500/60 hover:text-foreground sm:inline-flex"
-            style={{ ...monoFont, letterSpacing: "0.18em" }}
-          >
-            Hoy
-          </button>
-          <button
-            type="button"
-            onClick={() => setCursor(addMonths(cursor, -1))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-orange-500/60 hover:text-foreground"
-            aria-label="Mes anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCursor(addMonths(cursor, 1))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-orange-500/60 hover:text-foreground"
-            aria-label="Mes siguiente"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Weekday labels */}
-      <div
-        className="relative mb-2 grid grid-cols-7 gap-1.5 border-b border-border pb-2 text-center text-[10px] uppercase text-muted-foreground md:gap-2"
-        style={{ ...monoFont, letterSpacing: "0.18em" }}
-      >
-        {weekdayLabels.map((w) => (
-          <div key={w}>{w}</div>
-        ))}
-      </div>
-
-      {/* Days grid */}
-      <div className="relative mt-3 grid grid-cols-7 gap-1.5 md:gap-2">
-        {days.map((day) => {
-          const inMonth = isSameMonth(day, cursor);
-          const key = format(day, "yyyy-MM-dd");
-          const dayEvents = eventsByDay.get(key) ?? [];
-          const hasEvents = dayEvents.length > 0;
-          const isSelected = !!(selectedDay && isSameDay(selectedDay, day));
-          const isToday = isSameDay(day, new Date());
-          const previewImage = hasEvents ? dayEvents[0].image_url : null;
-
-          // Cell base styling — only used when no image (fallback)
-          let bg = "transparent";
-          let borderColor = "transparent";
-          let textColor = inMonth ? "#F4EEE2" : "rgba(244,238,226,0.25)";
-          let shadow = "none";
-
-          if (isSelected && !previewImage) {
-            bg = "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)";
-            textColor = "#fff";
-            shadow =
-              "inset 0 1px 0 rgba(255,255,255,0.35), 0 8px 24px -10px rgba(232,84,42,0.7)";
-          } else if (hasEvents && !previewImage) {
-            bg = "rgba(232,84,42,0.08)";
-            borderColor = "rgba(232,84,42,0.35)";
-          } else if (hasEvents && previewImage) {
-            // Image cell — border tone changes based on selection
-            borderColor = isSelected ? "rgba(232,84,42,0.85)" : "rgba(232,84,42,0.35)";
-            textColor = "#fff";
-            if (isSelected) {
-              shadow = "0 12px 30px -10px rgba(232,84,42,0.65), inset 0 1px 0 rgba(255,255,255,0.25)";
-            }
-          }
-
-          return (
-            <button
-              key={key}
-              onClick={() => setSelectedDay(isSelected ? null : day)}
-              className="group/day relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl text-sm transition duration-200 hover:scale-[1.03] disabled:cursor-default"
-              style={{
-                background: bg,
-                border: `1px solid ${borderColor}`,
-                boxShadow: shadow,
-                color: textColor,
-              }}
-              disabled={!inMonth}
-            >
-              {/* Event poster thumbnail */}
-              {hasEvents && previewImage && (
-                <>
-                  <img
-                    src={previewImage}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/day:scale-110"
-                    loading="lazy"
-                  />
-                  {/* Tint overlay — terracota wash if selected, dark gradient otherwise */}
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0"
-                    style={{
-                      background: isSelected
-                        ? "linear-gradient(165deg, rgba(255,122,77,0.78) 0%, rgba(232,84,42,0.82) 45%, rgba(184,56,26,0.88) 100%)"
-                        : "linear-gradient(180deg, rgba(10,10,10,0.20) 0%, rgba(10,10,10,0.55) 55%, rgba(10,10,10,0.85) 100%)",
-                    }}
-                  />
-                </>
-              )}
-
-              {/* "Today" amber dot */}
-              {isToday && !isSelected && (
-                <span
-                  className="absolute right-1.5 top-1.5 z-10 inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ background: "#E8B04C", boxShadow: "0 0 8px #E8B04C" }}
-                  aria-label="Hoy"
-                />
-              )}
-
-              {/* Day number */}
-              <span
-                className={`relative z-[1] text-base font-semibold leading-none md:text-lg`}
-                style={{
-                  ...monoFont,
-                  letterSpacing: isSelected ? "-0.02em" : undefined,
-                  textShadow: hasEvents && previewImage ? "0 1px 6px rgba(0,0,0,0.7)" : undefined,
-                  color: textColor,
-                }}
-              >
-                {format(day, "d")}
-              </span>
-
-              {/* Event count badge for multi-event days */}
-              {hasEvents && dayEvents.length > 1 && (
-                <span
-                  className="absolute right-1.5 top-1.5 z-10 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none"
-                  style={{
-                    ...monoFont,
-                    background: isSelected ? "rgba(255,255,255,0.95)" : "rgba(232,84,42,0.95)",
-                    color: isSelected ? "#B8381A" : "#fff",
-                    boxShadow: "0 4px 10px -3px rgba(0,0,0,0.4)",
-                  }}
-                >
-                  {dayEvents.length}
-                </span>
-              )}
-
-              {/* Subtle dots at bottom — only when no image fallback */}
-              {hasEvents && !previewImage && !isSelected && (
-                <span
-                  className="absolute bottom-1.5 inline-flex items-center gap-0.5"
-                  aria-hidden="true"
-                >
-                  {Array.from({ length: Math.min(3, dayEvents.length) }).map((_, i) => (
-                    <span
-                      key={i}
-                      className="inline-block h-1 w-1 rounded-full"
-                      style={{
-                        background: "#E8542A",
-                        boxShadow: "0 0 6px rgba(232,84,42,0.65)",
-                      }}
-                    />
-                  ))}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 };

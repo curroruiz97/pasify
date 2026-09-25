@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   addMonths,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
+  isSameDay,
   isSameMonth,
   startOfMonth,
   startOfWeek,
@@ -15,20 +16,28 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-reac
 import { optimizedImage } from "@/lib/image";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { CalendarEvent } from "./EventListCard";
+import type { CalendarEvent } from "@/hooks/useEvents";
 
 interface MonthCalendarViewProps {
   events: CalendarEvent[];
-  onEventClick: (event: CalendarEvent) => void;
+  /**
+   * Tarjeta de cada evento del día elegido, con sus botones (comprar, "Mi
+   * entrada"…). Tocar un día ya no compra: enseña TODOS sus eventos para
+   * elegir (antes un día con varios abría la compra del primero).
+   */
+  renderEvent: (event: CalendarEvent) => ReactNode;
 }
 
 // Month grid view inspired by club listing sites — each day cell shows
 // the poster thumbnail of the first event of the day; days with multiple
-// events overlay a "+N eventos" pill, days without events render an
+// events overlay a "N eventos" pill, days without events render an
 // empty "Sin eventos" placeholder so the grid stays uniform.
-const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => {
+const MonthCalendarView = ({ events, renderEvent }: MonthCalendarViewProps) => {
   const { t } = useTranslation();
   const [viewMonth, setViewMonth] = useState<Date>(() => new Date());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const selectedKey = selectedDay ? format(selectedDay, "yyyy-MM-dd") : null;
+  const dayListRef = useRef<HTMLElement | null>(null);
 
   const days = useMemo(() => {
     const monthStart = startOfMonth(viewMonth);
@@ -50,6 +59,21 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
     return map;
   }, [events]);
 
+  const selectedEvents = selectedKey ? eventsByDay.get(selectedKey) ?? [] : [];
+
+  // En el móvil la lista queda por debajo del calendario: la acercamos.
+  useEffect(() => {
+    if (!selectedKey) return;
+    requestAnimationFrame(() => {
+      dayListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [selectedKey]);
+
+  const changeMonth = (next: Date) => {
+    setViewMonth(next);
+    setSelectedDay(null);
+  };
+
   const monthLabel = format(viewMonth, "MMMM yyyy", { locale: es }).toUpperCase();
   const weekDayLabels = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -59,7 +83,7 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
       <div className="flex items-center justify-between rounded-2xl border border-border/40 bg-card px-3 py-2 shadow-sm">
         <button
           type="button"
-          onClick={() => setViewMonth((prev) => subMonths(prev, 1))}
+          onClick={() => changeMonth(subMonths(viewMonth, 1))}
           className="flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
           aria-label={t("calendar.previousMonth", "Mes anterior")}
         >
@@ -70,7 +94,7 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
         </span>
         <button
           type="button"
-          onClick={() => setViewMonth((prev) => addMonths(prev, 1))}
+          onClick={() => changeMonth(addMonths(viewMonth, 1))}
           className="flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
           aria-label={t("calendar.nextMonth", "Mes siguiente")}
         >
@@ -99,6 +123,7 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
           const firstEvent = dayEvents[0];
           const extraCount = dayEvents.length - 1;
           const dayNum = format(day, "d");
+          const isSelected = !!selectedDay && isSameDay(selectedDay, day);
 
           return (
             <div key={key} className="flex flex-col gap-1 sm:gap-1.5">
@@ -113,8 +138,14 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
               {firstEvent ? (
                 <button
                   type="button"
-                  onClick={() => onEventClick(firstEvent)}
-                  className="group relative aspect-square w-full overflow-hidden rounded-xl border border-border/40 bg-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  onClick={() => setSelectedDay(isSelected ? null : day)}
+                  aria-pressed={isSelected}
+                  aria-label={`${format(day, "EEEE d 'de' MMMM", { locale: es })}: ${
+                    dayEvents.length === 1 ? firstEvent.title : `${dayEvents.length} eventos`
+                  }`}
+                  className={`group relative aspect-square w-full overflow-hidden rounded-xl border bg-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                    isSelected ? "border-primary ring-2 ring-primary/70" : "border-border/40"
+                  }`}
                 >
                   {firstEvent.image_url ? (
                     <img
@@ -176,6 +207,24 @@ const MonthCalendarView = ({ events, onEventClick }: MonthCalendarViewProps) => 
           );
         })}
       </div>
+
+      {/* Eventos del día elegido: se elige cuál comprar */}
+      {selectedDay && selectedEvents.length > 0 && (
+        <section
+          ref={dayListRef}
+          aria-label={t("calendar.dayEvents", "Eventos del día")}
+          className="scroll-mt-20 pt-5"
+        >
+          <h3 className="mb-3 text-lg font-bold capitalize tracking-tight sm:text-xl">
+            {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
+          </h3>
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+            {selectedEvents.map((ev) => (
+              <Fragment key={ev.id}>{renderEvent(ev)}</Fragment>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

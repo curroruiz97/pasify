@@ -31,9 +31,13 @@ import {
  * devuelve el `qr_token` cuando la entrada es válida.
  *
  * Estados: válida (QR grande), ya utilizada (fecha de uso), reembolsada o
- * anulada (sin QR y con aviso claro) y errores honestos (enlace incompleto,
- * no encontrada, sin conexión).
+ * anulada (sin QR y con aviso claro), evento cancelado (sin QR, con el punto
+ * en que está la devolución) y errores honestos (enlace incompleto, no
+ * encontrada, sin conexión).
  */
+
+/** Devolución de la entrada, tal como la resume `ticket-public`. */
+type RefundStatus = "refunded" | "in_progress" | "failed" | null;
 
 type PublicTicketData = {
   ticket: {
@@ -43,6 +47,7 @@ type PublicTicketData = {
     holder_name: string | null;
     qr_token: string | null;
     used_at: string | null;
+    refund_status: RefundStatus;
   };
   event: {
     title: string;
@@ -53,8 +58,12 @@ type PublicTicketData = {
     city: string | null;
     image_url: string | null;
     timezone: string | null;
+    /** null con una versión anterior de `ticket-public`, que no lo mandaba. */
+    status: string | null;
   };
 };
+
+const REFUND_STATUSES = new Set(["refunded", "in_progress", "failed"]);
 
 type LoadState =
   | { kind: "loading" }
@@ -85,6 +94,9 @@ function parseResponse(body: unknown): PublicTicketData | null {
       holder_name: str(t.holder_name),
       qr_token: str(t.qr_token),
       used_at: str(t.used_at),
+      refund_status: REFUND_STATUSES.has(str(t.refund_status) ?? "")
+        ? (t.refund_status as RefundStatus)
+        : null,
     },
     event: {
       title: e.title as string,
@@ -95,6 +107,7 @@ function parseResponse(body: unknown): PublicTicketData | null {
       city: str(e.city),
       image_url: str(e.image_url),
       timezone: str(e.timezone),
+      status: str(e.status),
     },
   };
 }
@@ -207,8 +220,13 @@ const PublicTicket = () => {
     void load();
   }, [load]);
 
+  // Con el evento cancelado no se enseña el QR aunque la entrada siga pagada
+  // (el servidor ya no lo manda; esto cubre también una respuesta antigua).
   const showQr =
-    state.kind === "ready" && state.data.ticket.status === "paid" && !!state.data.ticket.qr_token;
+    state.kind === "ready" &&
+    state.data.ticket.status === "paid" &&
+    state.data.event.status !== "cancelled" &&
+    !!state.data.ticket.qr_token;
   const qrToken = state.kind === "ready" ? state.data.ticket.qr_token : null;
 
   useEffect(() => {
@@ -312,17 +330,34 @@ const TicketView = ({
   const mapsQuery = [event.venue_name, event.address, event.city].filter(Boolean).join(", ");
 
   const status = ticket.status;
-  const statusPill =
-    status === "paid"
-      ? { label: "Válida", bg: "rgba(77,184,122,0.18)", color: "#7FE0A6" }
-      : status === "used"
-      ? { label: "Utilizada", bg: "rgba(244,238,226,0.12)", color: "#F4EEE2" }
-      : status === "pending"
-      ? { label: "Pendiente de pago", bg: "rgba(232,176,76,0.18)", color: "#E8B04C" }
-      : { label: "No válida", bg: "rgba(232,84,42,0.2)", color: "#FFC9B0" };
+  const eventCancelled = event.status === "cancelled";
+  const statusPill = eventCancelled
+    ? { label: "Evento cancelado", bg: "rgba(232,84,42,0.2)", color: "#FFC9B0" }
+    : status === "paid"
+    ? { label: "Válida", bg: "rgba(77,184,122,0.18)", color: "#7FE0A6" }
+    : status === "used"
+    ? { label: "Utilizada", bg: "rgba(244,238,226,0.12)", color: "#F4EEE2" }
+    : status === "pending"
+    ? { label: "Pendiente de pago", bg: "rgba(232,176,76,0.18)", color: "#E8B04C" }
+    : { label: "No válida", bg: "rgba(232,84,42,0.2)", color: "#FFC9B0" };
 
   // Mensaje cuando NO enseñamos el QR.
   const notice = (() => {
+    if (eventCancelled) {
+      const refundText =
+        ticket.refund_status === "refunded"
+          ? "Te hemos devuelto el importe de esta entrada; puede tardar unos días en aparecer en tu cuenta."
+          : ticket.refund_status === "in_progress"
+          ? "Estamos devolviéndote el importe de esta entrada, al mismo medio con el que pagaste."
+          : ticket.refund_status === "failed"
+          ? "La devolución del importe está pendiente. Si en unos días no la ves, contacta con soporte."
+          : "Esta entrada ya no es válida para entrar.";
+      return {
+        icon: <XCircle className="h-7 w-7" />,
+        title: "Evento cancelado",
+        text: `El local ha cancelado este evento. ${refundText}`,
+      };
+    }
     if (status === "used") {
       const when = ticket.used_at ? formatMomentLong(ticket.used_at, tz) : "";
       return {
@@ -493,6 +528,11 @@ const TicketView = ({
             <div className="text-[#FFC9B0]">{notice.icon}</div>
             <h2 className="mt-3 text-lg font-semibold">{notice.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-white/60">{notice.text}</p>
+            {eventCancelled && ticket.refund_status === "failed" && (
+              <Link to="/soporte" className="mt-4 text-sm text-[#FF7A4D] underline underline-offset-4">
+                Contactar con soporte
+              </Link>
+            )}
           </div>
         )}
 
