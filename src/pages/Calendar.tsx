@@ -12,9 +12,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedMarqueeHero } from "@/components/ui/hero-3";
 import { useToast } from "@/hooks/use-toast";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
+import { TODA_ESPANA, useCiudadElegida } from "@/hooks/queries/clientData";
 import { loginPathWithNext } from "@/lib/eventLinks";
-import { DEFAULT_CITY } from "@/constants/spanishCities";
-import { DEFAULT_COUNTRY, getCountryByCode } from "@/constants/countries";
 
 // Stable empty array — usado como fallback cuando react-query aún no tiene
 // data, así el useEffect que depende de `events` no se re-dispara por un
@@ -47,12 +46,12 @@ const Calendar = () => {
   const focusEventId = searchParams.get("event");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
-  const [selectedCity, setSelectedCity] = useState<string>(
-    () => localStorage.getItem("selectedCity") || DEFAULT_CITY
-  );
-  const [selectedCountry, setSelectedCountry] = useState<string>(
-    () => localStorage.getItem("selectedCountry") || DEFAULT_COUNTRY
-  );
+  // Una sola ciudad para toda la app (B2-10): la del perfil del cliente o,
+  // sin sesión, la del dispositivo. null = «Toda España». Cambiarla aquí
+  // cambia también la de Inicio (y la del perfil). Antes el calendario tenía
+  // la suya propia en localStorage, con Valladolid por defecto y países fuera
+  // de España.
+  const { ciudad: selectedCity, cambiarCiudad } = useCiudadElegida();
   const [citySelectorOpen, setCitySelectorOpen] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [view, setView] = useState<"posters" | "calendar">(
@@ -76,51 +75,62 @@ const Calendar = () => {
     });
   }, []);
 
-  const { data: eventsData, isLoading } = useCalendarEvents(selectedCity, selectedCountry);
+  const { data: eventsData, isLoading } = useCalendarEvents(selectedCity);
+  // Misma lista (misma caché), sin filtrar por ciudad: para el ?event= de abajo.
+  const { data: todosLosEventos } = useCalendarEvents(null);
   // Estabilizamos la referencia de events: si data llega undefined (durante el
   // primer fetch), devolvemos siempre el MISMO array vacío para que el
   // useEffect que depende de `events` no caiga en loop por cambio de
   // referencia. Es la misma técnica que usa react-query con su cache interna.
-  const events = useMemo(() => eventsData ?? EMPTY_EVENTS, [eventsData]);
+  // Con ?event= (vuelta del login tras «Comprar»), ese evento sale aunque sea
+  // de otra ciudad: la del perfil puede no ser la que se miraba sin sesión.
+  const events = useMemo(() => {
+    const lista = eventsData ?? EMPTY_EVENTS;
+    if (!focusEventId || lista.some((e) => e.id === focusEventId)) return lista;
+    const foco = todosLosEventos?.find((e) => e.id === focusEventId);
+    return foco ? [...lista, foco].sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start)) : lista;
+  }, [eventsData, todosLosEventos, focusEventId]);
   const { invalidateAll } = useInvalidateEvents();
+  // Ids de los eventos visibles, como texto estable: cambiar de ciudad puede
+  // dejar el mismo número de eventos pero otros distintos.
+  const idsVisibles = useMemo(() => events.map((e) => e.id).join(","), [events]);
 
   // Once we know the user + the visible events, fetch which of those they
   // already participate in so the card shows "Mi entrada" (y "Comprar más").
   useEffect(() => {
-    if (!authedUserId || events.length === 0) {
+    if (!authedUserId || !idsVisibles) {
       // Solo limpiar si ya hay algo (evita re-renders innecesarios → loops).
       setParticipantIds((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
-    const eventIds = events.map((e) => e.id);
+    const visibles = new Set(idsVisibles.split(","));
     let cancelled = false;
     (async () => {
       // Pasify: la participación se materializa con un ticket pagado, no con
       // un row en `event_participants`. Consultamos `tickets` con status
       // 'paid' o 'used' que el usuario tiene AHORA: comprados y no
       // transferidos, o transferidos a él (misma regla que la RLS).
+      // Sin filtrar por evento en la URL: con «Toda España» serían cientos
+      // de ids; las entradas de una persona son pocas.
       const { data } = await supabase
         .from("tickets")
         .select("event_id, buyer_user_id, transferred_to_user_id")
         .or(`buyer_user_id.eq.${authedUserId},transferred_to_user_id.eq.${authedUserId}`)
-        .in("event_id", eventIds)
         .in("status", ["paid", "used"]);
       if (cancelled) return;
-      const held = (data ?? []).filter((r) =>
-        r.transferred_to_user_id
-          ? r.transferred_to_user_id === authedUserId
-          : r.buyer_user_id === authedUserId
+      const held = (data ?? []).filter(
+        (r) =>
+          visibles.has(r.event_id) &&
+          (r.transferred_to_user_id ? r.transferred_to_user_id === authedUserId : r.buyer_user_id === authedUserId)
       );
       setParticipantIds(new Set(held.map((r) => r.event_id)));
     })();
     return () => {
       cancelled = true;
     };
-    // Solo nos importa cuántos eventos hay (length) y el user, no la
-    // identidad del array (react-query nos da una referencia nueva al refetch
-    // aunque los IDs no cambien).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authedUserId, events.length]);
+    // Los ids como texto, no el array: react-query da una referencia nueva
+    // en cada refresco aunque los eventos sean los mismos.
+  }, [authedUserId, idsVisibles]);
 
   // Anchor for the hero CTA — scrolls the user from the marquee section
   // straight to the event list below.
@@ -166,14 +176,8 @@ const Calendar = () => {
     };
   }, [invalidateAll]);
 
-  const handleCityChange = (city: string) => {
-    setSelectedCity(city);
-    localStorage.setItem("selectedCity", city);
-  };
-
-  const handleCountryChange = (country: string) => {
-    setSelectedCountry(country);
-    localStorage.setItem("selectedCountry", country);
+  const handleCityChange = (city: string | null) => {
+    void cambiarCiudad(city);
   };
 
   // Hook compartido de compra. Encapsula auth gate, selector de tipo de
@@ -237,8 +241,6 @@ const Calendar = () => {
     }
   };
 
-  const countryFlag = getCountryByCode(selectedCountry)?.flag || "🇪🇸";
-
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       {/* Top bar — minimal, sticky with liquid glass */}
@@ -266,11 +268,11 @@ const Calendar = () => {
           <button
             type="button"
             onClick={() => setCitySelectorOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+            aria-label={`Ciudad: ${selectedCity ?? TODA_ESPANA}. Cambiar`}
+            className="flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
           >
             <MapPin className="h-3.5 w-3.5 text-primary" />
-            <span className="truncate max-w-[120px]">{selectedCity}</span>
-            <span className="text-base leading-none">{countryFlag}</span>
+            <span className="truncate max-w-[140px]">{selectedCity ?? TODA_ESPANA}</span>
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </button>
         </div>
@@ -370,8 +372,15 @@ const Calendar = () => {
         ) : events.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-sm text-muted-foreground">
-              {t("calendar.emptyDescription", "Aún no hay eventos publicados.")}
+              {selectedCity
+                ? `Aún no hay eventos publicados en ${selectedCity}.`
+                : t("calendar.emptyDescription", "Aún no hay eventos publicados.")}
             </p>
+            {selectedCity && (
+              <Button variant="outline" className="mt-4 min-h-[44px] rounded-full" onClick={() => handleCityChange(null)}>
+                Ver toda España
+              </Button>
+            )}
           </div>
         ) : view === "calendar" ? (
           <MonthCalendarView events={events} renderEvent={renderPosterCard} />
@@ -387,8 +396,6 @@ const Calendar = () => {
         onOpenChange={setCitySelectorOpen}
         selectedCity={selectedCity}
         onCityChange={handleCityChange}
-        selectedCountry={selectedCountry}
-        onCountryChange={handleCountryChange}
       />
 
       {/* Selector de entradas del hook de compra */}

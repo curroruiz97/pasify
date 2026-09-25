@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
 import { EVENT_OPEN_WITHOUT_END_MS, isEventOver } from "@/components/tickets/ticketUtils";
+import { enCiudad } from "@/hooks/queries/clientData";
 
 /**
  * Pasify · hooks de eventos.
@@ -24,6 +25,8 @@ import { EVENT_OPEN_WITHOUT_END_MS, isEventOver } from "@/components/tickets/tic
  */
 
 const STALE_TIME = 60 * 1000;
+/** ids por petición en los `in.(…)`: 60 uuid ≈ 2,3 KB de URL. */
+const IDS_POR_CONSULTA = 60;
 
 type Profile = {
   id: string;
@@ -101,12 +104,14 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
   const partnerIds = [
     ...new Set(events.map((e) => e.partner_id).filter((id): id is string => !!id)),
   ];
+  // Por tandas: con los eventos de toda España los ids no caben en una URL.
   const profilesMap = new Map<string, Profile>();
-  if (partnerIds.length > 0) {
-    const { data: partnersData, error: partnersError } = await supabase
-      .from("public_partners")
-      .select("id, business_name, avatar_url")
-      .in("id", partnerIds);
+  const tandas: string[][] = [];
+  for (let i = 0; i < partnerIds.length; i += IDS_POR_CONSULTA) tandas.push(partnerIds.slice(i, i + IDS_POR_CONSULTA));
+  const respuestas = await Promise.all(
+    tandas.map((ids) => supabase.from("public_partners").select("id, business_name, avatar_url").in("id", ids)),
+  );
+  respuestas.forEach(({ data: partnersData, error: partnersError }) => {
     if (partnersError) {
       console.warn("[useEvents] public_partners query failed", partnersError);
     }
@@ -120,7 +125,7 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
         avatar_url: p.avatar_url,
       });
     });
-  }
+  });
 
   return events.map((e) => decorate(e, (e.partner_id && profilesMap.get(e.partner_id)) || null));
 };
@@ -137,25 +142,35 @@ const sinTerminados = (eventos: CalendarEvent[]): CalendarEvent[] => {
 // servidor (`create_ticket_order`, ver isEventOver): hasta `date_end` o, sin
 // hora de fin, hasta 12 h después de empezar. Así salen las noches que ya
 // han empezado y los eventos de varios días en curso, y no los que ya
-// acabaron aunque empezaran hace poco. Filtra por city si llega.
-// Caché pública (qk.public.calendarEvents), guardada un día en el
-// dispositivo: al volver al calendario o recargar sale al instante.
-export const useCalendarEvents = (city?: string, _country?: string) => {
+// acabaron aunque empezaran hace poco.
+//
+// Ciudad (B2-10): se piden los de toda España UNA vez (qk.public.calendarEvents(null),
+// guardada un día en el dispositivo) y la ciudad se filtra al leer. Así
+// cambiar de ciudad es instantáneo (también sin conexión) y "Palma" encuentra
+// los eventos de "Palma de Mallorca" (enCiudad): la ciudad del perfil sale de
+// SpanishCitySelect y la de los eventos, de la tabla `cities`, y no siempre
+// se escriben igual. Con el `ilike` de antes no se encontraban.
+// Sin ciudad (null o "", «Toda España»): todos.
+export const useCalendarEvents = (city?: string | null) => {
+  const ciudad = city?.trim() || null;
+  const filtrar = useCallback(
+    (eventos: CalendarEvent[]): CalendarEvent[] =>
+      sinTerminados(ciudad ? eventos.filter((e) => enCiudad(e.city, ciudad)) : eventos),
+    [ciudad],
+  );
   return useQuery({
-    queryKey: qk.public.calendarEvents(city ?? null),
+    queryKey: qk.public.calendarEvents(null),
     queryFn: async () => {
       const ahora = Date.now();
       const nowIso = new Date(ahora).toISOString();
       const sinFinDesde = new Date(ahora - EVENT_OPEN_WITHOUT_END_MS).toISOString();
-      return fetchEventsWithProfiles((q) => {
-        let r = q
+      return fetchEventsWithProfiles((q) =>
+        q
           .eq("status", "published")
-          .or(`date_end.gte.${nowIso},and(date_end.is.null,date_start.gte.${sinFinDesde})`);
-        if (city) r = r.ilike("city", city);
-        return r;
-      });
+          .or(`date_end.gte.${nowIso},and(date_end.is.null,date_start.gte.${sinFinDesde})`),
+      );
     },
-    select: sinTerminados,
+    select: filtrar,
     staleTime: STALE_TIME,
     refetchOnReconnect: "always",
   });

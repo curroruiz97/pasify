@@ -27,6 +27,16 @@ import {
  *     sección plegada. Favoritos separados en Próximos y Pasados.
  *   - Ajustes de la cuenta se abre desde el perfil.
  *
+ * Ola 2 del cliente:
+ *   - B2-03: el corazón de los locales guarda (partner_favorites.partner_id)
+ *     y el local sale en Favoritos · Locales.
+ *   - B2-10: una sola ciudad, la del perfil (Madrid), filtra los locales y los
+ *     próximos eventos de Inicio; «Toda España» la quita y se guarda en el
+ *     perfil. Editar perfil la enseña.
+ *   - Cartera: «Reenviar email» (Enviado / Espera un poco), «Enviar a un
+ *     amigo» (y después «Transferencia pendiente») y la devolución según la
+ *     política del tipo (con fecha límite o «Sin devolución»).
+ *
  * Corre con la config del panel (arranca Vite con el Supabase falso, un
  * worker, hora de Madrid y sin service worker): va en su `testMatch` y en el
  * `testIgnore` de playwright.config.ts (su proyecto "mobile" no tiene barra
@@ -63,11 +73,26 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const C = {
   local1: "c11e0000-0000-4000-8000-0000000000a1",
   local2: "c11e0000-0000-4000-8000-0000000000a2",
+  /** En Barcelona: con la ciudad del perfil (Madrid) no sale en Inicio. */
+  local3: "c11e0000-0000-4000-8000-0000000000a3",
   eventoProximo: "c11e0000-0000-4000-8000-0000000000e1",
   eventoPasado: "c11e0000-0000-4000-8000-0000000000e2",
   eventoCancelado: "c11e0000-0000-4000-8000-0000000000e3",
   eventoReembolsado: "c11e0000-0000-4000-8000-0000000000e4",
+  eventoGala: "c11e0000-0000-4000-8000-0000000000e5",
+  eventoBarcelona: "c11e0000-0000-4000-8000-0000000000e6",
+  /** Devolución hasta 24 h antes; se puede transferir. */
+  tipoConDevolucion: "c11e0000-0000-4000-8000-0000000000f1",
+  /** Sin devolución (refundable_until_hours_before NULL). */
+  tipoSinDevolucion: "c11e0000-0000-4000-8000-0000000000f2",
+  pedido1: "c11e0000-0000-4000-8000-0000000000d1",
+  pedido5: "c11e0000-0000-4000-8000-0000000000d5",
+  transferencia5: "c11e0000-0000-4000-8000-0000000000c5",
 } as const;
+
+/** Entrada válida con devolución (Noche Futura) y la de la gala, con una transferencia pendiente. */
+const ENTRADA_1 = "c11e0000-0000-4000-8000-000000000101";
+const ENTRADA_5 = "c11e0000-0000-4000-8000-000000000105";
 
 function datosCliente(ahora: number) {
   const locales = [
@@ -84,6 +109,14 @@ function datosCliente(ahora: number) {
       business_name: "Teatro Lumen E2E",
       business_category: "teatro",
       city: "Madrid",
+      avatar_url: null,
+      cover_image_url: null,
+    },
+    {
+      id: C.local3,
+      business_name: "Club Mar E2E",
+      business_category: "club",
+      city: "Barcelona",
       avatar_url: null,
       cover_image_url: null,
     },
@@ -109,6 +142,15 @@ function datosCliente(ahora: number) {
     evento({ id: C.eventoPasado, title: "Fiesta Pasada E2E", date_start: iso(ahora - 10 * D), status: "past" }),
     evento({ id: C.eventoCancelado, title: "Concierto Cancelado E2E", date_start: iso(ahora + 5 * D), status: "cancelled" }),
     evento({ id: C.eventoReembolsado, title: "Sesión Reembolsada E2E", date_start: iso(ahora + 8 * D), status: "published", partner_id: C.local2 }),
+    evento({ id: C.eventoGala, title: "Gala Sin Devolución E2E", date_start: iso(ahora + 6 * D), status: "published" }),
+    evento({
+      id: C.eventoBarcelona,
+      title: "Fiesta Mar E2E",
+      date_start: iso(ahora + 4 * D),
+      status: "published",
+      partner_id: C.local3,
+      city: "Barcelona",
+    }),
   ];
 
   const entrada = (n: number, eventId: string, status: string, extra: Record<string, unknown> = {}) => ({
@@ -131,10 +173,17 @@ function datosCliente(ahora: number) {
     ...extra,
   });
   const entradas = [
-    entrada(1, C.eventoProximo, "paid"),
+    entrada(1, C.eventoProximo, "paid", { tier_id: C.tipoConDevolucion, order_id: C.pedido1 }),
     entrada(2, C.eventoPasado, "used", { used_at: iso(ahora - 10 * D + H) }),
     entrada(3, C.eventoCancelado, "paid"),
     entrada(4, C.eventoReembolsado, "refunded"),
+    entrada(5, C.eventoGala, "paid", { tier_id: C.tipoSinDevolucion, order_id: C.pedido5 }),
+  ];
+
+  // Política de los tipos (lo que lee la cartera de ticket_tiers).
+  const tipos = [
+    { id: C.tipoConDevolucion, name: "Anticipada", transfer_allowed: true, refundable_until_hours_before: 24 },
+    { id: C.tipoSinDevolucion, name: "Gala", transfer_allowed: true, refundable_until_hours_before: null },
   ];
 
   // favorites_v2 con el evento embebido (events!inner(...)).
@@ -164,7 +213,22 @@ function datosCliente(ahora: number) {
     },
   ];
 
-  return { locales, eventos, entradas, favoritos, niveles, movimientos };
+  return { locales, eventos, entradas, tipos, favoritos, niveles, movimientos };
+}
+
+/**
+ * Lo que el cliente escribe durante el test (el Supabase simulado no guarda
+ * nada): locales favoritos, ciudad del perfil, transferencias y reenvíos. Así
+ * un refresco tras guardar devuelve lo guardado, como el servidor de verdad.
+ */
+interface EstadoCliente {
+  localesFavoritos: { partner_id: string; created_at: string }[];
+  ciudad: string | null;
+  cambiosPerfil: Record<string, unknown>[];
+  transferencias: { id: string; ticket_id: string; expires_at: string; created_at: string }[];
+  envios: Record<string, unknown>[];
+  /** order_id de cada «Reenviar email». */
+  reenvios: unknown[];
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +271,62 @@ async function responder(page: Page, ruta: string, manejar: Manejador) {
   );
 }
 
+/** Respuesta con estado HTTP propio (escrituras, errores de edge functions). */
+type RespuestaPropia = { status?: number; body?: unknown };
+
+/**
+ * Como `responder`, pero cada llamada decide el estado HTTP y el cuerpo. El
+ * preflight lo contesta aquí con lo que pida el navegador: estas rutas usan
+ * PATCH y DELETE, que un preflight sin Allow-Methods no dejaría pasar.
+ */
+async function responderCon(page: Page, ruta: string, manejar: (req: Request, url: URL) => RespuestaPropia | undefined) {
+  await page.route(
+    (url) => url.origin === ORIGEN_SUPABASE && url.pathname === ruta,
+    async (route) => {
+      const req = route.request();
+      if (req.method() === "OPTIONS") {
+        const cabeceras = req.headers();
+        return route.fulfill({
+          status: 204,
+          headers: {
+            "access-control-allow-origin": cabeceras["origin"] ?? "*",
+            "access-control-allow-credentials": "true",
+            "access-control-allow-methods": cabeceras["access-control-request-method"] ?? "GET, POST, PATCH, DELETE",
+            "access-control-allow-headers": cabeceras["access-control-request-headers"] ?? "*",
+            "access-control-max-age": "600",
+          },
+        });
+      }
+      const respuesta = manejar(req, new URL(req.url()));
+      if (respuesta === undefined) return route.fallback();
+      const cuerpo = respuesta.body === undefined ? "" : JSON.stringify(respuesta.body);
+      const filas = Array.isArray(respuesta.body) ? respuesta.body.length : cuerpo ? 1 : 0;
+      await route.fulfill({
+        status: respuesta.status ?? 200,
+        headers: {
+          "access-control-allow-origin": req.headers()["origin"] ?? "*",
+          "access-control-allow-credentials": "true",
+          "access-control-expose-headers": "content-range, x-supabase-api-version",
+          ...(cuerpo ? { "content-type": "application/json; charset=utf-8" } : {}),
+          "content-range": filas ? `0-${filas - 1}/${filas}` : "*/0",
+        },
+        body: cuerpo,
+      });
+    },
+  );
+}
+
+/** Cuerpo JSON de una escritura (PostgREST o edge function). */
+function cuerpoDe(req: Request): Record<string, unknown> {
+  try {
+    const json = req.postDataJSON() as unknown;
+    const fila = Array.isArray(json) ? json[0] : json;
+    return fila && typeof fila === "object" ? (fila as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** `id=in.(a,b)` y `status=eq.x` de PostgREST, lo que piden la cartera y el calendario. */
 function filtrarEventos<T extends { id: string; status: string }>(eventos: T[], url: URL): T[] {
   let lista = eventos;
@@ -220,9 +340,20 @@ function filtrarEventos<T extends { id: string; status: string }>(eventos: T[], 
   return lista;
 }
 
-async function instalarDatosDeCliente(page: Page, { demo }: { demo: boolean }) {
-  const datos = datosCliente(Date.now());
+async function instalarDatosDeCliente(page: Page, { demo }: { demo: boolean }): Promise<EstadoCliente> {
+  const ahora = Date.now();
+  const datos = datosCliente(ahora);
   const soloLectura = (req: Request) => req.method() === "GET" || req.method() === "HEAD";
+  const estado: EstadoCliente = {
+    localesFavoritos: [],
+    ciudad: "Madrid",
+    cambiosPerfil: [],
+    transferencias: [
+      { id: C.transferencia5, ticket_id: ENTRADA_5, expires_at: iso(ahora + 5 * D), created_at: iso(ahora - D) },
+    ],
+    envios: [],
+    reenvios: [],
+  };
 
   await responder(page, "/rest/v1/rpc/get_user_roles", () => ["client"]);
   await responder(page, "/rest/v1/rpc/get_feature_flag", (_req, _url, args) =>
@@ -231,11 +362,83 @@ async function instalarDatosDeCliente(page: Page, { demo }: { demo: boolean }) {
   await responder(page, "/rest/v1/public_partners", (req) => (soloLectura(req) ? datos.locales : undefined));
   await responder(page, "/rest/v1/events", (req, url) => (soloLectura(req) ? filtrarEventos(datos.eventos, url) : undefined));
   await responder(page, "/rest/v1/tickets", (req) => (soloLectura(req) ? datos.entradas : undefined));
+  await responder(page, "/rest/v1/ticket_tiers", (req) => (soloLectura(req) ? datos.tipos : undefined));
   await responder(page, "/rest/v1/favorites_v2", (req) => (soloLectura(req) ? datos.favoritos : undefined));
   await responder(page, "/rest/v1/loyalty_levels", (req) => (soloLectura(req) ? datos.niveles : undefined));
   await responder(page, "/rest/v1/loyalty_points", (req) => (soloLectura(req) ? datos.movimientos : undefined));
   await responder(page, "/rest/v1/rpc/loyalty_balance", () => 750);
   await responder(page, "/rest/v1/rpc/get_or_create_my_referral_code", () => "ABCD1234");
+
+  // Perfil con la ciudad (B2-10): lo que se guarda es lo que vuelve a leerse.
+  await responderCon(page, "/rest/v1/profiles", (req) => {
+    if (req.method() === "PATCH") {
+      const cambios = cuerpoDe(req);
+      estado.cambiosPerfil.push(cambios);
+      if ("city" in cambios) estado.ciudad = (cambios.city as string | null) ?? null;
+      return { status: 204 };
+    }
+    if (!soloLectura(req)) return undefined;
+    const fila = {
+      id: IDS.usuario,
+      email: "local@e2e.pasify.test",
+      first_name: "Clara",
+      last_name: "E2E",
+      phone: null,
+      city: estado.ciudad,
+      avatar_url: null,
+      created_at: iso(ahora - 90 * D),
+      account_status: "approved",
+    };
+    const objeto = (req.headers()["accept"] ?? "").includes("vnd.pgrst.object+json");
+    return { body: objeto ? fila : [fila] };
+  });
+
+  // Locales favoritos (B2-03): upsert, borrado y lectura.
+  await responderCon(page, "/rest/v1/partner_favorites", (req, url) => {
+    if (req.method() === "POST") {
+      const partnerId = String(cuerpoDe(req).partner_id ?? "");
+      if (partnerId && !estado.localesFavoritos.some((f) => f.partner_id === partnerId)) {
+        estado.localesFavoritos.unshift({ partner_id: partnerId, created_at: new Date().toISOString() });
+      }
+      return { status: 201 };
+    }
+    if (req.method() === "DELETE") {
+      const partnerId = (url.searchParams.get("partner_id") ?? "").replace(/^eq\./, "");
+      estado.localesFavoritos = estado.localesFavoritos.filter((f) => f.partner_id !== partnerId);
+      return { status: 204 };
+    }
+    return soloLectura(req) ? { body: estado.localesFavoritos } : undefined;
+  });
+
+  // Transferencias pendientes de quien envía («Transferencia pendiente»).
+  await responderCon(page, "/rest/v1/ticket_transfers", (req) =>
+    soloLectura(req) ? { body: estado.transferencias } : undefined,
+  );
+
+  // Edge functions de la cartera (Ola 2).
+  await responderCon(page, "/functions/v1/resend-tickets-email", (req) => {
+    if (req.method() !== "POST") return undefined;
+    estado.reenvios.push(cuerpoDe(req).order_id);
+    // Límite de 3 por hora en el servidor; aquí, al segundo.
+    return estado.reenvios.length > 1
+      ? { status: 429, body: { error: "rate_limit_exceeded", message: "Demasiados reenvíos." } }
+      : { body: { sent: true } };
+  });
+  await responderCon(page, "/functions/v1/send-ticket-transfer", (req) => {
+    if (req.method() !== "POST") return undefined;
+    const cuerpo = cuerpoDe(req);
+    estado.envios.push(cuerpo);
+    const transferId = `c11e0000-0000-4000-8000-0000000000c${estado.envios.length}`;
+    estado.transferencias.push({
+      id: transferId,
+      ticket_id: String(cuerpo.ticket_id ?? ""),
+      expires_at: new Date(Date.now() + 7 * D).toISOString(),
+      created_at: new Date().toISOString(),
+    });
+    return { body: { transfer_id: transferId } };
+  });
+
+  return estado;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +449,8 @@ interface App {
   supabase: SupabaseFalso;
   /** `pageerror` desde que se abrió la app. */
   errores: string[];
+  /** Lo que el cliente ha guardado (favoritos, ciudad, transferencias…). */
+  estado: EstadoCliente;
 }
 
 let appActual: App | null = null;
@@ -266,8 +471,8 @@ async function abrirCliente(page: Page, { demo = false }: { demo?: boolean } = {
   const errores: string[] = [];
   page.on("pageerror", (err) => errores.push(err.stack ?? `${err.name}: ${err.message}`));
   const supabase = await instalarSupabaseFalso(page);
-  await instalarDatosDeCliente(page, { demo });
-  const app: App = { supabase, errores };
+  const estado = await instalarDatosDeCliente(page, { demo });
+  const app: App = { supabase, errores, estado };
   appActual = app;
 
   await page.goto("/#/client-dashboard");
@@ -350,16 +555,19 @@ test.describe("web", () => {
       await page.getByRole("button", { name: "Teatros" }).click();
       await expect(page.getByText("Teatro Lumen E2E")).toBeVisible();
       await expect(page.getByText("Sala Aurora E2E")).toHaveCount(0);
-      // Sin corazón de locales (guardaba mal): ninguna tarjeta lo lleva.
-      await expect(page.locator("main").getByRole("button", { name: /favoritos/i })).toHaveCount(0);
+      // Vuelve el corazón de los locales (Ola 2, B2-03), sin guardar todavía.
+      await expect(page.getByRole("button", { name: "Guardar Teatro Lumen E2E en favoritos" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
       await page.getByRole("button", { name: "Todos" }).click();
     });
 
     await test.step("Tickets: cancelado sin QR y reembolsadas plegadas", async () => {
       await irA(page, app, "Tickets");
       await expect(page.getByText("Evento cancelado · te devolvemos el importe")).toBeVisible();
-      // Válida y usada con QR; la del evento cancelado, no.
-      await expect(page.getByRole("button", { name: /Ver mi QR/ })).toHaveCount(2);
+      // Las dos válidas y la usada con QR; la del evento cancelado, no.
+      await expect(page.getByRole("button", { name: /Ver mi QR/ })).toHaveCount(3);
       await expect(page.getByText("Aún no tienes")).toHaveCount(0);
       const reembolsadas = page.getByRole("button", { name: /Reembolsadas · 1/ });
       await expect(reembolsadas).toHaveAttribute("aria-expanded", "false");
@@ -441,6 +649,120 @@ test.describe("web", () => {
         await expect(franjaDemo, `Franja DEMO en «${etiqueta}»`).toHaveCount(0);
       }
     });
+  });
+
+  test("Ola 2: locales favoritos, una sola ciudad y acciones de la cartera", async ({ page }) => {
+    const app = await abrirCliente(page);
+    const { estado } = app;
+    const main = page.locator("main");
+    const toast = (texto: string) => page.locator("[data-sonner-toast]").getByText(texto, { exact: true });
+    // Tarjeta de un local (su nombre sale también en los próximos eventos).
+    const tarjetaLocal = (nombre: string) => main.getByRole("button", { name: `Ver ${nombre}`, exact: true });
+
+    await test.step("Inicio: solo los locales y eventos de la ciudad del perfil", async () => {
+      await expect(main.getByRole("button", { name: /Tu ciudad: Madrid/ })).toBeVisible();
+      await expect(tarjetaLocal("Sala Aurora E2E")).toBeVisible();
+      await expect(tarjetaLocal("Club Mar E2E")).toHaveCount(0);
+      const proximos = page.getByRole("region", { name: "Próximos eventos" });
+      await expect(proximos).toContainText("Noche Futura E2E");
+      await expect(proximos).not.toContainText("Fiesta Mar E2E");
+    });
+
+    await test.step("Corazón de un local: se guarda y sale en Favoritos · Locales", async () => {
+      await page.getByRole("button", { name: "Guardar Sala Aurora E2E en favoritos" }).click();
+      const quitar = page.getByRole("button", { name: "Quitar Sala Aurora E2E de favoritos" });
+      await expect(quitar).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(() => estado.localesFavoritos.map((f) => f.partner_id)).toEqual([C.local1]);
+      await esperarCalma(page, app.supabase);
+      // Tras el refresco sigue guardado (lo devuelve el servidor).
+      await expect(quitar).toBeVisible();
+
+      await irA(page, app, "Favoritos");
+      await main.getByRole("button", { name: /^Locales/ }).click();
+      await expect(tarjetaLocal("Sala Aurora E2E")).toBeVisible();
+      await expect(main.getByRole("button", { name: "Quitar Sala Aurora E2E de favoritos" })).toBeVisible();
+      await expect(tarjetaLocal("Teatro Lumen E2E")).toHaveCount(0);
+    });
+
+    await test.step("Ciudad: «Toda España» enseña lo de fuera y se guarda en el perfil", async () => {
+      await irA(page, app, "Inicio");
+      await main.getByRole("button", { name: /Tu ciudad/ }).click();
+      const selector = page.getByRole("dialog");
+      await expect(selector.getByRole("heading", { name: "Elige tu ciudad" })).toBeVisible();
+      // Solo España: ni banderas ni países.
+      await expect(selector.getByText(/Francia|France|Italia|Portugal/)).toHaveCount(0);
+      await selector.getByRole("button", { name: /Toda España/ }).click();
+      await expect(tarjetaLocal("Club Mar E2E")).toBeVisible();
+      await expect.poll(() => estado.cambiosPerfil.some((c) => "city" in c && c.city === null)).toBe(true);
+      await esperarCalma(page, app.supabase);
+      await expect(main.getByRole("button", { name: /Tu ciudad: Toda España/ })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Próximos eventos" })).toContainText("Fiesta Mar E2E");
+    });
+
+    await test.step("Cartera: acciones según la política del tipo", async () => {
+      await irA(page, app, "Tickets");
+      const conDevolucion = page.locator("article", { hasText: "Noche Futura E2E" });
+      await expect(conDevolucion.getByText(/Devolución hasta el/)).toBeVisible();
+      await expect(conDevolucion.getByRole("button", { name: /Solicita el reembolso/ })).toBeVisible();
+      await expect(conDevolucion.getByRole("button", { name: "ENVIAR A UN AMIGO" })).toBeVisible();
+      await expect(conDevolucion.getByRole("button", { name: "REENVIAR EMAIL" })).toBeVisible();
+
+      const sinDevolucion = page.locator("article", { hasText: "Gala Sin Devolución E2E" });
+      await expect(sinDevolucion.getByText("Sin devolución (salvo cancelación)")).toBeVisible();
+      await expect(sinDevolucion.getByText("Transferencia pendiente").first()).toBeVisible();
+      await expect(sinDevolucion.getByRole("button", { name: "ENVIAR A UN AMIGO" })).toHaveCount(0);
+      await expect(sinDevolucion.getByRole("button", { name: /Solicita el reembolso/ })).toHaveCount(0);
+
+      // Evento cancelado y entrada usada: sin acciones.
+      for (const titulo of ["Concierto Cancelado E2E", "Fiesta Pasada E2E"]) {
+        const tarjeta = page.locator("article", { hasText: titulo });
+        await expect(tarjeta.getByRole("button", { name: /ENVIAR A UN AMIGO|REENVIAR EMAIL|reembolso/i })).toHaveCount(0);
+      }
+    });
+
+    await test.step("Reenviar email: «Enviado» y, al repetir, «Espera un poco» (429)", async () => {
+      const tarjeta = page.locator("article", { hasText: "Noche Futura E2E" });
+      await tarjeta.getByRole("button", { name: "REENVIAR EMAIL" }).click();
+      await expect(toast("Enviado")).toBeVisible();
+      await expect(tarjeta.getByRole("button", { name: "REENVIAR EMAIL" })).toBeEnabled();
+      await tarjeta.getByRole("button", { name: "REENVIAR EMAIL" }).click();
+      await expect(toast("Espera un poco")).toBeVisible();
+      expect(estado.reenvios).toEqual([C.pedido1, C.pedido1]);
+    });
+
+    await test.step("Enviar a un amigo: email y mensaje; después, «Transferencia pendiente»", async () => {
+      const tarjeta = page.locator("article", { hasText: "Noche Futura E2E" });
+      await tarjeta.getByRole("button", { name: "ENVIAR A UN AMIGO" }).click();
+      const hoja = page.getByRole("dialog");
+      await expect(hoja.getByRole("heading", { name: "Enviar a un amigo" })).toBeVisible();
+      await hoja.getByLabel("Email de tu amigo").fill("amiga@e2e.pasify.test");
+      await hoja.getByLabel("Mensaje (opcional)").fill("¡Nos vemos dentro!");
+      await hoja.getByRole("button", { name: "Enviar entrada" }).click();
+      await expect(toast("Entrada enviada")).toBeVisible();
+      expect(estado.envios).toEqual([
+        { ticket_id: ENTRADA_1, to_email: "amiga@e2e.pasify.test", message: "¡Nos vemos dentro!" },
+      ]);
+      await expect(tarjeta.getByText("Transferencia pendiente").first()).toBeVisible();
+      await expect(tarjeta.getByRole("button", { name: "ENVIAR A UN AMIGO" })).toHaveCount(0);
+      // Con la transferencia pendiente tampoco se ofrece la devolución.
+      await expect(tarjeta.getByRole("button", { name: /Solicita el reembolso/ })).toHaveCount(0);
+      await esperarCalma(page, app.supabase);
+      // Tras el refresco sigue pendiente (la lee de ticket_transfers).
+      await expect(tarjeta.getByText("Transferencia pendiente").first()).toBeVisible();
+    });
+
+    await test.step("Editar perfil: la ciudad (o «Toda España») se edita ahí", async () => {
+      await page.locator("aside").getByRole("button", { name: "Abrir perfil" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: /Ajustes de la cuenta/ }).click();
+      await page.getByRole("button", { name: "Editar perfil" }).click();
+      const hoja = page.getByRole("dialog", { name: "Editar perfil" });
+      await expect(hoja.getByText("Tu ciudad", { exact: true })).toBeVisible();
+      // La ciudad del perfil ya es «Toda España» (paso anterior).
+      await expect(hoja.getByRole("button", { name: "Toda España" })).toHaveAttribute("aria-pressed", "true");
+      await page.keyboard.press("Escape");
+    });
+
+    await comprobarSinFallos(page, app, "tras las acciones de la Ola 2");
   });
 });
 

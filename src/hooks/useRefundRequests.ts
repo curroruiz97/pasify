@@ -69,6 +69,36 @@ const toRefund = (r: DbRow): RefundRequest => ({
 
 const SIN_SOLICITUDES: RefundRequest[] = [];
 
+/**
+ * Textos de los errores de request_refund: los códigos de la política por
+ * tipo de entrada (Ola 2) y los mensajes de las comprobaciones de siempre.
+ * Se buscan en message, details y hint (el código puede ir en cualquiera).
+ */
+const ERRORES_SOLICITUD: ReadonlyArray<readonly [RegExp, string]> = [
+  [/refund_not_allowed/i, "Esta entrada no admite devolución, salvo que se cancele el evento."],
+  [/refund_window_closed/i, "Ya ha pasado el plazo para pedir la devolución de esta entrada."],
+  [/refund_in_dispute/i, "El pago de esta entrada está en disputa con el banco."],
+  [/ya existe solicitud/i, "Ya has pedido la devolución de esta entrada."],
+  [/transferencia pendiente/i, "Tienes una transferencia pendiente de esta entrada: mientras no se acepte o caduque, no se puede pedir la devolución."],
+  [/ya escaneado/i, "Esta entrada ya se ha usado en la puerta."],
+  [/no tiene importe/i, "Esta entrada no tiene importe que devolver."],
+  [/titular/i, "Esta entrada ya no está a tu nombre."],
+];
+
+/** Códigos con el texto para el comprador en DETAIL (RAISE … USING DETAIL). */
+const CODIGO_CON_DETALLE = /^(refund_not_allowed|refund_window_closed|refund_in_dispute)$/;
+
+/** Texto para el comprador de un error de request_refund. */
+export function mensajeErrorSolicitud(error: { message?: string; details?: string | null; hint?: string | null }): string {
+  const detalle = error.details?.trim();
+  if (detalle && CODIGO_CON_DETALLE.test(error.message?.trim() ?? "")) return detalle;
+  const texto = [error.message, error.details, error.hint].filter(Boolean).join(" · ");
+  return (
+    ERRORES_SOLICITUD.find(([patron]) => patron.test(texto))?.[1] ??
+    "No hemos podido enviar la solicitud. Vuelve a intentarlo en unos minutos."
+  );
+}
+
 /** `requesterId`: solo las que ha pedido ese usuario; null = todas las que deje ver RLS. */
 async function leerSolicitudes(requesterId: string | null): Promise<RefundRequest[]> {
   let consulta = supabase
@@ -147,6 +177,13 @@ export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
     ]);
   }, [queryClient, queryKey, mode, uid]);
 
+  /**
+   * Pide la devolución (RPC request_refund). Desde la Ola 2 la política es
+   * del tipo de entrada (D-3): sin plazo → `refund_not_allowed`; fuera de
+   * plazo → `refund_window_closed`; dentro, una solicitud 'pending' que
+   * decide el local. La tarjeta pasa al momento a «Pendiente de que el local
+   * lo revise» (se añade a la lista antes del refresco).
+   */
   const requestRefund = useCallback(async (ticketId: string, reason: string, reasonCode?: string) => {
     const { data, error } = await supabase.rpc("request_refund", {
       _ticket_id: ticketId,
@@ -154,13 +191,42 @@ export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
       _reason_code: reasonCode ?? null,
     });
     if (error) {
-      toast({ title: "No se pudo crear la solicitud", description: error.message, variant: "destructive" });
+      console.warn("[reembolsos] request_refund", error);
+      toast({ title: "No se ha podido pedir la devolución", description: mensajeErrorSolicitud(error), variant: "destructive" });
       throw error;
     }
     const requestId = data as string;
-    // Dentro del plazo del tipo de entrada la solicitud nace aprobada: el
-    // reembolso en Stripe lo lanza el propio comprador (process-refund lo
-    // permite solo para las aprobadas automáticamente).
+    if (mode === "mine" && uid) {
+      queryClient.setQueryData<RefundRequest[]>(qk.me.refunds(uid), (prev) => {
+        const lista = prev ?? [];
+        // Una rechazada o fallida se reabre con el mismo id (ticket_id es UNIQUE).
+        const previa = lista.find((r) => r.id === requestId || r.ticketId === ticketId);
+        const pendiente: RefundRequest = {
+          orderId: null,
+          eventId: "",
+          eventTitle: "Evento",
+          eventDate: null,
+          partnerName: null,
+          amount_cents: 0,
+          currency: "EUR",
+          ...previa,
+          id: requestId,
+          ticketId,
+          reason,
+          reason_code: reasonCode ?? null,
+          status: "pending",
+          requestedBy: uid,
+          requestedAt: new Date().toISOString(),
+          decidedAt: null,
+          decisionNote: null,
+          autoApproved: false,
+        };
+        return [pendiente, ...lista.filter((r) => r !== previa)];
+      });
+    }
+    // Servidor anterior a la Ola 2: dentro del plazo la solicitud nacía
+    // aprobada y el reembolso en Stripe lo lanzaba el propio comprador
+    // (process-refund solo lo permite en las aprobadas automáticamente).
     const { data: created } = await supabase
       .from("refund_requests")
       .select("status, auto_approved")
@@ -180,11 +246,11 @@ export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
             },
       );
     } else {
-      toast({ title: "Solicitud enviada", description: "Te avisamos cuando se decida." });
+      toast({ title: "Solicitud enviada", description: "Pendiente de que el local lo revise. Te avisaremos cuando decida." });
     }
     await fetchAll();
     return requestId;
-  }, [fetchAll, toast]);
+  }, [fetchAll, toast, mode, uid, queryClient]);
 
   const decideRefund = useCallback(async (requestId: string, decision: "approve" | "reject", note?: string) => {
     const { error } = await supabase.rpc("decide_refund", {

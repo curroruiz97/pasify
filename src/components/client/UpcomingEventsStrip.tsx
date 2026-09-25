@@ -8,7 +8,7 @@ const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 const MAX_EVENTOS = 10;
 
 interface Props {
-  /** Ciudad del perfil; sin ella, los de todas las ciudades. */
+  /** Ciudad elegida (useCiudadElegida); null = «Toda España». */
   city: string | null;
   onOpen: (eventId: string) => void;
   onSeeAll: () => void;
@@ -17,14 +17,14 @@ interface Props {
 /**
  * Próximos eventos de verdad en la home del cliente: los mismos del calendario
  * público (useCalendarEvents, caché qk.public.calendarEvents, misma regla de
- * "sigue a la venta" que el servidor). Sustituye a las recomendaciones
- * inventadas de SmartHomeStrip fuera del modo demo.
+ * "sigue a la venta" que el servidor), de la ciudad elegida. Sustituye a las
+ * recomendaciones inventadas de SmartHomeStrip fuera del modo demo.
  *
  * Es un extra: mientras carga, si falla o si no hay eventos no pinta nada (la
  * lista de locales de debajo tiene su propio estado de error).
  */
 export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
-  const { data } = useCalendarEvents(city ?? undefined);
+  const { data } = useCalendarEvents(city);
   const eventos = (data ?? []).slice(0, MAX_EVENTOS);
   if (eventos.length === 0) return null;
 
