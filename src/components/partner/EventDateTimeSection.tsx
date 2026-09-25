@@ -2,6 +2,7 @@ import { CalendarDays, Clock, Moon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { PasifyDateInput } from "@/components/ui/pasify-date-input";
 import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
+import { deviceTimeZone, zonedWallTimeToDate } from "@/components/partner/zonedTime";
 
 /**
  * EventDateTimeSection — selector fecha + hora inicio + hora fin separados.
@@ -15,6 +16,12 @@ import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
  * día siguiente". El helper `composeIsoStartEnd` que vive abajo devuelve
  * tanto el ISO de inicio como el de fin con el +1 día aplicado cuando
  * procede.
+ *
+ * Zona horaria: el día y las horas son los del reloj DEL LOCAL
+ * (`venues.timezone`), no los del móvil de quien crea el evento. Un local de
+ * Canarias editado desde Madrid (o al revés) ya no se desplaza una hora. Sin
+ * zona (local sin elegir, o la del local no es válida) se usa la del
+ * dispositivo, como antes.
  *
  * No persiste — el padre llama a `composeIsoStartEnd(...)` antes del INSERT.
  */
@@ -34,26 +41,30 @@ interface Props {
   value: DateTimeValue;
   onChange: (next: DateTimeValue) => void;
   disabled?: boolean;
+  /** Zona horaria del local (IANA, p. ej. "Europe/Madrid"). */
+  timeZone?: string;
 }
 
 /**
  * Devuelve los ISO timestamps para insertar en `events.date_start` /
- * `events.date_end`. Si endTime < startTime se asume cross-midnight y se
- * suma 1 día a date_end. Si date o startTime están vacíos devuelve null.
+ * `events.date_end`, con el día y las horas leídos en `timeZone` (la del
+ * local; sin ella, la del dispositivo). Si endTime < startTime se asume
+ * cross-midnight y se suma 1 día a date_end. Si date o startTime están
+ * vacíos devuelve null.
  */
 export const composeIsoStartEnd = (
-  v: DateTimeValue
+  v: DateTimeValue,
+  timeZone?: string
 ): { startIso: string | null; endIso: string | null; crossesMidnight: boolean } => {
   if (!v.date || !v.startTime) {
     return { startIso: null, endIso: null, crossesMidnight: false };
   }
-  // Construimos como local time (timezone del usuario) y convertimos a ISO UTC.
   const [y, m, d] = v.date.split("-").map(Number);
   const [sh, sm] = v.startTime.split(":").map(Number);
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
     return { startIso: null, endIso: null, crossesMidnight: false };
   }
-  const start = new Date(y, m - 1, d, sh, sm, 0, 0);
+  const start = zonedWallTimeToDate(y, m, d, sh, sm, timeZone);
   if (Number.isNaN(start.getTime())) {
     return { startIso: null, endIso: null, crossesMidnight: false };
   }
@@ -62,11 +73,11 @@ export const composeIsoStartEnd = (
   let crossesMidnight = false;
   if (v.endTime) {
     const [eh, em] = v.endTime.split(":").map(Number);
-    let end = new Date(y, m - 1, d, eh, em, 0, 0);
+    let end = zonedWallTimeToDate(y, m, d, eh, em, timeZone);
     if (!Number.isNaN(end.getTime())) {
       if (end <= start) {
         // Cross-midnight: nightclub style. Adelantar 1 día.
-        end = new Date(y, m - 1, d + 1, eh, em, 0, 0);
+        end = zonedWallTimeToDate(y, m, d + 1, eh, em, timeZone);
         crossesMidnight = true;
       }
       endIso = end.toISOString();
@@ -76,18 +87,19 @@ export const composeIsoStartEnd = (
 };
 
 /** Validación humana — devuelve mensaje de error o null si OK. */
-export const validateDateTime = (v: DateTimeValue): string | null => {
+export const validateDateTime = (v: DateTimeValue, timeZone?: string): string | null => {
   if (!v.date) return "Selecciona el día del evento";
   if (!v.startTime) return "Selecciona la hora de inicio";
-  const { startIso } = composeIsoStartEnd(v);
+  const { startIso } = composeIsoStartEnd(v, timeZone);
   if (!startIso) return "La fecha o la hora no son válidas";
   // No bloqueamos por evento "en el pasado" — el partner puede crear
   // borradores históricos para gestión interna. Sólo valida la lógica.
   return null;
 };
 
-export const EventDateTimeSection = ({ value, onChange, disabled }: Props) => {
-  const { crossesMidnight } = composeIsoStartEnd(value);
+export const EventDateTimeSection = ({ value, onChange, disabled, timeZone }: Props) => {
+  const { crossesMidnight } = composeIsoStartEnd(value, timeZone);
+  const differsFromDevice = !!timeZone && deviceTimeZone() !== timeZone;
 
   return (
     <div className="space-y-4">
@@ -139,10 +151,16 @@ export const EventDateTimeSection = ({ value, onChange, disabled }: Props) => {
         <div className="hidden sm:block">
           <Label className="text-xs invisible">spacer</Label>
           <div className="mt-1.5 flex h-10 items-center text-[11px] text-muted-foreground">
-            <span style={mono}>Zona horaria local</span>
+            <span style={mono}>{timeZone ? `Hora del local · ${timeZone}` : "Zona horaria local"}</span>
           </div>
         </div>
       </div>
+
+      {timeZone && differsFromDevice && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Las horas son las del local ({timeZone}), no las de este dispositivo.
+        </p>
+      )}
 
       {crossesMidnight && (
         <div

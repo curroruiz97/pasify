@@ -61,13 +61,20 @@ import type {
  *     no URL libre).
  *
  * Persistencia atómica (un solo "Finalizar"):
- *   1. create_organization (si no existe org propia)
+ *   1. La organización es la del contexto (`status.primaryOrgId` o `org.id`).
+ *      Si el contexto no ha cargado, `claim_partner_free_plan` devuelve la
+ *      que ya tiene (o la crea). Nunca `create_organization` directamente:
+ *      abierto desde Ayuda con el contexto caído creaba una segunda
+ *      organización y tenant_for_user elegía entre las dos sin orden fijo.
  *   2. UPDATE organizations (datos de empresa)
  *   3. UPDATE brand principal (logo, cover, colores, web, IG)
- *   4. UPDATE venue placeholder → primer local del form
- *   5. INSERT venues adicionales
- *   6. complete_partner_onboarding RPC marca server-truth
- *   7. onContextRefresh refresca el contexto y el wizard se cierra solo
+ *   4. Locales emparejados SOLO por id: UPDATE de los que ya existían, INSERT
+ *      de los nuevos. Antes un local nuevo se guardaba encima del que
+ *      ocupaba su posición en la BD (quitar B y añadir C sobrescribía B). El
+ *      único que se reutiliza sin id es el "Principal" vacío que crean
+ *      create_organization y claim_partner_free_plan.
+ *   5. complete_partner_onboarding RPC marca server-truth
+ *   6. onContextRefresh refresca el contexto y el wizard se cierra solo
  *
  * Si cualquier paso falla, mostramos toast con el error real (no
  * genéricos) y dejamos el wizard abierto para reintentar.
@@ -399,20 +406,15 @@ export const PartnerOnboardingWizard = ({
 
     setSubmitting(true);
     try {
-      // 1) Asegurar organization
-      let orgId = status?.primaryOrgId ?? null;
+      // 1) La organización del local. Sin contexto, claim_partner_free_plan
+      //    devuelve la que ya tiene (dueño, o owner/admin activo) y solo si no
+      //    tiene ninguna la crea: nunca una segunda organización.
+      let orgId = status?.primaryOrgId ?? org?.id ?? null;
       if (!orgId) {
-        const { data: createdOrgId, error: createErr } = await supabase.rpc(
-          "create_organization",
-          {
-            _name: data.orgName.trim(),
-            _country: data.orgCountry,
-            _slug: data.orgSlug.trim() || null,
-          } as never
-        );
-        if (createErr || !createdOrgId)
-          throw new Error(createErr?.message ?? "No se pudo crear la organización");
-        orgId = createdOrgId as string;
+        const { data: claimed, error: claimErr } = await supabase.rpc("claim_partner_free_plan");
+        if (claimErr) throw new Error(claimErr.message);
+        orgId = claimed?.[0]?.out_org_id ?? null;
+        if (!orgId) throw new Error("No se ha podido preparar tu organización. Vuelve a intentarlo.");
       }
 
       // 2) UPDATE organizations con todos los datos del paso 1
@@ -422,7 +424,7 @@ export const PartnerOnboardingWizard = ({
         currency: data.opCurrency,
         language: data.opLanguage,
       };
-      const { error: orgUpdErr } = await supabase
+      const { data: orgRows, error: orgUpdErr } = await supabase
         .from("organizations")
         .update({
           name: data.orgName.trim(),
@@ -434,8 +436,13 @@ export const PartnerOnboardingWizard = ({
           contact_phone: data.orgContactPhone.trim() || null,
           metadata: orgMetadata,
         })
-        .eq("id", orgId);
+        .eq("id", orgId)
+        .select("id");
       if (orgUpdErr) throw new Error(orgUpdErr.message);
+      // Sin filas: la RLS lo ha filtrado (no eres dueño ni admin de la organización).
+      if ((orgRows ?? []).length !== 1) {
+        throw new Error("No se han podido guardar los datos de la organización: tu cuenta no puede editarla.");
+      }
 
       // 3) Brand principal (create_organization crea 1)
       const { data: brandRow } = await supabase
@@ -468,20 +475,39 @@ export const PartnerOnboardingWizard = ({
         if (brandErr) throw new Error(brandErr.message);
       }
 
-      // 4) Venues. Localizar TODOS los existentes para reusar IDs.
-      const { data: existingVenues } = await supabase
+      // 4) Venues. Cada local del formulario se empareja SOLO por su id:
+      //    antes, uno nuevo (sin id) se guardaba encima del local que ocupaba
+      //    su misma posición en la BD, y al quitar B y añadir C, C
+      //    sobrescribía B. Sin id se crea, salvo que quede el "Principal"
+      //    vacío (sin dirección ni categoría) que crean create_organization
+      //    y claim_partner_free_plan: ese se rellena en vez de dejarlo
+      //    colgando (pasa si el asistente se abrió sin contexto).
+      const { data: existingVenues, error: venuesErr } = await supabase
         .from("venues")
-        .select("id")
+        .select("id, name, address, business_category")
         .eq("org_id", orgId)
         .order("created_at", { ascending: true });
-      const existingIds = (existingVenues ?? []).map((v) => v.id);
+      if (venuesErr) throw new Error(venuesErr.message);
+      const existing = existingVenues ?? [];
+      const existingIds = new Set(existing.map((v) => v.id));
+      const usedIds = new Set(data.venues.map((v) => v.id).filter((id): id is string => !!id));
+      const emptyPlaceholders = existing
+        .filter(
+          (v) =>
+            !usedIds.has(v.id) &&
+            v.name === "Principal" &&
+            !v.address?.trim() &&
+            !v.business_category?.trim()
+        )
+        .map((v) => v.id);
 
-      // El primer venue del form sustituye al PRIMER existente (placeholder
-      // o real) — eso garantiza que el "Principal" sin datos se rellena.
       let primaryVenueId: string | null = null;
       for (let i = 0; i < data.venues.length; i++) {
         const v = data.venues[i];
-        const targetId = v.id ?? existingIds[i] ?? null;
+        // Un id que ya no es de esta organización (contexto viejo) no se toca:
+        // ese local se crea de nuevo.
+        const targetId =
+          v.id && existingIds.has(v.id) ? v.id : !v.id ? emptyPlaceholders.shift() ?? null : null;
         const cap = v.capacity ? parseInt(v.capacity, 10) : null;
         const payload = {
           name: v.name.trim(),
@@ -498,11 +524,15 @@ export const PartnerOnboardingWizard = ({
             i === 0 ? (data.brandCoverUrl.trim() || null) : null,
         };
         if (targetId) {
-          const { error: vErr } = await supabase
+          const { data: vRows, error: vErr } = await supabase
             .from("venues")
             .update(payload)
-            .eq("id", targetId);
+            .eq("id", targetId)
+            .select("id");
           if (vErr) throw new Error(`Local ${i + 1}: ${vErr.message}`);
+          if ((vRows ?? []).length !== 1) {
+            throw new Error(`Local ${i + 1}: no se ha podido guardar (tu cuenta no puede editar este local).`);
+          }
           if (i === 0) primaryVenueId = targetId;
         } else {
           // INSERT — necesitamos brand_id + slug. El slug lo deja el
@@ -733,7 +763,7 @@ export const PartnerOnboardingWizard = ({
               data={data}
               setData={setData}
               disabled={submitting}
-              orgId={status?.primaryOrgId ?? null}
+              orgId={status?.primaryOrgId ?? org?.id ?? null}
             />
           )}
           {step === 3 && (

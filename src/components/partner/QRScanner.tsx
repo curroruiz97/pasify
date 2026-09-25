@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   AlertTriangle,
+  ArrowLeftRight,
   Camera,
   CameraOff,
   CheckCircle2,
@@ -26,7 +27,7 @@ import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { haptic } from "@/lib/haptics";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { appPlatform } from "@/lib/platform";
-import { eventPhase, listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
+import { eventPhase, isWithinDoorWindow, listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,12 +41,21 @@ import {
 /**
  * QRScanner — control de puerta del local, contra `scan_ticket` v2.
  *
- *   - Evento en puerta arriba: por defecto el de ahora (pickActiveEvent) y
- *     se envía como `_event_id`. Una entrada de otro evento o fuera de su
+ *   - Evento en puerta arriba: por defecto el de ahora (pickActiveEvent, que
+ *     incluye el evento retirado de la venta con entradas vendidas) y se
+ *     envía como `_event_id`. Una entrada de otro evento o fuera de su
  *     horario sale en rojo con el evento real; quien gestiona el evento puede
  *     "Dar entrada igualmente" con un motivo (queda auditado en servidor).
+ *   - Entrada de otro evento que se celebra ahora, con la puerta en un evento
+ *     que no es de ahora (el caso de retirar de la venta el de esta noche):
+ *     "Cambiar a ese evento" (también en el modo puerta) pone ese evento en
+ *     la puerta y vuelve a validar la misma entrada. scan_ticket devuelve en
+ *     wrong_event el id del evento real. Si el de la puerta también es de
+ *     ahora (dos salas), solo se explica cómo cambiarlo en el selector.
  *   - Resultado a pantalla completa: verde (se cierra solo a ~1,5 s) o rojo
  *     (hay que tocar para seguir), con el tipo de entrada, pitido y vibración.
+ *     Verde solo con `success` y resultado "success": cualquier otro
+ *     resultado, también uno que esta versión no conozca, sale en rojo.
  *     Si lo leído por la cámara no es un qr_token (UUID) no se llama al
  *     servidor: "Código no válido" al momento, y se cierra solo.
  *   - Entre lecturas se congela el <video>: el bucle de qr-scanner se para con
@@ -80,6 +90,8 @@ export interface ScannerEvent {
   date_start: string;
   date_end?: string | null;
   status: string;
+  /** Vendidas: un evento retirado de la venta con entradas sigue en la puerta. */
+  tickets_sold?: number | null;
 }
 
 interface QRScannerProps {
@@ -106,7 +118,9 @@ type ScanResultCode =
   | "not_paid"
   | "forbidden"
   | "outside_window"
-  | "event_cancelled";
+  | "event_cancelled"
+  /** Pagada en el modo de prueba de Stripe: no es una entrada real. */
+  | "test_payment";
 
 /** Fila de scan_ticket v2. Con `forbidden` todo lo del evento/comprador llega null. */
 interface ScanRow {
@@ -197,6 +211,42 @@ const deviceInfo = () =>
 
 const buyerName = (row: ScanRow) =>
   `${row.buyer_first_name ?? ""} ${row.buyer_last_name ?? ""}`.trim() || row.buyer_email || null;
+
+/**
+ * Verde solo con las dos cosas: `success` y resultado "success". Cualquier
+ * otro resultado, también uno nuevo que esta versión de la app no conozca,
+ * es rojo: nadie pasa por un resultado sin traducir.
+ */
+const isAdmitted = (row: ScanRow) => row.success === true && row.result === "success";
+
+/**
+ * Evento real de una entrada `wrong_event`, si ahora se pueden validar sus
+ * entradas (si no, cambiar la puerta a él solo daría "Fuera de horario").
+ * scan_ticket devuelve su id; si no llegara, se busca entre los eventos del
+ * local por título y hora de inicio. Un evento que la lista no tiene (lista
+ * guardada sin actualizar) se construye con lo que devuelve el servidor.
+ */
+const ticketEventForSwitch = (row: ScanRow, events: ScannerEvent[], now = new Date()): ScannerEvent | null => {
+  if (row.result !== "wrong_event") return null;
+  const startMs = row.event_date_start ? Date.parse(row.event_date_start) : Number.NaN;
+  let target: ScannerEvent | null = null;
+  if (row.event_id) {
+    target =
+      events.find((e) => e.id === row.event_id) ??
+      (row.event_date_start
+        ? {
+            id: row.event_id,
+            title: row.event_title ?? "Evento",
+            date_start: row.event_date_start,
+            date_end: null,
+            status: "unknown",
+          }
+        : null);
+  } else if (row.event_title && Number.isFinite(startMs)) {
+    target = events.find((e) => e.title === row.event_title && Date.parse(e.date_start) === startMs) ?? null;
+  }
+  return target && isWithinDoorWindow(target, now) ? target : null;
+};
 
 const eventDateLabel = (iso: string | null | undefined) => {
   if (!iso) return null;
@@ -360,7 +410,14 @@ const useScreenWakeLock = (active: boolean) => {
 
 const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScannerProps) => {
   // ---- Evento en puerta ------------------------------------------------------
-  const selectable = useMemo(() => listEventChoices(events), [events]);
+  // Evento al que se ha cambiado la puerta desde un aviso de "otro evento":
+  // se queda en el selector aunque la lista no lo traiga.
+  const [pinnedEvent, setPinnedEvent] = useState<ScannerEvent | null>(null);
+  const selectable = useMemo(() => {
+    const list = listEventChoices(events);
+    if (!pinnedEvent || list.some((e) => e.id === pinnedEvent.id)) return list;
+    return [events.find((e) => e.id === pinnedEvent.id) ?? pinnedEvent, ...list];
+  }, [events, pinnedEvent]);
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     () => pickActiveEvent(events)?.id ?? null
@@ -596,7 +653,7 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
       setOutcome(next);
       setForceOpen(false);
       setForceReason("");
-      const ok = next.kind === "ticket" && next.row.success;
+      const ok = next.kind === "ticket" && isAdmitted(next.row);
       if (ok) void haptic.success();
       else void haptic.error();
       playBeep(ok);
@@ -608,14 +665,17 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
   );
 
   // `token` es el qr_token leído o, si se tecleó el código corto, "code:<hex>".
-  const runScan = async (token: string, force?: ForceRequest) => {
+  // `eventIdOverride`: el evento recién elegido con "Cambiar a ese evento"
+  // (el estado aún no se ha actualizado en esta pasada).
+  const runScan = async (token: string, force?: ForceRequest, eventIdOverride?: string) => {
+    const eventId = eventIdOverride ?? selectedEventId;
     const byCode = token.startsWith(CODE_PREFIX);
     // A scan_ticket solo llega un UUID: cualquier otra cosa ni sale del móvil.
     if (!byCode && !UUID_RE.test(token)) {
       presentOutcome({ kind: "not_pasify" });
       return;
     }
-    if (byCode && !selectedEventId) {
+    if (byCode && !eventId) {
       presentOutcome({ kind: "error", token, message: "Elige arriba el evento para validar por código.", force });
       return;
     }
@@ -623,14 +683,14 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
     const request = byCode
       ? scanTicketByCodeRpc({
           _code: token.slice(CODE_PREFIX.length),
-          _event_id: selectedEventId as string,
+          _event_id: eventId as string,
           _device_info: deviceInfo(),
           ...(force ? { _force: true, _force_reason: force.reason } : {}),
         })
       : scanTicketRpc({
           _qr_token: token,
           _device_info: deviceInfo(),
-          ...(selectedEventId ? { _event_id: selectedEventId } : {}),
+          ...(eventId ? { _event_id: eventId } : {}),
           ...(force ? { _force: true, _force_reason: force.reason } : {}),
         });
     try {
@@ -653,7 +713,7 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
         presentOutcome({ kind: "error", token, message: "El servidor no ha devuelto resultado.", force });
         return;
       }
-      if (row.success) setSessionOk((n) => n + 1);
+      if (isAdmitted(row)) setSessionOk((n) => n + 1);
       setLastScanAt(new Date());
       presentOutcome({ kind: "ticket", row, token, forceAttempted: !!force });
     } catch (err) {
@@ -744,6 +804,32 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
     if (outcome.kind === "offline" || outcome.kind === "error") {
       void runScan(outcome.token, outcome.force);
     }
+  };
+
+  // "Es de otro evento" y ese evento se celebra ahora: se puede cambiar la
+  // puerta a él. También en el modo puerta (no es forzar: la entrada se
+  // valida con las reglas de su propio evento). Solo si el evento de la
+  // puerta NO es de ahora (p. ej. se quedó en el de la semana que viene
+  // porque el de esta noche se retiró de la venta): con dos eventos a la vez
+  // (dos salas, o uno acabando y otro abriendo puertas) un botón así dejaría
+  // pasar a la sala equivocada; entonces solo se indica cómo cambiarlo arriba.
+  const realEvent = outcome?.kind === "ticket" ? ticketEventForSwitch(outcome.row, events) : null;
+  const ticketEvent = realEvent && realEvent.id !== selectedEventId ? realEvent : null;
+  const selectedIsLive = !!selectedEvent && isWithinDoorWindow(selectedEvent);
+  const switchTarget = ticketEvent && !selectedIsLive ? ticketEvent : null;
+  const switchHint =
+    ticketEvent && selectedIsLive
+      ? `Si esta puerta es la de «${ticketEvent.title}», cámbiala arriba en «Evento en puerta».`
+      : null;
+
+  const switchToTicketEvent = () => {
+    if (!outcome || outcome.kind !== "ticket" || !switchTarget || validating) return;
+    setPinnedEvent(switchTarget);
+    setSelectedEventId(switchTarget.id);
+    setForceOpen(false);
+    setForceReason("");
+    // Se vuelve a validar la misma entrada, ya contra su evento.
+    void runScan(outcome.token, undefined, switchTarget.id);
   };
 
   const toggleTorch = async () => {
@@ -841,7 +927,8 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
         )}
         {selectedEvent && (
           <p className="mt-2 text-[12px] text-muted-foreground">
-            Las entradas de otros eventos saldrán en rojo con el evento al que pertenecen.
+            Una entrada de otro evento saldrá en rojo con el evento al que pertenece; si ese evento es
+            el de ahora, podrás cambiar la puerta a él desde el aviso.
           </p>
         )}
       </div>
@@ -1130,6 +1217,9 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
           onSubmitForce={submitForce}
           onRetry={retry}
           onDismiss={dismissOutcome}
+          switchTarget={switchTarget}
+          switchHint={switchHint}
+          onSwitchEvent={switchToTicketEvent}
         />
       )}
     </div>
@@ -1192,7 +1282,7 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
     .filter(Boolean)
     .join(" · ");
 
-  if (row.success) {
+  if (isAdmitted(row)) {
     return {
       tone: "ok",
       title: row.forced ? "Entrada forzada" : "Entrada válida",
@@ -1297,13 +1387,29 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
         canForce: false,
         canRetry: false,
       };
+    case "test_payment":
+      return {
+        tone: "bad",
+        title: "Entrada de prueba: no válida",
+        tier,
+        person,
+        lines: ["Se pagó en el modo de prueba de Stripe: no es una entrada real y no da acceso."],
+        canForce: false,
+        canRetry: false,
+      };
     default:
+      // Resultado que esta versión no conoce (o un "success" sin success):
+      // rojo genérico, nunca verde.
       return {
         tone: "bad",
         title: "Entrada no válida",
         tier,
         person,
-        lines: [`Motivo: ${row.result}`],
+        lines: [
+          row.result
+            ? `El servidor ha respondido «${row.result}». No dejes pasar sin comprobarlo.`
+            : "El servidor no ha dicho por qué. No dejes pasar sin comprobarlo.",
+        ],
         canForce: false,
         canRetry: false,
       };
@@ -1323,6 +1429,9 @@ const ResultOverlay = ({
   onSubmitForce,
   onRetry,
   onDismiss,
+  switchTarget,
+  switchHint,
+  onSwitchEvent,
 }: {
   outcome: Outcome;
   selectedEvent: ScannerEvent | null;
@@ -1336,6 +1445,11 @@ const ResultOverlay = ({
   onSubmitForce: (e: React.FormEvent) => void;
   onRetry: () => void;
   onDismiss: () => void;
+  /** Evento real de una entrada "de otro evento" que se celebra ahora. */
+  switchTarget: ScannerEvent | null;
+  /** Si el evento de la puerta también es de ahora: cómo cambiarlo a mano. */
+  switchHint: string | null;
+  onSwitchEvent: () => void;
 }) => {
   const described = describeOutcome(outcome, selectedEvent);
   const view: OutcomeView = doorMode
@@ -1347,10 +1461,14 @@ const ResultOverlay = ({
       }
     : described;
   const ok = view.tone === "ok";
+  const canSwitch = !ok && !!switchTarget;
   const Icon = ok ? CheckCircle2 : view.tone === "offline" ? WifiOff : view.canForce ? AlertTriangle : XCircle;
   // Sin conexión también va en rojo: no se ha validado nada y nadie pasa.
   const background = ok ? "bg-emerald-600" : "bg-red-700";
   const accentText = ok ? "text-emerald-700" : "text-red-700";
+  // Botón principal (blanco): reintentar, cambiar de evento o seguir.
+  const primaryClass = `h-12 w-full bg-white text-base font-semibold hover:bg-white/90 ${accentText}`;
+  const secondaryClass = "h-12 w-full border border-white/60 bg-transparent text-base text-white hover:bg-white/10";
 
   if (typeof document === "undefined") return null;
 
@@ -1382,6 +1500,7 @@ const ResultOverlay = ({
           {view.lines.map((line) => (
             <p key={line}>{line}</p>
           ))}
+          {!ok && switchHint && <p className="text-sm text-white/80">{switchHint}</p>}
         </div>
       </div>
 
@@ -1393,7 +1512,7 @@ const ResultOverlay = ({
               e.stopPropagation(); // el fondo verde también cierra: una sola vez
               onDismiss();
             }}
-            className={`h-12 w-full bg-white text-base font-semibold hover:bg-white/90 ${accentText}`}
+            className={primaryClass}
           >
             Siguiente
           </Button>
@@ -1440,7 +1559,7 @@ const ResultOverlay = ({
                 onClick={onRetry}
                 disabled={validating}
                 autoFocus
-                className={`h-12 w-full bg-white text-base font-semibold hover:bg-white/90 ${accentText}`}
+                className={primaryClass}
               >
                 {validating ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1449,6 +1568,27 @@ const ResultOverlay = ({
                 )}
                 Reintentar
               </Button>
+            )}
+            {canSwitch && switchTarget && (
+              <div className="space-y-1">
+                <Button
+                  type="button"
+                  onClick={onSwitchEvent}
+                  disabled={validating}
+                  autoFocus={!view.canRetry}
+                  className={view.canRetry ? secondaryClass : primaryClass}
+                >
+                  {validating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  )}
+                  Cambiar a ese evento
+                </Button>
+                <p className="text-center text-[12px] text-white/80">
+                  La puerta pasa a «{switchTarget.title}» y se vuelve a validar esta entrada.
+                </p>
+              </div>
             )}
             {view.canForce && (
               <Button
@@ -1465,12 +1605,8 @@ const ResultOverlay = ({
               type="button"
               onClick={onDismiss}
               disabled={validating}
-              autoFocus={!view.canRetry}
-              className={
-                view.canRetry
-                  ? "h-12 w-full border border-white/60 bg-transparent text-base text-white hover:bg-white/10"
-                  : `h-12 w-full bg-white text-base font-semibold hover:bg-white/90 ${accentText}`
-              }
+              autoFocus={!view.canRetry && !canSwitch}
+              className={view.canRetry || canSwitch ? secondaryClass : primaryClass}
             >
               {view.canRetry ? "Cerrar" : "Escanear siguiente"}
             </Button>

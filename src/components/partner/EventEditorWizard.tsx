@@ -43,12 +43,16 @@ import {
   type TierDraft,
   type TierSales,
 } from "@/components/partner/TicketTiersBuilder";
+import { isBelowStripeMinimum, priceEurToCents } from "@/components/partner/tierPrice";
 import {
   EventDateTimeSection,
   composeIsoStartEnd,
   validateDateTime,
   type DateTimeValue,
 } from "@/components/partner/EventDateTimeSection";
+import { addDaysToDate, isoToWallClock } from "@/components/partner/zonedTime";
+import { describeWriteError, expectRows } from "@/components/partner/writeErrors";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import {
   EventLocationSection,
   validateLocation,
@@ -93,8 +97,20 @@ import {
  *         BD también lo enforce)
  *       INSERT ticket_tiers nuevos
  *       DELETE ticket_tiers eliminados localmente (sólo si no tienen ventas)
+ *   - El aforo del evento (events.capacity) no lo escribe el editor: lo
+ *     mantiene un trigger con la suma de los cupos de TODOS los tipos,
+ *     también los ocultos (antes se sumaban solo los activos y ocultar un
+ *     tipo agotado le quitaba su cupo al aforo).
+ *   - Cada escritura pide `.select("id")` y comprueba cuántas filas cambian
+ *     (writeErrors): si la RLS la filtra no se dice "Cambios guardados", y el
+ *     aviso distingue sin conexión, rechazo del servidor y "no ha cambiado
+ *     nada".
  *   - Si la BD rechaza un UPDATE/DELETE por trigger, mostramos el error
  *     legible en un toast sin romper el resto de la transacción manual.
+ *
+ * Evento nuevo: el local elegido rellena la dirección, el cupo de la entrada
+ * por defecto (su aforo) y la zona horaria con la que se leen el día y las
+ * horas (EventDateTimeSection).
  */
 
 /**
@@ -150,7 +166,27 @@ export interface EditorVenue {
   name: string;
   city: string | null;
   address: string | null;
+  /** Aforo del local: cupo por defecto de la entrada de un evento nuevo. */
+  capacity?: number | null;
+  /** Zona horaria del local (IANA): el día y las horas del evento son los suyos. */
+  timezone?: string | null;
 }
+
+/** Zona horaria de un local (sin local o sin zona: la del dispositivo). */
+const zonaDe = (venue: EditorVenue | null | undefined): string | undefined => venue?.timezone || undefined;
+
+/** Aforo del local como cupo de la entrada por defecto ("" = sin límite). */
+const cupoDelLocal = (venue: EditorVenue | null | undefined): string =>
+  venue?.capacity && venue.capacity > 0 ? String(venue.capacity) : "";
+
+/** Entrada por defecto de un evento nuevo, con el aforo del local como cupo. */
+const tierPorDefecto = (venue: EditorVenue | null | undefined): TierDraft => ({
+  ...createEmptyTier("Entrada General", "15.00"),
+  capacity: cupoDelLocal(venue),
+});
+
+/** Estado de un tipo de entrada según su interruptor "Activo". */
+const estadoDelTipo = (active: boolean): "active" | "hidden" => (active ? "active" : "hidden");
 
 interface Props {
   mode: EditorMode;
@@ -227,12 +263,19 @@ export const EventEditorWizard = ({
     venueName: defaultVenueName,
     address: "",
   });
-  const [tiers, setTiers] = useState<TierDraft[]>([
-    createEmptyTier("Entrada General", "15.00"),
+  const [tiers, setTiers] = useState<TierDraft[]>(() => [
+    tierPorDefecto(venues.find((v) => v.id === defaultVenueId)),
   ]);
   const [imageUrl, setImageUrl] = useState("");
   const [willPublish, setWillPublish] = useState(true);
   const [venueId, setVenueId] = useState<string | null>(defaultVenueId);
+  // Zona horaria con la que se leen el día y las horas del formulario: la del
+  // local del evento. Se fija al cargar (con la que se descompuso la fecha) y
+  // al cambiar de local, no cuando llega tarde la lista de locales: así nunca
+  // se guarda con una zona distinta de la que se usó para enseñar la hora.
+  const [timeZone, setTimeZone] = useState<string | undefined>(() =>
+    zonaDe(venues.find((v) => v.id === defaultVenueId))
+  );
   // Estado del evento al abrirlo en "edit": guardar no lo cambia.
   const [originalStatus, setOriginalStatus] = useState<string | null>(null);
 
@@ -257,8 +300,9 @@ export const EventEditorWizard = ({
       address: defaultVenue?.address ?? "",
     });
     setVenueId(defaultVenue?.id ?? null);
+    setTimeZone(zonaDe(defaultVenue));
     setOriginalStatus(null);
-    setTiers([createEmptyTier("Entrada General", "15.00")]);
+    setTiers([tierPorDefecto(defaultVenue)]);
     setImageUrl("");
     setWillPublish(true);
     setTierSalesMap({});
@@ -279,7 +323,8 @@ export const EventEditorWizard = ({
     if (!open || mode !== "create" || !claveBorrador) return;
     const t = setTimeout(() => {
       const [primero] = tiers;
-      const porDefecto = createEmptyTier("Entrada General", "15.00");
+      // El cupo que viene del aforo del local no cuenta como "tocado".
+      const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
       const tocado =
         !!title.trim() ||
         !!description.trim() ||
@@ -311,7 +356,7 @@ export const EventEditorWizard = ({
       writeDraft(claveBorrador, borrador);
     }, 400);
     return () => clearTimeout(t);
-  }, [open, mode, claveBorrador, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId]);
+  }, [open, mode, claveBorrador, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, venues]);
 
   // -----------------------------------------------------------------
   // Reset / load según mode al abrir
@@ -331,8 +376,11 @@ export const EventEditorWizard = ({
         setDateTime(b.dateTime);
         setLocation(b.location);
         setVenueId(b.venueId ?? null);
+        setTimeZone(zonaDe(venues.find((v) => v.id === b.venueId)));
         setOriginalStatus(null);
-        setTiers(b.tiers.length > 0 ? b.tiers : [createEmptyTier("Entrada General", "15.00")]);
+        setTiers(
+          b.tiers.length > 0 ? b.tiers : [tierPorDefecto(venues.find((v) => v.id === b.venueId))]
+        );
         setImageUrl(b.imageUrl ?? "");
         setWillPublish(b.willPublish ?? true);
         setTierSalesMap({});
@@ -409,37 +457,27 @@ export const EventEditorWizard = ({
         }
       }
 
-      // 4) Fecha y hora desde date_start (+ end opcional)
-      const start = evt.date_start ? new Date(evt.date_start) : null;
-      const end = evt.date_end ? new Date(evt.date_end) : null;
+      // 4) Fecha y hora desde date_start (+ end opcional), en la hora del
+      //    local del evento (la misma zona con la que se guardará).
+      const venueDelEvento = venues.find((v) => v.id === (evt.venue_id ?? defaultVenueId));
+      const zona = zonaDe(venueDelEvento);
+      const inicio = evt.date_start ? isoToWallClock(evt.date_start, zona) : null;
+      const fin = evt.date_end ? isoToWallClock(evt.date_end, zona) : null;
 
       const baseTitle = evt.title ?? "";
       const dt = (() => {
-        if (!start) return { date: "", startTime: "23:30", endTime: "06:00" };
-        const pad = (n: number) => String(n).padStart(2, "0");
+        if (!inicio) return { date: "", startTime: "23:30", endTime: "06:00" };
         // Duplicate: mismo día de la semana y misma hora de reloj, la próxima
-        // semana que aún no haya pasado. setDate trabaja en hora local, así
-        // que un cambio de horario no desplaza la hora (sumar 7×24 h sí).
-        const plusDays = (d: Date, days: number) => {
-          const n = new Date(d);
-          n.setDate(n.getDate() + days);
-          return n;
-        };
-        let weeks = 0;
+        // semana que no haya pasado. Se suman días de calendario y la hora se
+        // conserva: un cambio de horario no la desplaza (sumar 7×24 h sí).
+        let date = inicio.date;
         if (m === "duplicate") {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          weeks = 1;
-          while (plusDays(start, 7 * weeks) < today && weeks < 520) weeks++;
+          const hoy = isoToWallClock(new Date(), zona)?.date ?? inicio.date;
+          let weeks = 1;
+          while (addDaysToDate(inicio.date, 7 * weeks) < hoy && weeks < 520) weeks++;
+          date = addDaysToDate(inicio.date, 7 * weeks);
         }
-        const baseStart = plusDays(start, 7 * weeks);
-        const baseEnd = end ? plusDays(end, 7 * weeks) : null;
-        const date = `${baseStart.getFullYear()}-${pad(baseStart.getMonth() + 1)}-${pad(baseStart.getDate())}`;
-        const startTime = `${pad(baseStart.getHours())}:${pad(baseStart.getMinutes())}`;
-        const endTime = baseEnd
-          ? `${pad(baseEnd.getHours())}:${pad(baseEnd.getMinutes())}`
-          : "";
-        return { date, startTime, endTime };
+        return { date, startTime: inicio.time, endTime: fin?.time ?? "" };
       })();
 
       setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
@@ -455,6 +493,7 @@ export const EventEditorWizard = ({
       setWillPublish(false);
       setOriginalStatus(m === "edit" ? evt.status ?? null : null);
       setVenueId(evt.venue_id ?? defaultVenueId ?? null);
+      setTimeZone(zona);
       setEventHasSales(m === "edit" ? hasSales : false);
       setTierSalesMap(salesMap);
 
@@ -468,11 +507,7 @@ export const EventEditorWizard = ({
         perUserMax: row.per_user_max != null ? String(row.per_user_max) : "4",
         active: (row.status ?? "active") === "active",
       }));
-      setTiers(
-        draftTiers.length > 0
-          ? draftTiers
-          : [createEmptyTier("Entrada General", "15.00")]
-      );
+      setTiers(draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error cargando evento";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -492,15 +527,18 @@ export const EventEditorWizard = ({
       .filter((n) => Number.isFinite(n) && n >= 0);
     const minPrice = prices.length > 0 ? Math.min(...prices) : null;
 
-    const caps = activeTiers
+    // Aforo = suma de los cupos de TODOS los tipos, también los ocultos (lo
+    // que ya vendieron sigue ocupando sitio), como lo guarda la BD. Un tipo
+    // sin cupo deja el evento sin límite.
+    const caps = tiers
       .map((t) => parseInt(t.capacity, 10))
       .filter((n) => Number.isFinite(n) && n > 0);
     const totalCap =
-      caps.length === activeTiers.length && caps.length > 0
+      caps.length === tiers.length && caps.length > 0
         ? caps.reduce((a, b) => a + b, 0)
         : null;
 
-    const { crossesMidnight } = composeIsoStartEnd(dateTime);
+    const { crossesMidnight } = composeIsoStartEnd(dateTime, timeZone);
 
     return {
       title,
@@ -517,7 +555,7 @@ export const EventEditorWizard = ({
       imageUrl: imageUrl || null,
       willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus]);
+  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -528,7 +566,7 @@ export const EventEditorWizard = ({
         if (!title.trim()) return "El evento necesita un título";
       }
       if (idx === 1) {
-        const dtErr = validateDateTime(dateTime);
+        const dtErr = validateDateTime(dateTime, timeZone);
         if (dtErr) return dtErr;
         const locErr = validateLocation(location);
         if (locErr) return locErr;
@@ -545,8 +583,13 @@ export const EventEditorWizard = ({
           if (!Number.isFinite(p) || p < 0) {
             return `El precio del ticket "${t.name}" no es válido`;
           }
-          // Capacity floor vs ventas
+          // Stripe no cobra de 0,01 a 0,49 € (el precio de un tipo con ventas
+          // no se puede tocar, así que ese no se comprueba).
           const sales = t.dbId ? tierSalesMap[t.dbId] : undefined;
+          if (!sales?.hasSales && isBelowStripeMinimum(t.priceEur)) {
+            return `El precio de "${t.name}" es demasiado bajo: el mínimo que se puede cobrar es 0,50 €.`;
+          }
+          // Capacity floor vs ventas
           if (sales && t.capacity) {
             const cap = parseInt(t.capacity, 10);
             if (Number.isFinite(cap) && cap < sales.sold) {
@@ -557,7 +600,7 @@ export const EventEditorWizard = ({
       }
       return null;
     },
-    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId]
+    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone]
   );
 
   const goNext = () => {
@@ -631,32 +674,22 @@ export const EventEditorWizard = ({
       return;
     }
 
-    const { startIso, endIso } = composeIsoStartEnd(dateTime);
+    const { startIso, endIso } = composeIsoStartEnd(dateTime, timeZone);
     if (!startIso) {
       toast({ title: "Fecha/hora inválida", variant: "destructive" });
       return;
     }
 
     const activeTiers = tiers.filter((t) => t.active);
-    const tierPriceCents = activeTiers.map((t) =>
-      Math.round(parseFloat(t.priceEur || "0") * 100)
-    );
+    const tierPriceCents = activeTiers.map((t) => priceEurToCents(t.priceEur || "0") ?? 0);
     const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
-
-    const caps = activeTiers
-      .map((t) => parseInt(t.capacity, 10))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const totalCap =
-      caps.length === activeTiers.length && caps.length > 0
-        ? caps.reduce((a, b) => a + b, 0)
-        : null;
 
     setSubmitting(true);
     try {
       if (mode === "edit" && eventId) {
-        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents, totalCap);
+        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents);
       } else {
-        await persistCreate(effective, startIso, endIso, minPriceCents, totalCap);
+        await persistCreate(effective, startIso, endIso, minPriceCents);
       }
       toast({
         title:
@@ -682,25 +715,24 @@ export const EventEditorWizard = ({
       await onSaved();
       onOpenChange(false);
     } catch (e: unknown) {
-      const raw = e instanceof Error ? e.message : "Error guardando";
-      // Mensajes amistosos para errores de trigger BD
-      const friendly =
-        raw.includes("Cannot change price")
-          ? "Hay tipos de entrada con ventas — el precio se ha bloqueado en BD. Revísalos."
-          : raw.includes("Cannot reduce")
-          ? "Has bajado un aforo por debajo de las ventas. Ajusta los cupos."
-          : raw.includes("Cannot delete event")
-          ? "No se puede eliminar este evento porque tiene ventas. Cámbialo a borrador en lugar de eliminarlo."
-          : raw.includes("Cannot delete tier")
-          ? "Hay tipos vendidos que no se pueden borrar. Desactívalos (oculto) en lugar de eliminarlos."
-          : raw.includes("cancelado no se puede")
-          ? "Un evento cancelado no se puede volver a publicar."
-          : raw.includes("row-level security") || raw.includes("42501")
-          ? "No tienes permiso para guardar este evento en ese local."
-          : raw;
+      console.error("[EventEditorWizard] guardar:", e);
+      // Sin conexión, rechazo del servidor (con su motivo) o "no ha cambiado
+      // nada" (RLS): cada uno con su mensaje.
+      const description = describeWriteError(e, {
+        network:
+          mode === "edit"
+            ? "No hay conexión con el servidor y puede que parte de los cambios no se haya guardado. Revisa tu conexión y vuelve a guardar."
+            : "No hay conexión con el servidor y no sabemos si el evento se ha creado. Revisa tu conexión y mira Mis eventos antes de volver a intentarlo.",
+        noRows:
+          mode === "edit"
+            ? "El servidor no ha guardado los cambios: puede que el evento ya no exista o que tu cuenta ya no tenga permiso para editarlo. Recarga la lista."
+            : "El servidor no ha guardado el evento: tu cuenta no tiene permiso para crear eventos en ese local.",
+      });
       toast({
-        title: "Error guardando",
-        description: friendly,
+        // En edición se guarda por partes (evento y cada tipo): lo anterior
+        // al fallo puede haberse guardado ya.
+        title: mode === "edit" ? "No se han guardado todos los cambios" : "No se ha guardado el evento",
+        description,
         variant: "destructive",
       });
     } finally {
@@ -713,10 +745,10 @@ export const EventEditorWizard = ({
     status: "draft" | "published",
     startIso: string,
     endIso: string | null,
-    minPriceCents: number,
-    totalCap: number | null
+    minPriceCents: number
   ) => {
-    const { data: createdEvent, error } = await supabase
+    // Sin capacity: el aforo lo pone la BD con los cupos de los tipos.
+    const eventRes = await supabase
       .from("events")
       .insert({
         partner_id: partnerId,
@@ -728,33 +760,31 @@ export const EventEditorWizard = ({
         date_start: startIso,
         date_end: endIso,
         price_cents: minPriceCents,
-        capacity: totalCap,
         image_url: imageUrl || null,
         // Con venue_id el trigger rellena brand_id y org_id.
         venue_id: venueId,
         status,
       })
-      .select("id")
-      .single();
-    if (error || !createdEvent) {
-      throw new Error(error?.message ?? "No se pudo crear el evento");
-    }
-    const tiersToInsert = tiers.map((t, idx) => ({
+      .select("id");
+    const [createdEvent] = expectRows<{ id: string }>(eventRes);
+    const tiersToInsert: TablesInsert<"ticket_tiers">[] = tiers.map((t, idx) => ({
       event_id: createdEvent.id,
       name: t.name.trim(),
       description: t.description.trim() || null,
-      price_cents: Math.round(parseFloat(t.priceEur || "0") * 100),
+      price_cents: priceEurToCents(t.priceEur || "0") ?? 0,
       currency: "EUR",
       capacity: t.capacity ? parseInt(t.capacity, 10) : null,
       per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
-      status: t.active ? "active" : "hidden",
+      status: estadoDelTipo(t.active),
       sort_order: idx,
     }));
-    const { error: tierErr } = await supabase.from("ticket_tiers").insert(tiersToInsert);
-    if (tierErr) {
-      // Rollback manual
+    const tiersRes = await supabase.from("ticket_tiers").insert(tiersToInsert).select("id");
+    try {
+      expectRows(tiersRes, tiersToInsert.length);
+    } catch (err) {
+      // Rollback manual: un evento sin sus tipos de entrada no se queda.
       await supabase.from("events").delete().eq("id", createdEvent.id);
-      throw new Error(tierErr.message);
+      throw err;
     }
   };
 
@@ -765,12 +795,12 @@ export const EventEditorWizard = ({
     status: "draft" | "published" | null,
     startIso: string,
     endIso: string | null,
-    minPriceCents: number,
-    totalCap: number | null
+    minPriceCents: number
   ) => {
-    // 1) UPDATE event safe + critical fields. La capa BD enforce capacity
-    //    floor; si baja por debajo de ventas el UPDATE falla y caemos al catch.
-    const { error: evtErr } = await supabase
+    // 1) UPDATE del evento: campos seguros + críticos. Sin capacity: el aforo
+    //    lo mantiene la BD con los cupos de los tipos (paso 3). Tiene que
+    //    cambiar exactamente una fila: con 0, la RLS lo ha filtrado.
+    const eventRes = await supabase
       .from("events")
       .update({
         title: title.trim(),
@@ -781,13 +811,13 @@ export const EventEditorWizard = ({
         date_start: startIso,
         date_end: endIso,
         price_cents: minPriceCents,
-        capacity: totalCap,
         image_url: imageUrl || null,
         ...(venueId ? { venue_id: venueId } : {}),
         ...(status ? { status } : {}),
       })
-      .eq("id", eid);
-    if (evtErr) throw new Error(evtErr.message);
+      .eq("id", eid)
+      .select("id");
+    expectRows(eventRes);
 
     // 2) DELETE tiers eliminados localmente (sólo si no tenían ventas — el
     //    trigger BD también lo bloquea, pero filtramos aquí para evitar
@@ -796,27 +826,33 @@ export const EventEditorWizard = ({
       (tid) => !tierSalesMap[tid]?.hasSales
     );
     if (toDelete.length > 0) {
-      const { error: delErr } = await supabase
+      const delRes = await supabase
         .from("ticket_tiers")
         .delete()
-        .in("id", toDelete);
-      if (delErr) throw new Error(delErr.message);
+        .in("id", toDelete)
+        .select("id");
+      expectRows(delRes, toDelete.length);
+      // Ya borrados: si hay que volver a guardar, no se piden otra vez.
+      setRemovedTierDbIds((prev) => {
+        const next = new Set(prev);
+        for (const tid of toDelete) next.delete(tid);
+        return next;
+      });
     }
 
     // 3) UPDATE tiers existentes / INSERT tiers nuevos
     for (let idx = 0; idx < tiers.length; idx++) {
       const t = tiers[idx];
       const sales = t.dbId ? tierSalesMap[t.dbId] : undefined;
-      const tierStatus = t.active ? "active" : "hidden";
       const tierCap = t.capacity ? parseInt(t.capacity, 10) : null;
-      const tierPriceC = Math.round(parseFloat(t.priceEur || "0") * 100);
+      const tierPriceC = priceEurToCents(t.priceEur || "0") ?? 0;
       if (t.dbId) {
         // Si tiene ventas: no toques price ni bajes capacity bajo sold
-        const update: Record<string, unknown> = {
+        const update: TablesUpdate<"ticket_tiers"> = {
           name: t.name.trim(),
           description: t.description.trim() || null,
           per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
-          status: tierStatus,
+          status: estadoDelTipo(t.active),
           sort_order: idx,
         };
         if (!sales?.hasSales) {
@@ -825,24 +861,32 @@ export const EventEditorWizard = ({
         // Capacity: dejamos siempre el valor (trigger BD enforce floor)
         update.capacity = tierCap;
 
-        const { error: upErr } = await supabase
+        const upRes = await supabase
           .from("ticket_tiers")
           .update(update)
-          .eq("id", t.dbId);
-        if (upErr) throw new Error(upErr.message);
+          .eq("id", t.dbId)
+          .select("id");
+        expectRows(upRes);
       } else {
-        const { error: insErr } = await supabase.from("ticket_tiers").insert({
-          event_id: eid,
-          name: t.name.trim(),
-          description: t.description.trim() || null,
-          price_cents: tierPriceC,
-          currency: "EUR",
-          capacity: tierCap,
-          per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
-          status: tierStatus,
-          sort_order: idx,
-        });
-        if (insErr) throw new Error(insErr.message);
+        const insRes = await supabase
+          .from("ticket_tiers")
+          .insert({
+            event_id: eid,
+            name: t.name.trim(),
+            description: t.description.trim() || null,
+            price_cents: tierPriceC,
+            currency: "EUR",
+            capacity: tierCap,
+            per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+            status: estadoDelTipo(t.active),
+            sort_order: idx,
+          })
+          .select("id");
+        const [creado] = expectRows<{ id: string }>(insRes);
+        // Si algo falla después y se vuelve a guardar, este tipo ya existe:
+        // se actualiza en vez de crearlo dos veces.
+        const key = t._key;
+        setTiers((prev) => prev.map((x) => (x._key === key ? { ...x, dbId: creado.id } : x)));
       }
     }
   };
@@ -1053,8 +1097,10 @@ export const EventEditorWizard = ({
                       cities={cities}
                       venues={venues}
                       venueId={venueId}
+                      timeZone={timeZone}
                       onVenueChange={(id) => {
                         const v = venues.find((x) => x.id === id);
+                        const anterior = venues.find((x) => x.id === venueId);
                         setVenueId(id);
                         if (v) {
                           setLocation((prev) => ({
@@ -1062,6 +1108,21 @@ export const EventEditorWizard = ({
                             venueName: v.name,
                             address: v.address || prev.address,
                           }));
+                          // El día y las horas pasan a ser los del reloj del
+                          // nuevo local.
+                          setTimeZone(zonaDe(v));
+                          // Evento nuevo: el cupo que venía del aforo del local
+                          // anterior (o vacío) pasa a ser el del nuevo local. Un
+                          // cupo escrito a mano no se toca.
+                          if (mode === "create") {
+                            setTiers((prev) =>
+                              prev.map((t, i) =>
+                                i === 0 && !t.dbId && t.capacity === cupoDelLocal(anterior)
+                                  ? { ...t, capacity: cupoDelLocal(v) }
+                                  : t
+                              )
+                            );
+                          }
                         }
                       }}
                       disabled={submitting}
@@ -1277,6 +1338,7 @@ const StepWhenWhere = ({
   cities,
   venues,
   venueId,
+  timeZone,
   onVenueChange,
   disabled,
 }: {
@@ -1287,6 +1349,8 @@ const StepWhenWhere = ({
   cities: City[];
   venues: EditorVenue[];
   venueId: string | null;
+  /** Zona horaria del local elegido (el día y las horas son los suyos). */
+  timeZone?: string;
   onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
@@ -1305,6 +1369,7 @@ const StepWhenWhere = ({
           value={dateTime}
           onChange={onDateTimeChange}
           disabled={disabled}
+          timeZone={timeZone}
         />
       </section>
       <section>
@@ -1393,15 +1458,15 @@ const StepMedia = ({
   <StepShell
     eyebrow="Paso 04"
     title={<>Imagen y <span style={serif} className="text-orange-500">portada</span>.</>}
-    subtitle="Una imagen 16:9 funciona mejor en el calendario público y en el ticket digital. JPG, PNG o WEBP."
+    subtitle="Mejor en vertical, formato 4:5 (el de un cartel): así se ve en la página del evento. JPG, PNG o WEBP de hasta 25 MB; al subirla se reduce y se comprime."
   >
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-sm">
       {imageUrl ? (
         <div className="relative overflow-hidden rounded-2xl border border-border">
           <img
             src={imageUrl}
             alt="Póster"
-            className="aspect-[16/9] w-full object-cover"
+            className="aspect-[4/5] w-full object-cover"
           />
           <button
             type="button"
@@ -1418,7 +1483,7 @@ const StepMedia = ({
           type="button"
           onClick={onPick}
           disabled={uploading || disabled}
-          className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
+          className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-orange-500/50 hover:bg-muted/40 disabled:opacity-50"
         >
           {uploading ? (
             <>
@@ -1430,7 +1495,7 @@ const StepMedia = ({
               <Upload className="h-7 w-7 text-orange-500" />
               <span className="font-medium text-foreground">Subir póster</span>
               <span className="text-[11px]" style={mono}>
-                JPG · PNG · WEBP · máx. 8 MB
+                4:5 · JPG · PNG · WEBP · máx. 25 MB
               </span>
             </>
           )}

@@ -7,8 +7,11 @@
  * plena noche) y Cashless el más antiguo de una ventana de 48 h.
  *
  * Reglas comunes:
- *   - Solo cuentan eventos `published` o `past` (nada de borradores ni
- *     cancelados).
+ *   - Cuentan los eventos no cancelados que están publicados, ya pasados o
+ *     con entradas vendidas (isOperationalEvent). "Retirar de la venta" deja
+ *     el evento en borrador, pero sus entradas siguen valiendo: si a las
+ *     20:00 se retira el de esa noche, la puerta tiene que seguir eligiéndolo
+ *     y no el siguiente publicado.
  *   - Fin del evento = `date_end` o, si no hay, `date_start + 12 h`.
  *   - "En curso" = desde 6 h antes del inicio (apertura de puertas, cola)
  *     hasta el fin. El escáner de servidor (scan_ticket v2) usa la misma
@@ -20,15 +23,27 @@ export interface ActiveEventCandidate {
   date_start: string;
   date_end?: string | null;
   status: string;
+  /** Entradas vendidas (events.tickets_sold). Sin el dato, solo cuenta el estado. */
+  tickets_sold?: number | null;
 }
 
 const HOUR_MS = 3_600_000;
 export const DOORS_OPEN_BEFORE_MS = 6 * HOUR_MS;
+/** scan_ticket deja validar hasta 2 h después del fin del evento. */
+export const DOORS_CLOSE_AFTER_MS = 2 * HOUR_MS;
 export const DEFAULT_EVENT_DURATION_MS = 12 * HOUR_MS;
 export const UPCOMING_WINDOW_MS = 7 * 24 * HOUR_MS;
 export const RECENTLY_ENDED_MS = 12 * HOUR_MS;
 
-const ELIGIBLE_STATUSES = new Set(["published", "past"]);
+const LISTED_STATUSES = new Set(["published", "past"]);
+
+/**
+ * Evento que tiene sentido en la puerta, En vivo o Asistentes: no cancelado
+ * y publicado, pasado o con entradas vendidas (un borrador que se retiró de
+ * la venta con entradas ya vendidas sigue celebrándose).
+ */
+export const isOperationalEvent = (event: { status: string; tickets_sold?: number | null }): boolean =>
+  event.status !== "cancelled" && (LISTED_STATUSES.has(event.status) || (event.tickets_sold ?? 0) > 0);
 
 interface Timed<T> {
   event: T;
@@ -51,11 +66,25 @@ export const eventTimeWindow = (event: {
 const toTimed = <T extends ActiveEventCandidate>(events: ReadonlyArray<T>): Timed<T>[] => {
   const out: Timed<T>[] = [];
   for (const event of events) {
-    if (!ELIGIBLE_STATUSES.has(event.status)) continue;
+    if (!isOperationalEvent(event)) continue;
     const span = eventTimeWindow(event);
     if (span) out.push({ event, ...span });
   }
   return out;
+};
+
+/**
+ * Si ahora se pueden validar entradas de este evento según scan_ticket: de
+ * 6 h antes del inicio a 2 h después del fin.
+ */
+export const isWithinDoorWindow = (
+  event: { date_start: string; date_end?: string | null },
+  now: Date = new Date()
+): boolean => {
+  const span = eventTimeWindow(event);
+  if (!span) return false;
+  const t = now.getTime();
+  return span.start - DOORS_OPEN_BEFORE_MS <= t && t <= span.end + DOORS_CLOSE_AFTER_MS;
 };
 
 const isInProgress = (x: Timed<unknown>, now: number) =>
