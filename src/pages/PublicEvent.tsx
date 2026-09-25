@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import {
   AlertTriangle,
   CalendarDays,
@@ -14,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { shareEventLink } from "@/lib/eventLinks";
 import { withTimeout } from "@/lib/withTimeout";
 import { TierConditions } from "@/components/tickets/TierPickerSheet";
@@ -183,15 +185,7 @@ const PublicEvent = () => {
   }, [load]);
 
   // Título de la pestaña: el del evento mientras se ve (y el de antes al salir).
-  useEffect(() => {
-    const previo = document.title;
-    return () => {
-      document.title = previo;
-    };
-  }, []);
-  useEffect(() => {
-    if (state.kind === "ready") document.title = `${state.data.event.title} · Pasify`;
-  }, [state]);
+  usePageTitle(state.kind === "ready" ? state.data.event.title : null);
 
   return (
     <div
@@ -202,7 +196,9 @@ const PublicEvent = () => {
         className="flex items-center gap-3 border-b border-white/10 px-4 py-3"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
-        <Link to="/calendar" aria-label="Ver más eventos">
+        {/* 44 px pulsables sin cambiar la altura de la cabecera: el margen
+            negativo se come lo que crece sobre el logo (26 px). */}
+        <Link to="/calendar" aria-label="Ver más eventos" className="-my-[9px] inline-flex min-h-[44px] items-center">
           <Wordmark height={26} />
         </Link>
         <span className="text-[10px] uppercase text-[#E8542A]" style={{ ...mono, letterSpacing: "0.22em" }}>
@@ -293,7 +289,10 @@ const Unavailable = ({
           <RotateCcw className="h-4 w-4" />
           Reintentar
         </button>
-        <Link to="/calendar" className="mt-6 text-sm text-white/50 underline underline-offset-4">
+        <Link
+          to="/calendar"
+          className="mt-3 inline-flex min-h-[44px] items-center text-sm text-white/50 underline underline-offset-4"
+        >
           Ver el calendario
         </Link>
       </>
@@ -491,4 +490,14 @@ function availabilityLabel(a: TierAvailability): string | null {
   }
 }
 
-export default PublicEvent;
+/**
+ * La hoja de compra (framer-motion) respeta «reducir movimiento» del
+ * sistema. Sobra si App.tsx pone el mismo MotionConfig en la raíz.
+ */
+const PublicEventConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <PublicEvent />
+  </MotionConfig>
+);
+
+export default PublicEventConMovimientoReducido;

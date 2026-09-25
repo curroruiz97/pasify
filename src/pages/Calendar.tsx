@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, MapPin, ChevronDown, Sparkles, LayoutGrid, CalendarDays } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { MotionConfig, useReducedMotion } from "framer-motion";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { useCalendarEvents, useInvalidateEvents, type CalendarEvent } from "@/hooks/useEvents";
 import EventPosterCard from "@/components/calendar/EventPosterCard";
@@ -39,6 +41,11 @@ const Calendar = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  usePageTitle(t("calendar.title", "Calendario"));
+  // «Reducir movimiento» del sistema: los saltos a la lista y a la tarjeta,
+  // sin desplazamiento suave.
+  const reducirMovimiento = useReducedMotion();
+  const desplazamiento: ScrollBehavior = reducirMovimiento ? "auto" : "smooth";
   // /calendar?event=<id>: vuelta del login tras pulsar "Comprar" sin sesión
   // (y enlaces antiguos). Resaltamos esa tarjeta y la acercamos en cuanto
   // carga la lista. Los enlaces compartidos (/e/:id) ya abren la página del
@@ -136,7 +143,7 @@ const Calendar = () => {
   // straight to the event list below.
   const eventsListRef = useRef<HTMLElement | null>(null);
   const scrollToEvents = () => {
-    eventsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    eventsListRef.current?.scrollIntoView({ behavior: desplazamiento, block: "start" });
   };
 
   // Con ?event=<id>, acercamos esa tarjeta y la resaltamos un momento para
@@ -158,8 +165,8 @@ const Calendar = () => {
     if (!highlightedId) return;
     document
       .getElementById(`event-card-${highlightedId}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlightedId]);
+      ?.scrollIntoView({ behavior: desplazamiento, block: "center" });
+  }, [highlightedId, desplazamiento]);
 
   // Realtime: any event change in the city refreshes the list immediately.
   useEffect(() => {
@@ -253,27 +260,34 @@ const Calendar = () => {
           WebkitBackdropFilter: "blur(20px)",
         }}
       >
-        <div className="flex items-center gap-2 px-3 py-2">
+        {/* Botones de 44 px (zona táctil) con la barra a la misma altura. El
+            h1 de la página es el titular de la portada de abajo: aquí el
+            nombre de la página va como texto. */}
+        <div className="flex items-center gap-2 px-3 py-1">
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 rounded-full"
+            className="h-11 w-11 rounded-full"
             onClick={handleBack}
+            aria-label="Volver"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="flex-1 text-base font-bold tracking-tight">
-            {t("calendar.title", "Calendar")}
-          </h1>
+          <p className="flex-1 text-base font-bold tracking-tight">
+            {t("calendar.title", "Calendario")}
+          </p>
+          {/* La pastilla se ve igual; la zona pulsable mide 44 px de alto. */}
           <button
             type="button"
             onClick={() => setCitySelectorOpen(true)}
             aria-label={`Ciudad: ${selectedCity ?? TODA_ESPANA}. Cambiar`}
-            className="flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+            className="group flex min-h-[44px] items-center focus:outline-none"
           >
-            <MapPin className="h-3.5 w-3.5 text-primary" />
-            <span className="truncate max-w-[140px]">{selectedCity ?? TODA_ESPANA}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            <span className="flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors group-hover:bg-muted group-focus-visible:ring-2 group-focus-visible:ring-ring">
+              <MapPin className="h-3.5 w-3.5 text-primary" />
+              <span className="truncate max-w-[140px]">{selectedCity ?? TODA_ESPANA}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </span>
           </button>
         </div>
       </div>
@@ -331,7 +345,7 @@ const Calendar = () => {
               onClick={() => setViewPersist("posters")}
               aria-pressed={view === "posters"}
               aria-label={t("calendar.viewPosters", "Vista posters")}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9 ${
                 view === "posters"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -344,7 +358,7 @@ const Calendar = () => {
               onClick={() => setViewPersist("calendar")}
               aria-pressed={view === "calendar"}
               aria-label={t("calendar.viewCalendar", "Vista calendario")}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9 ${
                 view === "calendar"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -404,4 +418,16 @@ const Calendar = () => {
   );
 };
 
-export default Calendar;
+/**
+ * La portada (marquesina de carteles en bucle y textos que entran
+ * deslizándose) respeta «reducir movimiento» del sistema: con él, framer-motion
+ * no mueve nada y la marquesina se queda quieta. Sobra si App.tsx pone el
+ * mismo MotionConfig en la raíz.
+ */
+const CalendarConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <Calendar />
+  </MotionConfig>
+);
+
+export default CalendarConMovimientoReducido;

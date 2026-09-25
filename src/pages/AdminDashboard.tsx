@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
+import { useCajonDeNavegacion, useFocoAlTitulo, usePageTitle } from "@/hooks/usePageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutLocal } from "@/hooks/useAuth";
 import { useCurrentUserId } from "@/lib/cache/session";
@@ -98,7 +100,7 @@ import {
   type AdminUserRow,
 } from "@/components/admin/adminQueries";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
@@ -134,6 +136,26 @@ type Section =
  */
 const SECCIONES_DEMO = new Set<Section>(["orgs", "finance", "ai", "ai_safety", "benchmarks", "trust", "compliance"]);
 
+/** Título de la pestaña en cada sección («Pedidos · Pasify»). */
+const TITULO_SECCION: Record<Section, string> = {
+  metricas: "Métricas",
+  orgs: "Organizaciones",
+  locales: "Locales",
+  clientes: "Clientes",
+  eventos: "Eventos",
+  pedidos: "Pedidos",
+  liquidaciones: "Liquidaciones",
+  finance: "Finanzas",
+  ai: "AI Insights",
+  ai_safety: "AI Safety",
+  benchmarks: "Benchmarks",
+  trust: "Trust & Safety",
+  compliance: "Compliance",
+  auditoria: "Auditoría",
+  refunds: "Reembolsos",
+  soporte: "Soporte",
+};
+
 const PAGE_SIZE = 25;
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -148,6 +170,12 @@ const AdminDashboard = () => {
   // Un enlace o un estado anterior que apunte a un módulo demo sin el flag
   // cae a Métricas en vez de pintar una maqueta.
   const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
+
+  // Título de la pestaña y, al cambiar de sección, el foco a su h1 (lector
+  // de pantalla y teclado). «Saltar al contenido» lleva al mismo <main>.
+  const mainRef = useRef<HTMLElement>(null);
+  usePageTitle(TITULO_SECCION[seccionActiva]);
+  useFocoAlTitulo(seccionActiva, mainRef);
 
   // Tiempo real del panel (bandeja de soporte y cola de reembolsos) y los
   // contadores del menú, que salen del servidor.
@@ -248,9 +276,20 @@ const AdminDashboard = () => {
       className="min-h-screen bg-background text-foreground"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
+      {/* Lo primero con el teclado: salta el menú y va al contenido. */}
+      <a
+        href="#contenido"
+        className="saltar-al-contenido"
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Saltar al contenido
+      </a>
       <div className="flex min-h-screen flex-col md:flex-row">
-        {/* Sidebar */}
-        <aside className="hidden w-60 border-r border-border bg-card md:flex md:flex-col">
+        {/* Sidebar: fija al hacer scroll (su menú scrollea dentro). */}
+        <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col">
           <div className="flex flex-col items-start gap-3 border-b border-border p-5">
             <Wordmark height={84} />
             <div className="flex items-center gap-2">
@@ -269,7 +308,16 @@ const AdminDashboard = () => {
             <NavTree<Section> tree={navTree} section={seccionActiva} onSelect={setSection} badgeFor={badgeFor} />
           </nav>
 
-          <div className="border-t border-border p-3">
+          {/* Configuración y Ayuda también en escritorio (antes solo desde el cajón del móvil). */}
+          <div className="space-y-1 border-t border-border p-3">
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setSettingsOpen(true)}>
+              <Settings className="mr-2 h-4 w-4" />
+              Configuración
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setHelpOpen(true)}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              Ayuda y docs
+            </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
@@ -294,14 +342,14 @@ const AdminDashboard = () => {
         />
 
         {/* Main content */}
-        <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
+        <main id="contenido" ref={mainRef} tabIndex={-1} className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
           {SECCIONES_DEMO.has(seccionActiva) && <DemoBanner />}
 
           {seccionActiva === "metricas" && (
             <MetricsSection
               uid={uid}
               showcase={showcase}
-              unread={totalUnread}
+              unread={noLeidos.data?.messages ?? null}
               refundsPending={reembolsos.data?.pending ?? null}
               refundsAttention={reembolsos.data?.attention ?? null}
               onGo={setSection}
@@ -392,7 +440,8 @@ const MetricsSection = ({
 }: {
   uid: string | null;
   showcase: boolean;
-  unread: number;
+  /** null mientras no se sabe: «—», no un 0 que no es verdad. */
+  unread: number | null;
   refundsPending: number | null;
   refundsAttention: number | null;
   onGo: (s: Section) => void;
@@ -634,7 +683,7 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
       <PartnerFilters
         filter={filter}
         onChange={cambiarFiltro}
-        total={total}
+        total={locales.data ? total : null}
         loading={locales.isFetching}
         cities={facets.data?.cities ?? []}
         categories={facets.data?.categories ?? []}
@@ -702,7 +751,8 @@ const LocalesSection = ({ uid }: { uid: string | null }) => {
                       ))}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
+                      {/* Acciones de la fila: 44 px de alto en móvil (zona táctil). */}
+                      <div className="flex flex-wrap justify-end gap-2 [&>button]:max-md:h-11">
                         {l.account_status !== "approved" && (
                           <Button
                             size="sm"
@@ -791,12 +841,13 @@ const ClientesSection = ({ uid }: { uid: string | null }) => {
       <div className="border-b border-border p-3 md:p-4">
         <Input
           placeholder="Buscar por nombre o email…"
+          aria-label="Buscar clientes por nombre o email"
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);
             setPage(0);
           }}
-          className="h-10 rounded-xl"
+          className="h-10 rounded-xl max-md:h-11"
         />
       </div>
       {clientes.isError ? (
@@ -955,7 +1006,12 @@ const EventosSection = ({ uid }: { uid: string | null }) => {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={`Acciones de ${e.title}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="max-md:h-11 max-md:w-11"
+                          aria-label={`Acciones de ${e.title}`}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -1052,10 +1108,22 @@ const Paginador = ({
         {cargando && <RefreshCw className="h-3 w-3 animate-spin" />}
       </span>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => onPage(Math.max(0, page - 1))}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="max-md:h-11"
+          disabled={page === 0}
+          onClick={() => onPage(Math.max(0, page - 1))}
+        >
           Anterior
         </Button>
-        <Button variant="outline" size="sm" disabled={hasta >= total} onClick={() => onPage(page + 1)}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="max-md:h-11"
+          disabled={hasta >= total}
+          onClick={() => onPage(page + 1)}
+        >
           Siguiente
         </Button>
       </div>
@@ -1073,7 +1141,7 @@ const ErrorCard = ({ mensaje, onRetry }: { mensaje: string; onRetry: () => void 
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
       {mensaje}
     </span>
-    <Button variant="outline" size="sm" onClick={onRetry}>
+    <Button variant="outline" size="sm" className="max-md:h-11" onClick={onRetry}>
       <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
       Reintentar
     </Button>
@@ -1107,12 +1175,14 @@ const AdminDrawer = ({
   variant?: "topbar" | "tab";
 }) => {
   const [open, setOpen] = useState(false);
+  // Al cambiar de sección desde el cajón, el foco va al título de la nueva.
+  const cajon = useCajonDeNavegacion(section);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         {variant === "tab" ? (
           <button
-            className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
+            className={`relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
               open ? "text-primary" : "text-muted-foreground"
             }`}
             aria-label="Más opciones"
@@ -1121,7 +1191,7 @@ const AdminDrawer = ({
             <span className="leading-none">Más</span>
           </button>
         ) : (
-          <Button variant="ghost" size="icon" aria-label="Abrir menú">
+          <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Abrir menú">
             <Menu className="h-5 w-5" />
           </Button>
         )}
@@ -1129,6 +1199,8 @@ const AdminDrawer = ({
       <SheetContent
         side="right"
         className="flex w-[88vw] max-w-sm flex-col gap-0 border-l border-border bg-card p-0"
+        aria-describedby={undefined}
+        {...cajon}
       >
         <header className="border-b border-border p-5">
           <div
@@ -1138,9 +1210,8 @@ const AdminDrawer = ({
             <span className="inline-block h-px w-5 bg-orange-500/70" />
             Pasify · Admin
           </div>
-          <div className="text-lg font-semibold tracking-tight text-foreground">
-            Plataforma
-          </div>
+          {/* Nombre del diálogo para el lector de pantalla. */}
+          <SheetTitle className="tracking-tight">Plataforma</SheetTitle>
         </header>
 
         <nav className="flex-1 overflow-y-auto p-3">
@@ -1169,7 +1240,7 @@ const AdminDrawer = ({
           <div className="flex flex-col gap-1">
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenSettings, 120);
@@ -1181,7 +1252,7 @@ const AdminDrawer = ({
             </button>
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenHelp, 120);
@@ -1198,7 +1269,7 @@ const AdminDrawer = ({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start"
+            className="h-11 w-full justify-start"
             onClick={() => {
               setOpen(false);
               onLogout();
@@ -1248,7 +1319,8 @@ const PartnerFilters = ({
 }: {
   filter: LocalFilter;
   onChange: (f: LocalFilter) => void;
-  total: number;
+  /** null en la primera carga: no se enseña un «0 locales» que no es verdad. */
+  total: number | null;
   loading: boolean;
   cities: string[];
   categories: string[];
@@ -1261,14 +1333,15 @@ const PartnerFilters = ({
         <div className="relative flex-1">
           <Input
             placeholder="Buscar local, contacto o email…"
+            aria-label="Buscar local, contacto o email"
             value={filter.search}
             onChange={(e) => update("search", e.target.value)}
-            className="h-10 rounded-xl"
+            className="h-10 rounded-xl max-md:h-11"
           />
         </div>
         <div className="grid grid-cols-3 gap-2 md:flex md:gap-2">
           <Select value={filter.category} onValueChange={(v) => update("category", v)}>
-            <SelectTrigger className="h-10 rounded-xl">
+            <SelectTrigger className="h-10 rounded-xl max-md:h-11">
               <SelectValue placeholder="Categoría" />
             </SelectTrigger>
             <SelectContent>
@@ -1281,7 +1354,7 @@ const PartnerFilters = ({
             </SelectContent>
           </Select>
           <Select value={filter.city} onValueChange={(v) => update("city", v)}>
-            <SelectTrigger className="h-10 rounded-xl">
+            <SelectTrigger className="h-10 rounded-xl max-md:h-11">
               <SelectValue placeholder="Ciudad" />
             </SelectTrigger>
             <SelectContent>
@@ -1294,7 +1367,7 @@ const PartnerFilters = ({
             </SelectContent>
           </Select>
           <Select value={filter.status} onValueChange={(v) => update("status", v)}>
-            <SelectTrigger className="h-10 rounded-xl">
+            <SelectTrigger className="h-10 rounded-xl max-md:h-11">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
@@ -1311,15 +1384,19 @@ const PartnerFilters = ({
         style={{ ...filterMono, letterSpacing: "0.18em" }}
       >
         <span className="inline-flex items-center gap-2">
-          {total.toLocaleString("es-ES")} {total === 1 ? "local" : "locales"}
-          {hayFiltros ? " con estos filtros" : ""}
+          {total === null
+            ? loading
+              ? "Cargando locales"
+              : "—"
+            : `${total.toLocaleString("es-ES")} ${total === 1 ? "local" : "locales"}`}
+          {total !== null && hayFiltros ? " con estos filtros" : ""}
           {loading && <RefreshCw className="h-3 w-3 animate-spin" />}
         </span>
         {hayFiltros && (
           <button
             type="button"
             onClick={() => onChange(SIN_FILTROS)}
-            className="rounded-full border border-border px-2.5 py-1 text-orange-500 transition hover:border-orange-500/40"
+            className="rounded-full border border-border px-2.5 py-1 text-orange-500 transition hover:border-orange-500/40 max-md:min-h-[44px] max-md:px-4"
           >
             Limpiar
           </button>
@@ -1329,4 +1406,15 @@ const PartnerFilters = ({
   );
 };
 
-export default AdminDashboard;
+/**
+ * Las animaciones de framer-motion del panel (hojas inferiores) respetan
+ * «reducir movimiento» del sistema. Sobra si App.tsx pone el mismo
+ * MotionConfig en la raíz.
+ */
+const AdminDashboardConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <AdminDashboard />
+  </MotionConfig>
+);
+
+export default AdminDashboardConMovimientoReducido;

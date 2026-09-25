@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 /* ============================================================
@@ -7,7 +7,17 @@ import { ChevronDown } from "lucide-react";
    (Partner/Client/Admin) keeps its own typed routes.
    Auto-expands the group that contains the active section;
    the user can collapse manually.
+
+   Accesibilidad:
+   - La sección activa lleva aria-current="page".
+   - Un grupo plegado queda fuera del Tab y del lector de pantalla
+     (visibility: hidden cuando termina de plegarse), no solo a
+     altura cero.
+   - En móvil (el cajón «Más») cada fila mide al menos 44 px.
    ============================================================ */
+
+/** Anillo de foco de teclado de todas las filas (por dentro: el plegable recorta lo de fuera). */
+const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 export type NavTreeItem<S extends string> = {
   id: S;
@@ -39,6 +49,9 @@ export function NavTree<S extends string>({
   /** Optional unread-count style badge per leaf section. Returns 0/undefined → no badge. */
   badgeFor?: (id: S) => number | undefined;
 }) {
+  // Prefijo de los id de los grupos (aria-controls): el mismo árbol se pinta
+  // a la vez en la barra lateral y en el cajón.
+  const idArbol = useId();
   // Groups that contain the active section start expanded.
   const initialExpanded = useMemo(() => {
     const ids = new Set<string>();
@@ -82,8 +95,10 @@ export function NavTree<S extends string>({
           return (
             <button
               key={node.id}
+              type="button"
               onClick={() => onSelect(node.id)}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              aria-current={active ? "page" : undefined}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition max-md:min-h-[44px] ${FOCO} ${
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -111,7 +126,8 @@ export function NavTree<S extends string>({
               type="button"
               onClick={() => toggle(node.id)}
               aria-expanded={isOpen}
-              className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              aria-controls={`${idArbol}-${node.id}`}
+              className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition max-md:min-h-[44px] ${FOCO} ${
                 containsActive
                   ? "text-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -121,6 +137,7 @@ export function NavTree<S extends string>({
               <span className="flex-1 text-left">{node.label}</span>
               {containsActive && !isOpen && (
                 <span
+                  aria-hidden="true"
                   className="inline-block h-1.5 w-1.5 rounded-full"
                   style={{ background: "#E8542A" }}
                 />
@@ -136,10 +153,13 @@ export function NavTree<S extends string>({
                 }`}
               />
             </button>
-            {/* Children — animated reveal via CSS grid trick */}
+            {/* Children — animated reveal via CSS grid trick. Plegado, la
+                visibilidad pasa a hidden al terminar la animación (y a
+                visible al empezar a abrirse): fuera del Tab y del lector. */}
             <div
-              className="grid transition-[grid-template-rows] duration-200 ease-out"
-              style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+              id={`${idArbol}-${node.id}`}
+              className="grid transition-[grid-template-rows,visibility] duration-200 ease-out"
+              style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", visibility: isOpen ? "visible" : "hidden" }}
             >
               <div className="overflow-hidden">
                 <div
@@ -152,8 +172,10 @@ export function NavTree<S extends string>({
                     return (
                       <button
                         key={c.id}
+                        type="button"
                         onClick={() => onSelect(c.id)}
-                        className={`relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition ${
+                        aria-current={active ? "page" : undefined}
+                        className={`relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition max-md:min-h-[44px] ${FOCO} ${
                           active
                             ? "bg-primary/15 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
