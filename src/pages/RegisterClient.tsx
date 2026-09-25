@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,13 @@ import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/cou
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import AppleAuthButton from "@/components/auth/AppleAuthButton";
+import ConfirmaTuEmail from "@/components/auth/ConfirmaTuEmail";
+import TurnstileWidget from "@/components/auth/TurnstileWidget";
+import { CaptchaError, useCaptcha } from "@/components/auth/captcha";
+import { urlTrasConfirmarEmail } from "@/components/auth/confirmacionEmail";
+import { metadatosAltaCliente } from "@/components/auth/alta";
 import { MENSAJE_PASSWORD_CORTA, MIN_PASSWORD_LENGTH, mensajeErrorAuth } from "@/components/auth/authErrors";
-import { guardarReferidoPendiente } from "@/components/auth/referidos";
+import { guardarReferidoPendiente, leerReferidoPendiente, normalizarCodigoReferido } from "@/components/auth/referidos";
 import { redirectToApp, sanitizeNextPath, withNext } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
@@ -34,6 +39,10 @@ const leerPaisGuardado = () => {
  *  - `?ref=`: código de "Trae un amigo". Se guarda al abrir la página y App
  *    lo canjea en cuanto hay una cuenta recién creada con sesión
  *    (components/auth/referidos.ts). Si falla, el alta sigue igual.
+ *  - «Confirm email» activado: signUp no abre sesión. Los datos del formulario
+ *    (y el `?ref=`) viajan en los metadatos del alta y el servidor los guarda
+ *    en el perfil; se pide que revise el correo y, al entrar, todo está.
+ *  - Solo en la web y con VITE_TURNSTILE_SITE_KEY, antes hay captcha.
  */
 const RegisterClient = () => {
   const { toast } = useToast();
@@ -43,6 +52,9 @@ const RegisterClient = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Email del alta que espera confirmación (sin sesión todavía).
+  const [pendienteDeConfirmar, setPendienteDeConfirmar] = useState<string | null>(null);
+  const captcha = useCaptcha("signup");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -60,6 +72,9 @@ const RegisterClient = () => {
 
   const citiesForCountry = getCitiesForCountry(formData.country);
 
+  // Confirmada en otra pestaña: con la sesión, a `next` o a su panel.
+  const alConfirmar = useCallback(() => redirectToApp(nextPath ?? "/client-dashboard"), [nextPath]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -75,6 +90,8 @@ const RegisterClient = () => {
 
     setLoading(true);
     try {
+      await captcha.verificar();
+
       const email = formData.email.trim();
       // `initial_role` viaja en los metadatos del usuario. El trigger
       // `zz_on_auth_user_created_role` lo lee y asigna el rol EN EL SERVIDOR,
@@ -82,23 +99,25 @@ const RegisterClient = () => {
       // recien emitido, y si esa llamada fallaba la cuenta quedaba creada pero
       // SIN ROL: el usuario entraba a una pantalla en blanco porque la app no
       // sabe a que panel llevarle. Paso dos veces seguidas en produccion.
+      // El resto del formulario lo copia al perfil otro trigger (también sin sesión).
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password: formData.password,
-        options: { data: { initial_role: "client" } },
+        options: {
+          // El `?ref=` también: con confirmación, el enlace puede abrirse en otra pestaña.
+          data: metadatosAltaCliente({ ...formData, ref: normalizarCodigoReferido(ref) ?? leerReferidoPendiente() }),
+          emailRedirectTo: urlTrasConfirmarEmail(),
+        },
       });
       if (authError) throw authError;
 
-      if (authData.user) {
-        // Garantizar sesion: si signUp no la abrio, entramos explicitamente.
-        if (!authData.session) {
-          const { error: signInErr } = await supabase.auth.signInWithPassword({
-            email,
-            password: formData.password,
-          });
-          if (signInErr) throw signInErr;
-        }
+      // «Confirm email» activado: sin sesión hasta que abra el enlace.
+      if (!authData.session) {
+        setPendienteDeConfirmar(email);
+        return;
+      }
 
+      if (authData.user) {
         // A partir de aqui NADA es fatal. La cuenta ya existe y ya tiene rol.
         // Que falle guardar el telefono o avisar a un administrador no puede
         // dejar al usuario plantado en el formulario de registro.
@@ -158,11 +177,36 @@ const RegisterClient = () => {
         return;
       }
     } catch (error) {
-      toast({ title: "No hemos podido crear la cuenta", description: mensajeErrorAuth(error), variant: "destructive" });
+      toast({
+        title: "No hemos podido crear la cuenta",
+        description: error instanceof CaptchaError ? error.message : mensajeErrorAuth(error),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  if (pendienteDeConfirmar) {
+    return (
+      <AuthShell
+        headline={
+          <>
+            Vive la <span style={serif} className="text-orange-200">noche</span> con Pasify.
+          </>
+        }
+        subline="Solo falta confirmar tu email. Después entra con tu contraseña y tendrás tus entradas siempre a mano."
+        imageUrl="/partner-hero.jpg"
+      >
+        <ConfirmaTuEmail
+          email={pendienteDeConfirmar}
+          loginHref={withNext("/login", nextPath)}
+          onCambiarEmail={() => setPendienteDeConfirmar(null)}
+          onConfirmada={alConfirmar}
+        />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell
@@ -346,6 +390,8 @@ const RegisterClient = () => {
               </button>
             </div>
           </FieldRow>
+
+          {captcha.activo && <TurnstileWidget {...captcha.widget} />}
 
           <motion.div whileTap={{ scale: 0.98 }} className="pt-2">
             <Button

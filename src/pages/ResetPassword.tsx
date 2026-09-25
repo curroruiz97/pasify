@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthShell from "@/components/auth/AuthShell";
+import TurnstileWidget from "@/components/auth/TurnstileWidget";
+import { CaptchaError, useCaptcha } from "@/components/auth/captcha";
 import { esLimiteDePeticiones, mensajeErrorAuth } from "@/components/auth/authErrors";
 import { buildExternalReturnUrl } from "@/lib/redirect-url";
 import { isNativeApp } from "@/lib/platform";
@@ -29,6 +31,9 @@ const ESPERA_REENVIO_S = 60;
  * avisa antes de pedir uno nuevo. Antes esta pantalla presumía de cosas que
  * no hace (certificaciones, "cifrado extremo a extremo", un token de ejemplo,
  * un log de SMTP de mentira) y el enlace caducado acababa en un 404 en inglés.
+ *
+ * En la web, con VITE_TURNSTILE_SITE_KEY, cada envío (también el reenvío)
+ * pasa antes por el captcha (components/auth/captcha.ts).
  */
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -38,6 +43,7 @@ const ResetPassword = () => {
   const [enviadoA, setEnviadoA] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [espera, setEspera] = useState(0);
+  const captcha = useCaptcha("reset-password");
 
   useEffect(() => {
     if (espera <= 0) return;
@@ -51,6 +57,7 @@ const ResetPassword = () => {
     setLoading(true);
     setError(null);
     try {
+      await captcha.verificar();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(limpio, {
         redirectTo: buildExternalReturnUrl("/update-password"),
       });
@@ -58,6 +65,10 @@ const ResetPassword = () => {
       setEnviadoA(limpio);
       setEspera(ESPERA_REENVIO_S);
     } catch (err) {
+      if (err instanceof CaptchaError) {
+        setError(err.message);
+        return;
+      }
       console.error("resetPasswordForEmail:", err);
       setError(mensajeErrorAuth(err));
       if (esLimiteDePeticiones(err)) setEspera(ESPERA_REENVIO_S);
@@ -117,6 +128,8 @@ const ResetPassword = () => {
             </p>
           )}
 
+          {captcha.activo && espera <= 0 && <TurnstileWidget {...captcha.widget} />}
+
           <Button
             type="button"
             variant="outline"
@@ -165,6 +178,8 @@ const ResetPassword = () => {
               {error}
             </p>
           )}
+
+          {captcha.activo && <TurnstileWidget {...captcha.widget} />}
 
           <Button
             type="submit"

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
-import { FunctionsHttpError } from "@supabase/supabase-js";
+import { FunctionsHttpError, type PostgrestError, type User } from "@supabase/supabase-js";
 import {
   Sheet,
   SheetContent,
@@ -12,7 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { signOutLocal } from "@/hooks/useAuth";
+import { refrescarRoles, signOutLocal } from "@/hooks/useAuth";
+import { llamarRpc } from "@/components/auth/alta";
+import { fileDateStamp, saveOrShareFile } from "@/lib/saveOrShareFile";
+import { redirectToApp } from "@/lib/redirect-url";
 import EditPersonalInfoSheet from "@/components/shared/EditPersonalInfoSheet";
 import {
   ArrowLeft,
@@ -45,6 +48,54 @@ const MIN_PASSWORD_LENGTH = 8;
 
 /** delete-own-account responde 409 a una cuenta de administrador: ni se ofrece. */
 const ADMIN_DELETE_MESSAGE = `Una cuenta de administrador no se puede eliminar desde la app. Si necesitas darla de baja, escríbenos a ${SUPPORT_EMAIL}.`;
+
+/** 409 refund_in_progress de delete-own-account. */
+const REFUND_IN_PROGRESS_MESSAGE = `Tienes una devolución en curso. Cuando se resuelva (te avisamos por email) podrás eliminar la cuenta: si la borras ahora, la solicitud se perdería. Si no puedes esperar, escríbenos a ${SUPPORT_EMAIL}.`;
+
+/** 409 partner_has_upcoming_sales de delete-own-account. */
+const UPCOMING_SALES_MESSAGE = `Tu local tiene eventos próximos con entradas vendidas, así que todavía no se puede eliminar la cuenta. Cancélalos y reembolsa desde Mis eventos, o escríbenos a ${SUPPORT_EMAIL} y lo resolvemos contigo.`;
+
+/** Motivos de convert_new_client_to_partner (DETAIL del error 42501). */
+const conversionErrorMessage = (error: PostgrestError | null): string => {
+  switch (error?.details) {
+    case "account_too_old":
+      return "Tu cuenta tiene más de 30 días. Para tu local, crea una cuenta de local nueva con otro email.";
+    case "has_purchases":
+      return "Esta cuenta ya tiene compras o entradas y dejarías de verlas. Para tu local, crea una cuenta de local con otro email.";
+    case "not_client":
+      return "Esta cuenta ya no es de cliente.";
+    case "account_disabled":
+      return `Esta cuenta está desactivada. Escríbenos a ${SUPPORT_EMAIL}.`;
+    default:
+      return "No hemos podido cambiar tu cuenta. Revisa tu conexión y vuelve a intentarlo.";
+  }
+};
+
+/** ¿La cuenta entra con Sign in with Apple? */
+const tieneApple = (user: User): boolean =>
+  (user.identities ?? []).some((i) => i.provider === "apple") ||
+  (Array.isArray(user.app_metadata?.providers) && user.app_metadata.providers.includes("apple")) ||
+  user.app_metadata?.provider === "apple";
+
+/**
+ * Borrar una cuenta con Apple exige revocar su acceso (guía 5.1.1(v)). Supabase
+ * no guarda ningún token de Apple, así que en iOS se pide a Apple un
+ * authorization code nuevo y delete-own-account lo usa para revocar.
+ * Si Apple falla (no si se cancela), se borra igual sin revocar.
+ */
+async function pedirCodigoApple(): Promise<{ code: string | null; cancelado: boolean }> {
+  try {
+    const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+    const result = await SignInWithApple.authorize({ clientId: "es.pasify.app", redirectURI: "", scopes: "" });
+    return { code: result?.response?.authorizationCode || null, cancelado: false };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err ?? "");
+    // 1001 = ASAuthorizationError.canceled (el usuario cerró la hoja)
+    if (/1001|cancel/i.test(msg)) return { code: null, cancelado: true };
+    console.warn("[SettingsSheet] Apple no ha dado el código para revocar:", err);
+    return { code: null, cancelado: false };
+  }
+}
 
 // Inyectado por vite.config.ts (`pasify@<sha12>`). Solo se enseña en web.
 declare const __PASIFY_RELEASE__: string;
@@ -112,7 +163,7 @@ export const SettingsSheet = ({
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [sessionUser, setSessionUser] = useState<{ id: string; email: string | null } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{ id: string; email: string | null; apple: boolean } | null>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -133,6 +184,17 @@ export const SettingsSheet = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteBlocked, setDeleteBlocked] = useState<string | null>(null);
+  // Hoja de Apple cerrada sin confirmar: se explica y se deja volver a intentarlo.
+  const [appleCancelado, setAppleCancelado] = useState(false);
+
+  const [exporting, setExporting] = useState(false);
+
+  // De cliente a local (solo cuentas de cliente nuevas y sin compras).
+  const [conversionEligible, setConversionEligible] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
   const [appVersion, setAppVersion] = useState<string | null>(
     Capacitor.isNativePlatform() ? null : WEB_BUILD ? `Web · ${WEB_BUILD}` : null
@@ -147,12 +209,35 @@ export const SettingsSheet = ({
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
       const user = data.session?.user;
-      setSessionUser(user ? { id: user.id, email: user.email ?? null } : null);
+      setSessionUser(user ? { id: user.id, email: user.email ?? null, apple: tieneApple(user) } : null);
     });
     return () => {
       cancelled = true;
     };
   }, [open]);
+
+  /* «¿Tienes un local?»: solo si el servidor dice que esta cuenta puede
+     pasar a local (partner_conversion_status). Ante cualquier duda, no se
+     ofrece. */
+  useEffect(() => {
+    if (!open || role !== "client" || !userId) {
+      setConversionEligible(false);
+      return;
+    }
+    let cancelled = false;
+    llamarRpc("partner_conversion_status")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.warn("partner_conversion_status:", error.message);
+        setConversionEligible(!error && (data as { eligible?: unknown } | null)?.eligible === true);
+      })
+      .catch(() => {
+        if (!cancelled) setConversionEligible(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, role, userId]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -331,13 +416,28 @@ export const SettingsSheet = ({
      quedaron sin ruta al retirar del router las pantallas social/perfil.
      Este es el unico panel de ajustes accesible en la app, asi que el
      borrado real tiene que salir de aqui.
-     Si el local tiene eventos futuros con entradas vendidas, la funcion
-     responde 409 partner_has_upcoming_sales y se enseña su mensaje.
+     No se borra (409, se explica por qué) si es administrador, si tiene una
+     devolución en curso o si su local tiene eventos futuros con entradas
+     vendidas. Con Apple, en iOS se pide antes a Apple un código para revocar
+     el acceso (pedirCodigoApple).
      ------------------------------------------------------------------ */
   const handleDeleteAccount = async () => {
     setDeleting(true);
+    setAppleCancelado(false);
     try {
-      const { error } = await supabase.functions.invoke("delete-own-account");
+      let appleCode: string | null = null;
+      if (sessionUser?.apple && Capacitor.getPlatform() === "ios") {
+        const apple = await pedirCodigoApple();
+        if (apple.cancelado) {
+          setAppleCancelado(true);
+          return;
+        }
+        appleCode = apple.code;
+      }
+
+      const { error } = await supabase.functions.invoke("delete-own-account", {
+        body: appleCode ? { apple_authorization_code: appleCode } : {},
+      });
       if (error) {
         let serverMessage: string | null = null;
         if (error instanceof FunctionsHttpError) {
@@ -346,10 +446,12 @@ export const SettingsSheet = ({
             | { error?: string; message?: string }
             | null;
           if (response.status === 409 && body?.error === "partner_has_upcoming_sales") {
-            setDeleteBlocked(
-              body.message ||
-                `Tu local tiene eventos próximos con entradas vendidas, así que todavía no se puede eliminar la cuenta. Escríbenos a ${SUPPORT_EMAIL} y lo resolvemos contigo.`
-            );
+            setDeleteBlocked(UPCOMING_SALES_MESSAGE);
+            return;
+          }
+          // Solicitud de reembolso pendiente, aprobada o en proceso.
+          if (response.status === 409 && body?.error === "refund_in_progress") {
+            setDeleteBlocked(REFUND_IN_PROGRESS_MESSAGE);
             return;
           }
           // Cuenta de administrador de la plataforma: su baja se gestiona a mano.
@@ -393,30 +495,101 @@ export const SettingsSheet = ({
   const closeDeleteConfirm = () => {
     setShowDeleteConfirm(false);
     setDeleteBlocked(null);
+    setAppleCancelado(false);
   };
 
-  /* Peticion de acceso a datos (art. 15 RGPD). No prometemos un ZIP
-     automatico que no existe: abrimos el correo de soporte con la
-     solicitud ya redactada y la atiende una persona. */
-  const handleRequestData = () => {
-    const asunto = "Solicitud de acceso a mis datos (RGPD)";
-    const cuerpo = [
-      "Hola,",
-      "",
-      "Solicito una copia de los datos personales que Pasify tiene sobre mi cuenta,",
-      "conforme al artículo 15 del RGPD.",
-      "",
-      `Correo de la cuenta: ${accountEmail ?? ""}`,
-      "",
-      "Gracias.",
-    ].join("\n");
-    window.location.href =
-      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(asunto)}` +
-      `&body=${encodeURIComponent(cuerpo)}`;
-    toast({
-      title: "Abriendo tu correo",
-      description: `Envíanos la solicitud a ${SUPPORT_EMAIL} y te respondemos en 30 días como máximo.`,
-    });
+  /* Acceso a los datos (art. 15 y 20 del RGPD): gdpr-export-data los
+     devuelve en un JSON (sin tokens ni credenciales) y se guarda o se
+     comparte como cualquier otra exportación. Como mucho 5 al día. */
+  const handleDownloadData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("gdpr-export-data", { body: {} });
+      if (error) {
+        const status = error instanceof FunctionsHttpError ? (error.context as Response).status : null;
+        console.error("gdpr-export-data:", error);
+        toast({
+          title: "No hemos podido preparar tus datos",
+          description:
+            status === 429
+              ? "Ya los has descargado varias veces hoy. Vuelve a intentarlo mañana."
+              : `Vuelve a intentarlo en unos minutos. Si sigue fallando, escríbenos a ${SUPPORT_EMAIL}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const respuesta = data as { export?: unknown; file_name?: unknown } | null;
+      if (!respuesta?.export) throw new Error("gdpr-export-data sin datos");
+      await saveOrShareFile({
+        filename:
+          typeof respuesta.file_name === "string" ? respuesta.file_name : `pasify-mis-datos-${fileDateStamp()}.json`,
+        mimeType: "application/json",
+        data: JSON.stringify(respuesta.export, null, 2),
+        dialogTitle: "Tus datos de Pasify",
+      });
+      toast({
+        title: "Tus datos están listos",
+        description: Capacitor.isNativePlatform()
+          ? "Guarda el archivo en Archivos o compártelo."
+          : "Se ha descargado un archivo JSON con tus datos.",
+      });
+    } catch (err) {
+      console.error("descargar mis datos:", err);
+      toast({
+        title: "No hemos podido preparar tus datos",
+        description: `Vuelve a intentarlo en unos minutos. Si sigue fallando, escríbenos a ${SUPPORT_EMAIL}.`,
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /* «¿Tienes un local?»: quien entró con Apple o Google nace cliente y no
+     tenía cómo pasar a local. convert_new_client_to_partner cambia el rol y
+     deja la organización y el plan como el alta de local; después se va al
+     panel, donde la lista de primeros pasos lleva a completar el local. */
+  const handleConvertToPartner = async () => {
+    const nombre = businessName.trim();
+    if (nombre.length < 2) {
+      setConvertError("Escribe el nombre de tu local.");
+      return;
+    }
+    if (!userId || converting) return;
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const { error } = await llamarRpc("convert_new_client_to_partner", { _business_name: nombre });
+      if (error) {
+        console.error("convert_new_client_to_partner:", error);
+        setConvertError(conversionErrorMessage(error));
+        return;
+      }
+      // Los roles se cargan una vez por usuario: se refrescan en toda la app.
+      let rolesAlDia = true;
+      try {
+        await refrescarRoles(userId);
+      } catch (err) {
+        rolesAlDia = false;
+        console.warn("refrescarRoles tras pasar a local:", err);
+      }
+      setConvertOpen(false);
+      setConversionEligible(false);
+      onOpenChange(false);
+      toast({
+        title: "Tu cuenta ya es de local",
+        description: "Completa los datos de tu local y crea tu primer evento.",
+      });
+      // Sin los roles nuevos, una recarga completa los vuelve a pedir.
+      if (rolesAlDia) navigate("/partner-dashboard", { replace: true });
+      else redirectToApp("/partner-dashboard");
+    } catch (err) {
+      console.error("convert_new_client_to_partner:", err);
+      setConvertError(conversionErrorMessage(null));
+    } finally {
+      setConverting(false);
+    }
   };
 
   const roleLabel =
@@ -597,6 +770,73 @@ export const SettingsSheet = ({
               />
             </SectionCard>
 
+            {/* === De cliente a local (cuentas de cliente nuevas y sin compras) === */}
+            {role === "client" && conversionEligible && (
+              <SectionCard
+                eyebrow="Para locales"
+                icon={<Store className="h-3 w-3" />}
+                title="¿Tienes un local?"
+              >
+                <Row
+                  icon={<Store className="h-4 w-4" />}
+                  label="Crea tu cuenta de local"
+                  description="Convierte esta cuenta en la de tu local para crear eventos y vender entradas."
+                  onPress={() => {
+                    setConvertError(null);
+                    setConvertOpen((v) => !v);
+                  }}
+                  expanded={convertOpen}
+                />
+                {convertOpen && (
+                  <form
+                    className="mx-3 mb-2 mt-1 space-y-2 rounded-xl border border-border p-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleConvertToPartner();
+                    }}
+                  >
+                    <Input
+                      placeholder="Nombre de tu local"
+                      aria-label="Nombre de tu local"
+                      autoComplete="organization"
+                      maxLength={120}
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      disabled={converting}
+                    />
+                    <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                      Esta cuenta pasará a ser de local: entrarás en el panel del local, donde completarás
+                      sus datos (dirección, categoría…) y crearás tus eventos. Dejarás de ver el panel de
+                      cliente. No se puede deshacer.
+                    </p>
+                    {convertError && (
+                      <p role="alert" className="text-[11.5px] leading-relaxed text-red-500">
+                        {convertError}
+                      </p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        disabled={converting}
+                        onClick={() => {
+                          setConvertOpen(false);
+                          setConvertError(null);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button type="submit" size="sm" className="flex-1" disabled={converting || !businessName.trim()}>
+                        {converting ? "Creando…" : "Crear cuenta de local"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </SectionCard>
+            )}
+
             {/* === Cobros y avisos (local) === */}
             {role === "partner" && (
               <SectionCard
@@ -654,8 +894,14 @@ export const SettingsSheet = ({
               <Row
                 icon={<Download className="h-4 w-4" />}
                 label="Descargar mis datos"
+                description={
+                  exporting
+                    ? "Preparando el archivo…"
+                    : "Un archivo JSON con tu perfil, tus compras y entradas, favoritos, puntos, avisos y conversaciones."
+                }
                 value="RGPD"
-                onPress={handleRequestData}
+                onPress={() => void handleDownloadData()}
+                busy={exporting}
               />
               <Divider />
               <Row
@@ -681,6 +927,7 @@ export const SettingsSheet = ({
                   }
                   onPress={() => {
                     setDeleteBlocked(null);
+                    setAppleCancelado(false);
                     setShowDeleteConfirm(true);
                   }}
                 />
@@ -712,11 +959,52 @@ export const SettingsSheet = ({
                     <>
                       <div className="flex items-start gap-2">
                         <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                        <div className="text-[12px] leading-relaxed text-foreground">
-                          Esta acción es <strong>irreversible</strong>. Si confirmas, se
-                          eliminará ahora mismo tu cuenta y se cerrará la sesión.
-                          {role === "partner" &&
-                            " Si tu local tiene eventos próximos con entradas vendidas, todavía no se podrá eliminar."}
+                        {/* Lo mismo que public/eliminar-cuenta.html: si cambia uno, el otro. */}
+                        <div className="space-y-2 text-[12px] leading-relaxed text-foreground">
+                          <p>
+                            Esta acción es <strong>irreversible</strong>. Si confirmas, se elimina ahora
+                            mismo tu cuenta y se cierra la sesión.
+                          </p>
+                          <p>
+                            <strong>Se borra en el momento:</strong> tu cuenta de acceso, tu perfil y tus
+                            datos de contacto, tu foto de perfil, tus favoritos, avisos, preferencias,
+                            puntos y códigos de invitación, tus solicitudes de reembolso ya resueltas y tus
+                            conversaciones de soporte como comprador.
+                          </p>
+                          <p>
+                            <strong>Se conserva</strong>, sin vínculo con tu cuenta y durante el plazo que
+                            exige la normativa mercantil y fiscal (6 años, art. 30 del Código de Comercio):
+                            los pedidos y las entradas que compraste, sus validaciones en la puerta y los
+                            pagos, con el nombre, el email y el teléfono que diste al comprar. Las entradas
+                            de eventos futuros siguen valiendo con el QR y el enlace del email.
+                          </p>
+                          {role === "partner" && (
+                            <p>
+                              <strong>Tu local:</strong> tus eventos futuros sin ventas se cancelan y tu
+                              organización queda cerrada. Sus datos, sus eventos pasados, sus ventas, su
+                              saldo y sus conversaciones de soporte se conservan sin vínculo con tu cuenta.
+                            </p>
+                          )}
+                          <p>
+                            Los registros técnicos se borran solos: el de actividad del panel al año y los
+                            avisos de pago, a los 180 días.
+                          </p>
+                          <p>
+                            No se puede eliminar mientras tengas una devolución en curso
+                            {role === "partner" ? " ni con eventos próximos con entradas vendidas" : ""}.
+                          </p>
+                          {sessionUser?.apple && Capacitor.getPlatform() === "ios" && (
+                            <p>
+                              Te pediremos confirmarlo con Apple: así Pasify deja de tener acceso a tu
+                              Apple ID.
+                            </p>
+                          )}
+                          {appleCancelado && (
+                            <p role="alert" className="text-red-500">
+                              Has cancelado la confirmación con Apple. Para eliminar la cuenta, pulsa
+                              Confirmar y acepta con Apple.
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="mt-3 flex gap-2">
