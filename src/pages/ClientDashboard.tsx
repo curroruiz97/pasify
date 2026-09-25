@@ -51,6 +51,8 @@ import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import type { FavEvent } from "@/hooks/useFavorites";
 import SupportChat from "@/components/support/SupportChat";
+import { SupportNavIcon } from "@/components/support/SupportNavIcon";
+import { useSupportUnread } from "@/hooks/useSupportUnread";
 import ProfileSheet from "@/components/client/ProfileSheet";
 import TicketQRModal from "@/components/client/TicketQRModal";
 import { TICKETS_UPDATED_EVENT } from "@/hooks/usePendingCheckoutResume";
@@ -510,12 +512,14 @@ const ClientDashboard = () => {
         },
       ]
     : [{ kind: "item", id: "loyalty", label: "Pasify Points", icon: <Crown className="h-5 w-5" /> }];
+  // Respuestas de Pasify sin leer: número en «Soporte» (menú, cajón y barra inferior).
+  const soporteSinLeer = useSupportUnread(uid);
   const navTree: NavTreeNode<View>[] = [
     { kind: "item", id: "home", label: "Inicio", icon: <Home className="h-5 w-5" /> },
     { kind: "item", id: "favorites", label: "Favoritos", icon: <EventsIcon count={favProximos.length} /> },
     { kind: "item", id: "wallet", label: "Tickets", icon: <Ticket className="h-5 w-5" /> },
     ...nodosMembresia,
-    { kind: "item", id: "support", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
+    { kind: "item", id: "support", label: "Soporte", icon: <SupportNavIcon count={soporteSinLeer} /> },
   ];
 
   // Bottom tab bar mobile — 4 entradas más usadas; el resto en el drawer "Más".
@@ -523,7 +527,7 @@ const ClientDashboard = () => {
     { id: "home", label: "Inicio", icon: <Home className="h-5 w-5" /> },
     { id: "favorites", label: "Favoritos", icon: <EventsIcon count={favProximos.length} /> },
     { id: "wallet", label: "Tickets", icon: <Ticket className="h-5 w-5" /> },
-    { id: "support", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
+    { id: "support", label: "Soporte", icon: <SupportNavIcon count={soporteSinLeer} /> },
   ];
 
   const hayFiltros = !!search.trim() || activeCat !== "all";

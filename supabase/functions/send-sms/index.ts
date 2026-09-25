@@ -23,8 +23,10 @@ Deno.serve(async (req) => {
     await enforceRateLimit({ key: `sms:${to}`, max: 5, windowSec: 3600 });
 
     const result = await sendSms({ to, body, statusCallback: status_callback });
-    logger.info("sms_sent", { to_last4: to.slice(-4), provider: result.provider });
-    return jsonResponse({ sid: result.sid, provider: result.provider });
+    // Sin Twilio configurado no sale nada: no es un envío.
+    const simulated = result.provider !== "twilio";
+    logger.info(simulated ? "sms_simulated" : "sms_sent", { to_last4: String(to).slice(-4), provider: result.provider });
+    return jsonResponse({ sid: result.sid, provider: result.provider, simulated });
   } catch (err) {
     logger.error("send-sms failed", { error: String(err) });
     return safeErrorResponse(err);

@@ -17,12 +17,19 @@ export interface SendSmsResult {
   provider: "twilio" | "fallback";
 }
 
+/** true si Twilio está configurado: sin él no sale ningún SMS. */
+export function isSmsConfigured(): boolean {
+  return !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER);
+}
+
 /**
- * Envía un SMS. Si Twilio no está configurado, log-only fallback (dev).
+ * Envía un SMS. Si Twilio no está configurado no envía nada: registra un warn
+ * y devuelve un sid simulado con provider "fallback", que NO es un envío.
  */
 export async function sendSms(opts: SendSmsOptions): Promise<SendSmsResult> {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
-    logger.warn("twilio_not_configured", { to: opts.to.slice(-6), body_preview: opts.body.slice(0, 60) });
+  if (!isSmsConfigured()) {
+    // Sin el cuerpo en el log: puede llevar un código de verificación.
+    logger.warn("twilio_not_configured", { to_last4: opts.to.slice(-4) });
     return { sid: `simulated-${crypto.randomUUID()}`, provider: "fallback" };
   }
 

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tans
 import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId, useSessionReady } from "@/lib/cache/session";
+import { supportUnreadKey } from "@/hooks/useSupportUnread";
 import {
   AlertTriangle,
   Check,
@@ -125,9 +126,17 @@ interface ChatData {
   /** Local: organización con la que se abre su conversación. */
   orgId: string | null;
   messages: Message[];
+  /**
+   * Usuario: sus conversaciones de este Soporte con respuestas sin leer
+   * (unread_for_client > 0; normalmente solo la abierta). Al abrir el chat se
+   * marcan leídas todas: si no, el contador del menú (useSupportUnread) se
+   * quedaba encendido por una conversación antigua que el chat no enseña.
+   */
+  pendientesLeer: string[];
 }
 
 const SIN_MENSAJES: Message[] = [];
+const SIN_PENDIENTES: string[] = [];
 
 /** Busca la conversación (sin crearla) y carga sus mensajes. */
 async function cargarConversacion(p: {
@@ -141,6 +150,7 @@ async function cargarConversacion(p: {
   try {
     let id: string | null = null;
     let org: string | null = null;
+    let pendientesLeer: string[] = [];
 
     if (p.mode === "admin") {
       if (p.conversationId) {
@@ -169,7 +179,7 @@ async function cargarConversacion(p: {
       const suyas = () => {
         const consulta = supabase
           .from("support_conversations")
-          .select("id")
+          .select("id, unread_for_client")
           .eq("client_id", p.uid)
           .eq("kind", p.kind === "partner" ? "partner_admin" : "client_admin");
         if (p.kind !== "partner") return consulta;
@@ -193,9 +203,14 @@ async function cargarConversacion(p: {
         if (cerrada.error) throw cerrada.error;
         id = cerrada.data?.[0]?.id ?? null;
       }
+      // Respuestas sin leer en este Soporte (la abierta y, si quedara, alguna
+      // antigua): el chat las marca leídas al abrirse. Si falla, no impide abrirlo.
+      const sinLeer = await suyas().gt("unread_for_client", 0).limit(20);
+      if (sinLeer.error) console.warn("[SupportChat] no leídos:", sinLeer.error.message);
+      else pendientesLeer = (sinLeer.data ?? []).map((c) => c.id);
     }
 
-    if (!id) return { convId: null, orgId: org, messages: [] };
+    if (!id) return { convId: null, orgId: org, messages: [], pendientesLeer };
 
     const { data: rows, error: messagesError } = await supabase
       .from("support_messages")
@@ -203,7 +218,7 @@ async function cargarConversacion(p: {
       .eq("conversation_id", id)
       .order("created_at", { ascending: true });
     if (messagesError) throw messagesError;
-    return { convId: id, orgId: org, messages: (rows ?? []) as Message[] };
+    return { convId: id, orgId: org, messages: (rows ?? []) as Message[], pendientesLeer };
   } catch (err) {
     console.error("[SupportChat] no se pudo abrir la conversación:", err);
     throw err;
@@ -265,9 +280,14 @@ export const SupportChat = ({
           if (mode === "admin" && userId) {
             void queryClient.invalidateQueries({ queryKey: qk.admin.supportInbox(userId) });
           }
+          // El contador de Soporte del menú del usuario se apaga ya (el tiempo
+          // real también lo haría, unos instantes después).
+          if (mode === "client" && userId) {
+            void queryClient.invalidateQueries({ queryKey: supportUnreadKey(userId, kind) });
+          }
         });
     },
-    [readerKind, mode, userId, queryClient]
+    [readerKind, mode, kind, userId, queryClient]
   );
 
   // Conversación y mensajes en la caché (solo en memoria: es una
@@ -296,6 +316,7 @@ export const SupportChat = ({
   });
   const convId = query.data?.convId ?? null;
   const messages = query.data?.messages ?? SIN_MENSAJES;
+  const pendientesLeer = query.data?.pendientesLeer ?? SIN_PENDIENTES;
   const loadState: LoadState = !sesionLista
     ? "loading"
     : !userId
@@ -315,6 +336,17 @@ export const SupportChat = ({
   useEffect(() => {
     if (convId && haySinLeer) markRead(convId);
   }, [convId, haySinLeer, markRead]);
+
+  // Al abrir Soporte, el usuario da por leídas las respuestas de Pasify de
+  // este Soporte (unread_for_client a 0): el contador del menú se apaga aunque
+  // los mensajes ya tuvieran read_at. Una vez por carga.
+  useEffect(() => {
+    if (mode !== "client" || pendientesLeer.length === 0) return;
+    for (const id of pendientesLeer) markRead(id);
+    queryClient.setQueryData<ChatData>(chatKey, (prev) =>
+      prev ? { ...prev, pendientesLeer: SIN_PENDIENTES } : prev
+    );
+  }, [mode, pendientesLeer, markRead, queryClient, chatKey]);
 
   const anadirMensajes = useCallback(
     (nuevos: Message[]) => {
@@ -390,6 +422,7 @@ export const SupportChat = ({
             convId: nueva,
             orgId: prev?.orgId ?? org,
             messages: prev?.convId === nueva ? prev.messages : [],
+            pendientesLeer: SIN_PENDIENTES,
           }));
         }
 
