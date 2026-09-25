@@ -2,8 +2,9 @@
 --
 -- Estos tests se ejecutan contra una instancia Supabase local (puerto 54322)
 -- después de `supabase db reset`. Cada test usa BEGIN/ROLLBACK para no dejar
--- residuo. El runner (`.github/workflows/db-policy-tests.yml`) hace fail si
--- cualquier `RAISE EXCEPTION` salta o si un `ASSERT FALSE` se ejecuta.
+-- residuo. El runner (`.github/workflows/db-tests.yml`, que pasa todos los
+-- tests/db/*.sql) hace fail si cualquier `RAISE EXCEPTION` salta, si un
+-- `ASSERT FALSE` se ejecuta o si sale un NOTICE que empieza por FAIL.
 --
 -- Conceptos:
 --  - Usamos `SET LOCAL request.jwt.claim.sub` + `SET LOCAL role authenticated`
@@ -51,6 +52,9 @@ BEGIN
     RAISE EXCEPTION 'FAIL test1: client pudo añadirse rol partner';
   EXCEPTION
     WHEN insufficient_privilege OR check_violation OR raise_exception THEN
+      -- El propio 'FAIL test1' es un raise_exception: sin esto se tragaba
+      -- como PASS y el test no podía fallar nunca.
+      IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
       v_err := SQLERRM;
       RAISE NOTICE 'PASS test1: rejected as expected (%)', v_err;
     WHEN OTHERS THEN
@@ -163,6 +167,6 @@ ROLLBACK;
 DO $$
 BEGIN
   RAISE NOTICE '════════════════════════════════════════════';
-  RAISE NOTICE 'Pasify db-policy-tests · run complete';
+  RAISE NOTICE 'Pasify tests/db/policies.sql · run complete';
   RAISE NOTICE '════════════════════════════════════════════';
 END $$;

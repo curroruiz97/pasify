@@ -2,21 +2,27 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Eliminar tu cuenta · Pasify</title>
-<meta name="description" content="Cómo eliminar tu cuenta de Pasify y qué datos se borran o se conservan, desde la app o solicitándolo por correo.">
+<meta name="description" content="Cómo eliminar tu cuenta de Pasify, desde la app o por email, y qué datos se borran y cuáles se conservan y por qué.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://pasifyy.vercel.app/eliminar-cuenta.html">
+<!--
+  Recurso web que exige Google Play para borrar la cuenta sin tener la app.
+  Lo que dice aquí tiene que coincidir con lo que hacen de verdad
+  supabase/functions/delete-own-account y partner_close_account
+  (20260923120200_ticket_flow_v2.sql) y con /privacidad.html.
+-->
 <style>
   :root{
-    --bg:#0b0b0f; --card:#14141b; --text:#e9e9ef; --muted:#a0a0b0;
-    --accent:#7c5cff; --line:#26263a;
+    --bg:#0F0F0F; --card:#171513; --text:#F4EEE2; --muted:#A39B8E;
+    --accent:#FF7A4D; --line:#2A2521;
   }
   *{box-sizing:border-box}
   body{
     margin:0; background:var(--bg); color:var(--text);
     font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    padding:40px 20px;
+    padding:calc(40px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
   main{max-width:760px;margin:0 auto}
   header{margin-bottom:36px;padding-bottom:24px;border-bottom:1px solid var(--line)}
@@ -32,12 +38,14 @@
   li{margin:7px 0}
   a{color:var(--accent)}
   code{
-    background:#1d1d28;border:1px solid var(--line);border-radius:5px;
+    background:#1F1B18;border:1px solid var(--line);border-radius:5px;
     padding:2px 6px;font-size:14px;
   }
-  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px}
+  .table{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px;min-width:520px}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
   th{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+  .pending{color:#E8B04C}
   footer{margin-top:48px;padding-top:22px;border-top:1px solid var(--line)}
 </style>
 </head>
@@ -45,82 +53,106 @@
 <main>
   <header>
     <h1>Eliminar tu cuenta de Pasify</h1>
-    <p class="muted">Aplicación: <strong>Pasify</strong> · Desarrollador: Pasify · Última actualización: 16 de agosto de 2026</p>
+    <p class="muted">Aplicación: <strong>Pasify</strong> · Desarrollador: Pasify (AVENUE DIGITAL GROUP, S.L.) · Última actualización: 25 de septiembre de 2026</p>
   </header>
 
   <p>
-    Puedes eliminar tu cuenta y los datos asociados en cualquier momento, sin
-    tener que pedirlo por teléfono ni dar explicaciones. Tienes dos vías: desde
-    la propia aplicación o escribiéndonos.
+    Puedes eliminar tu cuenta cuando quieras, sin dar explicaciones: desde la
+    propia app o escribiéndonos. Antes, lee qué se borra y qué se conserva: los
+    pedidos y las entradas se guardan un tiempo porque la ley nos obliga.
   </p>
 
   <h2>1 · Desde la aplicación</h2>
   <div class="card">
     <ol>
       <li>Abre Pasify e inicia sesión.</li>
-      <li>Entra en <strong>Ajustes</strong> (icono de engranaje del panel).</li>
-      <li>Baja hasta <strong>Eliminar cuenta</strong>.</li>
-      <li>Confirma. El borrado se ejecuta en ese momento y se cierra la sesión.</li>
+      <li>Entra en <strong>Ajustes</strong> y ve a <strong>Privacidad y datos</strong>.</li>
+      <li>Pulsa <strong>Eliminar mi cuenta</strong> y confirma.</li>
+      <li>La cuenta se borra en ese momento y se cierra la sesión.</li>
     </ol>
+    <p style="margin-bottom:0">
+      <strong>Si tienes un local:</strong> mientras tengas eventos futuros con entradas
+      vendidas no se puede borrar la cuenta. Cancélalos desde el panel (Pasify
+      devuelve el dinero a los compradores) o escríbenos y lo vemos contigo.
+    </p>
   </div>
 
-  <h2>2 · Si ya no tienes la app instalada</h2>
+  <h2>2 · Si ya no tienes la app</h2>
   <div class="card">
     <p style="margin-top:0">
-      Escríbenos a <a href="mailto:hola@pasify.es?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20cuenta">hola@pasify.es</a>
-      desde la dirección de correo con la que te registraste, indicando en el asunto
+      Escríbenos a <a href="mailto:comunicacion@avenuemedia.io?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20cuenta">comunicacion@avenuemedia.io</a>
+      desde el email con el que te registraste, con el asunto
       <code>Solicitud de eliminación de cuenta</code>.
     </p>
     <p style="margin-bottom:0">
-      Verificamos que la petición viene del titular y completamos el borrado en un
-      plazo máximo de <strong>30 días</strong>. Te confirmamos por correo cuando esté hecho.
+      Comprobamos que la petición viene del titular y borramos la cuenta en un
+      plazo máximo de <strong>30 días</strong>. Te confirmamos por email cuando esté hecho.
     </p>
   </div>
 
   <h2>Qué se borra y qué se conserva</h2>
+  <div class="table">
   <table>
     <thead>
-      <tr><th>Dato</th><th>Tratamiento</th></tr>
+      <tr><th>Dato</th><th>Qué pasa</th></tr>
     </thead>
     <tbody>
       <tr>
-        <td>Cuenta de acceso, perfil, foto y datos de contacto</td>
-        <td>Se eliminan de forma permanente.</td>
+        <td>Cuenta de acceso, perfil y datos de contacto</td>
+        <td>Se borran en el momento.</td>
       </tr>
       <tr>
-        <td>Entradas, favoritos, mensajes de soporte y preferencias</td>
-        <td>Se eliminan de forma permanente.</td>
+        <td>Favoritos, avisos, preferencias, puntos, códigos de invitación, solicitudes de reembolso y conversaciones de soporte como comprador</td>
+        <td>Se borran en el momento.</td>
       </tr>
       <tr>
-        <td>Datos de organización, locales y eventos (cuentas Partner)</td>
-        <td>Se eliminan junto con la cuenta propietaria.</td>
+        <td>Foto de perfil</td>
+        <td>El archivo no se borra solo con la cuenta: lo borramos cuando nos lo pides por email.</td>
       </tr>
       <tr>
-        <td>Registros de facturación y de pagos</td>
+        <td>Pedidos y entradas que compraste, sus validaciones en la puerta y los pagos</td>
         <td>
-          Se conservan de forma disociada durante los plazos que exige la
-          normativa fiscal y contable española (hasta 6 años, art. 30 del Código
-          de Comercio). No se usan para perfilarte ni para enviarte comunicaciones.
+          <strong>Se conservan</strong>, sin vínculo con tu cuenta, durante el plazo que
+          exige la normativa mercantil y fiscal (6 años, art. 30 del Código de Comercio).
+          Incluyen el nombre, el email y el teléfono que diste al comprar: son el
+          justificante de la operación y el registro del organizador del evento. No
+          se usan para nada más. Las entradas de eventos futuros siguen siendo
+          válidas con el QR y el enlace del email.
+        </td>
+      </tr>
+      <tr>
+        <td>Cuentas de local: organización, locales, eventos y ventas</td>
+        <td>
+          Tus eventos futuros sin ventas se cancelan y la organización queda
+          cerrada: nadie más puede entrar a su panel. Sus datos, sus eventos
+          pasados, sus ventas, su saldo y sus conversaciones de soporte
+          <strong>se conservan</strong> sin vínculo con tu cuenta, por las mismas obligaciones.
         </td>
       </tr>
       <tr>
         <td>Registros técnicos y de seguridad</td>
-        <td>Se conservan un máximo de 90 días y después se eliminan automáticamente.</td>
+        <td>
+          El registro de actividad del panel se guarda 1 año y los avisos de pago
+          de Stripe, 180 días; después se borran solos. Los informes de errores
+          siguen el plazo de Sentry <span class="pending">[PENDIENTE: retención configurada en Sentry]</span>.
+        </td>
       </tr>
     </tbody>
   </table>
+  </div>
 
   <p>
-    El borrado es irreversible: no podemos recuperar una cuenta eliminada ni las
-    entradas asociadas. Si tienes entradas para eventos futuros, descárgalas o
-    tramita la devolución antes de eliminar la cuenta.
+    El borrado no se puede deshacer: no podemos recuperar una cuenta eliminada.
+    Si tienes entradas para eventos futuros, guarda el email de cada una (con su
+    QR) o pide el reembolso antes de borrar la cuenta.
   </p>
 
   <footer>
     <p class="muted">
       ¿Dudas sobre tus datos? Consulta la
-      <a href="/privacidad.html">Política de Privacidad</a> o escribe a
-      <a href="mailto:hola@pasify.es">hola@pasify.es</a>.
+      <a href="/privacidad.html">Política de privacidad</a> o escribe a
+      <a href="mailto:comunicacion@avenuemedia.io">comunicacion@avenuemedia.io</a>.
+      AVENUE DIGITAL GROUP, S.L. · NIF B70829601 · Plaza Mayor, 23 - 1.º A, 47001 Valladolid.
     </p>
   </footer>
 </main>

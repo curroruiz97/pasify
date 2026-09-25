@@ -10,7 +10,7 @@ keywords y la estrategia son completamente distintos en Pasify.
 
 ## 1. Public assets ya configurados en el repo
 
-- `public/sitemap.xml` — 5 URLs canónicas con alternates `hreflang` ES/EN/FR/IT/PT/DE
+- `public/sitemap.xml` — URLs canónicas, sin `hreflang`: la web y la app solo existen en español
 - `public/CNAME` — `pasify.es` (Vercel custom domain target)
 - `public/site.webmanifest` — name `Pasify`, theme `#0B0908`, bg `#F7F3EC`
 - `public/.well-known/assetlinks.json` — pendiente de actualizar a

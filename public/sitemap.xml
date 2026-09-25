@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- La web solo existe en español: sin alternates hreflang. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-    xmlns:xhtml="http://www.w3.org/1999/xhtml"
     xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0"
     xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
@@ -11,12 +11,6 @@
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://pasify.es/" />
-    <xhtml:link rel="alternate" hreflang="fr" href="https://pasify.es/" />
-    <xhtml:link rel="alternate" hreflang="it" href="https://pasify.es/" />
-    <xhtml:link rel="alternate" hreflang="pt" href="https://pasify.es/" />
-    <xhtml:link rel="alternate" hreflang="de" href="https://pasify.es/" />
   </url>
 
   <!-- Calendario público de eventos -->
@@ -26,7 +20,6 @@
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/calendar" />
   </url>
 
   <!-- Registro Cliente -->
@@ -36,7 +29,6 @@
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/register-client" />
   </url>
 
   <!-- Registro Partner -->
@@ -46,7 +38,6 @@
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/register-partner" />
   </url>
 
   <!-- Login -->
@@ -56,28 +47,25 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/login" />
   </url>
 
   <!-- Política de Privacidad -->
   <url>
     <loc>https://pasify.es/privacidad.html</loc>
-    <lastmod>2026-08-05</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/privacidad.html" />
   </url>
 
   <!-- Eliminación de cuenta · exigida por Google Play como recurso web
        accesible sin tener la app instalada. Debe seguir siendo indexable. -->
   <url>
     <loc>https://pasify.es/eliminar-cuenta.html</loc>
-    <lastmod>2026-08-16</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <mobile:mobile/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://pasify.es/eliminar-cuenta.html" />
   </url>
 
 </urlset>

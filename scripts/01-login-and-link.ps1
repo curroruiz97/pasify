@@ -1,4 +1,4 @@
-# Pasify · Paso 1 — Autenticar Supabase CLI y linkear el proyecto
+﻿# Pasify · Paso 1 — Autenticar Supabase CLI y linkear el proyecto
 # Ejecutar desde la raiz del repo en PowerShell:
 #     .\scripts\01-login-and-link.ps1
 #
@@ -41,7 +41,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "✅ Listo. Ahora puedes ejecutar:" -ForegroundColor Green
     Write-Host "   .\scripts\02-set-secrets.ps1    # configurar secrets"
-    Write-Host "   .\scripts\03-deploy-all.ps1     # deploy edge functions"
+    Write-Host "   Las edge functions y las migraciones se despliegan desde GitHub Actions"
+    Write-Host "   (.github/workflows/deploy-production.yml), no desde aqui."
 } else {
     Write-Host ""
     Write-Host "❌ Link falló. Si dice 'privileges', tu cuenta no es admin del proyecto." -ForegroundColor Red

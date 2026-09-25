@@ -146,8 +146,7 @@ export type PartnerSubscriptionStatus =
 /**
  * Estado de suscripción de Stripe → enum Pasify. Stripe escribe `canceled`
  * (una L) y el enum `cancelled` (dos): escribir el valor de Stripe tal cual
- * hace fallar el upsert. Mismo criterio que partner-confirm-subscription
- * (desconocido → 'active').
+ * hace fallar el upsert. Un estado que el enum no conoce cuenta como 'active'.
  */
 export function mapStripeSubscriptionStatus(status: string | null | undefined): PartnerSubscriptionStatus {
   switch (status) {
