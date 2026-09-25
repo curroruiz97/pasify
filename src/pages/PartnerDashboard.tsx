@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,33 +40,14 @@ import {
   Pencil,
   RefreshCcw,
 } from "lucide-react";
-import QRScanner from "@/components/partner/QRScanner";
 import Wordmark from "@/components/Wordmark";
-import SupportChat from "@/components/support/SupportChat";
-import { LiveWarRoom } from "@/components/partner/LiveWarRoom";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
-import { PartnerOnboardingWizard } from "@/components/partner/PartnerOnboardingWizard";
 import { OnboardingChecklist } from "@/components/partner/OnboardingChecklist";
-import { PartnerAttendees } from "@/components/partner/PartnerAttendees";
-import { EventEditorWizard, type EditorMode } from "@/components/partner/EventEditorWizard";
+import type { EditorMode } from "@/components/partner/EventEditorWizard";
 import { usePartnerContext } from "@/hooks/usePartnerContext";
-import { TpvCierreZ } from "@/components/partner/TpvCierreZ";
-import { PartnerCRM } from "@/components/partner/PartnerCRM";
-import { PartnerSalesChannels } from "@/components/partner/PartnerSalesChannels";
-import { PartnerVipHospitality } from "@/components/partner/PartnerVipHospitality";
-import { PartnerTeam } from "@/components/partner/PartnerTeam";
-import { PartnerReports } from "@/components/partner/PartnerReports";
-import { PartnerMarketing } from "@/components/partner/PartnerMarketing";
-import { PartnerForecast } from "@/components/partner/PartnerForecast";
-import { PartnerDynamicPricing } from "@/components/partner/PartnerDynamicPricing";
-import { PartnerCashless } from "@/components/partner/PartnerCashless";
-import { PartnerAppMarketplace } from "@/components/partner/PartnerAppMarketplace";
-import { PartnerWhiteLabel } from "@/components/partner/PartnerWhiteLabel";
-import { PartnerDoorVision } from "@/components/partner/PartnerDoorVision";
-import { PartnerAutoPilot } from "@/components/partner/PartnerAutoPilot";
 import { SectionBoundary } from "@/components/partner/SectionBoundary";
-import { IndustryBenchmarks } from "@/components/admin/IndustryBenchmarks";
-import { Megaphone, Gem, Briefcase, Wand2, Brain, Gauge, Wifi, Plug, Crown, ScanFace, Bot, BarChart3, Workflow, ChevronRight } from "lucide-react";
+import { describeWriteError, expectRows, toWriteError } from "@/components/partner/writeErrors";
+import { Megaphone, Gem, Briefcase, Wand2, Gauge, Wifi, Plug, Crown, ScanFace, Bot, BarChart3, Workflow, ChevronRight, LineChart } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { PartnerSettingsBlock } from "@/components/shared/PartnerSettingsBlock";
@@ -114,6 +95,63 @@ import {
   type City,
   type PartnerEventRow,
 } from "@/hooks/queries/partnerData";
+
+/**
+ * Carga diferida (WP1.7). El panel importaba de golpe unos 60 módulos y su
+ * chunk pesaba 505 KB. Las maquetas, las secciones pesadas (Informes,
+ * Previsión, En vivo, Escáner, Asistentes, Soporte), el editor de eventos y
+ * el asistente de alta van en chunks propios que se descargan al abrirlos.
+ * Mientras, <Diferida> enseña un "Cargando…" dentro de la sección (la
+ * cabecera de la sección ya está pintada), y si la descarga falla lo recoge
+ * el SectionBoundary de la sección, que ofrece recargar.
+ */
+const diferido = <P extends object>(cargar: () => Promise<ComponentType<P>>) =>
+  lazy(() => cargar().then((componente) => ({ default: componente })));
+
+const QRScanner = diferido(() => import("@/components/partner/QRScanner").then((m) => m.default));
+const SupportChat = diferido(() => import("@/components/support/SupportChat").then((m) => m.default));
+const LiveWarRoom = diferido(() => import("@/components/partner/LiveWarRoom").then((m) => m.LiveWarRoom));
+const PartnerOnboardingWizard = diferido(() =>
+  import("@/components/partner/PartnerOnboardingWizard").then((m) => m.PartnerOnboardingWizard)
+);
+const PartnerAttendees = diferido(() =>
+  import("@/components/partner/PartnerAttendees").then((m) => m.PartnerAttendees)
+);
+const EventEditorWizard = diferido(() =>
+  import("@/components/partner/EventEditorWizard").then((m) => m.EventEditorWizard)
+);
+const PartnerReports = diferido(() => import("@/components/partner/PartnerReports").then((m) => m.PartnerReports));
+const PartnerForecast = diferido(() => import("@/components/partner/PartnerForecast").then((m) => m.PartnerForecast));
+// Maquetas (SECCIONES_SOLO_WEB): solo la organización de demo las abre.
+const TpvCierreZ = diferido(() => import("@/components/partner/TpvCierreZ").then((m) => m.TpvCierreZ));
+const PartnerCRM = diferido(() => import("@/components/partner/PartnerCRM").then((m) => m.PartnerCRM));
+const PartnerSalesChannels = diferido(() =>
+  import("@/components/partner/PartnerSalesChannels").then((m) => m.PartnerSalesChannels)
+);
+const PartnerVipHospitality = diferido(() =>
+  import("@/components/partner/PartnerVipHospitality").then((m) => m.PartnerVipHospitality)
+);
+const PartnerTeam = diferido(() => import("@/components/partner/PartnerTeam").then((m) => m.PartnerTeam));
+const PartnerMarketing = diferido(() =>
+  import("@/components/partner/PartnerMarketing").then((m) => m.PartnerMarketing)
+);
+const PartnerDynamicPricing = diferido(() =>
+  import("@/components/partner/PartnerDynamicPricing").then((m) => m.PartnerDynamicPricing)
+);
+const PartnerCashless = diferido(() => import("@/components/partner/PartnerCashless").then((m) => m.PartnerCashless));
+const PartnerAppMarketplace = diferido(() =>
+  import("@/components/partner/PartnerAppMarketplace").then((m) => m.PartnerAppMarketplace)
+);
+const PartnerWhiteLabel = diferido(() =>
+  import("@/components/partner/PartnerWhiteLabel").then((m) => m.PartnerWhiteLabel)
+);
+const PartnerDoorVision = diferido(() =>
+  import("@/components/partner/PartnerDoorVision").then((m) => m.PartnerDoorVision)
+);
+const PartnerAutoPilot = diferido(() => import("@/components/partner/PartnerAutoPilot").then((m) => m.PartnerAutoPilot));
+const IndustryBenchmarks = diferido(() =>
+  import("@/components/admin/IndustryBenchmarks").then((m) => m.IndustryBenchmarks)
+);
 
 type Section =
   | "metricas"
@@ -381,12 +419,12 @@ const PartnerDashboard = () => {
     setChangingStatus(true);
     try {
       if (to === "published") {
-        const { count, error: tierErr } = await supabase
+        const { count, error: tierErr, status: tierStatus } = await supabase
           .from("ticket_tiers")
           .select("id", { count: "exact", head: true })
           .eq("event_id", target.id)
           .eq("status", "active");
-        if (tierErr) throw tierErr;
+        if (tierErr) throw toWriteError(tierErr, tierStatus);
         if (!count) {
           toast({
             title: "Falta un tipo de entrada",
@@ -397,26 +435,29 @@ const PartnerDashboard = () => {
           return;
         }
       }
-      const { error } = await supabase.from("events").update({ status: to }).eq("id", target.id);
-      if (error) throw error;
+      // Tiene que cambiar exactamente una fila: con 0, la RLS lo ha filtrado
+      // y no se puede decir "publicado".
+      expectRows(await supabase.from("events").update({ status: to }).eq("id", target.id).select("id"));
       toast(
         to === "published"
           ? { title: "Evento publicado", description: `"${target.title}" ya está a la venta.` }
           : {
               title: "Retirado de la venta",
-              description: "Ya no aparece en el calendario. Las entradas vendidas siguen siendo válidas.",
+              description:
+                "Ya no aparece en el calendario. Las entradas vendidas siguen siendo válidas y el evento sigue en la puerta.",
             },
       );
       await reloadEvents();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "";
+      console.error("[PartnerDashboard] changeEventStatus:", err);
       toast({
-        title: "No se pudo cambiar el estado",
-        description: msg.includes("cancelado")
-          ? "Un evento cancelado no se puede volver a publicar."
-          : msg.includes("42501") || msg.includes("permission") || msg.includes("row-level")
-          ? "Tu cuenta no puede publicar eventos ahora mismo. Escríbenos desde Soporte."
-          : "Revisa tu conexión y vuelve a intentarlo.",
+        title: to === "published" ? "No se ha publicado" : "No se ha retirado de la venta",
+        description: describeWriteError(err, {
+          network:
+            "No hay conexión con el servidor y no se ha podido confirmar el cambio. Revisa tu conexión y vuelve a intentarlo.",
+          noRows:
+            "El servidor no ha cambiado el evento: puede que ya no exista o que tu cuenta ya no tenga permiso sobre él. Recarga la lista.",
+        }),
         variant: "destructive",
       });
     } finally {
@@ -428,26 +469,29 @@ const PartnerDashboard = () => {
   const handleDeleteEvent = async () => {
     if (!deleteTarget || !userId) return;
     setDeleting(true);
-    const { error } = await supabase.from("events").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    if (error) {
+    try {
+      // Tiene que borrarse exactamente una fila (la RLS filtra en silencio).
+      expectRows(await supabase.from("events").delete().eq("id", deleteTarget.id).select("id"));
+    } catch (err) {
       // El trigger BD enforce_event_no_delete_on_sales bloquea el delete si
-      // hay tickets vendidos. Mostramos un mensaje útil según el motivo
-      // real del fallo para que el partner entienda la causa.
-      const msg = error.message ?? "";
-      const friendly = msg.includes("Cannot delete event")
-        ? "Este evento ya tiene entradas vendidas y no se puede eliminar. Puedes retirarlo de la venta desde su menú."
-        : msg.includes("foreign key") || msg.includes("violates")
-        ? "El evento tiene tickets vendidos o relacionados. Cancélalo en lugar de borrarlo."
-        : msg;
+      // hay tickets vendidos: describeWriteError lo traduce, y distingue
+      // también "sin conexión" y "no se ha borrado nada".
+      console.error("[PartnerDashboard] deleteEvent:", err);
       toast({
         title: "No se pudo eliminar",
-        description: friendly,
+        description: describeWriteError(err, {
+          network:
+            "No hay conexión con el servidor y no se ha podido confirmar el borrado. Revisa tu conexión y comprueba la lista.",
+          noRows:
+            "El servidor no ha borrado el evento: puede que ya no exista o que tu cuenta no tenga permiso para borrarlo. Recarga la lista.",
+        }),
         variant: "destructive",
       });
+      setDeleting(false);
       setDeleteTarget(null);
       return;
     }
+    setDeleting(false);
     toast({
       title: "Evento eliminado",
       description: `"${deleteTarget.title}" ya no aparece en tu lista.`,
@@ -469,11 +513,13 @@ const PartnerDashboard = () => {
     { kind: "item", id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
     { kind: "item", id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
     { kind: "item", id: "eventos", label: "Mis eventos", icon: <Calendar className="h-5 w-5" /> },
+    // La previsión es la media de tus eventos comparables, no IA: va fuera
+    // del grupo "Pasify IA", que solo tiene maquetas (y un local real no ve).
+    { kind: "item", id: "forecast", label: "Previsión", icon: <LineChart className="h-5 w-5" /> },
     {
       kind: "group", id: "ai", label: "Pasify IA", icon: <Bot className="h-5 w-5" />,
       children: [
         { id: "autopilot", label: "AutoPilot", icon: <Bot className="h-4 w-4" /> },
-        { id: "forecast", label: "Forecast", icon: <Brain className="h-4 w-4" /> },
         { id: "pricing", label: "Pricing", icon: <Gauge className="h-4 w-4" /> },
         { id: "door_vision", label: "Door Vision", icon: <ScanFace className="h-4 w-4" /> },
       ],
@@ -555,19 +601,31 @@ const PartnerDashboard = () => {
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Onboarding wizard: usa estado server-side de partner_onboarding_state
-          via usePartnerContext. NUNCA depende de localStorage. */}
-      <PartnerOnboardingWizard
-        userId={userId || null}
-        status={partnerCtx.status}
-        org={partnerCtx.org}
-        venue={partnerCtx.venue}
-        venues={partnerCtx.venues}
-        brand={partnerCtx.brand}
-        email={userEmail}
-        forceOpen={reopenOnboarding}
-        onClose={() => setReopenOnboarding(false)}
-        onContextRefresh={refreshAllPartnerData}
-      />
+          via usePartnerContext. NUNCA depende de localStorage. Ya no se abre
+          solo: se monta (y se descarga su chunk) al pedirlo desde la lista de
+          primeros pasos, Configuración o Ayuda, y se desmonta al cerrarlo. */}
+      {reopenOnboarding && (
+        <SectionBoundary
+          sectionId="onboarding"
+          onGoHome={() => setReopenOnboarding(false)}
+          goHomeLabel="Cerrar"
+        >
+          <Suspense fallback={<AsistenteCargando />}>
+            <PartnerOnboardingWizard
+              userId={userId || null}
+              status={partnerCtx.status}
+              org={partnerCtx.org}
+              venue={partnerCtx.venue}
+              venues={partnerCtx.venues}
+              brand={partnerCtx.brand}
+              email={userEmail}
+              forceOpen={reopenOnboarding}
+              onClose={() => setReopenOnboarding(false)}
+              onContextRefresh={refreshAllPartnerData}
+            />
+          </Suspense>
+        </SectionBoundary>
+      )}
       <div className="flex min-h-screen flex-col md:flex-row">
         {/* Sidebar desktop */}
         <aside className="hidden w-60 border-r border-border bg-card md:flex md:flex-col">
@@ -737,7 +795,9 @@ const PartnerDashboard = () => {
                 </div>
               )}
 
-              <PartnerReports />
+              <Diferida>
+                <PartnerReports />
+              </Diferida>
             </div>
           )}
 
@@ -748,7 +808,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de un asistente que propondrá acciones de precio, marketing y soporte para que tú las apruebes.
               </p>
-              <PartnerAutoPilot />
+              <Diferida>
+                <PartnerAutoPilot />
+              </Diferida>
             </div>
           )}
 
@@ -765,24 +827,27 @@ const PartnerDashboard = () => {
             </div>
           )}
 
-          {/* FORECAST IA */}
+          {/* PREVISIÓN — media de tus eventos comparables (no es IA) */}
           {seccionActiva === "forecast" && (
             <div>
-              <h1 className="mb-1 text-3xl font-bold tracking-tight">Forecast IA</h1>
+              <h1 className="mb-1 text-3xl font-bold tracking-tight">Previsión</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Previsión de venta de tus próximos eventos a partir de tu histórico.
+                Cuántas entradas puedes vender en tus próximos eventos, según lo que vendiste en eventos
+                parecidos de tu local.
               </p>
               {eventsGate(
-                <PartnerForecast
-                  events={events.map((e) => ({
-                    id: e.id,
-                    title: e.title,
-                    date_start: e.date_start,
-                    capacity: e.capacity ?? null,
-                    tickets_sold: e.tickets_sold ?? 0,
-                    status: e.status,
-                  }))}
-                />
+                <Diferida>
+                  <PartnerForecast
+                    events={events.map((e) => ({
+                      id: e.id,
+                      title: e.title,
+                      date_start: e.date_start,
+                      capacity: e.capacity ?? null,
+                      tickets_sold: e.tickets_sold ?? 0,
+                      status: e.status,
+                    }))}
+                  />
+                </Diferida>
               )}
             </div>
           )}
@@ -794,7 +859,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Propuestas de subida o bajada de precio según la velocidad de venta de cada tipo de entrada. Tú decides si se aplican.
               </p>
-              <PartnerDynamicPricing />
+              <Diferida>
+                <PartnerDynamicPricing />
+              </Diferida>
             </div>
           )}
 
@@ -829,23 +896,27 @@ const PartnerDashboard = () => {
 
               {/* Editor unificado: create / edit / duplicate. La key remonta
                   el wizard cuando el target cambia (importante porque el
-                  efecto de carga inicial corre on mount/open). */}
-              <EventEditorWizard
-                key={`${editor?.mode ?? "none"}-${editor?.eventId ?? "new"}`}
-                mode={editor?.mode ?? "create"}
-                open={editor !== null}
-                onOpenChange={(o) => {
-                  if (!o) setEditor(null);
-                }}
-                partnerId={userId}
-                eventId={editor?.eventId}
-                cities={cities}
-                defaultCity={partnerCtx.venue?.city || profile?.city || profile?.business_city || ""}
-                defaultVenueName={partnerCtx.venue?.name || profile?.business_name || ""}
-                venues={partnerCtx.venues}
-                defaultVenueId={partnerCtx.venue?.id ?? null}
-                onSaved={reloadEvents}
-              />
+                  efecto de carga inicial corre on mount/open). Va en su
+                  propio chunk: mientras llega no se pinta nada (es un
+                  diálogo). */}
+              <Suspense fallback={null}>
+                <EventEditorWizard
+                  key={`${editor?.mode ?? "none"}-${editor?.eventId ?? "new"}`}
+                  mode={editor?.mode ?? "create"}
+                  open={editor !== null}
+                  onOpenChange={(o) => {
+                    if (!o) setEditor(null);
+                  }}
+                  partnerId={userId}
+                  eventId={editor?.eventId}
+                  cities={cities}
+                  defaultCity={partnerCtx.venue?.city || profile?.city || profile?.business_city || ""}
+                  defaultVenueName={partnerCtx.venue?.name || profile?.business_name || ""}
+                  venues={partnerCtx.venues}
+                  defaultVenueId={partnerCtx.venue?.id ?? null}
+                  onSaved={reloadEvents}
+                />
+              </Suspense>
 
               {loading ? (
                 <PasifyEmptyState
@@ -1014,18 +1085,20 @@ const PartnerDashboard = () => {
           {seccionActiva === "asistentes" && (
             <div>
               {eventsGate(
-                <PartnerAttendees
-                  events={events.map((e) => ({
-                    id: e.id,
-                    title: e.title,
-                    date_start: e.date_start,
-                    date_end: e.date_end,
-                    city: e.city,
-                    capacity: e.capacity,
-                    tickets_sold: e.tickets_sold,
-                    status: e.status,
-                  }))}
-                />
+                <Diferida>
+                  <PartnerAttendees
+                    events={events.map((e) => ({
+                      id: e.id,
+                      title: e.title,
+                      date_start: e.date_start,
+                      date_end: e.date_end,
+                      city: e.city,
+                      capacity: e.capacity,
+                      tickets_sold: e.tickets_sold,
+                      status: e.status,
+                    }))}
+                  />
+                </Diferida>
               )}
             </div>
           )}
@@ -1064,16 +1137,20 @@ const PartnerDashboard = () => {
                 </Button>
               </div>
               {userId ? (
-                <QRScanner
-                  events={events.map((e) => ({
-                    id: e.id,
-                    title: e.title,
-                    date_start: e.date_start,
-                    date_end: e.date_end,
-                    status: e.status,
-                  }))}
-                  eventsState={loading ? "loading" : loadError ? "error" : "ready"}
-                />
+                <Diferida>
+                  <QRScanner
+                    events={events.map((e) => ({
+                      id: e.id,
+                      title: e.title,
+                      date_start: e.date_start,
+                      date_end: e.date_end,
+                      status: e.status,
+                      // Con vendidas, un evento retirado de la venta sigue en la puerta.
+                      tickets_sold: e.tickets_sold,
+                    }))}
+                    eventsState={loading ? "loading" : loadError ? "error" : "ready"}
+                  />
+                </Diferida>
               ) : (
                 // Sin sesión resuelta todavía (o falló el arranque): nunca una pantalla vacía.
                 eventsGate(null)
@@ -1088,7 +1165,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de verificación en puerta.
               </p>
-              <PartnerDoorVision />
+              <Diferida>
+                <PartnerDoorVision />
+              </Diferida>
             </div>
           )}
 
@@ -1099,7 +1178,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa del cierre de caja y el resumen de ventas del día.
               </p>
-              <TpvCierreZ />
+              <Diferida>
+                <TpvCierreZ />
+              </Diferida>
             </div>
           )}
 
@@ -1111,15 +1192,17 @@ const PartnerDashboard = () => {
                 Vista previa del pago sin efectivo en barra, por evento.
               </p>
               {eventsGate(
-                <PartnerCashless
-                  events={events.map((e) => ({
-                    id: e.id,
-                    title: e.title,
-                    date_start: e.date_start,
-                    date_end: e.date_end,
-                    status: e.status,
-                  }))}
-                />
+                <Diferida>
+                  <PartnerCashless
+                    events={events.map((e) => ({
+                      id: e.id,
+                      title: e.title,
+                      date_start: e.date_start,
+                      date_end: e.date_end,
+                      status: e.status,
+                    }))}
+                  />
+                </Diferida>
               )}
             </div>
           )}
@@ -1131,7 +1214,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de la gestión de mesas y reservados.
               </p>
-              <PartnerVipHospitality />
+              <Diferida>
+                <PartnerVipHospitality />
+              </Diferida>
             </div>
           )}
 
@@ -1142,7 +1227,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de la base de clientes y sus segmentos.
               </p>
-              <PartnerCRM />
+              <Diferida>
+                <PartnerCRM />
+              </Diferida>
             </div>
           )}
 
@@ -1153,7 +1240,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de campañas y automatizaciones de marketing.
               </p>
-              <PartnerMarketing />
+              <Diferida>
+                <PartnerMarketing />
+              </Diferida>
             </div>
           )}
 
@@ -1164,7 +1253,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa del reparto de ventas por canal.
               </p>
-              <PartnerSalesChannels />
+              <Diferida>
+                <PartnerSalesChannels />
+              </Diferida>
             </div>
           )}
 
@@ -1175,7 +1266,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de plantilla y turnos.
               </p>
-              <PartnerTeam />
+              <Diferida>
+                <PartnerTeam />
+              </Diferida>
             </div>
           )}
 
@@ -1186,7 +1279,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Integraciones con herramientas externas (próximamente).
               </p>
-              <PartnerAppMarketplace />
+              <Diferida>
+                <PartnerAppMarketplace />
+              </Diferida>
             </div>
           )}
 
@@ -1197,14 +1292,18 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Vista previa de la personalización con tu marca.
               </p>
-              <PartnerWhiteLabel />
+              <Diferida>
+                <PartnerWhiteLabel />
+              </Diferida>
             </div>
           )}
 
           {/* INDUSTRY BENCHMARKS — maqueta */}
           {seccionActiva === "benchmarks" && (
             <div>
-              <IndustryBenchmarks />
+              <Diferida>
+                <IndustryBenchmarks />
+              </Diferida>
             </div>
           )}
 
@@ -1218,7 +1317,9 @@ const PartnerDashboard = () => {
               <p className="mb-6 text-sm text-muted-foreground">
                 Escríbenos y te respondemos en horario laboral.
               </p>
-              <SupportChat mode="client" kind="partner" orgId={orgId} />
+              <Diferida>
+                <SupportChat mode="client" kind="partner" orgId={orgId} />
+              </Diferida>
             </div>
           )}
           </SectionBoundary>
@@ -1365,6 +1466,38 @@ const PasifyBrand = ({ size = 28 }: { size?: number }) => <Wordmark height={size
 
 const monoStyle = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
+/**
+ * Parte de una sección que va en su propio chunk: mientras se descarga, un
+ * "Cargando…" con el estilo del panel (la cabecera de la sección ya está
+ * pintada). Si la descarga falla, el error sube al SectionBoundary.
+ */
+const Diferida = ({ children }: { children: React.ReactNode }) => (
+  <Suspense
+    fallback={
+      <PasifyEmptyState
+        icon={<LayoutDashboard className="h-7 w-7" />}
+        eyebrow="Cargando"
+        title="Abriendo la sección…"
+        spin
+        compact
+      />
+    }
+  >
+    {children}
+  </Suspense>
+);
+
+/** Mientras llega el asistente de alta (su chunk), un velo con el loader. */
+const AsistenteCargando = () => (
+  <div
+    role="status"
+    aria-label="Abriendo el asistente"
+    className="fixed inset-0 z-[80] grid place-items-center bg-background/80 backdrop-blur-sm"
+  >
+    <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+  </div>
+);
+
 /** Franja fija de las secciones maqueta: nadie debe confundirlas con datos reales. */
 const DemoBanner = () => (
   <div
@@ -1461,20 +1594,22 @@ const LiveSection = ({ events, partnerName }: { events: EventRow[]; partnerName:
           ))}
         </select>
       )}
-      <LiveWarRoom
-        event={
-          selected
-            ? {
-                id: selected.id,
-                title: selected.title,
-                date_start: selected.date_start,
-                date_end: selected.date_end,
-                capacity: selected.capacity ?? null,
-                partner_name: partnerName,
-              }
-            : null
-        }
-      />
+      <Diferida>
+        <LiveWarRoom
+          event={
+            selected
+              ? {
+                  id: selected.id,
+                  title: selected.title,
+                  date_start: selected.date_start,
+                  date_end: selected.date_end,
+                  capacity: selected.capacity ?? null,
+                  partner_name: partnerName,
+                }
+              : null
+          }
+        />
+      </Diferida>
     </div>
   );
 };

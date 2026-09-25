@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { PasifyPriceInput } from "@/components/ui/pasify-price-input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { isBelowStripeMinimum } from "@/components/partner/tierPrice";
 
 /**
  * TicketTiersBuilder — constructor multi-tier reutilizable.
@@ -12,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
  * "Festival multi-día". Genera filas de tipos de tickets con:
  *   - Nombre (requerido)
  *   - Descripción corta opcional
- *   - Precio EUR (>= 0)
+ *   - Precio EUR (0 o al menos 0,50: Stripe no cobra menos)
  *   - Capacidad opcional
  *   - Límite por usuario (default 10)
  *   - Activo on/off
@@ -265,6 +266,11 @@ export const TicketTiersBuilder = ({
                   min={0}
                   disabled={disabled || isLocked}
                 />
+                {!isLocked && isBelowStripeMinimum(tier.priceEur) && (
+                  <p className="mt-1 text-[11px] text-destructive" role="alert">
+                    El mínimo que se puede cobrar es 0,50 €.
+                  </p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor={`tier-desc-${tier._key}`} className="text-xs">

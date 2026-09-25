@@ -2,12 +2,11 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Brain,
   Calendar,
   CheckCircle2,
   History,
+  LineChart,
   Loader2,
-  Sparkles,
   Target,
   Ticket,
   TrendingUp,
@@ -30,12 +29,21 @@ import { getErrorMessage } from "@/lib/sentry";
  * factors, model_version, generated_at).
  *
  * Honestidad de los números:
- *   - La función solo predice de verdad con histórico (≥ 3 eventos pasados con
- *     ventas del mismo local y ciudad en 6 meses): `factors.method =
- *     "historical_mean_same_dow"`. Sin histórico devuelve un relleno
- *     (`default_fallback`: el 60 % del aforo, o 200 si no hay aforo). Ese
- *     relleno NO se enseña como previsión: se dice que aún no hay histórico y
- *     se enseña el ritmo real de venta.
+ *   - No es IA: es la media de lo vendido en eventos comparables del mismo
+ *     local, y así se llama ("Previsión").
+ *   - La función solo predice con histórico (≥ 3 eventos pasados con ventas
+ *     del mismo local y ciudad en 6 meses): `factors.method =
+ *     "historical_mean_same_dow"`. Sin histórico guarda `insufficient_history`
+ *     (las versiones antiguas guardaban un relleno, `default_fallback`, el
+ *     60 % del aforo o 200). Nada de eso se enseña como previsión: se dice
+ *     que aún no hay histórico y se enseña el ritmo real de venta.
+ *   - Confianza = 1 − coeficiente de variación de la muestra (función v0.2).
+ *     La de las previsiones antiguas (0,5 + n/30) no significaba nada: no se
+ *     enseña.
+ *   - El rango es el intervalo de predicción del 80 % (v0.2); las antiguas
+ *     guardaban ±1σ.
+ *   - Previsión y ocupación nunca pasan del aforo (también las antiguas, que
+ *     no se recortaban).
  *   - La función no calcula ingresos (`predicted_revenue_cents` va vacío), así
  *     que no se pinta ningún "0 € proyectados".
  *   - Sin aforo no hay "% de ocupación".
@@ -79,8 +87,19 @@ interface Props {
 /** Único método de ai-forecast-event que sale de datos reales del local. */
 const HISTORY_METHOD = "historical_mean_same_dow";
 
+/** Versión de la función con la confianza 0,5 + n/30 y el rango ±1σ. */
+const LEGACY_MODEL = "pasify-baseline-v0.1";
+
 const isHistoryBased = (p: PredictionRow | null | undefined): boolean =>
   !!p && (p.factors as { method?: unknown } | null)?.method === HISTORY_METHOD;
+
+/** Confianza con significado (coeficiente de variación), no la antigua. */
+const hasReliableConfidence = (p: PredictionRow): boolean =>
+  p.model_version !== LEGACY_MODEL && typeof p.confidence === "number";
+
+/** Una previsión nunca pasa del aforo (las antiguas no se recortaban). */
+const cappedAttendance = (p: PredictionRow, capacity: number | null): number =>
+  capacity !== null ? Math.min(p.predicted_attendance, capacity) : p.predicted_attendance;
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString("es-ES");
 
@@ -231,11 +250,17 @@ export const PartnerForecast = ({ events }: Props) => {
     );
   }
 
-  // Cabecera: solo previsiones con histórico
+  // Cabecera: solo previsiones con histórico, recortadas al aforo de su evento
+  const capacityOf = (eventId: string): number | null => {
+    const capacity = upcoming.find((e) => e.id === eventId)?.capacity;
+    return capacity && capacity > 0 ? capacity : null;
+  };
   const predicted = Object.values(predictions).filter((p): p is PredictionRow => isHistoryBased(p));
-  const totalPredicted = predicted.reduce((s, p) => s + p.predicted_attendance, 0);
-  const highConf = predicted.filter((p) => (p.confidence ?? 0) >= 0.7).length;
-  const highConfPct = predicted.length > 0 ? Math.round((highConf / predicted.length) * 100) : 0;
+  const totalPredicted = predicted.reduce((s, p) => s + cappedAttendance(p, capacityOf(p.event_id)), 0);
+  // La confianza de las previsiones antiguas no cuenta (no significaba nada).
+  const withConfidence = predicted.filter(hasReliableConfidence);
+  const highConf = withConfidence.filter((p) => (p.confidence ?? 0) >= 0.7).length;
+  const highConfPct = withConfidence.length > 0 ? Math.round((highConf / withConfidence.length) * 100) : null;
   const onlyFallbacks =
     predicted.length === 0 && Object.values(predictions).some((p) => p !== null);
 
@@ -267,15 +292,15 @@ export const PartnerForecast = ({ events }: Props) => {
                 "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 20px -8px rgba(232,84,42,0.6)",
             }}
           >
-            <Brain className="h-6 w-6" />
+            <LineChart className="h-6 w-6" />
           </div>
           <div className="min-w-0">
             <div
               className="mb-1 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
               style={{ ...mono, letterSpacing: "0.22em" }}
             >
-              <Sparkles className="h-3 w-3" />
-              Forecast · IA
+              <History className="h-3 w-3" />
+              Previsión · según tu histórico
             </div>
             <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
               {predicted.length > 0 ? (
@@ -305,7 +330,9 @@ export const PartnerForecast = ({ events }: Props) => {
             </h2>
             <div className="mt-1 text-[12px] text-muted-foreground" style={mono}>
               {predicted.length > 0
-                ? `${predicted.length} de ${upcoming.length} eventos con previsión · ${highConfPct} % con confianza alta`
+                ? `${predicted.length} de ${upcoming.length} eventos con previsión${
+                    highConfPct !== null ? ` · ${highConfPct} % con confianza alta` : ""
+                  }`
                 : "La previsión se basa en tus eventos pasados: hacen falta al menos 3 con ventas en la misma ciudad en los últimos 6 meses."}
             </div>
           </div>
@@ -317,7 +344,7 @@ export const PartnerForecast = ({ events }: Props) => {
             value={`${historyCount} ${historyCount === 1 ? "evento" : "eventos"}`}
           />
           <ModelStat label="Error medio" value={mape === null ? "—" : `${mape.toFixed(1)} %`} />
-          <ModelStat label="Modelo" value={predicted[0]?.model_version ?? "—"} />
+          <ModelStat label="Método" value={predicted.length > 0 ? "Media de eventos similares" : "—"} />
         </div>
       </section>
 
@@ -384,15 +411,30 @@ const ModelStat = ({ label, value }: { label: string; value: string }) => (
 /** Factores de la previsión en lenguaje claro; lo desconocido no se enseña. */
 const describeFactors = (factors: Record<string, unknown> | null): string[] => {
   if (!factors) return [];
-  const { sample_size: sampleSize, mean, stddev, day_of_week: dayOfWeek } = factors;
+  const {
+    sample_size: sampleSize,
+    mean,
+    stddev,
+    day_of_week: dayOfWeek,
+    coefficient_of_variation: cv,
+    capped_at_capacity: capped,
+  } = factors;
   const out: string[] = [];
   if (typeof sampleSize === "number") {
     out.push(`${sampleSize} ${sampleSize === 1 ? "evento comparable" : "eventos comparables"}`);
   }
   if (typeof mean === "number") out.push(`media ${fmtInt(mean)} entradas`);
-  if (typeof stddev === "number") out.push(`desviación ± ${fmtInt(stddev)}`);
-  if (typeof dayOfWeek === "string") out.push(`día del evento: ${dayOfWeek}`);
+  if (typeof cv === "number") out.push(`variación entre ellos ${Math.round(cv * 100)} %`);
+  else if (typeof stddev === "number") out.push(`desviación ± ${fmtInt(stddev)}`);
+  if (typeof dayOfWeek === "string") out.push(`mismo día de la semana (${dayOfWeek})`);
+  if (capped === true) out.push("recortada al aforo");
   return out;
+};
+
+/** Eventos comparables que encontró la función cuando no había bastantes. */
+const comparableCount = (p: PredictionRow | null): number | null => {
+  const n = (p?.factors as { comparable_events?: unknown } | null)?.comparable_events;
+  return typeof n === "number" ? n : null;
 };
 
 const ForecastCard = ({
@@ -450,7 +492,7 @@ const ForecastCard = ({
             ) : noHistory ? (
               <Zap className="h-3.5 w-3.5" />
             ) : (
-              <Brain className="h-3.5 w-3.5" />
+              <LineChart className="h-3.5 w-3.5" />
             )}
             {generating ? "Calculando…" : noHistory ? "Volver a calcular" : "Calcular previsión"}
           </button>
@@ -463,7 +505,10 @@ const ForecastCard = ({
               <span className="font-medium text-foreground">
                 Aún no hay histórico suficiente para predecir.
               </span>{" "}
-              Hacen falta al menos 3 eventos pasados con ventas en la misma ciudad.
+              Hacen falta al menos 3 eventos pasados con ventas en la misma ciudad
+              {comparableCount(prediction) !== null
+                ? ` (ahora hay ${comparableCount(prediction)}).`
+                : "."}
             </p>
           </div>
         )}
@@ -475,13 +520,26 @@ const ForecastCard = ({
     );
   }
 
-  const conf = prediction.confidence ?? 0;
+  // La confianza de las previsiones antiguas (0,5 + n/30) no se enseña.
+  const conf = hasReliableConfidence(prediction) ? prediction.confidence ?? 0 : null;
   const confCfg =
-    conf >= 0.7
+    conf === null
+      ? null
+      : conf >= 0.7
       ? { color: "#4DB87A", label: "Confianza alta", Icon: CheckCircle2 }
       : conf >= 0.4
       ? { color: "#E8B04C", label: "Confianza media", Icon: TrendingUp }
       : { color: "#B8381A", label: "Confianza baja", Icon: AlertTriangle };
+
+  const attendance = cappedAttendance(prediction, capacity);
+  const range =
+    prediction.ci_low !== null && prediction.ci_high !== null
+      ? {
+          low: capacity !== null ? Math.min(prediction.ci_low, capacity) : prediction.ci_low,
+          high: capacity !== null ? Math.min(prediction.ci_high, capacity) : prediction.ci_high,
+        }
+      : null;
+  const is80 = (prediction.factors as { interval?: unknown } | null)?.interval === "prediccion_80";
 
   const factors = describeFactors(prediction.factors);
 
@@ -508,19 +566,22 @@ const ForecastCard = ({
           <h3 className="text-xl font-semibold text-foreground">{event.title}</h3>
         </div>
         <div className="flex items-center gap-2">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase"
-            style={{
-              ...mono,
-              letterSpacing: "0.18em",
-              background: `${confCfg.color}1A`,
-              color: confCfg.color,
-              border: `1px solid ${confCfg.color}40`,
-            }}
-          >
-            <confCfg.Icon className="h-3 w-3" />
-            {confCfg.label}
-          </span>
+          {confCfg && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase"
+              style={{
+                ...mono,
+                letterSpacing: "0.18em",
+                background: `${confCfg.color}1A`,
+                color: confCfg.color,
+                border: `1px solid ${confCfg.color}40`,
+              }}
+              title="Según lo parecidas que fueron las ventas de los eventos comparables"
+            >
+              <confCfg.Icon className="h-3 w-3" />
+              {confCfg.label}
+            </span>
+          )}
           <button
             type="button"
             onClick={onGenerate}
@@ -537,18 +598,21 @@ const ForecastCard = ({
         <Stat
           icon={<Users className="h-4 w-4" />}
           label="Previsión"
-          value={`${fmtInt(prediction.predicted_attendance)} entradas`}
+          value={`${fmtInt(attendance)} entradas`}
           sub={
-            prediction.ci_low !== null && prediction.ci_high !== null
-              ? `Entre ${fmtInt(prediction.ci_low)} y ${fmtInt(prediction.ci_high)}`
-              : ""
+            // Las antiguas guardaban ±1σ: ese rango no se enseña como probable.
+            range && is80
+              ? `8 de cada 10 veces, entre ${fmtInt(range.low)} y ${fmtInt(range.high)}`
+              : range
+                ? "Recalcula para ver el rango probable"
+                : ""
           }
         />
         {capacity !== null ? (
           <Stat
             icon={<Target className="h-4 w-4" />}
             label="Ocupación prevista"
-            value={`${Math.round((prediction.predicted_attendance / capacity) * 100)} %`}
+            value={`${Math.min(100, Math.round((attendance / capacity) * 100))} %`}
             sub={`Aforo ${fmtInt(capacity)}`}
           />
         ) : (

@@ -16,6 +16,15 @@ import { Share } from "@capacitor/share";
  * Si el usuario cierra la hoja de compartir sin elegir nada no es un error:
  * la promesa se resuelve igual. Cualquier otro fallo se propaga para que
  * quien llama muestre un aviso.
+ *
+ * Datos personales: un CSV de Asistentes lleva nombres y teléfonos. En la app
+ * los ficheros van a una carpeta propia de la caché ("exports") y cada nueva
+ * exportación borra los de más de una hora (también los que las versiones
+ * anteriores dejaban sueltos en la raíz de la caché). No se borran al
+ * terminar de compartir: en Android la app que lo recibe puede leer el
+ * fichero después de que se resuelva la promesa. Además se limpian una vez
+ * por sesión al cargar este módulo, para que un fichero exportado no se
+ * quede en el móvil hasta la siguiente exportación.
  */
 export interface SaveOrShareFileOptions {
   /** Nombre del fichero con extensión, p. ej. "pasify-asistentes-2026-09-23.csv". */
@@ -44,9 +53,11 @@ export async function saveOrShareFile({
     return;
   }
 
+  await cleanupOldExports();
   const base64 = await blobToBase64(blob);
-  await Filesystem.writeFile({ path: name, data: base64, directory: Directory.Cache });
-  const { uri } = await Filesystem.getUri({ path: name, directory: Directory.Cache });
+  const path = `${EXPORT_DIR}/${name}`;
+  await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache, recursive: true });
+  const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
   try {
     await Share.share({ title: name, url: uri, dialogTitle: dialogTitle ?? name });
   } catch (err) {
@@ -54,6 +65,45 @@ export async function saveOrShareFile({
     throw err;
   }
 }
+
+/** Carpeta de la caché de la app donde se escriben las exportaciones. */
+const EXPORT_DIR = "exports";
+/** Margen para que la app que recibe el fichero lo lea antes de borrarlo. */
+const EXPORT_MAX_AGE_MS = 60 * 60_000;
+/** Exportaciones de versiones anteriores, escritas en la raíz de la caché. */
+const LEGACY_EXPORT_RE = /^pasify-.+\.(csv|pdf|png)$/i;
+
+/**
+ * Borra las exportaciones de más de una hora. Nunca falla: si no se puede
+ * limpiar, la exportación sigue adelante igual.
+ */
+export async function cleanupOldExports(now: number = Date.now()): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const borrarAntiguos = async (path: string, filtro: (name: string) => boolean) => {
+    let files: Array<{ name: string; type: string; mtime: number; uri: string }>;
+    try {
+      ({ files } = await Filesystem.readdir({ path, directory: Directory.Cache }));
+    } catch {
+      return; // la carpeta aún no existe
+    }
+    for (const file of files) {
+      if (file.type !== "file" || !filtro(file.name)) continue;
+      const mtime = Number(file.mtime);
+      // Sin fecha fiable se trata como antiguo: mejor borrar de más que dejar datos.
+      if (Number.isFinite(mtime) && mtime > 0 && now - mtime < EXPORT_MAX_AGE_MS) continue;
+      try {
+        await Filesystem.deleteFile({ path: path ? `${path}/${file.name}` : file.name, directory: Directory.Cache });
+      } catch {
+        /* otro intento en la próxima exportación */
+      }
+    }
+  };
+  await borrarAntiguos(EXPORT_DIR, () => true);
+  await borrarAntiguos("", (name) => LEGACY_EXPORT_RE.test(name));
+}
+
+// Una vez por sesión, al cargar el módulo (primera pantalla que exporta).
+if (Capacitor.isNativePlatform()) void cleanupOldExports();
 
 // ============================================================================
 // CSV

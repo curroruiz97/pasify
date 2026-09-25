@@ -35,14 +35,18 @@ interface DoorEvent {
   date_start: string;
   date_end: string | null;
   status: string;
+  tickets_sold: number;
 }
 
 /**
- * La puerta solo necesita lo de estos días (de hace 3 días a dentro de 7) y
- * lo que se vende o se ha vendido. Sale de la lista de eventos del panel, que
- * está en la caché y guardada en el dispositivo: el dueño activa el modo
- * desde el panel, así que la puerta abre al instante aunque no haya
- * cobertura.
+ * La puerta solo necesita lo de estos días (de hace 3 días a dentro de 7).
+ * Qué eventos se pueden elegir lo decide el escáner (pickActiveEvent →
+ * isOperationalEvent): publicados, pasados y también los retirados de la
+ * venta con entradas vendidas, que se siguen celebrando; antes aquí solo
+ * pasaban publicados y pasados, y un evento retirado a las 20:00 dejaba la
+ * puerta en el siguiente. Sale de la lista de eventos del panel, que está en
+ * la caché y guardada en el dispositivo: el dueño activa el modo desde el
+ * panel, así que la puerta abre al instante aunque no haya cobertura.
  */
 function eventosDePuerta(eventos: PartnerEventRow[], ahora = Date.now()): DoorEvent[] {
   const desde = ahora - 3 * 24 * 3600_000;
@@ -50,9 +54,16 @@ function eventosDePuerta(eventos: PartnerEventRow[], ahora = Date.now()): DoorEv
   return eventos
     .filter((e) => {
       const t = new Date(e.date_start).getTime();
-      return (e.status === "published" || e.status === "past") && t >= desde && t <= hasta;
+      return e.status !== "cancelled" && t >= desde && t <= hasta;
     })
-    .map((e) => ({ id: e.id, title: e.title, date_start: e.date_start, date_end: e.date_end, status: e.status }))
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      date_start: e.date_start,
+      date_end: e.date_end,
+      status: e.status,
+      tickets_sold: e.tickets_sold,
+    }))
     .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
 }
 

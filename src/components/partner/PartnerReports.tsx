@@ -276,6 +276,8 @@ export const PartnerReports = () => {
   // CSV para Excel en español (";" y coma decimal), horas de Madrid y el
   // título del evento en vez de su UUID. En la app se abre la hoja de
   // compartir: el <a download> de antes no hacía nada en iOS/Android.
+  // Sin datos de compradores (decisión D15: nada de emails en la analítica):
+  // la lista de personas está en Asistentes.
   const exportCsv = async () => {
     if (tickets.length === 0) {
       toast({ title: "Nada que exportar", description: "Aún no tienes ventas en este rango." });
@@ -285,14 +287,13 @@ export const PartnerReports = () => {
     try {
       const statusLabel: Record<string, string> = { paid: "Pagada", used: "Usada" };
       const rows: CsvCell[][] = [
-        ["Evento", "Estado", "Importe (€)", "Pagada el", "Usada el", "Email del comprador", "ID de la entrada"],
+        ["Evento", "Estado", "Importe (€)", "Pagada el", "Usada el", "ID de la entrada"],
         ...tickets.map((t): CsvCell[] => [
           events.get(t.event_id)?.title ?? t.event_id,
           statusLabel[t.status] ?? t.status,
           formatEurosCsv(t.amount_paid_cents),
           formatCsvDateTime(t.paid_at),
           formatCsvDateTime(t.used_at),
-          t.buyer_email ?? "",
           t.id,
         ]),
       ];

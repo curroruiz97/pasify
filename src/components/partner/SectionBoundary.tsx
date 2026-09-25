@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, LayoutDashboard, RefreshCcw } from "lucide-react";
+import { AlertTriangle, LayoutDashboard, RefreshCcw, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sentry } from "@/lib/sentry";
 
@@ -13,6 +13,11 @@ import { Sentry } from "@/lib/sentry";
  * Sentry con la sección como tag y el usuario puede reintentar o volver a
  * Métricas.
  *
+ * Las secciones pesadas se cargan aparte (React.lazy). Si su fichero no se
+ * puede descargar (sin red, o se ha publicado una versión nueva y el
+ * fichero antiguo ya no existe), "Reintentar" no sirve: React recuerda el
+ * fallo de la descarga. Entonces se ofrece recargar la página.
+ *
  * Úsese con `key` = id de la sección, para que cambiar de sección monte un
  * boundary limpio.
  */
@@ -21,53 +26,80 @@ interface SectionBoundaryProps {
   sectionId: string;
   /** Vuelve a Métricas. Sin él (p. ej. si la que falla es Métricas) no se ofrece el botón. */
   onGoHome?: () => void;
+  /** Texto del botón de onGoHome (por defecto, "Ir a Métricas"). */
+  goHomeLabel?: string;
   children: ReactNode;
 }
 
-export const SectionBoundary = ({ sectionId, onGoHome, children }: SectionBoundaryProps) => (
+/** Fallo al descargar un chunk de React.lazy (import dinámico). */
+const CHUNK_ERROR_RE =
+  /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading chunk .* failed|dynamically imported module/i;
+
+const isChunkLoadError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : typeof error === "string"
+        ? error
+        : "";
+  return CHUNK_ERROR_RE.test(message) || (error instanceof Error && error.name === "ChunkLoadError");
+};
+
+export const SectionBoundary = ({ sectionId, onGoHome, goHomeLabel = "Ir a Métricas", children }: SectionBoundaryProps) => (
   <Sentry.ErrorBoundary
     beforeCapture={(scope) => {
       scope.setTag("partner_section", sectionId);
     }}
-    fallback={({ resetError }) => (
-      <div
-        role="alert"
-        className="mx-auto flex max-w-md flex-col items-center rounded-2xl border border-border bg-card px-6 py-12 text-center"
-      >
+    fallback={({ error, resetError }) => {
+      const chunk = isChunkLoadError(error);
+      return (
         <div
-          className="mb-4 grid h-12 w-12 place-items-center rounded-2xl text-white"
-          style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+          role="alert"
+          className="mx-auto flex max-w-md flex-col items-center rounded-2xl border border-border bg-card px-6 py-12 text-center"
         >
-          <AlertTriangle className="h-5 w-5" />
+          <div
+            className="mb-4 grid h-12 w-12 place-items-center rounded-2xl text-white"
+            style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+          >
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            Esta sección ha fallado
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {chunk
+              ? "No se ha podido descargar esta parte del panel: puede que no haya conexión o que haya una versión nueva. Recarga la página para seguir."
+              : "Algo no ha ido bien al mostrarla. El resto del panel sigue funcionando: puedes reintentarlo."}
+          </p>
+          <div className="mt-6 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {chunk ? (
+              <Button type="button" onClick={() => window.location.reload()}>
+                <RotateCw className="mr-2 h-4 w-4" />
+                Recargar
+              </Button>
+            ) : (
+              <Button type="button" onClick={() => resetError()}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Reintentar
+              </Button>
+            )}
+            {onGoHome && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  resetError();
+                  onGoHome();
+                }}
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                {goHomeLabel}
+              </Button>
+            )}
+          </div>
         </div>
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">
-          Esta sección ha fallado
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Algo no ha ido bien al mostrarla. El resto del panel sigue funcionando: puedes
-          reintentarlo o volver a Métricas.
-        </p>
-        <div className="mt-6 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button type="button" onClick={() => resetError()}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Reintentar
-          </Button>
-          {onGoHome && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                resetError();
-                onGoHome();
-              }}
-            >
-              <LayoutDashboard className="mr-2 h-4 w-4" />
-              Ir a Métricas
-            </Button>
-          )}
-        </div>
-      </div>
-    )}
+      );
+    }}
   >
     {children}
   </Sentry.ErrorBoundary>
