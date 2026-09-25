@@ -1,113 +1,102 @@
 import { useState } from "react";
-import { useNavigate, Link, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import { Loader2, Eye, EyeOff, Mail, Lock, CircleAlert } from "lucide-react";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import AppleAuthButton from "@/components/auth/AppleAuthButton";
+import { esCuentaDesactivada, mensajeErrorAuth, SUPPORT_EMAIL } from "@/components/auth/authErrors";
+import { resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
+import { sanitizeNextPath, withNext } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
-// Limita le destinazioni post-login a path interni assoluti.
-const sanitizeNextPath = (raw: string | null): string | null => {
-  if (!raw) return null;
-  try {
-    const decoded = decodeURIComponent(raw);
-    if (!decoded.startsWith("/")) return null;
-    if (decoded.startsWith("//")) return null;
-    return decoded;
-  } catch {
-    return null;
-  }
+/** Avisos con los que se llega al login desde fuera (main.tsx). */
+const AVISOS: Record<string, string> = {
+  google: "No hemos podido entrar con Google. Vuelve a intentarlo o entra con tu email.",
 };
+
+class CuentaDesactivadaError extends Error {}
+
+/**
+ * Adónde ir tras entrar con email. Las cuentas antiguas sin rol lo reclaman
+ * aquí (local si el perfil tiene datos de negocio; si no, cliente). Una
+ * cuenta desactivada (p. ej. un local al que el admin ha retirado el acceso)
+ * no puede reclamar nada: se cierra la sesión y se dice por qué, en vez de
+ * tragarse el error y acabar en una pantalla negra.
+ */
+async function destinoTrasEntrar(userId: string): Promise<string> {
+  const { data: rolesData, error: rolesError } = await supabase.rpc("get_user_roles", { _user_id: userId });
+  // Sin poder leer los roles (red): que decida RootRoute, que sabe reintentar.
+  if (rolesError) return "/";
+  const roles = ((rolesData as string[] | null) ?? []).filter((r) => typeof r === "string");
+  if (roles.length > 0) return resolveInitialDashboard(roles);
+
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("business_category, business_name")
+    .eq("id", userId)
+    .maybeSingle();
+  const rol = perfil?.business_category || perfil?.business_name ? "partner" : "client";
+  const { error: claimError } = await supabase.rpc("claim_initial_role", { _role: rol });
+  if (claimError) {
+    if (esCuentaDesactivada(claimError)) throw new CuentaDesactivadaError();
+    console.error("claim_initial_role:", claimError);
+    return "/";
+  }
+  return rol === "partner" ? "/partner-dashboard" : "/client-dashboard";
+}
 
 const Login = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const nextPath = sanitizeNextPath(searchParams.get("next"));
+  const aviso = AVISOS[searchParams.get("aviso") ?? ""] ?? null;
   const { toast } = useToast();
-  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check if we're adding a new account (don't sign out existing session)
-  const isAddingAccount = location.state?.addingAccount === true;
-  const prefilledEmail = location.state?.email || "";
-
   const [formData, setFormData] = useState({
-    email: prefilledEmail,
+    email: "",
     password: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     try {
       // NON fare mai signOut - signInWithPassword gestisce automaticamente il cambio sessione
-      // signOut invalida TUTTI i refresh token, rompendo il multi-account
-
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
       });
-
       if (error) throw error;
+      if (!data.user) return;
 
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("business_category, business_name")
-          .eq("id", data.user.id)
-          .maybeSingle();
-
-        // Get user role to redirect appropriately
-        const { data: role, error: roleError } = await supabase
-          .rpc('get_user_role', { _user_id: data.user.id });
-
-        console.log("Role check via RPC:", { role }, "Error:", roleError);
-
-        let effectiveRole = role as string | null;
-
-        // Auto-promote a partner SOLO se il profilo ha già dati business
-        // (niente default "client" — quello era un bug che marchiava partner
-        // come student quando profile update era ancora in volo).
-        // Usuarios antiguos sin rol: se reclama con claim_initial_role (el
-        // INSERT directo en user_roles ya no está permitido por RLS).
-        if (!roleError && !role && (profile?.business_category || profile?.business_name)) {
-          const { error: claimError } = await supabase.rpc("claim_initial_role", { _role: "partner" });
-          if (!claimError) effectiveRole = "partner";
-        }
-
+      const destino = await destinoTrasEntrar(data.user.id);
+      toast({ title: "Has iniciado sesión", description: "Bienvenido a Pasify." });
+      // `next` manda (vuelta al evento tras "Comprar"); si no, el panel del rol.
+      navigate(nextPath ?? destino, { replace: true });
+    } catch (error) {
+      if (error instanceof CuentaDesactivadaError) {
+        await signOutLocal();
         toast({
-          title: t("auth.loginSuccess"),
-          description: t("auth.welcome"),
+          title: "Esta cuenta está desactivada",
+          description: `No puede entrar en Pasify. Si crees que es un error, escríbenos a ${SUPPORT_EMAIL}.`,
+          variant: "destructive",
         });
-
-        // Routing per ruolo. Se non esiste alcun ruolo (es. utente creato
-        // da dashboard) → default 'client' e poi alla dashboard cliente.
-        if (effectiveRole === "admin") {
-          navigate("/admin");
-        } else if (effectiveRole === "partner") {
-          navigate("/partner-dashboard");
-        } else if (effectiveRole === "client") {
-          navigate(nextPath ?? "/client-dashboard");
-        } else {
-          await supabase.rpc("claim_initial_role", { _role: "client" });
-          navigate(nextPath ?? "/client-dashboard");
-        }
+        return;
       }
-    } catch (error: any) {
       toast({
-        title: t("errors.loginFailed"),
-        description: error.message,
+        title: "No has podido entrar",
+        description: mensajeErrorAuth(error),
         variant: "destructive",
       });
     } finally {
@@ -125,16 +114,6 @@ const Login = () => {
       subline="Tickets, eventos y locales en un solo lugar. Accede con tu cuenta para seguir viviendo la noche con Pasify."
       imageUrl="/partner-hero.jpg"
     >
-      {isAddingAccount && (
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Volver
-        </button>
-      )}
-
       {/* Guideline 5.1.1(v) — Apple exige que las funciones que NO requieren
           cuenta (explorar eventos, ver info de locales) sean accesibles sin
           registrarse/iniciar sesión. En nativo, `/` redirige siempre a
@@ -156,17 +135,23 @@ const Login = () => {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">
-          {isAddingAccount ? t("accountSwitcher.addAccount") : t("auth.loginTitle")}
-        </h2>
-        <p className="mb-8 text-sm text-slate-500">
-          Introduce tus credenciales o inicia sesión con tu cuenta de Google.
-        </p>
+        <h2 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Inicia sesión</h2>
+        <p className="mb-8 text-sm text-slate-500">Accede a tus entradas y a tu panel.</p>
 
-        {/* Google OAuth */}
-        <GoogleAuthButton label="Continuar con Google" />
+        {aviso && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800"
+          >
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{aviso}</span>
+          </div>
+        )}
+
+        {/* Google (web y Android) y Apple (solo iOS): cada botón decide si se pinta. */}
+        <GoogleAuthButton label="Continuar con Google" next={nextPath} />
         <div className="h-3" />
-        <AppleAuthButton label="Continuar con Apple" />
+        <AppleAuthButton label="Continuar con Apple" next={nextPath} />
 
         {/* Divider */}
         <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-slate-400">
@@ -178,7 +163,7 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-xs font-medium text-slate-700">
-              {t("auth.email")}
+              Email
             </Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -186,6 +171,7 @@ const Login = () => {
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 placeholder="tu@email.com"
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10 focus-visible:ring-orange-500"
                 value={formData.email}
@@ -196,7 +182,7 @@ const Login = () => {
 
           <div className="space-y-1.5">
             <Label htmlFor="password" className="text-xs font-medium text-slate-700">
-              {t("auth.password")}
+              Contraseña
             </Label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -204,6 +190,7 @@ const Login = () => {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10 pr-10 focus-visible:ring-orange-500"
                 value={formData.password}
@@ -212,6 +199,7 @@ const Login = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -224,7 +212,7 @@ const Login = () => {
               to="/reset-password"
               className="text-xs font-medium text-orange-600 transition hover:text-orange-700"
             >
-              {t("auth.forgotPassword")}
+              ¿Olvidaste tu contraseña?
             </Link>
           </div>
 
@@ -241,10 +229,10 @@ const Login = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("auth.loggingIn")}
+                  Entrando…
                 </>
               ) : (
-                t("auth.login")
+                "Iniciar sesión"
               )}
             </Button>
           </motion.div>
@@ -252,7 +240,11 @@ const Login = () => {
           <div className="space-y-1.5 pt-3 text-center text-xs text-slate-500">
             <div>
               ¿No tienes cuenta?{" "}
-              <Link to="/register-client" className="font-semibold text-orange-600 hover:text-orange-700">
+              {/* Con `next`: tras crear la cuenta se vuelve al evento. */}
+              <Link
+                to={withNext("/register-client", nextPath)}
+                className="font-semibold text-orange-600 hover:text-orange-700"
+              >
                 Regístrate como cliente
               </Link>
             </div>

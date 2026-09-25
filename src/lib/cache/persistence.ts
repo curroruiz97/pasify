@@ -165,6 +165,26 @@ export async function borrarCacheGuardada(userId: string | null): Promise<void> 
 }
 
 /**
+ * Borra lo guardado de cualquier usuario que no sea `userId` (null: de todos).
+ * Lo público (`:anon`) se queda. Nunca lanza.
+ */
+export async function borrarCachesDeOtrosUsuarios(userId: string | null): Promise<void> {
+  const s = almacen();
+  if (!s) return;
+  const conservar = new Set([claveDe(userId), claveDe(null)]);
+  try {
+    const todas = await keys(s);
+    await Promise.all(
+      todas
+        .filter((k) => typeof k === "string" && k.startsWith(PREFIJO) && !conservar.has(k))
+        .map((k) => del(k, s)),
+    );
+  } catch {
+    /* nada que limpiar */
+  }
+}
+
+/**
  * Limpieza al arrancar: la caché global de antes (mezclaba usuarios y nunca
  * se borraba al cerrar sesión) y las entradas de esquemas anteriores.
  */

@@ -43,6 +43,9 @@ const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+/** delete-own-account responde 409 a una cuenta de administrador: ni se ofrece. */
+const ADMIN_DELETE_MESSAGE = `Una cuenta de administrador no se puede eliminar desde la app. Si necesitas darla de baja, escríbenos a ${SUPPORT_EMAIL}.`;
+
 // Inyectado por vite.config.ts (`pasify@<sha12>`). Solo se enseña en web.
 declare const __PASIFY_RELEASE__: string;
 const WEB_BUILD =
@@ -347,6 +350,11 @@ export const SettingsSheet = ({
               body.message ||
                 `Tu local tiene eventos próximos con entradas vendidas, así que todavía no se puede eliminar la cuenta. Escríbenos a ${SUPPORT_EMAIL} y lo resolvemos contigo.`
             );
+            return;
+          }
+          // Cuenta de administrador de la plataforma: su baja se gestiona a mano.
+          if (response.status === 409 && body?.error === "admin_account") {
+            setDeleteBlocked(ADMIN_DELETE_MESSAGE);
             return;
           }
           serverMessage = body?.message ?? null;
@@ -656,20 +664,28 @@ export const SettingsSheet = ({
                 onPress={() => goTo("/privacidad")}
               />
               <Divider />
-              <DangerRow
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Eliminar mi cuenta"
-                description={
-                  role === "partner"
-                    ? "Permanente: se borra tu cuenta y dejas de tener acceso al panel del local."
-                    : "Permanente: se borran tu cuenta y tus datos personales."
-                }
-                onPress={() => {
-                  setDeleteBlocked(null);
-                  setShowDeleteConfirm(true);
-                }}
-              />
-              {showDeleteConfirm && (
+              {role === "admin" ? (
+                <Row
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Eliminar mi cuenta"
+                  description={ADMIN_DELETE_MESSAGE}
+                />
+              ) : (
+                <DangerRow
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Eliminar mi cuenta"
+                  description={
+                    role === "partner"
+                      ? "Permanente: se borra tu cuenta y dejas de tener acceso al panel del local."
+                      : "Permanente: se borran tu cuenta y tus datos personales."
+                  }
+                  onPress={() => {
+                    setDeleteBlocked(null);
+                    setShowDeleteConfirm(true);
+                  }}
+                />
+              )}
+              {showDeleteConfirm && role !== "admin" && (
                 <div
                   className="mt-2 rounded-xl border p-3"
                   style={{

@@ -1,10 +1,13 @@
+/// <reference types="vite-plugin-pwa/vanillajs" />
 // File: main.tsx
 
 import { createRoot } from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
 import App from "./App.tsx";
 import "./index.css";
 import "./i18n/config";
-import { initSentry } from "./lib/sentry";
+import { initSentry, Sentry } from "./lib/sentry";
+import { tomarOAuthEnCurso } from "./lib/redirect-url";
 
 // No-op se VITE_SENTRY_DSN non è settato.
 initSentry();
@@ -17,7 +20,6 @@ initSentry();
 // MobileTopBar). Errores se tragan: si el plugin no está disponible (web
 // dev en navegador) no debe romper el boot.
 (async () => {
-  const { Capacitor } = await import('@capacitor/core');
   if (!Capacitor.isNativePlatform()) return;
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
@@ -29,9 +31,40 @@ initSentry();
   }
 })();
 
+// --- ENLACES DE AUTH QUE VUELVEN CON ERROR ---
+// GoTrue devuelve los enlaces que ya no valen (caducados o usados) con
+// `error_code`/`error_description` en la URL (`…/#/update-password#error=…`):
+// HashRouter lo tomaba por una ruta y acababa en un 404 en inglés. Un error
+// al volver de Google (entrada en curso, redirect-url.ts) va al login; el
+// resto son enlaces de email, a pedir uno nuevo. Se hace antes de que auth-js
+// lea la URL (arranca en diferido) y sin recargar si solo cambia el hash.
+const redirigirErroresDeAuth = (): boolean => {
+  const url = `${window.location.search}${window.location.hash}`;
+  if (!/[?#&](error_code|error_description)=/.test(url)) return false;
+  const destino = tomarOAuthEnCurso() ? '/login?aviso=google' : '/reset-password?enlace=caducado';
+  window.location.replace(`${window.location.origin}${window.location.pathname}#${destino}`);
+  return true;
+};
+
+// --- ENLACE DE RECUPERACIÓN SIN RUTA ---
+// Plantilla nueva: `{{ .RedirectTo }}?token_hash=…&type=recovery`, con
+// RedirectTo = …/#/update-password. Si esa Redirect URL no está permitida en
+// Supabase, GoTrue pone la Site URL y el token llega a la raíz, en la query:
+// se lleva a /update-password en vez de perderlo en la landing.
+const llevarTokenHashAUpdatePassword = (): boolean => {
+  const params = new URLSearchParams(window.location.search);
+  const tokenHash = params.get('token_hash');
+  if (!tokenHash || params.get('type') !== 'recovery' || window.location.hash.includes('update-password')) return false;
+  window.location.replace(
+    `${window.location.origin}${window.location.pathname}#/update-password?token_hash=${encodeURIComponent(tokenHash)}&type=recovery`,
+  );
+  return true;
+};
+
 // --- INTERCETTA TOKEN DI RECOVERY PRIMA DI HASHROUTER ---
 // Supabase aggiunge i token come fragment (#access_token=...) ma HashRouter usa anche #
-// Quindi dobbiamo intercettarli prima che vengano persi
+// Quindi dobbiamo intercettarli prima che vengano persi. Enlaces antiguos: los
+// nuevos llevan `?token_hash=` y los resuelve UpdatePassword.
 const handleRecoveryTokens = () => {
   const hash = window.location.hash;
   const search = window.location.search;
@@ -70,7 +103,6 @@ const handleRecoveryTokens = () => {
 
   // If we found recovery tokens, save them and redirect to update-password
   if (accessToken && (type === 'recovery' || type === 'magiclink' || hash.includes('update-password') || hash.includes('password-recovery'))) {
-    console.log('🔑 Recovery tokens found, saving to sessionStorage');
     sessionStorage.setItem('recovery_access_token', accessToken);
     if (refreshToken) {
       sessionStorage.setItem('recovery_refresh_token', refreshToken);
@@ -84,40 +116,87 @@ const handleRecoveryTokens = () => {
 };
 
 // Run token handler - if tokens were found, the page will reload
-handleRecoveryTokens();
-
-import { Capacitor } from '@capacitor/core';
+if (!redirigirErroresDeAuth() && !llevarTokenHashAUpdatePassword()) handleRecoveryTokens();
 
 // Pulisci cache vecchie del Service Worker (post fantasma da DB precedente)
 const CACHE_VERSION = "v2";
 const cacheVersionKey = "app_cache_version";
-if (localStorage.getItem(cacheVersionKey) !== CACHE_VERSION) {
-  localStorage.setItem(cacheVersionKey, CACHE_VERSION);
-  if ('caches' in window) {
-    caches.keys().then(names => {
-      names.forEach(name => {
-        if (name.includes('supabase-api') || name.includes('supabase-storage')) {
-          caches.delete(name);
-          console.log(`🗑️ Cleared stale cache: ${name}`);
-        }
-      });
-    });
+try {
+  if (localStorage.getItem(cacheVersionKey) !== CACHE_VERSION) {
+    localStorage.setItem(cacheVersionKey, CACHE_VERSION);
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        names.forEach(name => {
+          if (name.includes('supabase-api') || name.includes('supabase-storage')) {
+            void caches.delete(name);
+          }
+        });
+      }).catch(() => { /* sin Cache Storage */ });
+    }
   }
+} catch {
+  /* sin localStorage (modo privado antiguo) */
 }
 
+// --- SERVICE WORKER: solo en la web ---
 // En nativo (Capacitor) NO queremos el Service Worker registrado: el bundle
 // se sirve desde capacitor://localhost y un SW activo (registrado en una
 // build PWA anterior) puede cachear assets con scope incorrecto y dejar la
 // APK en un estado raro. Desregistramos cualquier SW que haya quedado vivo
-// de una versión web previa instalada en la misma WebView.
-if (Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(r => r.unregister().then(() => console.log('🧹 SW unregistered (native)')));
-  }).catch(() => { /* swallow */ });
+// de una versión web previa instalada en la misma WebView. El registro ya no
+// lo inyecta el plugin en index.html (`injectRegister: false`, vite.config.ts):
+// el registerSW.js inyectado lo volvía a registrar también en Android.
+if (Capacitor.isNativePlatform()) {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => void r.unregister());
+    }).catch(() => { /* swallow */ });
+  }
+} else {
+  // Web: con `autoUpdate`, cuando un deploy nuevo toma el control la página
+  // se recarga sola (registerSW de vite-plugin-pwa). Antes se quedaba con el
+  // JS viejo, que pedía trozos que ya no existen: pantalla en blanco.
+  import('virtual:pwa-register')
+    .then(({ registerSW }) => registerSW({ immediate: true }))
+    .catch((err) => console.warn('[pwa] registro del service worker omitido:', err));
 }
 
-// Renderizza il componente principale dell'app
-import { Sentry } from "./lib/sentry";
+// --- VERSIÓN VIEJA TRAS UN DEPLOY ---
+// Un trozo de la versión anterior que ya no existe (deploy nuevo con la
+// pestaña o la app abiertas) hace fallar la carga de esa pantalla. Se recarga
+// para coger la versión nueva, una sola vez: la marca en sessionStorage evita
+// un bucle si el fallo es otro (sin red, un trozo roto). Pasado un minuto, otro
+// deploy puede volver a recargar.
+const RECARGA_POR_VERSION_KEY = 'pasify.recarga-por-version';
+const RECARGA_POR_VERSION_MS = 60_000;
+window.addEventListener('vite:preloadError', (event) => {
+  let ultima = 0;
+  try {
+    ultima = Number(sessionStorage.getItem(RECARGA_POR_VERSION_KEY)) || 0;
+  } catch {
+    return; // sin sessionStorage no hay forma de evitar el bucle: que salga el error
+  }
+  if (Date.now() - ultima < RECARGA_POR_VERSION_MS) return;
+  try {
+    sessionStorage.setItem(RECARGA_POR_VERSION_KEY, String(Date.now()));
+  } catch {
+    return;
+  }
+  event.preventDefault();
+  window.location.reload();
+});
+
+// --- MULTI-CUENTA RETIRADA ---
+// Las versiones anteriores guardaban en Preferences, en claro, el refresh
+// token de cada cuenta usada en el dispositivo. Ya no se usa: fuera.
+void import('@capacitor/preferences')
+  .then(({ Preferences }) =>
+    Promise.all([
+      Preferences.remove({ key: 'pasify_saved_accounts' }),
+      Preferences.remove({ key: 'pasify_active_account' }),
+    ]),
+  )
+  .catch(() => { /* sin plugin o sin storage: nada que borrar */ });
 
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary
@@ -202,4 +281,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </Sentry.ErrorBoundary>
 );
-

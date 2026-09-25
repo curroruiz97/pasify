@@ -1,6 +1,7 @@
-import { QueryClient, focusManager } from "@tanstack/react-query";
+import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { TimeoutError } from "@/lib/withTimeout";
+import { getSessionSnapshot, subscribeSession } from "./session";
 
 /**
  * Caché de datos de la app (React Query): stale-while-revalidate.
@@ -67,3 +68,34 @@ if (Capacitor.isNativePlatform()) {
     };
   });
 }
+
+// "En línea" para React Query: con red Y con una sesión que valga. Con la
+// sesión "sin verificar" (session.ts: sin red y con el token caducado) no se
+// pide nada: auth-js no tiene token válido, supabase-js mandaría la clave
+// anónima y su respuesta (vacía por RLS) pisaría lo guardado, la cartera
+// incluida. Las consultas esperan en pausa, enseñando lo guardado, hasta que
+// auth-js renueve la sesión; entonces siguen con el token nuevo.
+onlineManager.setEventListener((setOnline) => {
+  if (typeof window === "undefined") return undefined;
+  // Con red: como el de React Query por defecto (en línea hasta el primer
+  // evento "offline").
+  let conRed = true;
+  const actualizar = () => setOnline(conRed && !getSessionSnapshot().sinVerificar);
+  const alRecuperarRed = () => {
+    conRed = true;
+    actualizar();
+  };
+  const alPerderRed = () => {
+    conRed = false;
+    actualizar();
+  };
+  window.addEventListener("online", alRecuperarRed);
+  window.addEventListener("offline", alPerderRed);
+  const baja = subscribeSession(actualizar);
+  actualizar();
+  return () => {
+    window.removeEventListener("online", alRecuperarRed);
+    window.removeEventListener("offline", alPerderRed);
+    baja();
+  };
+});

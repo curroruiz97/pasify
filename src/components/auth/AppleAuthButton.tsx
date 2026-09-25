@@ -1,13 +1,19 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeNextPath } from "@/lib/redirect-url";
 
 interface AppleAuthButtonProps {
   label?: string;
   className?: string;
+  /** Ruta de la app a la que volver al entrar (`?next=`). */
+  next?: string | null;
+  /** Qué hacer al entrar. Por defecto, ir a `next` o a "/" (RootRoute elige el panel). */
+  onSuccess?: () => void | Promise<void>;
 }
 
 /**
@@ -21,6 +27,10 @@ interface AppleAuthButtonProps {
  * Nonce: Apple espera el nonce YA HASHEADO en la petición y lo devuelve tal
  * cual dentro del id_token. Supabase espera el nonce EN CRUDO y lo hashea por
  * su cuenta para compararlos. De ahí que mandemos uno a cada sitio.
+ *
+ * Al entrar navega (a `next` o a "/") y el botón deja de girar pase lo que
+ * pase: antes se quedaba cargando para siempre tras entrar, sin llevar a
+ * ninguna parte (el mismo patrón por el que Apple rechazó la build 8).
  */
 async function makeNonce() {
   const bytes = new Uint8Array(32);
@@ -31,14 +41,17 @@ async function makeNonce() {
   return { raw, hashed };
 }
 
-export const AppleAuthButton = ({ label = "Continuar con Apple", className }: AppleAuthButtonProps) => {
+export const AppleAuthButton = ({ label = "Continuar con Apple", className, next, onSuccess }: AppleAuthButtonProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
   if (Capacitor.getPlatform() !== "ios") return null;
 
   const handleClick = async () => {
+    if (loading) return;
     setLoading(true);
+    let dentro = false;
     try {
       const { raw, hashed } = await makeNonce();
 
@@ -58,6 +71,7 @@ export const AppleAuthButton = ({ label = "Continuar con Apple", className }: Ap
         nonce: raw,
       });
       if (error) throw error;
+      dentro = true;
     } catch (err) {
       console.error("Apple auth error:", err);
 
@@ -72,8 +86,13 @@ export const AppleAuthButton = ({ label = "Continuar con Apple", className }: Ap
           : "No hemos podido conectar con Apple. Puedes entrar con tu email y contraseña mientras tanto.",
         variant: cancelado ? "default" : "destructive",
       });
+    } finally {
       setLoading(false);
     }
+
+    if (!dentro) return;
+    if (onSuccess) await onSuccess();
+    else navigate(sanitizeNextPath(next) ?? "/", { replace: true });
   };
 
   return (

@@ -5,11 +5,9 @@
          PERMISSIONS · justificados por los plugins Capacitor en uso
          INTERNET .................... Supabase/Stripe/Sentry (obligatorio)
          CAMERA ...................... @capacitor/camera + QR scanner (html5-qrcode)
-         RECORD_AUDIO ................ notas de voz del chat (VoiceRecorderButton →
-                                       getUserMedia({audio:true}) + MediaRecorder).
-                                       Sin este permiso la WebView deniega la
-                                       captura y el boton del microfono falla
-                                       siempre en Android.
+
+         NO añadir RECORD_AUDIO: era para las notas de voz del chat, que ya no
+         existe. Ninguna pantalla viva graba audio (el escáner pide solo vídeo).
 
          NO añadir READ_MEDIA_IMAGES ni READ_MEDIA_VIDEO.
          Estaban declarados a mano desde el commit de mayo 2026 y no los pide
@@ -27,7 +25,6 @@
          ============================================================ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- USE_CREDENTIALS lo arrastra @codetrix-studio/capacitor-google-auth en su
          propio manifest. Es un permiso obsoleto que Android ELIMINÓ en API 23, y
@@ -36,10 +33,9 @@
          quien la lee. Lo quitamos de la fusión. -->
     <uses-permission android:name="android.permission.USE_CREDENTIALS" tools:node="remove" />
 
-    <!-- Ni cámara ni micrófono son obligatorios: así la app sigue siendo
-         instalable en tablets y dispositivos sin ese hardware. -->
+    <!-- La cámara no es obligatoria: así la app sigue siendo instalable en
+         tablets y dispositivos sin ella. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:allowBackup="false"
@@ -63,9 +59,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link OAuth callback: Supabase / GoogleAuth devuelven a la app
-                 vía es.pasify.app://callback. El listener vive en src/App.tsx:309
-                 (CapacitorApp.addListener('appUrlOpen', ...)). -->
+            <!-- Enlaces es.pasify.app://e/<id>, ://p/<id> y ://entrada/<id>: abren
+                 el evento, el local o la entrada (appUrlOpen, IntegracionNativa en
+                 src/App.tsx). Ya no traen sesiones: Google entra con su SDK nativo
+                 y la app ignora cualquier token que venga en un enlace. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

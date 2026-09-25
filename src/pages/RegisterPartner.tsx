@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,12 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Eye, EyeOff, Mail, Lock, Building2, Phone, Tag } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { COUNTRIES, getCitiesForCountry, DEFAULT_COUNTRY } from "@/constants/countries";
 import AuthShell from "@/components/auth/AuthShell";
-import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
-import AppleAuthButton from "@/components/auth/AppleAuthButton";
+import { MENSAJE_PASSWORD_CORTA, MIN_PASSWORD_LENGTH, mensajeErrorAuth } from "@/components/auth/authErrors";
 import { redirectToApp } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
@@ -36,12 +34,22 @@ const PASIFY_CATEGORIES: Category[] = [
   { id: "otro", name: "otro", display_name: "Otro" },
 ];
 
+const leerPaisGuardado = () => {
+  try {
+    return localStorage.getItem("selectedCountry") || DEFAULT_COUNTRY;
+  } catch {
+    return DEFAULT_COUNTRY;
+  }
+};
+
+/**
+ * Alta de local, solo con email. Sin Google ni Apple (build 10): con ellos la
+ * cuenta nacía como cliente (el trigger de alta no sabe que viene de "Soy un
+ * local") y no había forma de pasarla a local. La conversión de cliente a
+ * local llega en la Ola 3.
+ */
 const RegisterPartner = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const redirectAfter = (location.state as any)?.redirectAfter as string | undefined;
   const { toast } = useToast();
-  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [categories] = useState<Category[]>(PASIFY_CATEGORIES);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +60,7 @@ const RegisterPartner = () => {
     confirmPassword: "",
     businessName: "",
     businessAddress: "",
-    businessCountry: localStorage.getItem("selectedCountry") || DEFAULT_COUNTRY,
+    businessCountry: leerPaisGuardado(),
     businessCity: "",
     businessPhone: "",
     businessCategory: "",
@@ -62,40 +70,36 @@ const RegisterPartner = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (formData.password !== formData.confirmPassword) {
-      toast({ title: t("common.error"), description: t("errors.passwordMismatch"), variant: "destructive" });
+      toast({ title: "Revisa la contraseña", description: "Las contraseñas no coinciden.", variant: "destructive" });
       return;
     }
-    if (formData.password.length < 6) {
-      toast({ title: t("common.error"), description: t("errors.passwordTooShort"), variant: "destructive" });
+    if (formData.password.length < MIN_PASSWORD_LENGTH) {
+      toast({ title: "Revisa la contraseña", description: MENSAJE_PASSWORD_CORTA, variant: "destructive" });
       return;
     }
 
     setLoading(true);
     try {
+      const email = formData.email.trim();
       // Ver RegisterClient: el rol se asigna en el servidor a partir de estos
       // metadatos (trigger zz_on_auth_user_created_role). Sin este dato el
       // trigger asignaria 'client' por defecto y el local no llegaria a su panel.
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
+        email,
         password: formData.password,
         options: { data: { initial_role: "partner" } },
       });
-      if (authError) {
-        if (authError.message.includes("already registered") || authError.status === 422) {
-          throw new Error("Este email ya está registrado. Ve al login o usa otro email.");
-        }
-        throw authError;
-      }
+      if (authError) throw authError;
 
       // Garantisce una session valida: se signUp non l'ha già aperta (email
       // confirmation off), facciamo un signInWithPassword esplicito. Senza
       // session le INSERT successive (user_roles) verrebbero rifiutate da RLS
       // e l'utente finirebbe come "client" (fallback ProtectedRoute).
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) {
+      if (!authData.session) {
         const { error: signInErr } = await supabase.auth.signInWithPassword({
-          email: formData.email,
+          email,
           password: formData.password,
         });
         if (signInErr) throw signInErr;
@@ -117,15 +121,16 @@ const RegisterPartner = () => {
           .eq("id", authData.user.id);
         if (profileError) throw profileError;
 
-        // 2) Reclamar rol partner vía RPC canónica (claim_initial_role).
-        //    Esta RPC (mig 20260513120000) es atómica y bloquea acumulación
-        //    de roles. Si falla por "role ya asignado" (23505) lo tratamos
-        //    como no-fatal (el usuario ya era partner).
-        const { error: roleError } = await supabase.rpc("claim_initial_role", {
-          _role: "partner",
+        // 2) Rol de local: lo asigna el trigger de alta a partir de
+        //    `initial_role`. claim_initial_role solo como red de seguridad, si
+        //    de verdad no hay rol: reclamarlo con el rol ya asignado responde
+        //    409 (23505) y llenaba los logs con uno por cada alta.
+        const { data: roles, error: rolesError } = await supabase.rpc("get_user_roles", {
+          _user_id: authData.user.id,
         });
-        if (roleError && !String(roleError.message).includes("already has a role")) {
-          throw roleError;
+        if (!rolesError && ((roles as string[] | null) ?? []).length === 0) {
+          const { error: roleError } = await supabase.rpc("claim_initial_role", { _role: "partner" });
+          if (roleError) throw roleError;
         }
 
         // 3) Crear organization + brand + venue default (RPC en mig 0011).
@@ -144,8 +149,8 @@ const RegisterPartner = () => {
         await supabase
           .from("organizations")
           .update({
-            billing_email: formData.email,
-            contact_email: formData.email,
+            billing_email: email,
+            contact_email: email,
             contact_phone: formData.businessPhone,
             city: formData.businessCity,
             address: formData.businessAddress,
@@ -168,7 +173,7 @@ const RegisterPartner = () => {
               city: formData.businessCity,
               address: formData.businessAddress,
               phone: formData.businessPhone,
-              email: formData.email,
+              email,
             })
             .eq("brand_id", brandRow.id);
         }
@@ -184,8 +189,8 @@ const RegisterPartner = () => {
         toast({ title: "¡Cuenta creada!", description: "Bienvenido a Pasify." });
         redirectToApp("/partner-dashboard");
       }
-    } catch (error: any) {
-      toast({ title: t("errors.signupFailed"), description: error.message, variant: "destructive" });
+    } catch (error) {
+      toast({ title: "No hemos podido crear la cuenta", description: mensajeErrorAuth(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -207,25 +212,13 @@ const RegisterPartner = () => {
         transition={{ duration: 0.5 }}
       >
         <h2 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Soy un local · Regístrate aquí</h2>
-        <p className="mb-6 text-sm text-slate-500">
-          Rellena los datos de tu negocio o regístrate con Google.
-        </p>
-
-        <GoogleAuthButton label="Registrarme con Google" />
-        <div className="h-3" />
-        <AppleAuthButton label="Registrarme con Apple" />
-
-        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-slate-400">
-          <div className="h-px flex-1 bg-slate-200" />
-          <span>o con email</span>
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
+        <p className="mb-6 text-sm text-slate-500">Rellena los datos de tu negocio para crear la cuenta de tu local.</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Email */}
           <FieldRow>
             <Label htmlFor="email" className="text-xs font-medium text-slate-700">
-              {t("auth.email")} *
+              Email *
             </Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -233,6 +226,7 @@ const RegisterPartner = () => {
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 placeholder="negocio@email.com"
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10"
                 value={formData.email}
@@ -303,7 +297,7 @@ const RegisterPartner = () => {
           {/* Paese + Città */}
           <div className="grid grid-cols-2 gap-3">
             <FieldRow>
-              <Label className="text-xs font-medium text-slate-700">{t("countries.selectCountry")} *</Label>
+              <Label className="text-xs font-medium text-slate-700">País *</Label>
               <Select
                 value={formData.businessCountry}
                 onValueChange={(value) => setFormData({ ...formData, businessCountry: value, businessCity: "" })}
@@ -319,13 +313,13 @@ const RegisterPartner = () => {
               </Select>
             </FieldRow>
             <FieldRow>
-              <Label className="text-xs font-medium text-slate-700">{t("profileEdit.city")} *</Label>
+              <Label className="text-xs font-medium text-slate-700">Ciudad *</Label>
               <Select
                 value={formData.businessCity}
                 onValueChange={(value) => setFormData({ ...formData, businessCity: value })}
               >
                 <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white">
-                  <SelectValue placeholder={t("citySelector.selectCity")} />
+                  <SelectValue placeholder="Selecciona una ciudad" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
                   {citiesForCountry.map((c) => (
@@ -338,14 +332,15 @@ const RegisterPartner = () => {
 
           {/* Password */}
           <FieldRow>
-            <Label htmlFor="password" className="text-xs font-medium text-slate-700">{t("auth.password")} *</Label>
+            <Label htmlFor="password" className="text-xs font-medium text-slate-700">Contraseña *</Label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
                 required
-                placeholder="••••••••"
+                autoComplete="new-password"
+                placeholder={`Mínimo ${MIN_PASSWORD_LENGTH} caracteres`}
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10 pr-10"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -353,6 +348,7 @@ const RegisterPartner = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -362,13 +358,14 @@ const RegisterPartner = () => {
 
           {/* Confirm Password */}
           <FieldRow>
-            <Label htmlFor="confirmPassword" className="text-xs font-medium text-slate-700">{t("auth.confirmPassword")} *</Label>
+            <Label htmlFor="confirmPassword" className="text-xs font-medium text-slate-700">Repite la contraseña *</Label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
                 required
+                autoComplete="new-password"
                 placeholder="••••••••"
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10 pr-10"
                 value={formData.confirmPassword}
@@ -377,6 +374,7 @@ const RegisterPartner = () => {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -397,7 +395,7 @@ const RegisterPartner = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("auth.registering")}
+                  Creando la cuenta…
                 </>
               ) : (
                 "Crear cuenta de local"

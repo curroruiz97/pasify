@@ -2,20 +2,20 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { toast as sonnerToast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import type { Session } from "@supabase/supabase-js";
 import { App as CapacitorApp } from "@capacitor/app";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { usePendingCheckoutResume } from "@/hooks/usePendingCheckoutResume";
-import { supabase } from "@/integrations/supabase/client";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { queryClient } from "@/lib/cache/queryClient";
 import { useCacheLifecycle } from "@/lib/cache/lifecycle";
-import { useCurrentUserId } from "@/lib/cache/session";
-import { isDoorLocked, useDoorLocked } from "@/lib/doorLock";
-import { useTranslation } from "react-i18next";
-import logo from "./assets/logo.webp";
+import { useCurrentUserId, useSesionSinVerificar } from "@/lib/cache/session";
+import { useDoorLocked } from "@/lib/doorLock";
+import { sanitizeNextPath, tomarOAuthEnCurso } from "@/lib/redirect-url";
+import { canjearReferidoPendiente } from "@/components/auth/referidos";
 
 // Critical pages - keep static imports
 import Index from "./pages/Index";
@@ -41,7 +41,6 @@ const PublicTicket = lazy(() => import("./pages/PublicTicket"));
 const PartnerCancel = lazy(() => import("./pages/PartnerCancel"));
 const PartnerChoosePlan = lazy(() => import("./pages/PartnerChoosePlan"));
 const PartnerOnboarding = lazy(() => import("./pages/PartnerOnboarding"));
-const AuthBridge = lazy(() => import("./pages/AuthBridge"));
 // Paginas publicas exigidas por App Store Connect y Google Play:
 // URL de soporte y politica de privacidad. Accesibles sin sesion.
 const Soporte = lazy(() => import("./pages/Soporte"));
@@ -58,33 +57,31 @@ import LoaderOne from "@/components/ui/loader-one";
 
 // Usa il sistema di auth centralizzato
 import { useAuth, resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
-import AuthErrorScreen from "@/components/auth/AuthErrorScreen";
-import { useMultiAccount } from "@/hooks/useMultiAccount";
+import AuthErrorScreen, { CuentaSinAcceso } from "@/components/auth/AuthErrorScreen";
 
 // Caché de datos: src/lib/cache (memoria + dispositivo por usuario). La de
 // antes (PersistQueryClientProvider) guardaba en una única entrada los datos
 // de cualquier usuario y no los borraba al cerrar sesión.
 
+// Loading state for Suspense fallback — full-screen Pasify dark splash that
+// matches the inline boot splash in index.html so the chain is seamless and
+// no gray flash / blue dots appear between splash and page.
+const PageLoader = () => <LoaderOne />;
+
 // Wrapper per la pagina Login. Resuelve el dashboard inicial según el rol
 // efectivo del usuario (post-Fase 1 hardening) en lugar de empujar a todos
-// a /client-dashboard. Si todavía no se han cargado los roles, muestra Login
-// mientras tanto — comportamiento defensivo: nunca redirige a un panel
-// que el usuario no tiene.
-const LoginRoute = ({ session }: { session: any }) => {
-  const location = useLocation();
+// a /client-dashboard. Si todavía no se han cargado los roles (o la cuenta no
+// tiene ninguno), muestra Login — nunca redirige a un panel que el usuario no
+// tiene. Con `?next=` (el CTA de compra) manda `next`: antes, al llegar la
+// sesión, se pisaba con el panel y el comprador perdía el evento.
+const LoginRoute = ({ session }: { session: Session | null }) => {
+  const [searchParams] = useSearchParams();
   const { userRoles, roleLoading } = useAuth();
-  const isAddingAccount = (location.state as any)?.addingAccount === true;
 
-  if (isAddingAccount) {
-    return <Login />;
-  }
-
-  if (session) {
-    if (roleLoading || userRoles.length === 0) {
-      return <Login />;
-    }
-    const target = resolveInitialDashboard(userRoles);
-    return <Navigate to={target} replace />;
+  if (session && !roleLoading && userRoles.length > 0) {
+    const next = sanitizeNextPath(searchParams.get("next"));
+    const destino = next && !next.startsWith("/login") ? next : resolveInitialDashboard(userRoles);
+    if (destino !== "/login") return <Navigate to={destino} replace />;
   }
 
   return <Login />;
@@ -92,10 +89,17 @@ const LoginRoute = ({ session }: { session: any }) => {
 
 // Wrapper para la ruta `/` (root). Igual que LoginRoute pero el fallback no
 // autenticado es Index (landing pública) en web, o /login en nativa.
-const RootRoute = ({ session }: { session: any }) => {
-  const { userRoles, roleLoading, roleError, reloadRoles } = useAuth();
+const RootRoute = ({ session }: { session: Session | null }) => {
+  const { userRoles, rolesLoaded, roleError, reloadRoles } = useAuth();
+  // Vuelta de "Entrar con Google" en la web: la raíz, con el destino (`next`)
+  // apuntado antes de salir. Se toma una vez, en cuanto hay sesión.
+  const destinoOAuthRef = useRef<string | null | undefined>(undefined);
+  if (session && destinoOAuthRef.current === undefined) {
+    destinoOAuthRef.current = tomarOAuthEnCurso()?.next ?? null;
+  }
 
   if (session) {
+    if (destinoOAuthRef.current) return <Navigate to={destinoOAuthRef.current} replace />;
     // Sin red no se pueden saber los roles: mejor "Reintentar" que una
     // pantalla en blanco.
     if (roleError && userRoles.length === 0) {
@@ -109,9 +113,10 @@ const RootRoute = ({ session }: { session: any }) => {
         />
       );
     }
-    if (roleLoading || userRoles.length === 0) {
-      return null; // splash visible mientras useAuth carga
-    }
+    if (!rolesLoaded) return <PageLoader />;
+    // Roles cargados y ninguno (p. ej. un local al que el admin ha retirado
+    // el acceso): antes, pantalla negra sin salida.
+    if (userRoles.length === 0) return <CuentaSinAcceso onSignOut={signOutLocal} />;
     const target = resolveInitialDashboard(userRoles);
     return <Navigate to={target} replace />;
   }
@@ -119,6 +124,17 @@ const RootRoute = ({ session }: { session: any }) => {
     return <Navigate to="/login" replace />;
   }
   return <Index />;
+};
+
+// Alta (cliente y local): quien ya tiene sesión al abrirla no tiene nada que
+// registrar y va a `next` o a su panel. Solo se mira al entrar: la sesión que
+// abre la propia alta a mitad del formulario no puede sacarle de ella (el
+// alta de local aún tiene que crear su organización).
+const SoloSinSesion = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
+  const [searchParams] = useSearchParams();
+  const [habiaSesion] = useState(() => session !== null);
+  if (habiaSesion) return <Navigate to={sanitizeNextPath(searchParams.get("next")) ?? "/"} replace />;
+  return <>{children}</>;
 };
 
 // Modo puerta activo en este dispositivo (src/lib/doorLock.ts): ninguna otra
@@ -141,99 +157,110 @@ const LegacyPartnerRedirect = () => {
   return <Navigate to={`/p/${encodeURIComponent(id ?? "")}`} replace />;
 };
 
-// Loading state for Suspense fallback — full-screen Pasify dark splash that
-// matches the inline boot splash in index.html so the chain is seamless and
-// no gray flash / blue dots appear between splash and page.
-const PageLoader = () => <LoaderOne />;
+/**
+ * Ruta de la app para un enlace que abre la app nativa (appUrlOpen): la web
+ * (`https://…/e/<id>`, también con la ruta tras el `#`) o el esquema propio
+ * (`es.pasify.app://e/<id>`, donde el primer tramo llega como host).
+ *
+ *   /e/<id>       → /e/<id>        (página del evento)
+ *   /p/<id>       → /p/<id>        (ficha del local)
+ *   /entrada/<id> → /entrada/<id>  (entrada pública; solo viaja su `?k=`)
+ *   cualquier otra → /
+ *
+ * Nunca lleva tokens de sesión: antes cualquier URL con access_token y
+ * refresh_token abría esa sesión en la app (login CSRF).
+ */
+function rutaDeEnlace(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "/";
+  }
+  let ruta: string;
+  let query: string;
+  if (u.hash.startsWith("#/")) {
+    const [p, q = ""] = u.hash.slice(1).split("?");
+    ruta = p;
+    query = q;
+  } else {
+    const esWeb = u.protocol === "http:" || u.protocol === "https:";
+    ruta = esWeb ? u.pathname : `/${u.host}${u.pathname}`;
+    query = u.search.replace(/^\?/, "");
+  }
+  ruta = ruta.replace(/^\/+/, "/").replace(/\/+$/, "");
+  const m = ruta.match(/^\/(e|p|entrada)\/([^/]+)$/);
+  if (!m) return "/";
+  const [, tipo, idCodificado] = m;
+  let id: string;
+  try {
+    id = decodeURIComponent(idCodificado);
+  } catch {
+    return "/";
+  }
+  const k = tipo === "entrada" ? new URLSearchParams(query).get("k") : null;
+  return `/${tipo}/${encodeURIComponent(id)}${k ? `?k=${encodeURIComponent(k)}` : ""}`;
+}
 
-// Deep link handler per push notifications — vive dentro HashRouter
-// per poter usare useNavigate(). Mappa data.type → route.
-//
-// MULTI-ACCOUNT: il device riceve notifiche per TUTTI gli account
-// loggati su quel device (i token FCM sono salvati per ciascuno).
-// Quando arriva una notifica con `data.targetUserId` che non matcha
-// la sessione corrente:
-//   - se l'account è salvato in MultiAccount → switch automatico
-//   - altrimenti → redirect al login con hint email
-// Se la notifica non ha `targetUserId` (legacy backend), naviga
-// senza switch — comportamento back-compat.
-const NotificationDeepLinkHandler = () => {
+/** Capas de Radix abiertas (hojas, diálogos, menús): el botón atrás las cierra. */
+const CAPA_ABIERTA =
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]';
+
+/**
+ * Botón atrás de Android. Con cualquier listener registrado Capacitor ya no
+ * hace nada por su cuenta, así que aquí va todo: cerrar la hoja o el diálogo
+ * abierto (Escape, como el teclado), volver atrás si hay historial dentro de
+ * la app y, si no, minimizar. En /door manda el de DoorMode (no deja salir).
+ */
+function alPulsarAtras() {
+  if (window.location.hash.startsWith("#/door")) return;
+  if (document.querySelector(CAPA_ABIERTA)) {
+    const destino = document.activeElement ?? document.body;
+    destino.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true, cancelable: true }),
+    );
+    return;
+  }
+  // HashRouter guarda en history.state el índice de la entrada (0 = la primera de la app).
+  const idx = (window.history.state as { idx?: unknown } | null)?.idx;
+  if (typeof idx === "number" && idx > 0) window.history.back();
+  else void CapacitorApp.minimizeApp();
+}
+
+/** Enlaces que abren la app y botón atrás (solo nativo). Vive dentro del router. */
+const IntegracionNativa = () => {
   const navigate = useNavigate();
-  const { savedAccounts, switchToAccount } = useMultiAccount();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   useEffect(() => {
-    const resolveRoute = (data: Record<string, unknown>): string => {
-      const type = data.type as string | undefined;
-      // Soporte (chat tri-direccional): aterriza directo en el client/partner
-      // dashboard donde el SupportChat drawer se abre automáticamente leyendo
-      // el query string `?support=<conversation_id>`.
-      if (data.conversationId || type === "support_reply") {
-        const cid = (data.conversationId as string) || (data.id as string) || "";
-        return cid ? `/client-dashboard?support=${cid}` : "/client-dashboard";
-      }
-      if (type === "event" || type === "ticket_paid" || type === "discount") return "/client-dashboard";
-      if (type === "refund_decided" && data.refundId) return `/client-dashboard?refund=${data.refundId}`;
-      if (type === "partner" && data.partnerId) return `/p/${data.partnerId}`;
-      if (type === "participant" || type === "participation" || type === "payout_arrived") return "/partner-dashboard";
-      if (type === "ai_recommendation" || type === "compliance_alert") return "/partner-dashboard";
-      return "/client-dashboard";
+    if (!Capacitor.isNativePlatform()) return;
+    // Solo se quitan estos: App.removeAllListeners() se llevaba también los
+    // de DoorMode, la vuelta de Stripe y el estado de la red.
+    const handles: Promise<PluginListenerHandle>[] = [
+      CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+        navigateRef.current(rutaDeEnlace(url));
+      }),
+      CapacitorApp.addListener("backButton", alPulsarAtras),
+    ];
+    return () => {
+      handles.forEach((h) => void h.then((handle) => handle.remove()).catch(() => undefined));
     };
+  }, []);
 
-    const handler = async (e: Event) => {
-      const data = ((e as CustomEvent).detail || {}) as Record<string, unknown>;
-      const route = resolveRoute(data);
-      const targetUserId = (data.targetUserId || data.userId) as string | undefined;
-      const targetEmail = data.targetEmail as string | undefined;
+  return null;
+};
 
-      // Sessione corrente
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUserId = session?.user?.id;
-
-      // Modo puerta: ni navegar ni cambiar de cuenta desde una notificación.
-      // El bloqueo es por usuario: con otra cuenta guardada se saldría de la puerta.
-      if (isDoorLocked(currentUserId)) return;
-
-      // Caso 1: notifica senza target user → naviga e basta (legacy)
-      if (!targetUserId) {
-        navigate(route);
-        return;
-      }
-
-      // Caso 2: target == current user → naviga normalmente
-      if (currentUserId === targetUserId) {
-        navigate(route);
-        return;
-      }
-
-      // Caso 3: target ≠ current user → tenta switch automatico se saved
-      const savedTarget = savedAccounts.find((a) => a.id === targetUserId);
-      if (savedTarget?.refreshToken) {
-        // Salviamo la route in sessionStorage così dopo il reload
-        // post-switch atterriamo sul deep link giusto.
-        try {
-          sessionStorage.setItem("post_switch_route", route);
-        } catch { /* noop */ }
-        const ok = await switchToAccount(savedTarget);
-        if (ok) return; // switchToAccount triggera reload
-      }
-
-      // Caso 4: target non salvato o switch fallito → login con hint
-      navigate("/login", { state: { suggestedEmail: targetEmail || savedTarget?.email, deepLinkAfter: route } });
-    };
-
-    // Dopo un reload da account-switch, naviga alla route memorizzata
-    try {
-      const stored = sessionStorage.getItem("post_switch_route");
-      if (stored) {
-        sessionStorage.removeItem("post_switch_route");
-        navigate(stored);
-      }
-    } catch { /* noop */ }
-
-    window.addEventListener("notification-tap", handler);
-    return () => window.removeEventListener("notification-tap", handler);
-  }, [navigate, savedAccounts, switchToAccount]);
-
+// Invitación de "Trae un amigo" (RegisterClient guarda el `?ref=`): se canjea
+// en cuanto hay sesión verificada de una cuenta recién creada.
+const ReferidoPendiente = () => {
+  const userId = useCurrentUserId();
+  const sinVerificar = useSesionSinVerificar();
+  useEffect(() => {
+    if (userId && !sinVerificar) void canjearReferidoPendiente();
+  }, [userId, sinVerificar]);
   return null;
 };
 
@@ -264,30 +291,46 @@ const PageTransitions = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Offline banner component. Solo informa: nunca bloquea toques
+// Aviso sin conexión. Solo informa: nunca bloquea toques
 // (pointer-events-none) y en modo puerta no sale: tapaba la cabecera, y con
 // ella «Salir», justo sin red; el escáner ya avisa de que así no se valida.
+// También sale con la sesión "sin verificar" (arranque sin red con el token
+// caducado): se está viendo lo guardado en el dispositivo.
 const OfflineBanner = () => {
   const { isOnline, wasOffline } = useNetworkStatus();
-  const { t } = useTranslation();
+  const sinVerificar = useSesionSinVerificar();
   const location = useLocation();
+  const sinVerificarAntes = useRef(sinVerificar);
 
   useEffect(() => {
     if (wasOffline && isOnline) {
-      sonnerToast.success(t("network.backOnline", "Connected! Updating data..."));
+      sonnerToast.success("Vuelves a tener conexión. Actualizando…");
       // Solo le query attualmente *attive* vengono invalidate.
       // Le query inattive (pagine non aperte) restano in cache e si
       // aggiorneranno alla prossima visita. Evita una raffica di refetch
       // su decine di query non visibili al riconnetto.
       queryClient.invalidateQueries({ refetchType: "active" });
     }
-  }, [wasOffline, isOnline, t]);
+  }, [wasOffline, isOnline]);
 
-  if (isOnline || location.pathname === "/door") return null;
+  // La sesión se ha podido renovar: lo que se ve sale ya del servidor.
+  useEffect(() => {
+    if (sinVerificarAntes.current && !sinVerificar) {
+      queryClient.invalidateQueries({ refetchType: "active" });
+    }
+    sinVerificarAntes.current = sinVerificar;
+  }, [sinVerificar]);
+
+  if ((isOnline && !sinVerificar) || location.pathname === "/door") return null;
 
   return (
-    <div className="pointer-events-none fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium shadow-lg">
-      {t("network.offline", "Offline mode - data may not be up to date")}
+    <div
+      role="status"
+      className="pointer-events-none fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium shadow-lg"
+    >
+      {isOnline
+        ? "Sin conexión con Pasify: estás viendo lo guardado en este dispositivo."
+        : "Sin conexión: puede que lo que ves no esté al día."}
     </div>
   );
 };
@@ -301,84 +344,11 @@ const App = () => {
   // esto, si el webhook de Stripe no llega, la entrada pagada nunca aparece.
   usePendingCheckoutResume();
 
-  // Listen for foreground push notifications and show toast
-  // Skip city notifications (event/discount) - native push is enough
-  useEffect(() => {
-    const handleForegroundPush = (e: Event) => {
-      const { title, body, data } = (e as CustomEvent).detail;
-      const notifType = data?.type;
-      if (notifType === 'event' || notifType === 'discount') return;
-      if (title || body) {
-        sonnerToast(title, { description: body });
-      }
-    };
-    window.addEventListener('foreground-push', handleForegroundPush);
-    return () => window.removeEventListener('foreground-push', handleForegroundPush);
-  }, []);
-
-  // Gestione deep links: Supabase Auth, App Links e share URLs.
-  useEffect(() => {
-    CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
-      console.log('Deep link received:', url);
-      let urlObj: URL;
-      try {
-        urlObj = new URL(url);
-      } catch {
-        return;
-      }
-
-      // 1) Supabase Auth callback (token nell'hash, non nel path)
-      const hashParams = new URLSearchParams(urlObj.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (error) console.error('Error setting session from deep link:', error);
-        else console.log('Session set successfully from deep link');
-        return;
-      }
-
-      // 2) App Links shareable URLs (Android verified or iOS Universal):
-      //    https://pasify.es/e/<id>            → /calendar?event=<id>
-      //    https://pasify.es/calendar?event=   → stesso
-      //    https://pasify.es/p/<id>            → /p/<id>
-      //    https://pasify.es/client-dashboard?wallet=<id> → wallet
-      //    https://pasify.es/t/<qr_token>      → ticket detail
-      //    https://pasify.es/refund/<id>       → refund flow
-      // Tutti vengono ridiretti al corrispondente HashRouter target.
-      const path = urlObj.pathname;
-      const search = urlObj.search;
-      const targetForRouter = (() => {
-        const eventMatch = path.match(/^\/e\/([\w-]+)\/?$/);
-        if (eventMatch) return `/calendar?event=${encodeURIComponent(eventMatch[1])}`;
-        if (path.startsWith('/calendar')) return `/calendar${search}`;
-        if (path.startsWith('/p/')) return `${path}${search}`;
-        if (path.startsWith('/client-dashboard')) return `/client-dashboard${search}`;
-        return null;
-      })();
-
-      if (targetForRouter) {
-        // HashRouter usa hash come path. Sostituiamo solo l'hash della
-        // URL corrente, cosi' React Router intercetta come navigation.
-        window.location.hash = targetForRouter.startsWith('/')
-          ? targetForRouter
-          : `/${targetForRouter}`;
-      }
-    });
-
-    return () => {
-      CapacitorApp.removeAllListeners();
-    };
-  }, []);
-
   // Lo splash è in index.html (visibile prima ancora che React parta) e
   // viene rimosso da MutationObserver appena #root ha il primo DOM child.
-  // Mentre useAuth carica la session (< 50ms da localStorage), ritorniamo
-  // null così #root resta vuoto e lo splash resta visibile → no flash di
-  // login prima del redirect alla dashboard, transizione perfetta.
+  // Mentre useAuth carica la session, ritorniamo null così #root resta vuoto
+  // e lo splash resta visibile → no flash di login prima del redirect alla
+  // dashboard. Sin red, como mucho ~2 s (lib/cache/session.ts).
   // Igual mientras se restaura la caché guardada (IndexedDB, ~decenas de ms,
   // máximo 1,5 s): así la primera pantalla ya sale con sus datos.
   if (loading || !cacheLista) return null;
@@ -389,9 +359,10 @@ const App = () => {
         <Sonner />
         {/* Prefetch dati in background */}
         <DataPrefetcher userId={session?.user?.id} />
+        <ReferidoPendiente />
         <HashRouter>
           <OfflineBanner />
-          <NotificationDeepLinkHandler />
+          <IntegracionNativa />
           {/* Floating multi-role switcher (visible when user tiene 2+ roles
               y está en una ruta de dashboard). */}
           <PanelSwitcher />
@@ -405,8 +376,22 @@ const App = () => {
               <Route path="/" element={<RootRoute session={session} />} />
 
               {/* Rotte pubbliche */}
-              <Route path="/register-client" element={<RegisterClient />} />
-              <Route path="/register-partner" element={<RegisterPartner />} />
+              <Route
+                path="/register-client"
+                element={
+                  <SoloSinSesion session={session}>
+                    <RegisterClient />
+                  </SoloSinSesion>
+                }
+              />
+              <Route
+                path="/register-partner"
+                element={
+                  <SoloSinSesion session={session}>
+                    <RegisterPartner />
+                  </SoloSinSesion>
+                }
+              />
               <Route
                 path="/login"
                 element={<LoginRoute session={session} />}
@@ -415,7 +400,6 @@ const App = () => {
               <Route path="/update-password" element={<UpdatePassword />} />
               <Route path="/password-recovery" element={<UpdatePassword />} />
               <Route path="/home" element={<Index />} />
-              <Route path="/auth/bridge" element={<AuthBridge />} />
 
               {/* Calendar — pubblico, accessibile anche senza account.
                   Niente piu' route /calendar/:city/:id: il flusso e' tutto

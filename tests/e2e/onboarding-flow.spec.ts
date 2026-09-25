@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
  *  - Sin sesión, /partner-dashboard redirige a /login (cubre el caso
  *    "wizard auto-abriéndose" — debe ocurrir SOLO en partner-dashboard,
  *    no antes de autenticarse)
- *  - El form de RegisterPartner valida que el password tenga 6+ chars
+ *  - El form de RegisterPartner valida que el password tenga 8+ chars
  *    (cliente-side, sin tocar Supabase)
  *
  * No se prueba el flujo end-to-end con signup real porque CI no tiene
@@ -41,18 +41,18 @@ test.describe("Partner onboarding · smoke", () => {
   }) => {
     await page.goto("/#/register-partner");
     await page.locator('input[type="email"]').first().fill("test@pasify.es");
-    await page.locator('input[type="password"]').nth(0).fill("123");
-    await page.locator('input[type="password"]').nth(1).fill("123");
+    // "Nombre del negocio" es obligatorio (required): sin él, el navegador ni
+    // deja enviar el formulario.
+    await page.locator('input:not([type="email"]):not([type="password"])').first().fill("Sala de prueba");
+    await page.locator('input[type="password"]').nth(0).fill("1234567");
+    await page.locator('input[type="password"]').nth(1).fill("1234567");
     // Submit — el botón principal del form lleva texto Spanish "Crear cuenta..."
     await page
       .getByRole("button", { name: /(crear|sign up|signup)/i })
       .first()
       .click();
-    // Sonner toast con error de password corto
-    const toast = page.locator(
-      '[data-sonner-toast], [role="status"], [role="alert"]',
-    );
-    await expect(toast.first()).toBeVisible({ timeout: 8000 });
+    // Sonner toast con error de password corto (mínimo 8), en español
+    await expect(page.getByText("La contraseña debe tener al menos 8 caracteres.")).toBeVisible({ timeout: 8000 });
   });
 
   test("partner-dashboard sin sesión NO abre el wizard, redirige a login", async ({
