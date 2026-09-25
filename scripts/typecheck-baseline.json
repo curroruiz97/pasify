@@ -10,12 +10,5 @@
   },
   "src/components/ui/loader-one.tsx": {
     "TS2353: Object literal may only specify known properties, and 'WebkitUserDrag' does not exist in type 'Properties<string | number, string & {}>'.": 1
-  },
-  "src/components/ui/toaster.tsx": {
-    "TS2700: Rest types may only be created from object types.": 1
-  },
-  "src/components/ui/vertical-cut-reveal.tsx": {
-    "TS2339: Property 'Segmenter' does not exist on type 'typeof Intl'.": 1,
-    "TS2724: '\"framer-motion\"' has no exported member named 'DynamicAnimationOptions'. Did you mean 'AnimationOptions'?": 1
   }
 }
