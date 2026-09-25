@@ -75,6 +75,8 @@ import { listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
 import { useCurrentUser, useCurrentUserId } from "@/lib/cache/session";
 import { qk } from "@/lib/cache/keys";
 import { useEventoEnUrl } from "@/hooks/useEventoEnUrl";
+import { useSupportUnread } from "@/hooks/useSupportUnread";
+import { SupportNavIcon } from "@/components/support/SupportNavIcon";
 import { RefreshIndicator } from "@/components/ui/refresh-indicator";
 import {
   invalidarTrasCambioDeEventos,
@@ -544,6 +546,9 @@ const PartnerDashboard = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Respuestas de Pasify sin leer: número en «Soporte» (menú, cajón y barra inferior).
+  const soporteSinLeer = useSupportUnread(uid, "partner");
+
   // Arbol de navegación — agrupa secciones por dominio para reducir scroll.
   // Cada grupo se auto-expande cuando su sección activa está dentro.
   // Va en su propia constante tipada: con `.flatMap` encadenado al literal,
@@ -593,7 +598,7 @@ const PartnerDashboard = () => {
         { id: "stripe", label: "Cobros", icon: <CreditCard className="h-4 w-4" /> },
       ],
     },
-    { kind: "item", id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
+    { kind: "item", id: "soporte", label: "Soporte", icon: <SupportNavIcon count={soporteSinLeer} /> },
   ];
   // Fuera del arbol lo que no se puede ver; si un grupo se queda sin hijos,
   // desaparece el grupo entero en vez de dejar una carpeta vacia.
@@ -608,7 +613,7 @@ const PartnerDashboard = () => {
     { id: "metricas", label: "Métricas", icon: <LayoutDashboard className="h-5 w-5" /> },
     { id: "live", label: "En vivo", icon: <Radio className="h-5 w-5" /> },
     { id: "eventos", label: "Eventos", icon: <Calendar className="h-5 w-5" /> },
-    { id: "soporte", label: "Soporte", icon: <MessageCircle className="h-5 w-5" /> },
+    { id: "soporte", label: "Soporte", icon: <SupportNavIcon count={soporteSinLeer} /> },
   ];
 
   // "Recaudado" ya no sale de aquí: tickets_sold × price_cents del evento no

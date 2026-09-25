@@ -109,8 +109,17 @@ export interface FcmMessage {
 }
 
 /**
+ * true si hay cuenta de servicio de FCM (FIREBASE_SERVICE_ACCOUNT_JSON válida).
+ * Sin ella no sale ningún push: sendPush solo simula.
+ */
+export function isPushConfigured(): boolean {
+  return parseServiceAccount() !== null;
+}
+
+/**
  * Envía push a un device token vía FCM HTTP v1.
- * Si no hay service account, fallback simulated (log only) para dev.
+ * Sin service account no envía nada: registra un warn y devuelve un id
+ * simulado con provider "fallback". Eso NO es un envío (ver sendPushMulticast).
  */
 export async function sendPush(msg: FcmMessage): Promise<{ id: string; provider: "fcm" | "fallback" }> {
   const sa = parseServiceAccount();
@@ -175,18 +184,29 @@ export async function sendPush(msg: FcmMessage): Promise<{ id: string; provider:
   return { id: json.name as string, provider: "fcm" };
 }
 
+export interface PushResult {
+  token: string;
+  /** Solo true si FCM lo aceptó. */
+  success: boolean;
+  /** Sin FCM configurado: no ha salido nada (antes contaba como enviado). */
+  simulated: boolean;
+  id?: string;
+  error?: string;
+}
+
 /** Multicast: envía mismo mensaje a varios tokens. Devuelve resultados por token. */
 export async function sendPushMulticast(
   tokens: string[],
   payload: Omit<FcmMessage, "token">
-): Promise<Array<{ token: string; success: boolean; id?: string; error?: string }>> {
+): Promise<PushResult[]> {
   const results = await Promise.allSettled(
     tokens.map((token) => sendPush({ ...payload, token }))
   );
   return results.map((r, i) => {
     if (r.status === "fulfilled") {
-      return { token: tokens[i], success: true, id: r.value.id };
+      const simulated = r.value.provider !== "fcm";
+      return { token: tokens[i], success: !simulated, simulated, id: r.value.id };
     }
-    return { token: tokens[i], success: false, error: String(r.reason) };
+    return { token: tokens[i], success: false, simulated: false, error: String(r.reason) };
   });
 }
