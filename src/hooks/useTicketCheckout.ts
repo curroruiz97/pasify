@@ -96,7 +96,13 @@ function currentRoutePath(): string {
 // ---------------------------------------------------------------- errores
 
 type AfterError = "refresh" | "close";
-type CheckoutErrorCopy = { title: string; description: string; after?: AfterError };
+type CheckoutErrorCopy = {
+  title: string;
+  description: string;
+  after?: AfterError;
+  /** Nuestro texto siempre, aunque el servidor mande el suyo. */
+  fixed?: boolean;
+};
 
 const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
   event_not_available: {
@@ -183,6 +189,21 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
     description: "Vuelve a iniciar sesión para comprar tus entradas.",
     after: "close",
   },
+  // 401 de stripe-create-checkout: la sesión caducó entre abrir el selector y pagar.
+  auth_required: {
+    title: "Sesión caducada",
+    description: "Vuelve a iniciar sesión para comprar tus entradas.",
+    after: "close",
+    fixed: true,
+  },
+  // 503: en producción los pagos están en modo prueba (clave de Stripe no
+  // live). No se ha reservado nada; reintentar ahora no sirve.
+  payments_unavailable: {
+    title: "Pagos no disponibles",
+    description: "Los pagos no están disponibles en este momento. Inténtalo más tarde.",
+    after: "close",
+    fixed: true,
+  },
   rate_limit_exceeded: {
     title: "Demasiados intentos",
     description: "Espera unos minutos antes de volver a intentarlo.",
@@ -195,9 +216,10 @@ function describeCheckoutError(httpStatus: number, body: unknown): CheckoutError
   const known = knownCode ? CHECKOUT_ERRORS[knownCode] : undefined;
   // Contrato del servidor: `message` de primer nivel es texto para el usuario
   // (el texto técnico del formato antiguo queda fuera, ver parseEdgeError).
-  if (known) return message ? { ...known, description: message } : known;
+  if (known) return message && !known.fixed ? { ...known, description: message } : known;
   if (httpStatus === 401) return CHECKOUT_ERRORS.unauthorized;
   if (httpStatus === 429) return CHECKOUT_ERRORS.rate_limit_exceeded;
+  if (httpStatus === 503) return CHECKOUT_ERRORS.payments_unavailable;
   if (message) {
     return {
       title: "No se pudo completar la compra",

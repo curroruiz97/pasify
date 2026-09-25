@@ -19,8 +19,14 @@ import { MAX_PERSIST_AGE_MS, debePersistir, perteneceA, vigente } from "./policy
  * v2: la v1 podía llevar datos de terceros (solicitudes de reembolso de otros
  * usuarios en "mis reembolsos" y el nombre y email del comprador original de
  * las entradas recibidas por transferencia). Al subir se borran al arrancar.
+ *
+ * v3: la cartera guarda también las entradas reembolsadas y el estado y la
+ * hora de fin de cada evento (cancelado = sin QR); los favoritos, la hora de
+ * fin; el perfil pasa a ser uno solo (qk.me.profile) y deja de existir
+ * ["me", uid, "profile", "city"]. Con lo de la v2 una entrada de un evento
+ * cancelado seguía saliendo con su QR hasta el primer refresco.
  */
-export const CACHE_SCHEMA = 2;
+export const CACHE_SCHEMA = 3;
 const PREFIJO = `v${CACHE_SCHEMA}:`;
 const ESPERA_ESCRITURA_MS = 1000;
 /** Caché global de antes (sin separar por usuario): se borra al arrancar. */

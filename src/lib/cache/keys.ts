@@ -24,6 +24,8 @@ export const qk = {
     favorites: (uid: string) => ["me", uid, "favorites"] as const,
     loyalty: (uid: string) => ["me", uid, "loyalty"] as const,
     support: (uid: string, mode: string, scope: string | null) => ["me", uid, "support", mode, scope] as const,
+    /** Modo demo de la app del cliente (flag client_showcase). Solo en memoria. */
+    clientShowcase: (uid: string) => ["me", uid, "client-showcase"] as const,
   },
   partner: {
     all: (uid: string) => ["partner", uid] as const,

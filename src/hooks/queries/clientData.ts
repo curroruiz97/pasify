@@ -11,9 +11,16 @@ import type { Ticket as WalletTicket, TicketEventInfo } from "@/components/clien
  * cartera se abre al instante y funciona en la puerta sin cobertura (el QR se
  * dibuja en el propio móvil a partir del token). Por eso no llevan datos
  * personales de terceros (ver sinDatosDeTerceros).
+ *
+ * Estados reales en la cartera: vienen también las entradas reembolsadas
+ * (antes desaparecían sin dejar rastro al refrescar) y el estado del evento
+ * ('cancelled' = sin QR, se devuelve el importe) con su hora de fin.
  */
 
 export type WalletTicketRow = WalletTicket & { event: TicketEventInfo | null };
+
+/** Estados de entrada que enseña la cartera. 'refunded' va a la sección plegada. */
+const ESTADOS_CARTERA = ["paid", "used", "refunded"] as const;
 
 export type PublicPartner = {
   id: string;
@@ -69,7 +76,7 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
       "id, event_id, tier_id, qr_token, status, buyer_user_id, transferred_to_user_id, buyer_first_name, buyer_last_name, buyer_email, holder_first_name, holder_last_name, holder_email, amount_paid_cents, used_at, paid_at"
     )
     .or(`buyer_user_id.eq.${userId},transferred_to_user_id.eq.${userId}`)
-    .in("status", ["paid", "used"])
+    .in("status", [...ESTADOS_CARTERA])
     .order("paid_at", { ascending: false });
   if (tixErr) {
     console.error("[mis entradas] tickets query failed", tixErr);
@@ -100,6 +107,8 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
     id: string;
     title: string | null;
     date_start: string | null;
+    date_end: string | null;
+    status: string | null;
     city: string | null;
     venue_name: string | null;
     image_url: string | null;
@@ -107,9 +116,11 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
   };
   let evs: WalletEventRow[] = [];
   if (eventIds.length > 0) {
+    // RLS: el titular lee su evento también cancelado o retirado de la venta
+    // (events_ticket_holder_read).
     const { data: evData, error: evErr } = await supabase
       .from("events")
-      .select("id, title, date_start, city, venue_name, image_url, partner_id")
+      .select("id, title, date_start, date_end, status, city, venue_name, image_url, partner_id")
       .in("id", eventIds);
     if (evErr) console.warn("[mis entradas] events query failed", evErr);
     else evs = (evData ?? []) as WalletEventRow[];
@@ -143,6 +154,8 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
     eventMap.set(e.id, {
       title: e.title ?? "Evento",
       date_start: e.date_start ?? new Date().toISOString(),
+      date_end: e.date_end ?? null,
+      status: e.status ?? null,
       city: e.city ?? "",
       venue_name: e.venue_name ?? null,
       image_url: e.image_url ?? null,
@@ -196,16 +209,71 @@ export function usePublicPartners() {
   });
 }
 
-/** Ciudad del perfil del usuario (cabecera y ajustes). */
+/** Perfil propio (nombre, email, ciudad, foto). Datos del usuario: se guardan 7 días. */
+export type MyProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  city: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+};
+
+async function leerMiPerfil(uid: string): Promise<MyProfile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, first_name, last_name, email, city, avatar_url, created_at")
+    .eq("id", uid)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as MyProfile | null) ?? null;
+}
+
+const perfilQuery = (uid: string | null) => ({
+  queryKey: qk.me.profile(uid ?? ""),
+  queryFn: () => leerMiPerfil(uid as string),
+  enabled: !!uid,
+  staleTime: 10 * 60_000,
+});
+
+/**
+ * Perfil del usuario, una sola consulta para toda la app (qk.me.profile):
+ * la hoja de perfil (montada dos veces, barra lateral y cabecera móvil), la
+ * ciudad de la cabecera y los ajustes. Editar el perfil (EditPersonalInfoSheet)
+ * o la foto la invalida y todos se actualizan a la vez.
+ */
+export function useMyProfile(uid: string | null) {
+  return useQuery(perfilQuery(uid));
+}
+
+/** Ciudad del perfil del usuario (cabecera y ajustes). Misma consulta que useMyProfile. */
 export function useMyCity(uid: string | null) {
   return useQuery({
-    queryKey: [...qk.me.profile(uid ?? ""), "city"] as const,
-    queryFn: async (): Promise<{ city: string | null }> => {
-      const { data, error } = await supabase.from("profiles").select("city").eq("id", uid as string).maybeSingle();
+    ...perfilQuery(uid),
+    select: (perfil: MyProfile | null): { city: string | null } => ({ city: perfil?.city ?? null }),
+  });
+}
+
+/**
+ * Modo demo de la app del cliente (D-7): flag `client_showcase` de
+ * get_feature_flag con el id del usuario (la cuenta de demo está en
+ * tenant_overrides). Apagado para todos por defecto. Solo en memoria: se
+ * pregunta al entrar y un fallo o la falta de red cuentan como "no".
+ */
+export function useClientShowcase(uid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: qk.me.clientShowcase(uid ?? ""),
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.rpc("get_feature_flag", {
+        _code: "client_showcase",
+        _org_id: uid as string,
+      });
       if (error) throw error;
-      return { city: data?.city ?? null };
+      return data === true;
     },
-    enabled: !!uid,
+    enabled: enabled && !!uid,
     staleTime: 10 * 60_000,
+    retry: 1,
   });
 }

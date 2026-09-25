@@ -80,7 +80,16 @@ const serif = {
 
 // =============================================================
 // Demo data (mocks lo que se cargaría del backend al hacer check-in)
+//
+// SOLO MODO DEMO (D-7): ClientDashboard enseña esta vista únicamente con el
+// flag client_showcase, en la web y bajo la franja "DEMO · datos ficticios".
+// Por eso: local y artistas ficticios (nada de marcas reales), ninguna acción
+// con dinero (la recarga cashless está desactivada) y nada que prometa
+// reembolsos ni que algo "se ha publicado" cuando solo vive en memoria.
 // =============================================================
+
+/** Local ficticio de la demo. */
+const DEMO_VENUE = "Sala Órbita";
 
 interface LiveEvent {
   id: string;
@@ -106,8 +115,8 @@ const buildLiveEvent = (): LiveEvent => {
   return {
     id: "live-evt-01",
     title: "Saturday Night · Resident DJs",
-    venue: "Pacha Ibiza",
-    city: "Ibiza",
+    venue: DEMO_VENUE,
+    city: "Valencia",
     startedAt: tonight,
     endsAt: nowM(360),
     lineup: [
@@ -122,7 +131,7 @@ const buildLiveEvent = (): LiveEvent => {
       balanceCents: 4800,
       lastTopUpCents: 5000,
       lastConsumption: {
-        name: "Gin Tonic Bombay",
+        name: "Gin tonic",
         cents: 1200,
         at: new Date(Date.now() - 18 * 60 * 1000),
       },
@@ -142,7 +151,7 @@ interface Props {
 /**
  * Live Experience del cliente — modo evento que se "activa" cuando
  * detectas que está dentro del local (geofencing / scan QR a la entrada).
- * Modo demo: usa datos mock; en producción se hidrata del backend.
+ * Solo existe en modo demo (datos mock): no hay backend detrás.
  */
 export const ClientLiveExperience = ({ ticketHasEventToday = true }: Props) => {
   const [activated, setActivated] = useState(false);
@@ -526,7 +535,8 @@ const LineupView = ({ event }: { event: LiveEvent }) => {
 };
 
 const CashlessPanel = ({ event }: { event: LiveEvent }) => {
-  const [balance, setBalance] = useState(event.wallet.balanceCents);
+  // Saldo fijo de ejemplo: la demo no recarga ni cobra nada.
+  const balance = event.wallet.balanceCents;
   const lastConsumption = event.wallet.lastConsumption;
 
   return (
@@ -599,20 +609,17 @@ const CashlessPanel = ({ event }: { event: LiveEvent }) => {
         </div>
       </div>
 
-      {/* Top up + last */}
-      <div className="relative mt-5 grid grid-cols-3 gap-2">
-        {[10, 20, 50].map((amount) => (
-          <button
-            key={amount}
-            type="button"
-            onClick={() => setBalance((b) => b + amount * 100)}
-            className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-bold text-foreground transition hover:border-orange-500/40 hover:text-orange-500"
-            style={mono}
-          >
-            +{amount}€
-          </button>
-        ))}
-      </div>
+      {/* Recarga: desactivada. Antes +10/20/50 € subían el saldo sin cobrar nada. */}
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        className="relative mt-5 flex min-h-[44px] w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card px-3 py-2.5 text-sm font-semibold text-muted-foreground opacity-70"
+        style={mono}
+      >
+        <CreditCard className="h-4 w-4" />
+        Recargar saldo · Demo
+      </button>
 
       {/* Last consumption */}
       {lastConsumption && (
@@ -653,7 +660,7 @@ const CashlessPanel = ({ event }: { event: LiveEvent }) => {
         style={{ ...mono, letterSpacing: "0.18em" }}
       >
         <Sparkles className="h-3 w-3" />
-        El saldo no consumido se reembolsa al cierre del evento
+        Saldo y consumos de ejemplo · sin pulsera real
       </div>
     </section>
   );
@@ -941,7 +948,7 @@ const VenueMap = () => {
             Mapa interior · live
           </div>
           <h3 className="text-lg font-semibold tracking-tight text-foreground md:text-xl">
-            Pacha · {FLOOR_LABEL[floor]}
+            {DEMO_VENUE} · {FLOOR_LABEL[floor]}
           </h3>
           <div
             className="mt-1 inline-flex items-center gap-2 text-[10.5px] text-muted-foreground"
@@ -1448,9 +1455,10 @@ const PhotoWall = ({ photoCount }: { photoCount: number }) => {
 
     if (valid.length > 0) {
       setMyPhotos((prev) => [...valid.map((f) => URL.createObjectURL(f)), ...prev]);
+      // Solo viven en memoria: nada de decir que ya están publicadas.
       toast({
-        title: valid.length === 1 ? "Foto anadida" : `${valid.length} fotos anadidas`,
-        description: "Ya aparecen en el muro de fotos del evento.",
+        title: valid.length === 1 ? "Foto añadida" : `${valid.length} fotos añadidas`,
+        description: "Es una demo: solo se ven en este dispositivo y no se suben a ningún sitio.",
       });
     }
 
@@ -1593,7 +1601,7 @@ const ExitNps = () => {
           </span>
         </h3>
         <p className="relative mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-          El local recibe tu feedback al cierre. Tu saldo cashless restante se reembolsará en 24h a tu tarjeta.
+          Es una demo: tu valoración no se envía a ningún sitio.
         </p>
       </section>
     );

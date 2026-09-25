@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
-import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import { TEST_PAYMENT_MESSAGE, useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
 import { loginPathWithNext } from "@/lib/eventLinks";
 import {
   formatEventDateTime,
@@ -41,6 +41,8 @@ import {
  *      hemos enviado un email" cuando el servidor lo ha registrado
  *      (`ticket_orders.tickets_email_sent_at`); si no consta, que las
  *      entradas ya están en la cartera y que también irán por email.
+ *   5) Pago de modo prueba en producción (409 test_payment_not_accepted): no
+ *      hay entradas ni se reintenta; se dice tal cual.
  *
  * En la app nativa la vuelta de Stripe es /ticket/gracias (TicketReturn).
  * Estética Pasify: dark, terracota, mono labels, itálica serif en el titular.
@@ -240,6 +242,8 @@ const TicketSuccess = () => {
     ? "Pago no completado"
     : state.phase === "unverifiable"
     ? "Pendiente de confirmar"
+    : state.phase === "test_payment"
+    ? "Pago no válido"
     : "Ha habido un problema";
 
   const accent = (word: string) => (
@@ -262,6 +266,8 @@ const TicketSuccess = () => {
     <>La compra no se {accent("completó")}</>
   ) : state.phase === "unverifiable" ? (
     <>Inicia sesión para {accent("confirmar")}</>
+  ) : state.phase === "test_payment" ? (
+    <>Este pago no es {accent("válido")}</>
   ) : (
     <>Algo salió mal</>
   );
@@ -307,6 +313,8 @@ const TicketSuccess = () => {
         return "La sesión de pago caducó y no se ha realizado ningún cargo. Puedes volver a intentarlo cuando quieras.";
       case "unverifiable":
         return "Sin sesión no podemos comprobar el pago desde aquí. Inicia sesión con la cuenta de la compra: si el pago se completó, tus entradas estarán en Mis entradas.";
+      case "test_payment":
+        return TEST_PAYMENT_MESSAGE;
       case "idle":
         return "No hemos recibido la referencia de tu compra. Si has pagado, tus entradas aparecerán en Mis entradas.";
       default:
@@ -388,7 +396,7 @@ const TicketSuccess = () => {
                 border: "1px solid rgba(232,84,42,0.4)",
               }}
             >
-              {state.phase === "expired" ? (
+              {state.phase === "expired" || state.phase === "test_payment" ? (
                 <XCircle className="h-12 w-12" strokeWidth={2.2} />
               ) : state.phase === "pending" ? (
                 <Clock className="h-12 w-12" strokeWidth={2.2} />
@@ -600,7 +608,10 @@ const TicketSuccess = () => {
             </PrimaryButton>
           )}
 
-          {(state.phase === "expired" || state.phase === "error" || state.phase === "idle") && (
+          {(state.phase === "expired" ||
+            state.phase === "error" ||
+            state.phase === "idle" ||
+            state.phase === "test_payment") && (
             <SecondaryButton onClick={() => navigate("/calendar")}>
               <CalendarDays className="h-5 w-5" />
               Volver al calendario

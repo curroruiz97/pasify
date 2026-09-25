@@ -133,7 +133,9 @@ export const useLoyalty = () => {
     enabled: !!userId,
   });
   const { levels, balance, movements } = query.data ?? SIN_PUNTOS;
-  const loading = !!userId && query.isPending && !query.isError;
+  // Sin red y sin nada guardado la consulta queda en pausa: eso no es "cargando".
+  const offline = !!userId && query.isPending && query.fetchStatus === "paused";
+  const loading = !!userId && query.isPending && !query.isError && !offline;
   const error = query.error ? getErrorMessage(query.error) : null;
   const { refetch: refetchQuery } = query;
 
@@ -174,6 +176,10 @@ export const useLoyalty = () => {
     progressPct,
     loading,
     error,
+    /** Hay saldo que enseñar (de la red o guardado): un refresco fallido no lo tapa. */
+    hasData: query.data !== undefined,
+    isFetching: query.isFetching,
+    offline,
     refetch: () => refetchQuery(),
   };
 };

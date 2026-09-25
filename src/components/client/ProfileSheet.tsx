@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutLocal } from "@/hooks/useAuth";
+import { qk } from "@/lib/cache/keys";
+import { useMyProfile, type MyProfile } from "@/hooks/queries/clientData";
 import {
   Sheet,
   SheetContent,
@@ -16,44 +19,30 @@ import { Camera, LogOut, Settings, ChevronRight, Loader2, MapPin } from "lucide-
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
-type Profile = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  city: string | null;
-  avatar_url: string | null;
-  created_at: string;
-};
-
 interface Props {
   userId: string;
   /** "avatar" = solo cerchio (default top-bar). "row" = riga avatar+nome (sidebar). */
   variant?: "avatar" | "row";
+  /** Abre los ajustes de la cuenta (SettingsSheet, estado en el padre). */
+  onOpenSettings?: () => void;
 }
 
 /**
  * Avatar trigger in alto-dx + Sheet laterale per profilo cliente.
  * Modifica foto (storage `avatars`), vede nome/cognome/anzianità, settings, logout.
+ *
+ * El perfil sale de la caché compartida (useMyProfile, qk.me.profile): la hoja
+ * está montada dos veces (barra lateral y cabecera móvil) y antes cada una
+ * tenía su copia, que no se enteraba de un cambio de nombre hecho en Ajustes.
  */
-export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
+export const ProfileSheet = ({ userId, variant = "avatar", onOpenSettings }: Props) => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const queryClient = useQueryClient();
+  const profile = useMyProfile(userId || null).data ?? null;
+  const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name, email, city, avatar_url, created_at")
-        .eq("id", userId)
-        .maybeSingle();
-      if (data) setProfile(data as Profile);
-    })();
-  }, [userId]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,7 +73,11 @@ export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
         .eq("id", userId);
       if (profErr) throw profErr;
 
-      setProfile((prev) => (prev ? { ...prev, avatar_url: newUrl } : prev));
+      // Las dos hojas (y la cabecera) ven la foto nueva al momento.
+      queryClient.setQueryData<MyProfile | null>(qk.me.profile(userId), (prev) =>
+        prev ? { ...prev, avatar_url: newUrl } : prev
+      );
+      void queryClient.invalidateQueries({ queryKey: qk.me.profile(userId) });
       toast({ title: "Foto actualizada" });
     } catch (err: any) {
       console.error("upload avatar:", err);
@@ -109,7 +102,7 @@ export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
     : "";
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         {variant === "row" ? (
           <button
@@ -236,9 +229,21 @@ export const ProfileSheet = ({ userId, variant = "avatar" }: Props) => {
         </div>
 
         {/* Menu items */}
-        <div className="space-y-1 p-4">
-          <MenuItem icon={<Settings className="h-4 w-4" />} label="Ajustes de la cuenta" disabled hint="Próximamente" />
-        </div>
+        {onOpenSettings && (
+          <div className="space-y-1 p-4">
+            <MenuItem
+              icon={<Settings className="h-4 w-4" />}
+              label="Ajustes de la cuenta"
+              hint="Perfil, contraseña y privacidad"
+              onClick={() => {
+                // Se cierra esta hoja antes de abrir la de ajustes: dos hojas
+                // a la vez se pisan el foco.
+                setOpen(false);
+                setTimeout(onOpenSettings, 120);
+              }}
+            />
+          </div>
+        )}
 
         {/* Logout */}
         <div className="p-4 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>

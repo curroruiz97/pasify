@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +98,11 @@ async function leerSolicitudes(requesterId: string | null): Promise<RefundReques
  * otras personas: solo en memoria. Un cambio en tiempo real refresca la lista
  * sin vaciarla (antes cada cambio volvía a poner `loading` y parpadeaba el
  * wallet).
+ *
+ * En "mine", cada vez que cambian las solicitudes (una nueva, una decisión, el
+ * reembolso hecho en Stripe, la cancelación del evento) se vuelven a pedir
+ * también las entradas (qk.me.tickets): antes la entrada seguía "Válida" y con
+ * su QR hasta refrescar a mano, o 30 días sin conexión.
  */
 export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
   const { toast } = useToast();
@@ -124,9 +129,23 @@ export const useRefundRequests = (mode: "mine" | "org" | "admin" = "mine") => {
     queryKey: uid ? queryKey : null,
   });
 
+  // Las entradas dependen de las solicitudes: si la lista cambia de verdad
+  // (React Query conserva la misma referencia cuando llega lo mismo), la
+  // cartera se vuelve a pedir. La primera carga no cuenta.
+  const solicitudesPrevias = useRef<RefundRequest[] | undefined>(undefined);
+  useEffect(() => {
+    const previas = solicitudesPrevias.current;
+    solicitudesPrevias.current = query.data;
+    if (mode !== "mine" || !uid || !previas || !query.data || previas === query.data) return;
+    void queryClient.invalidateQueries({ queryKey: qk.me.tickets(uid) });
+  }, [mode, uid, query.data, queryClient]);
+
   const fetchAll = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey });
-  }, [queryClient, queryKey]);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey }),
+      mode === "mine" && uid ? queryClient.invalidateQueries({ queryKey: qk.me.tickets(uid) }) : undefined,
+    ]);
+  }, [queryClient, queryKey, mode, uid]);
 
   const requestRefund = useCallback(async (ticketId: string, reason: string, reasonCode?: string) => {
     const { data, error } = await supabase.rpc("request_refund", {

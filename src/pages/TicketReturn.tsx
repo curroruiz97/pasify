@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, RotateCcw, Smartphone, XCircle } from "lucide-react";
-import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
+import { TEST_PAYMENT_MESSAGE, useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
 
 /**
  * Pasify · destino de retorno de Stripe Checkout para la APP NATIVA.
@@ -20,6 +20,8 @@ import { useCheckoutConfirmation } from "@/hooks/usePendingCheckoutResume";
  *   - pendiente  → seguimos comprobando, con reintento.
  *   - caducado   → no se ha cobrado nada.
  *   - cancelado  → Stripe vuelve aquí solo con `order_id` (cancel_url).
+ *   - de prueba  → en producción un pago de modo prueba no emite entradas
+ *                  (409 test_payment_not_accepted): se dice tal cual.
  *
  * "Abrir la app": solo en Android, que registra el esquema `es.pasify.app`
  * en AndroidManifest.xml. iOS no declara CFBundleURLSchemes (ni Universal
@@ -152,6 +154,13 @@ const TicketReturn = () => {
           "Desde el navegador no podemos comprobar el pago. Abre la app Pasify: la compra se confirmará sola y, si se completó, tus entradas aparecerán en Mis entradas.";
         action = <ReturnToApp platform={platform} path="/client-dashboard?wallet=1" />;
         break;
+      case "test_payment":
+        tone = "bad";
+        icon = <XCircle className="h-9 w-9" />;
+        title = "Pago no válido";
+        body = TEST_PAYMENT_MESSAGE;
+        action = <ReturnToApp platform={platform} path="/" />;
+        break;
       case "error":
       default: {
         tone = "bad";
@@ -207,7 +216,7 @@ const TicketReturn = () => {
           </p>
         )}
 
-        {(state.phase === "error" || cancelled) && (
+        {(state.phase === "error" || state.phase === "test_payment" || cancelled) && (
           <Link
             to="/soporte"
             className="mt-8 inline-block text-[13px] text-white/40 underline underline-offset-4"
