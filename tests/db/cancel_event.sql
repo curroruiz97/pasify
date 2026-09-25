@@ -9,6 +9,7 @@ DECLARE
   v_client  UUID := gen_random_uuid();
   v_other   UUID := gen_random_uuid();
   v_ghost   UUID := gen_random_uuid();
+  v_guest   UUID := gen_random_uuid();
   v_org     UUID;
   v_event   UUID;
   v_tier    UUID;
@@ -31,7 +32,8 @@ BEGIN
     (v_partner, 'ce-partner-' || v_partner || '@pasify.test', '{"initial_role":"partner"}', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now()),
     (v_client,  'ce-client-'  || v_client  || '@pasify.test', '{}',                         'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now()),
     (v_other,   'ce-other-'   || v_other   || '@pasify.test', '{"initial_role":"partner"}', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now()),
-    (v_ghost,   'ce-ghost-'   || v_ghost   || '@pasify.test', '{}',                         'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
+    (v_ghost,   'ce-ghost-'   || v_ghost   || '@pasify.test', '{}',                         'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now()),
+    (v_guest,   'ce-guest-'   || v_guest   || '@pasify.test', '{}',                         'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
 
   PERFORM set_config('request.jwt.claim.sub', v_partner::text, true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_partner, 'role', 'authenticated')::text, true);
@@ -51,7 +53,11 @@ BEGIN
   SELECT * INTO v_b FROM public.create_ticket_order(v_event, v_tier, 1, v_client, 'ce-client@pasify.test', 'Clara', 'Ena');
   PERFORM public.set_order_stripe_session(v_b.order_id, 'cs_test_ce_b_' || v_b.order_id);
   PERFORM public.mark_order_paid_v2('cs_test_ce_b_' || v_b.order_id, 'pi_test_ce_b', 2500, 125);
-  SELECT * INTO v_g FROM public.create_ticket_order(v_event, v_tier, 1, NULL, 'invitado@pasify.test', 'Gus', 'Invitado');
+  -- Ya no se crean pedidos sin comprador (buyer_user_required): el del
+  -- invitado es uno antiguo, o de una cuenta ya borrada, sin usuario.
+  SELECT * INTO v_g FROM public.create_ticket_order(v_event, v_tier, 1, v_guest, 'invitado@pasify.test', 'Gus', 'Invitado');
+  UPDATE public.ticket_orders SET buyer_user_id = NULL WHERE id = v_g.order_id;
+  UPDATE public.tickets SET buyer_user_id = NULL WHERE order_id = v_g.order_id;
   PERFORM public.set_order_stripe_session(v_g.order_id, 'cs_test_ce_g_' || v_g.order_id);
   PERFORM public.mark_order_paid_v2('cs_test_ce_g_' || v_g.order_id, 'pi_test_ce_g', 2500, 125);
   SELECT * INTO v_c FROM public.create_ticket_order(v_event, v_tier, 1, v_client, 'ce-client@pasify.test', 'Clara', 'Ena');

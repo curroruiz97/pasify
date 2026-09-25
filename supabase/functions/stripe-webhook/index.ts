@@ -27,6 +27,11 @@
 // handlers son idempotentes: dos entregas simultáneas no duplican efectos.
 // Un error devuelve 500 para que Stripe reintente (hasta 3 días).
 //
+// Modo prueba: en producción los eventos con livemode = false se ignoran
+// (200 y log webhook_test_event_ignored, para que Stripe no reintente), salvo
+// el escape PASIFY_ALLOW_TEST_PAYMENTS (ver _shared/stripe.ts). Fuera de
+// producción se procesan como siempre.
+//
 // verify_jwt = false (config.toml) — autenticamos por la firma de Stripe.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -36,6 +41,7 @@ import {
   requireStripe,
   stripeWebhookSecrets,
   stripeKeyIsLive,
+  isIgnoredTestModeObject,
   stripeCryptoProvider,
   stripeId,
   isCheckoutSessionPaid,
@@ -106,6 +112,7 @@ async function handleCheckoutPaid(stripe: Stripe, event: Stripe.Event, session: 
     paymentIntentId,
     amountTotal: session.amount_total ?? 0,
     applicationFee,
+    livemode: session.livemode,
     source: `webhook:${event.type}`,
   });
   log.info("checkout_order_paid", { session_id: session.id, order_id: res.orderId, newly_paid: res.newlyPaid });
@@ -575,6 +582,13 @@ Deno.serve(async (req) => {
 
   log.info("webhook_received", { event_id: event.id, type: event.type, livemode: event.livemode, account: event.account ?? null, endpoint });
 
+  // Producción: nada de modo prueba, ni con la clave de test configurada
+  // (pagos con la tarjeta 4242 que acababan en entradas válidas y en el saldo
+  // del local). 200 para que Stripe no lo reintente.
+  if (isIgnoredTestModeObject(event.livemode)) {
+    log.warn("webhook_test_event_ignored", { event_id: event.id, type: event.type, account: event.account ?? null, endpoint });
+    return json({ received: true, ignored: "test_mode_in_production" });
+  }
   // Un evento de modo test con clave live (o al revés) no es nuestro: el
   // endpoint de Connect en live también recibe eventos de test de las
   // cuentas conectadas.

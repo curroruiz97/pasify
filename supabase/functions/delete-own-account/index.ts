@@ -8,6 +8,8 @@
 // miembros. Si tiene eventos futuros con entradas vendidas la RPC se niega
 // (partner_has_upcoming_sales) y respondemos 409 sin tocar la cuenta.
 // Los clientes siguen como siempre: se borra el usuario de auth y listo.
+// Una cuenta de administrador de plataforma (rol admin) no se borra desde la
+// app: respondemos 409 y su baja se gestiona a mano.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { supabaseAdmin, requireUser, userClientFrom } from "../_shared/supabase.ts";
@@ -33,7 +35,8 @@ Deno.serve(async (req) => {
     const user = await requireUser(req)
     const log = logger.child({ function: 'delete-own-account', user_id: user.id })
 
-    // Rol partner: consulta con el cliente admin (un usuario puede tener varias filas).
+    // Roles con el cliente admin (un usuario puede tener varias filas). Si la
+    // consulta falla no se borra nada: el control de admin no puede fallar abierto.
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
@@ -42,7 +45,17 @@ Deno.serve(async (req) => {
       log.error('user_roles_lookup_failed', { error: rolesError.message })
       return json({ error: 'internal_error' }, 500)
     }
-    const isPartner = (roles ?? []).some((r: { role: string }) => r.role === 'partner')
+    const userRoles = (roles ?? []) as Array<{ role: string }>
+
+    if (userRoles.some((r) => r.role === 'admin')) {
+      log.warn('delete_blocked_admin_account')
+      return json({
+        error: 'admin_account',
+        message: 'Una cuenta de administrador no se puede borrar desde la app.',
+      }, 409)
+    }
+
+    const isPartner = userRoles.some((r) => r.role === 'partner')
 
     if (isPartner) {
       const { data: closed, error: closeError } = await userClientFrom(req).rpc('partner_close_account')

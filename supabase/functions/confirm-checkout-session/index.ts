@@ -12,6 +12,9 @@
 //   2) Si Stripe dice que está cobrada → `handleOrderPaid` (el mismo camino
 //      que el webhook: mark_order_paid_v2 + email con QR, puntos y avisos,
 //      solo la primera vez). Si la sesión caducó → `expire_ticket_order`.
+//      En producción una sesión de modo prueba (livemode false) no confirma
+//      nada: 409 test_payment_not_accepted (salvo PASIFY_ALLOW_TEST_PAYMENTS,
+//      ver _shared/stripe.ts).
 //
 // verify_jwt = false (config.toml): la autorización la hace esta función.
 // Rate limit por IP.
@@ -24,7 +27,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import type Stripe from "npm:stripe@14";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { supabaseAdmin, requireUser, isPlatformAdmin } from "../_shared/supabase.ts";
-import { requireStripe, stripeId, isCheckoutSessionPaid } from "../_shared/stripe.ts";
+import { requireStripe, stripeId, isCheckoutSessionPaid, isIgnoredTestModeObject } from "../_shared/stripe.ts";
 import { enforceRateLimit, clientIp, RateLimitError } from "../_shared/rate-limit.ts";
 import { handleOrderPaid } from "../_shared/order-paid.ts";
 import { logger } from "../_shared/logger.ts";
@@ -121,6 +124,17 @@ Deno.serve(async (req) => {
       return notFound();
     }
 
+    // Producción: un pago de modo prueba no genera entradas (ni email, ni
+    // puntos, ni aviso de venta). El pedido sigue pendiente hasta que caduca.
+    if (isIgnoredTestModeObject(session.livemode)) {
+      olog.warn("test_mode_session_ignored", { status: session.status, payment_status: session.payment_status });
+      return fail(
+        409,
+        "test_payment_not_accepted",
+        "Este pago se hizo en modo de prueba y no genera entradas. No se te ha cobrado nada.",
+      );
+    }
+
     if (isCheckoutSessionPaid(session)) {
       const pi = session.payment_intent;
       const res = await handleOrderPaid({
@@ -128,6 +142,7 @@ Deno.serve(async (req) => {
         paymentIntentId: stripeId(pi),
         amountTotal: session.amount_total ?? 0,
         applicationFee: pi && typeof pi === "object" ? pi.application_fee_amount ?? 0 : 0,
+        livemode: session.livemode,
         source: "confirm-checkout-session",
       });
       olog.info("order_confirmed_via_stripe", { newly_paid: res.newlyPaid });

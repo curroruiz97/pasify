@@ -58,6 +58,10 @@ C:UsersjosepAndroidStudioProjectsstudentslife-mainscriptsevents_to_migrate.json
 "C\357\200\272UsersjosepAndroidStudioProjectsstudentslife-mainscriptsevents_to_migrate.json"
 secrets.env
 
+# Exportaciones de resultados de consultas (editor SQL de Supabase, psql…):
+# suelen llevar datos personales. Nunca se versionan.
+query-results-export*.csv
+
 # Supabase CLI runtime artifacts (project ref, pooler URL, etc.)
 supabase/.temp/
 supabase/.branches/
