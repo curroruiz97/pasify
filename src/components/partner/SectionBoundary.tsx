@@ -20,6 +20,11 @@ import { Sentry } from "@/lib/sentry";
  *
  * Úsese con `key` = id de la sección, para que cambiar de sección monte un
  * boundary limpio.
+ *
+ * El aviso sustituye a la sección entera, título incluido: por eso su
+ * encabezado es el h1 de la vista (y el que recibe el foco al cambiar de
+ * sección). Fuera de <main>, como el del asistente de alta, va con
+ * `nivelTitulo={2}` para no dejar dos h1.
  */
 interface SectionBoundaryProps {
   /** Id de la sección (tag `partner_section` en Sentry). */
@@ -28,6 +33,8 @@ interface SectionBoundaryProps {
   onGoHome?: () => void;
   /** Texto del botón de onGoHome (por defecto, "Ir a Métricas"). */
   goHomeLabel?: string;
+  /** Nivel del encabezado del aviso (por defecto 1: ocupa el sitio de la sección). */
+  nivelTitulo?: 1 | 2;
   children: ReactNode;
 }
 
@@ -45,13 +52,20 @@ const isChunkLoadError = (error: unknown): boolean => {
   return CHUNK_ERROR_RE.test(message) || (error instanceof Error && error.name === "ChunkLoadError");
 };
 
-export const SectionBoundary = ({ sectionId, onGoHome, goHomeLabel = "Ir a Métricas", children }: SectionBoundaryProps) => (
+export const SectionBoundary = ({
+  sectionId,
+  onGoHome,
+  goHomeLabel = "Ir a Métricas",
+  nivelTitulo = 1,
+  children,
+}: SectionBoundaryProps) => (
   <Sentry.ErrorBoundary
     beforeCapture={(scope) => {
       scope.setTag("partner_section", sectionId);
     }}
     fallback={({ error, resetError }) => {
       const chunk = isChunkLoadError(error);
+      const Titulo = nivelTitulo === 1 ? "h1" : "h2";
       return (
         <div
           role="alert"
@@ -63,22 +77,23 @@ export const SectionBoundary = ({ sectionId, onGoHome, goHomeLabel = "Ir a Métr
           >
             <AlertTriangle className="h-5 w-5" />
           </div>
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+          <Titulo className="text-xl font-semibold tracking-tight text-foreground">
             Esta sección ha fallado
-          </h2>
+          </Titulo>
           <p className="mt-2 text-sm text-muted-foreground">
             {chunk
               ? "No se ha podido descargar esta parte del panel: puede que no haya conexión o que haya una versión nueva. Recarga la página para seguir."
               : "Algo no ha ido bien al mostrarla. El resto del panel sigue funcionando: puedes reintentarlo."}
           </p>
+          {/* 44 px de alto en móvil (zona táctil). */}
           <div className="mt-6 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             {chunk ? (
-              <Button type="button" onClick={() => window.location.reload()}>
+              <Button type="button" className="h-11 sm:h-10" onClick={() => window.location.reload()}>
                 <RotateCw className="mr-2 h-4 w-4" />
                 Recargar
               </Button>
             ) : (
-              <Button type="button" onClick={() => resetError()}>
+              <Button type="button" className="h-11 sm:h-10" onClick={() => resetError()}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Reintentar
               </Button>
@@ -87,6 +102,7 @@ export const SectionBoundary = ({ sectionId, onGoHome, goHomeLabel = "Ir a Métr
               <Button
                 type="button"
                 variant="outline"
+                className="h-11 sm:h-10"
                 onClick={() => {
                   resetError();
                   onGoHome();

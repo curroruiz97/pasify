@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
+import { useCajonDeNavegacion, useFocoAlTitulo, usePageTitle } from "@/hooks/usePageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutLocal } from "@/hooks/useAuth";
 import { qk } from "@/lib/cache/keys";
@@ -81,7 +83,7 @@ import { ClientDemoBanner } from "@/components/client/ClientDemoBanner";
 import { UpcomingEventsStrip } from "@/components/client/UpcomingEventsStrip";
 import { Crown, Radio, Gem, Menu, MoreHorizontal, HelpCircle, Settings, ChevronRight } from "lucide-react";
 import { NavTree, type NavTreeNode } from "@/components/shared/NavTree";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SettingsSheet } from "@/components/shared/SettingsSheet";
 import { HelpSheet } from "@/components/shared/HelpSheet";
 import { useRefundRequests, type RefundRequest } from "@/hooks/useRefundRequests";
@@ -158,6 +160,17 @@ const CATEGORIES = [
 const VIEWS: readonly View[] = ["home", "support", "wallet", "favorites", "loyalty", "live", "concierge"];
 const isView = (value: string | undefined): value is View =>
   !!value && (VIEWS as readonly string[]).includes(value);
+
+/** Título de la pestaña en cada vista («Mis entradas · Pasify»): el de su h1. */
+const TITULO_VISTA: Record<View, string> = {
+  home: "Inicio",
+  favorites: "Favoritos",
+  wallet: "Mis entradas",
+  loyalty: "Pasify Points",
+  support: "Soporte",
+  live: "En vivo",
+  concierge: "Concierge",
+};
 
 // Referencias estables mientras no hay datos.
 const SIN_ENTRADAS: WalletTicketRow[] = [];
@@ -266,6 +279,12 @@ const ClientDashboard = () => {
   useEffect(() => {
     if (esVistaDemo && showcaseDecidido && !showcase) navigate("/client-dashboard", { replace: true });
   }, [esVistaDemo, showcaseDecidido, showcase, navigate]);
+
+  // Título de la pestaña y, al cambiar de vista, el foco a su h1 (lector de
+  // pantalla y teclado). «Saltar al contenido» lleva al mismo <main>.
+  const mainRef = useRef<HTMLElement>(null);
+  usePageTitle(TITULO_VISTA[vistaActiva]);
+  useFocoAlTitulo(vistaActiva, mainRef);
 
   const favoritos = useFavorites();
   const { events: favEvents, toggle: toggleFav } = favoritos;
@@ -531,9 +550,20 @@ const ClientDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* Lo primero con el teclado: salta el menú y va al contenido. */}
+      <a
+        href="#contenido"
+        className="saltar-al-contenido"
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Saltar al contenido
+      </a>
       <div className="flex min-h-screen flex-col md:flex-row">
-        {/* Sidebar desktop */}
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:flex md:flex-col">
+        {/* Sidebar desktop: fija al hacer scroll (su menú scrollea dentro). */}
+        <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col">
           <div className="flex flex-col items-start gap-3 border-b border-border p-5">
             <PasifyBrand size={84} />
             <button
@@ -553,7 +583,12 @@ const ClientDashboard = () => {
           <div className="border-t border-border p-2">
             {userId && <ProfileSheet userId={userId} variant="row" onOpenSettings={abrirAjustes} />}
           </div>
-          <div className="border-t border-border p-3">
+          {/* Ayuda también en escritorio (antes solo desde el cajón del móvil). */}
+          <div className="space-y-1 border-t border-border p-3">
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setHelpOpen(true)}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              Ayuda
+            </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
@@ -582,9 +617,12 @@ const ClientDashboard = () => {
           }
         />
 
-        <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
+        <main id="contenido" ref={mainRef} tabIndex={-1} className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
         {vistaActiva === "home" && (
           <>
+            {/* Inicio no enseña título (lo encabeza el buscador), pero el
+                lector de pantalla lo anuncia y recibe el foco como las demás. */}
+            <h1 className="sr-only">Inicio</h1>
             {/* Ciudad (una sola, la del perfil) y búsqueda */}
             <div className="pt-4">
               <button
@@ -1315,12 +1353,14 @@ const ClientDrawer = ({
   variant?: "topbar" | "tab";
 }) => {
   const [open, setOpen] = useState(false);
+  // Al cambiar de vista desde el cajón, el foco va al título de la nueva.
+  const cajon = useCajonDeNavegacion(view);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         {variant === "tab" ? (
           <button
-            className={`relative flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
+            className={`relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition ${
               open ? "text-primary" : "text-muted-foreground"
             }`}
             aria-label="Más opciones"
@@ -1329,7 +1369,7 @@ const ClientDrawer = ({
             <span className="leading-none">Más</span>
           </button>
         ) : (
-          <Button variant="ghost" size="icon" aria-label="Abrir menú">
+          <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Abrir menú">
             <Menu className="h-5 w-5" />
           </Button>
         )}
@@ -1337,6 +1377,8 @@ const ClientDrawer = ({
       <SheetContent
         side="right"
         className="flex w-[88vw] max-w-sm flex-col gap-0 border-l border-border bg-card p-0"
+        aria-describedby={undefined}
+        {...cajon}
       >
         <header className="border-b border-border p-5">
           <div
@@ -1346,9 +1388,10 @@ const ClientDrawer = ({
             <span className="inline-block h-px w-5 bg-orange-500/70" />
             Pasify · Cliente
           </div>
-          <div className="text-lg font-semibold tracking-tight text-foreground">
+          {/* Nombre del diálogo para el lector de pantalla. */}
+          <SheetTitle className="tracking-tight">
             {city ? `Tu noche en ${city}` : "Tu noche"}
-          </div>
+          </SheetTitle>
         </header>
 
         <nav className="flex-1 overflow-y-auto p-3">
@@ -1376,7 +1419,7 @@ const ClientDrawer = ({
           <div className="flex flex-col gap-1">
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenSettings, 120);
@@ -1388,7 +1431,7 @@ const ClientDrawer = ({
             </button>
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenHelp, 120);
@@ -1405,7 +1448,7 @@ const ClientDrawer = ({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start"
+            className="h-11 w-full justify-start"
             onClick={() => {
               setOpen(false);
               onLogout();
@@ -2100,4 +2143,15 @@ const EntradaReembolsada = ({ ticket }: { ticket: WalletTicketRow }) => {
   );
 };
 
-export default ClientDashboard;
+/**
+ * Las animaciones de framer-motion del panel (hojas inferiores) respetan
+ * «reducir movimiento» del sistema. Sobra si App.tsx pone el mismo
+ * MotionConfig en la raíz.
+ */
+const ClientDashboardConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <ClientDashboard />
+  </MotionConfig>
+);
+
+export default ClientDashboardConMovimientoReducido;

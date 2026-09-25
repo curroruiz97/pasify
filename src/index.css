@@ -21,7 +21,12 @@
     --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 65%;
+    /* Texto secundario. Con el 65 % de antes, las variantes con opacidad de
+       las etiquetas pequeñas (text-muted-foreground/70 a 10-11 px, en
+       Pedidos, Soporte…) se quedaban en 4,2:1 sobre las tarjetas, por debajo
+       del 4,5:1 de WCAG AA. Con el 70 % pasan (4,8:1 sobre --card) y el color
+       lleno sube de 7,4:1 a 8,5:1. Mismo gris neutro, un punto más claro. */
+    --muted-foreground: 0 0% 70%;
 
     --accent: 13 80% 16%;
     --accent-foreground: 13 80% 80%;
@@ -78,7 +83,7 @@
     --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 65%;
+    --muted-foreground: 0 0% 70%;
 
     --accent: 13 80% 16%;
     --accent-foreground: 13 80% 80%;
@@ -146,6 +151,53 @@
     body {
       overflow-x: hidden;
     }
+  }
+
+  /* Foco puesto por código (tabindex="-1"): el <main> al que salta «Saltar
+     al contenido» y el h1 de la sección al cambiar de sección
+     (useFocoAlTitulo). Sin marco al llegar con el ratón o el dedo; con el
+     teclado, el anillo de la marca en el título. Al acercarlo a la vista,
+     queda por debajo de la barra superior fija del móvil. */
+  main[tabindex="-1"]:focus,
+  h1[tabindex="-1"]:focus:not(:focus-visible) {
+    outline: none;
+  }
+  h1[tabindex="-1"]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+  main h1 {
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5rem);
+  }
+}
+
+@layer components {
+  /* «Saltar al contenido»: primer elemento de cada panel. Fuera de la vista
+     (pero no del lector de pantalla) hasta que el teclado lo enfoca; entonces
+     aparece arriba a la izquierda, por encima de las barras. */
+  .saltar-al-contenido {
+    position: fixed;
+    left: 1rem;
+    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    z-index: 10000;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1.25rem;
+    border: 1px solid hsl(var(--primary));
+    border-radius: 9999px;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.6);
+    transform: translateY(calc(-100% - 3rem - env(safe-area-inset-top, 0px)));
+  }
+  .saltar-al-contenido:focus {
+    transform: none;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
@@ -749,3 +801,28 @@ animation-play-state: paused;
 .safe-top    { padding-top: max(env(safe-area-inset-top), 12px); }
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
 .safe-x      { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+/* ============================================================
+   REDUCIR MOVIMIENTO (prefers-reduced-motion: reduce)
+   Con la preferencia del sistema, las animaciones y transiciones CSS
+   (hojas y diálogos que entran deslizándose, marquesinas, pulsos, hover…)
+   terminan al instante: duran 0,01 ms en vez de desaparecer, así siguen
+   llegando los animationend/transitionend de los que depende Radix para
+   desmontar un diálogo. Los indicadores de carga (animate-spin) siguen
+   girando: quietos parecería que la app se ha colgado.
+   Las de framer-motion van aparte: MotionConfig reducedMotion="user".
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

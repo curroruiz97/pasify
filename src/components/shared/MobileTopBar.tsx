@@ -30,6 +30,10 @@ import { useAuth } from "@/hooks/useAuth";
  *
  * El componente sólo se renderiza < md; en desktop el sidebar lateral
  * sigue siendo la nav principal.
+ *
+ * Objetivos táctiles de 44 px: la flecha de volver y la pastilla del cambio
+ * de panel (la pastilla se ve igual; lo que crece es la zona pulsable). Los
+ * botones del `endSlot` los dimensiona quien los pasa.
  */
 
 type Role = "client" | "partner" | "admin";
@@ -89,14 +93,14 @@ export const MobileTopBar = ({
 
   return (
     <header
-      className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-3 pr-2 md:hidden"
-      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+      className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 pr-2 md:hidden"
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
     >
       {showBack && (
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-11 w-11 shrink-0"
           onClick={onBack}
           aria-label="Volver"
         >
@@ -111,14 +115,16 @@ export const MobileTopBar = ({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="group inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-transparent px-2.5 py-1 text-xs font-semibold text-primary transition hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              className="group inline-flex min-h-[44px] items-center focus:outline-none"
               aria-label={`Cambiar de panel · actualmente ${meta.label}`}
             >
-              {meta.label}
-              <ChevronDown
-                className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180"
-                strokeWidth={2.5}
-              />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-transparent px-2.5 py-1 text-xs font-semibold text-primary transition group-hover:bg-primary/10 group-focus-visible:ring-2 group-focus-visible:ring-primary/40 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-card">
+                {meta.label}
+                <ChevronDown
+                  className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180"
+                  strokeWidth={2.5}
+                />
+              </span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" sideOffset={6} className="min-w-[200px]">
@@ -134,7 +140,7 @@ export const MobileTopBar = ({
                 <DropdownMenuItem
                   key={r}
                   onSelect={() => handleSelectRole(r)}
-                  className={`gap-2 ${isActive ? "bg-primary/10 text-primary" : ""}`}
+                  className={`min-h-[44px] gap-2 ${isActive ? "bg-primary/10 text-primary" : ""}`}
                 >
                   <m.Icon className="h-4 w-4" strokeWidth={2.5} />
                   <span className="flex-1">{m.label}</span>

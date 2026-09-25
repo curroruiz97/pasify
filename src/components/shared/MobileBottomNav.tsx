@@ -13,6 +13,10 @@ import type { ReactNode } from "react";
  * Padding-bottom usa `env(safe-area-inset-bottom)` para respetar el área
  * segura de iOS (notch / barra inferior).
  *
+ * Accesibilidad: la pestaña activa lleva aria-current="page", cada celda
+ * mide al menos 44 px de alto y el contador se lee con la etiqueta
+ * («Soporte, 3 pendientes»); el globo naranja es solo visual.
+ *
  * Sólo se renderiza < md.
  */
 
@@ -40,6 +44,7 @@ export function MobileBottomNav<TId extends string = string>({
 }: MobileBottomNavProps<TId>) {
   return (
     <nav
+      aria-label="Secciones"
       className="fixed bottom-0 inset-x-0 z-20 flex items-stretch border-t border-border bg-card md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
@@ -51,7 +56,7 @@ export function MobileBottomNav<TId extends string = string>({
             key={item.id}
             type="button"
             onClick={() => onSelect(item.id)}
-            className={`relative flex flex-1 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium leading-tight transition ${
+            className={`relative flex min-h-[44px] flex-1 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
               active ? "text-primary" : "text-muted-foreground"
             }`}
             aria-current={active ? "page" : undefined}
@@ -62,13 +67,14 @@ export function MobileBottomNav<TId extends string = string>({
                 <span
                   className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-primary-foreground"
                   style={{ background: "#E8542A" }}
-                  aria-label={`${item.badge} sin leer`}
+                  aria-hidden="true"
                 >
                   {item.badge}
                 </span>
               )}
             </span>
             <span className="block w-full truncate text-center">{item.label}</span>
+            {hasBadge && <span className="sr-only">{`, ${item.badge} pendientes`}</span>}
             {active && (
               <span
                 className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full"

@@ -1,6 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
+import { useCajonDeNavegacion, useFocoAlTitulo, usePageTitle } from "@/hooks/usePageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutLocal } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,7 +61,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { PartnerEventList } from "@/components/partner/PartnerEventList";
@@ -180,6 +182,32 @@ const ALL_SECTIONS: readonly Section[] = [
 ];
 const isSection = (value: string | undefined): value is Section =>
   !!value && (ALL_SECTIONS as readonly string[]).includes(value);
+
+/** Título de la pestaña en cada sección («Mis eventos · Pasify»). */
+const TITULO_SECCION: Record<Section, string> = {
+  metricas: "Métricas",
+  live: "En vivo",
+  autopilot: "AutoPilot IA",
+  forecast: "Previsión",
+  pricing: "Pricing IA",
+  eventos: "Mis eventos",
+  reembolsos: "Reembolsos",
+  asistentes: "Asistentes",
+  scanner: "Escáner",
+  door_vision: "Door Vision IA",
+  tpv: "TPV",
+  cashless: "Cashless",
+  vip: "VIP & Hospitality",
+  crm: "CRM & Audience",
+  marketing: "Marketing",
+  channels: "Canales de venta",
+  team: "Equipo",
+  apps: "App Marketplace",
+  whitelabel: "White-label",
+  benchmarks: "Benchmarks",
+  stripe: "Cobros",
+  soporte: "Soporte",
+};
 
 /**
  * SECCIONES MAQUETA — OCULTAS SALVO EN LA ORGANIZACIÓN DE DEMO.
@@ -369,6 +397,12 @@ const PartnerDashboard = () => {
   // Si un enlace guardado apunta a una seccion que no se puede ver, se cae a
   // Metricas en vez de pintar una pantalla que no deberia estar ahi.
   const seccionActiva: Section = seccionVisible(section) ? section : "metricas";
+
+  // Título de la pestaña y, al cambiar de sección, el foco a su h1 (lector
+  // de pantalla y teclado). «Saltar al contenido» lleva al mismo <main>.
+  const mainRef = useRef<HTMLElement>(null);
+  usePageTitle(TITULO_SECCION[seccionActiva]);
+  useFocoAlTitulo(seccionActiva, mainRef);
 
   // Modo puerta activo en este dispositivo: el panel no se abre.
   useEffect(() => {
@@ -641,6 +675,17 @@ const PartnerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* Lo primero con el teclado: salta el menú y va al contenido. */}
+      <a
+        href="#contenido"
+        className="saltar-al-contenido"
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Saltar al contenido
+      </a>
       {/* Onboarding wizard: usa estado server-side de partner_onboarding_state
           via usePartnerContext. NUNCA depende de localStorage. Ya no se abre
           solo: se monta (y se descarga su chunk) al pedirlo desde la lista de
@@ -650,6 +695,7 @@ const PartnerDashboard = () => {
           sectionId="onboarding"
           onGoHome={() => setReopenOnboarding(false)}
           goHomeLabel="Cerrar"
+          nivelTitulo={2}
         >
           <Suspense fallback={<AsistenteCargando />}>
             <PartnerOnboardingWizard
@@ -668,8 +714,8 @@ const PartnerDashboard = () => {
         </SectionBoundary>
       )}
       <div className="flex min-h-screen flex-col md:flex-row">
-        {/* Sidebar desktop */}
-        <aside className="hidden w-60 border-r border-border bg-card md:flex md:flex-col">
+        {/* Sidebar desktop: fija al hacer scroll (su menú scrollea dentro). */}
+        <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col">
           <div className="flex flex-col items-start gap-3 border-b border-border p-5">
             <PasifyBrand size={84} />
             <Badge variant="outline" className="border-primary/40 text-primary">
@@ -702,6 +748,11 @@ const PartnerDashboard = () => {
               <Settings className="mr-2 h-4 w-4" />
               Configuración
             </Button>
+            {/* Ayuda también en escritorio (antes solo desde el cajón del móvil). */}
+            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setHelpOpen(true)}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              Ayuda y guías
+            </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => void handleLogout()}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
@@ -727,7 +778,7 @@ const PartnerDashboard = () => {
           }
         />
 
-        <main className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
+        <main id="contenido" ref={mainRef} tabIndex={-1} className="flex-1 overflow-x-auto p-6 pb-24 md:p-8 md:pb-8">
           {/* Organización suspendida: franja fija en todas las secciones. */}
           {bloqueoPublicar && <SuspendedBanner message={bloqueoPublicar} />}
 
@@ -760,7 +811,7 @@ const PartnerDashboard = () => {
                 size="sm"
                 onClick={() => void partnerCtx.refresh()}
                 disabled={partnerCtx.refreshing}
-                className="shrink-0"
+                className="shrink-0 max-md:h-11"
               >
                 {partnerCtx.refreshing ? (
                   <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -1025,6 +1076,11 @@ const PartnerDashboard = () => {
           {/* ASISTENTES — control de puerta estilo Eventbrite */}
           {seccionActiva === "asistentes" && (
             <div>
+              {/* Con eventos, el título lo pinta PartnerAttendees; mientras
+                  cargan, si fallan o si aún no hay ninguno, va aquí. */}
+              {(loading || loadError || events.length === 0) && (
+                <h1 className="mb-6 text-3xl font-bold tracking-tight">Asistentes y check-ins</h1>
+              )}
               {eventsGate(
                 <Diferida>
                   <PartnerAttendees
@@ -1072,7 +1128,7 @@ const PartnerDashboard = () => {
                   La cámara se activa sola. Apunta al QR de la entrada: el resultado sale a pantalla
                   completa y los accesos validados aparecen al momento en Asistentes.
                 </p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/door")}>
+                <Button variant="outline" size="sm" className="mt-3 max-md:h-11" onClick={() => navigate("/door")}>
                   <Lock className="mr-2 h-4 w-4" />
                   Modo puerta con PIN
                 </Button>
@@ -1491,7 +1547,7 @@ const StaleListNotice = ({ onRetry, retrying }: { onRetry: () => void; retrying:
       <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
       No hemos podido actualizar la lista: ves la última que se cargó.
     </span>
-    <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying} className="shrink-0">
+    <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying} className="shrink-0 max-md:h-11">
       {retrying ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="mr-2 h-3.5 w-3.5" />}
       Reintentar
     </Button>
@@ -1525,7 +1581,7 @@ const LoadErrorCard = ({
         <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{message}</p>
       </div>
     </div>
-    <Button size="sm" onClick={onRetry} disabled={retrying} className="shrink-0">
+    <Button size="sm" onClick={onRetry} disabled={retrying} className="shrink-0 max-md:h-11">
       {retrying ? (
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
       ) : (
@@ -1567,7 +1623,7 @@ const LiveSection = ({
         <select
           value={selectedId ?? ""}
           onChange={(ev) => setSelectedId(ev.target.value || null)}
-          className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground sm:w-auto"
+          className="min-h-[44px] w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground sm:w-auto md:min-h-0"
           aria-label="Evento"
         >
           {options.map((e) => (
@@ -1680,7 +1736,13 @@ const StripeSection = ({ orgId }: { orgId: string | null }) => {
           ) : balanceState === "error" ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               No hemos podido cargar tus cobros.
-              <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="max-md:h-11"
+                onClick={() => void query.refetch()}
+                disabled={query.isFetching}
+              >
                 {query.isFetching ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
@@ -1747,6 +1809,9 @@ const PartnerDrawer = ({
   badgeFor?: (id: Section) => number | undefined;
   variant?: "topbar" | "tab";
 }) => {
+  // Al cambiar de sección desde el cajón, el foco va al título de la nueva.
+  const cajon = useCajonDeNavegacion(section);
+
   const [open, setOpen] = useState(false);
   // En la barra inferior, "Más" enseña cuánto espera dentro del cajón.
   const pendientes = variant === "tab" && badgeFor ? (badgeFor("reembolsos") ?? 0) : 0;
@@ -1779,12 +1844,17 @@ const PartnerDrawer = ({
             <span className="leading-none">Más</span>
           </button>
         ) : (
-          <Button variant="ghost" size="icon" aria-label="Abrir menú">
+          <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Abrir menú">
             <Menu className="h-5 w-5" />
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent side="right" className="flex w-[88vw] max-w-sm flex-col gap-0 border-l border-border bg-card p-0">
+      <SheetContent
+        side="right"
+        className="flex w-[88vw] max-w-sm flex-col gap-0 border-l border-border bg-card p-0"
+        aria-describedby={undefined}
+        {...cajon}
+      >
         {/* Header del drawer */}
         <header className="border-b border-border p-5">
           <div
@@ -1794,9 +1864,8 @@ const PartnerDrawer = ({
             <span className="inline-block h-px w-5 bg-orange-500/70" />
             Pasify · Local
           </div>
-          <div className="text-lg font-semibold tracking-tight text-foreground">
-            {businessName ?? "Tu local"}
-          </div>
+          {/* Nombre del diálogo para el lector de pantalla. */}
+          <SheetTitle className="tracking-tight">{businessName ?? "Tu local"}</SheetTitle>
         </header>
 
         {/* Navegación principal */}
@@ -1827,7 +1896,7 @@ const PartnerDrawer = ({
           <div className="flex flex-col gap-1">
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenSettings, 120);
@@ -1839,7 +1908,7 @@ const PartnerDrawer = ({
             </button>
             <button
               type="button"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               onClick={() => {
                 setOpen(false);
                 setTimeout(onOpenHelp, 120);
@@ -1857,7 +1926,7 @@ const PartnerDrawer = ({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start"
+            className="h-11 w-full justify-start"
             onClick={() => {
               setOpen(false);
               onLogout();
@@ -1897,4 +1966,15 @@ const StatCard = ({
 // reutilizado para create / edit / duplicate. Eso elimina ~450 LOC duplicadas
 // y garantiza que la edición sigue exactamente la misma UX que la creación.
 
-export default PartnerDashboard;
+/**
+ * Las animaciones de framer-motion del panel (hojas inferiores) respetan
+ * «reducir movimiento» del sistema. Sobra si App.tsx pone el mismo
+ * MotionConfig en la raíz.
+ */
+const PartnerDashboardConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <PartnerDashboard />
+  </MotionConfig>
+);
+
+export default PartnerDashboardConMovimientoReducido;

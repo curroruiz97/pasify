@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { MonthGrid } from "@/components/event/MonthGrid";
 import { isEventOver } from "@/components/tickets/ticketUtils";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { useFavoritePartners } from "@/hooks/useFavoritePartners";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import type { PublicPartner } from "@/hooks/queries/clientData";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
@@ -79,6 +81,13 @@ const EVENT_COLUMNS =
   "id, title, description, date_start, date_end, city, price_cents, capacity, tickets_sold, image_url, status";
 
 const monoFont = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+
+/**
+ * Gris cálido de la pestaña inactiva. Era #8A8275: el número de eventos
+ * (10 px) quedaba en 4,4:1 sobre su pastilla, por debajo del 4,5:1 de WCAG
+ * AA. Un punto más claro, el mismo tono.
+ */
+const GRIS_INACTIVO = "#948C7F";
 
 // Nota: DEMO_PARTNERS y demoEventsFor eliminados (mayo 2026, hardening).
 // Antes se hardcoded Pacha/Razzmatazz/etc. con id "demo-*". En producción
@@ -163,15 +172,7 @@ const PublicPartnerPage = () => {
     (eventsQuery.isError || (eventsQuery.isPending && eventsQuery.fetchStatus === "paused"));
 
   // Título de la pestaña: el del local mientras se ve su ficha.
-  useEffect(() => {
-    const previo = document.title;
-    return () => {
-      document.title = previo;
-    };
-  }, []);
-  useEffect(() => {
-    if (partner?.business_name) document.title = `${partner.business_name} · Pasify`;
-  }, [partner?.business_name]);
+  usePageTitle(partner?.business_name);
 
   const upcomingEvents = useMemo(() => {
     // Misma regla que el servidor: se ve (y se vende) hasta que termina.
@@ -212,7 +213,7 @@ const PublicPartnerPage = () => {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="text-muted-foreground mb-4">Local no encontrado.</p>
+            <h1 className="text-muted-foreground mb-4">Local no encontrado.</h1>
             <Button onClick={volver}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver
@@ -229,7 +230,7 @@ const PublicPartnerPage = () => {
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
           <Card>
             <CardContent className="py-10 text-center">
-              <p className="font-semibold text-foreground">No hemos podido cargar este local</p>
+              <h1 className="font-semibold text-foreground">No hemos podido cargar este local</h1>
               <p className="mt-2 mb-6 text-sm text-muted-foreground">
                 Revisa tu conexión y vuelve a intentarlo.
               </p>
@@ -330,10 +331,11 @@ const PublicPartnerPage = () => {
           />
         </div>
 
-        {/* Back button */}
+        {/* Back button (44 px en móvil: zona táctil) */}
         <button
+          type="button"
           onClick={volver}
-          className="absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
+          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60 md:h-9 md:w-9"
           style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
           aria-label="Volver"
         >
@@ -346,7 +348,7 @@ const PublicPartnerPage = () => {
           onClick={alternarFavorito}
           aria-pressed={esFavorito}
           aria-label={esFavorito ? `Quitar ${nombreLocal} de favoritos` : `Guardar ${nombreLocal} en favoritos`}
-          className="absolute right-16 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
+          className="absolute right-[4.5rem] top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60 md:right-16 md:h-9 md:w-9"
           style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
         >
           <Heart
@@ -358,8 +360,9 @@ const PublicPartnerPage = () => {
 
         {/* Compartir: enlace de la web pública, con vista previa en WhatsApp */}
         <button
+          type="button"
           onClick={() => void sharePartnerLink(id, partner.business_name ?? "Local en Pasify")}
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60"
+          className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition hover:bg-black/60 md:h-9 md:w-9"
           style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
           aria-label="Compartir local"
         >
@@ -419,11 +422,14 @@ const PublicPartnerPage = () => {
       {/* Tabs — editorial style */}
       <div className="mx-auto mt-10 max-w-5xl px-4 md:px-6">
         <div className="mb-6 flex items-end justify-between gap-4 border-b border-border">
+          {/* Lista / Calendario: 44 px de alto como mínimo (zona táctil). */}
           <div className="flex gap-1">
             <button
+              type="button"
               onClick={() => setTab("list")}
-              className="group relative inline-flex items-center gap-2 px-4 pb-3 pt-1 text-sm font-medium transition"
-              style={{ color: tab === "list" ? "#F4EEE2" : "#8A8275" }}
+              aria-pressed={tab === "list"}
+              className="group relative inline-flex min-h-[44px] items-center gap-2 px-4 pb-3 pt-1 text-sm font-medium transition"
+              style={{ color: tab === "list" ? "#F4EEE2" : GRIS_INACTIVO }}
             >
               <ListIcon className="h-4 w-4" />
               Próximos eventos
@@ -434,7 +440,7 @@ const PublicPartnerPage = () => {
                     ...monoFont,
                     letterSpacing: "0.08em",
                     background: tab === "list" ? "rgba(232,84,42,0.18)" : "rgba(255,255,255,0.06)",
-                    color: tab === "list" ? "#FF7A4D" : "#8A8275",
+                    color: tab === "list" ? "#FF7A4D" : GRIS_INACTIVO,
                   }}
                 >
                   {upcomingEvents.length.toString().padStart(2, "0")}
@@ -453,9 +459,11 @@ const PublicPartnerPage = () => {
               />
             </button>
             <button
+              type="button"
               onClick={() => setTab("calendar")}
-              className="group relative inline-flex items-center gap-2 px-4 pb-3 pt-1 text-sm font-medium transition"
-              style={{ color: tab === "calendar" ? "#F4EEE2" : "#8A8275" }}
+              aria-pressed={tab === "calendar"}
+              className="group relative inline-flex min-h-[44px] items-center gap-2 px-4 pb-3 pt-1 text-sm font-medium transition"
+              style={{ color: tab === "calendar" ? "#F4EEE2" : GRIS_INACTIVO }}
             >
               <CalendarDays className="h-4 w-4" />
               Calendario
@@ -532,9 +540,9 @@ const PublicPartnerPage = () => {
                       <span className="inline-block h-px w-6 bg-orange-500/70" />
                       Día seleccionado
                     </div>
-                    <h3 className="text-2xl font-semibold capitalize tracking-tight text-foreground">
+                    <h2 className="text-2xl font-semibold capitalize tracking-tight text-foreground">
                       {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
-                    </h3>
+                    </h2>
                     {dayEvents.length === 0 ? (
                       <p
                         className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground"
@@ -567,4 +575,14 @@ const PublicPartnerPage = () => {
   );
 };
 
-export default PublicPartnerPage;
+/**
+ * La hoja de compra (framer-motion) respeta «reducir movimiento» del
+ * sistema. Sobra si App.tsx pone el mismo MotionConfig en la raíz.
+ */
+const PublicPartnerPageConMovimientoReducido = () => (
+  <MotionConfig reducedMotion="user">
+    <PublicPartnerPage />
+  </MotionConfig>
+);
+
+export default PublicPartnerPageConMovimientoReducido;
