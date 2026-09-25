@@ -52,8 +52,9 @@ BEGIN
   END;
   RESET ROLE;
 
-  -- Plazo de reembolso amplio: la solicitud queda pendiente (no automática)
-  UPDATE public.ticket_tiers SET refundable_until_hours_before = 1000 WHERE id = v_tier;
+  -- Tipo con devolución hasta 48 h antes (evento a 10 días): la solicitud
+  -- queda pendiente y la decide el local (Ola 2, o2_reembolsos).
+  UPDATE public.ticket_tiers SET refundable_until_hours_before = 48 WHERE id = v_tier;
 
   -- Dos entradas pagadas del cliente
   SELECT * INTO v_order FROM public.create_ticket_order(v_event, v_tier, 2, v_client, 'rf-client@pasify.test', 'Rita', 'Fernández');

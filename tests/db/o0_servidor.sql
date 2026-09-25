@@ -423,6 +423,16 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_client, 'role', 'authenticated')::text, true);
   SET LOCAL ROLE authenticated;
   PERFORM public.redeem_referral_code(v_code);
+  RESET ROLE;
+  -- Ola 2 (o2_reembolsos): el canje deja el referido pendiente y los puntos
+  -- llegan con la primera compra de pago (v_client ya tiene pedidos pagados),
+  -- como hace order-paid.ts desde el servidor.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM public.grant_referral_on_first_purchase(v_client);
+  PERFORM set_config('request.jwt.claim.sub', v_client::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_client, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
 
   -- Como cliente
   IF NOT public.has_role(v_client, 'client') THEN RAISE EXCEPTION 'FAIL has_role propio'; END IF;

@@ -10,9 +10,18 @@
 //                                    puntos y notificaciones, solo la primera vez)
 //   checkout.session.expired / async_payment_failed
 //                                  → expire_ticket_order (libera el stock)
-//   charge.refunded                → mark_refund_processed por cada reembolso completado
+//   charge.refunded                → mark_refund_processed por cada reembolso de Pasify
+//                                    completado; los hechos en el panel de Stripe (sin
+//                                    pasify_refund_request_id) → mark_external_refund:
+//                                    total = entradas y pedido reembolsados; parcial = se
+//                                    anota en el pedido y se avisa a los admins
 //   refund.updated                 → reembolso que se completa más tarde (cierra la
-//                                    solicitud) o que Stripe rechaza (vuelve a 'failed')
+//                                    solicitud, o el externo) o que Stripe rechaza
+//                                    (vuelve a 'failed')
+//   charge.dispute.created         → mark_order_dispute 'open': la puerta rechaza sus
+//                                    entradas y se avisa a los admins
+//   charge.dispute.closed          → ganada: vuelven a valer; perdida: reembolso
+//                                    externo total (mark_external_refund)
 //   customer.subscription.*        → upsert partner_subscriptions (estado mapeado)
 //   invoice.paid                   → último cobro de la suscripción
 //   invoice.payment_failed         → past_due + aviso al owner
@@ -31,6 +40,11 @@
 // (200 y log webhook_test_event_ignored, para que Stripe no reintente), salvo
 // el escape PASIFY_ALLOW_TEST_PAYMENTS (ver _shared/stripe.ts). Fuera de
 // producción se procesan como siempre.
+//
+// En Stripe, el endpoint de PLATAFORMA tiene que enviar también
+// charge.dispute.created y charge.dispute.closed (o charge.dispute.*): sin
+// ellos las disputas no llegan. Los demás charge.dispute.* se registran como
+// 'ignored'.
 //
 // verify_jwt = false (config.toml) — autenticamos por la firma de Stripe.
 
@@ -52,8 +66,9 @@ import {
 import { logger } from "../_shared/logger.ts";
 import { enqueueNotification, type EnqueueNotificationOpts } from "../_shared/notify.ts";
 import { sendEmail } from "../_shared/resend.ts";
-import { payoutArrivedEmail } from "../_shared/email-templates.ts";
+import { formatMoney, orderReference, payoutArrivedEmail } from "../_shared/email-templates.ts";
 import { handleOrderPaid } from "../_shared/order-paid.ts";
+import { notifyInAppOnly } from "../_shared/refund.ts";
 
 const log = logger.child({ function: "stripe-webhook" });
 
@@ -128,8 +143,79 @@ async function handleCheckoutExpired(event: Stripe.Event, session: Stripe.Checko
 }
 
 /* ===========================================================================
+   Avisos a los admins de plataforma (disputas, reembolsos parciales externos)
+   =========================================================================== */
+
+/** Aviso normal (en la app, push y email genérico) a cada admin. Nunca lanza. */
+async function notifyPlatformAdmins(opts: Omit<EnqueueNotificationOpts, "user_id" | "category">): Promise<void> {
+  const { data, error } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
+  if (error) {
+    log.warn("platform_admins_lookup_failed", { kind: opts.kind, error: error.message });
+    return;
+  }
+  const ids = [...new Set(((data ?? []) as Array<{ user_id: string | null }>).map((r) => r.user_id).filter((id): id is string => !!id))];
+  for (const userId of ids) await notifySafe({ ...opts, user_id: userId, category: "system" });
+}
+
+/* ===========================================================================
    Reembolsos
    =========================================================================== */
+
+/** Solicitud de Pasify de un reembolso (metadatos), o null si se hizo fuera de Pasify. */
+function pasifyRequestId(refund: Stripe.Refund): string | null {
+  const id = refund.metadata?.pasify_refund_request_id;
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
+/** El cargo queda devuelto entero (amount_refunded incluye este reembolso). */
+const chargeFullyRefunded = (charge: Stripe.Charge): boolean =>
+  charge.refunded === true || (charge.amount_refunded ?? 0) >= charge.amount;
+
+interface ExternalRefundResult {
+  result: "full" | "partial" | "duplicate" | "order_not_found" | "pasify_refund";
+  order_id?: string;
+  event_id?: string;
+  tickets_refunded?: number;
+  requests?: number;
+}
+
+/**
+ * Reembolso hecho en el panel de Stripe (sin pasify_refund_request_id):
+ * mark_external_refund. Total → entradas y pedido reembolsados; parcial → se
+ * anota en el pedido y se avisa a los admins (hay que decidir qué entradas
+ * anular). Idempotente por id del reembolso.
+ */
+async function applyExternalRefund(opts: {
+  paymentIntentId: string;
+  refund: Stripe.Refund;
+  full: boolean;
+}): Promise<void> {
+  const { paymentIntentId, refund, full } = opts;
+  if (!paymentIntentId) {
+    log.warn("external_refund_without_payment_intent", { stripe_refund_id: refund.id });
+    return;
+  }
+  const { data, error } = await supabaseAdmin.rpc("mark_external_refund", {
+    _payment_intent_id: paymentIntentId,
+    _stripe_object_id: refund.id,
+    _amount_cents: refund.amount,
+    _full: full,
+    _source: "stripe_refund",
+  });
+  if (error) throw new Error(`mark_external_refund_failed: ${error.message}`);
+  const res = data as ExternalRefundResult;
+  log.info("external_refund", { stripe_refund_id: refund.id, full, result: res.result, order_id: res.order_id ?? null });
+  if (res.result === "partial" && res.order_id) {
+    await notifyPlatformAdmins({
+      kind: "external_refund_partial",
+      title: "Reembolso parcial hecho en Stripe",
+      body: `${formatMoney(refund.amount, (refund.currency ?? "eur").toUpperCase())} del pedido ${orderReference(res.order_id)}. Las entradas siguen válidas: revisa cuáles anular.`,
+      link: "/#/admin",
+      priority: "high",
+      payload: { order_id: res.order_id, event_id: res.event_id ?? null, stripe_refund_id: refund.id },
+    });
+  }
+}
 
 async function handleChargeRefunded(stripe: Stripe, charge: Stripe.Charge): Promise<Outcome> {
   // Desde la API 2022-11-15 `charge.refunds` ya no viene en el evento: se
@@ -139,31 +225,50 @@ async function handleChargeRefunded(stripe: Stripe, charge: Stripe.Charge): Prom
     : (await stripe.refunds.list({ charge: charge.id, limit: 100 })).data;
   const paymentIntentId = stripeId(charge.payment_intent) ?? "";
 
+  // Primero los de Pasify: llevan la solicitud en los metadatos, así se
+  // casan bien aunque un pedido tenga varias en proceso a la vez (una
+  // cancelación reembolsa cada entrada por separado).
   for (const r of refunds) {
-    if (r.status !== "succeeded") continue;
-    // Los reembolsos de Pasify llevan la solicitud en los metadatos: así se
-    // casan bien aunque un pedido tenga varias en proceso a la vez (una
-    // cancelación reembolsa cada entrada por separado).
-    const requestId = r.metadata?.pasify_refund_request_id;
+    const requestId = pasifyRequestId(r);
+    if (!requestId || r.status !== "succeeded") continue;
     const { error } = await supabaseAdmin.rpc("mark_refund_processed", {
       _stripe_refund_id: r.id,
       _amount_refunded_cents: r.amount,
       _payment_intent_id: paymentIntentId,
-      ...(requestId && /^[0-9a-f-]{36}$/i.test(requestId) ? { _refund_request_id: requestId } : {}),
+      _refund_request_id: requestId,
     });
     if (error) throw new Error(`mark_refund_processed_failed: ${error.message}`);
+  }
+  // Después los hechos en el panel de Stripe: antes no anulaban la entrada
+  // (seguía valiendo en la puerta) y el dinero seguía contando en el saldo.
+  const full = chargeFullyRefunded(charge);
+  for (const r of refunds) {
+    if (pasifyRequestId(r) || r.status !== "succeeded") continue;
+    await applyExternalRefund({ paymentIntentId, refund: r, full });
   }
   return "processed";
 }
 
 /**
  * Un reembolso cambia de estado después de crearse (los que quedan
- * 'pending'): al completarse se cierra la solicitud; si Stripe lo rechaza o
- * se cancela, la solicitud vuelve a 'failed' para poder reintentarla.
+ * 'pending'): al completarse se cierra la solicitud (o se aplica el externo);
+ * si Stripe lo rechaza o se cancela, la solicitud vuelve a 'failed' para
+ * poder reintentarla.
  */
-async function handleRefundUpdated(refund: Stripe.Refund): Promise<Outcome> {
-  const requestId = refund.metadata?.pasify_refund_request_id;
-  if (!requestId || !/^[0-9a-f-]{36}$/i.test(requestId)) return "ignored";
+async function handleRefundUpdated(stripe: Stripe, refund: Stripe.Refund): Promise<Outcome> {
+  const requestId = pasifyRequestId(refund);
+  if (!requestId) {
+    if (refund.status !== "succeeded") return "ignored";
+    const chargeId = stripeId(refund.charge);
+    if (!chargeId) return "ignored";
+    const charge = await stripe.charges.retrieve(chargeId);
+    await applyExternalRefund({
+      paymentIntentId: stripeId(refund.payment_intent) ?? stripeId(charge.payment_intent) ?? "",
+      refund,
+      full: chargeFullyRefunded(charge),
+    });
+    return "processed";
+  }
   if (refund.status === "succeeded") {
     const { error } = await supabaseAdmin.rpc("mark_refund_processed", {
       _stripe_refund_id: refund.id,
@@ -190,6 +295,90 @@ async function handleRefundUpdated(refund: Stripe.Refund): Promise<Outcome> {
     return "processed";
   }
   return "ignored";
+}
+
+/* ===========================================================================
+   Disputas (contracargos)
+   =========================================================================== */
+
+interface DisputeResult {
+  result: "open" | "won" | "lost" | "duplicate" | "stale" | "order_not_found";
+  order_id?: string;
+  event_title?: string | null;
+  refund?: ExternalRefundResult | null;
+}
+
+/** PaymentIntent de la disputa (en versiones antiguas de la API solo viene el cargo). */
+async function disputePaymentIntent(stripe: Stripe, dispute: Stripe.Dispute): Promise<string | null> {
+  const direct = stripeId((dispute as unknown as { payment_intent?: string | { id: string } | null }).payment_intent ?? null);
+  if (direct) return direct;
+  const chargeId = stripeId(dispute.charge);
+  if (!chargeId) return null;
+  const charge = await stripe.charges.retrieve(chargeId);
+  return stripeId(charge.payment_intent);
+}
+
+async function markDispute(
+  stripe: Stripe,
+  dispute: Stripe.Dispute,
+  status: "open" | "won" | "lost",
+): Promise<DisputeResult | null> {
+  const paymentIntentId = await disputePaymentIntent(stripe, dispute);
+  if (!paymentIntentId) {
+    log.warn("dispute_without_payment_intent", { dispute_id: dispute.id });
+    return null;
+  }
+  const { data, error } = await supabaseAdmin.rpc("mark_order_dispute", {
+    _payment_intent_id: paymentIntentId,
+    _dispute_id: dispute.id,
+    _status: status,
+    _amount_cents: dispute.amount,
+    _reason: dispute.reason ?? null,
+  });
+  if (error) throw new Error(`mark_order_dispute_failed: ${error.message}`);
+  const res = data as DisputeResult;
+  log.info("dispute_marked", { dispute_id: dispute.id, status, result: res.result, order_id: res.order_id ?? null });
+  return res;
+}
+
+async function handleDisputeCreated(stripe: Stripe, dispute: Stripe.Dispute): Promise<Outcome> {
+  const res = await markDispute(stripe, dispute, "open");
+  if (!res || res.result === "order_not_found") return "ignored";
+  if (res.result === "open" && res.order_id) {
+    const dueBy = dispute.evidence_details?.due_by
+      ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" })
+      : null;
+    await notifyPlatformAdmins({
+      kind: "dispute_opened",
+      title: `Disputa abierta · ${res.event_title ?? "pedido"}`,
+      body: `${formatMoney(dispute.amount, (dispute.currency ?? "eur").toUpperCase())} · pedido ${orderReference(res.order_id)} · motivo: ${dispute.reason ?? "sin indicar"}${dueBy ? ` · responde en Stripe antes del ${dueBy}` : ""}. Sus entradas no entran en la puerta mientras siga abierta.`,
+      link: "/#/admin",
+      priority: "high",
+      payload: { order_id: res.order_id, dispute_id: dispute.id, charge_id: stripeId(dispute.charge) },
+    });
+  }
+  return "processed";
+}
+
+async function handleDisputeClosed(stripe: Stripe, dispute: Stripe.Dispute): Promise<Outcome> {
+  // won / warning_closed (consulta cerrada sin contracargo): las entradas
+  // vuelven a valer. lost: el dinero vuelve al comprador = reembolso total.
+  const status = dispute.status === "lost" ? "lost" : "won";
+  const res = await markDispute(stripe, dispute, status);
+  if (!res || res.result === "order_not_found") return "ignored";
+  if ((res.result === "won" || res.result === "lost") && res.order_id) {
+    await notifyPlatformAdmins({
+      kind: "dispute_closed",
+      title: `${status === "lost" ? "Disputa perdida" : "Disputa ganada"} · ${res.event_title ?? "pedido"}`,
+      body: status === "lost"
+        ? `El banco devolvió ${formatMoney(dispute.amount, (dispute.currency ?? "eur").toUpperCase())} al comprador (pedido ${orderReference(res.order_id)}): sus entradas quedan reembolsadas.`
+        : `Pedido ${orderReference(res.order_id)}: sus entradas vuelven a valer en la puerta.`,
+      link: "/#/admin",
+      priority: status === "lost" ? "high" : "normal",
+      payload: { order_id: res.order_id, dispute_id: dispute.id, status: dispute.status },
+    });
+  }
+  return "processed";
 }
 
 /* ===========================================================================
@@ -275,30 +464,40 @@ async function handlePayout(payout: Stripe.Payout, account: string | null): Prom
 
   // Solo al pasar a 'paid' (un reintento de Stripe no repite el aviso).
   if (status === "paid" && prev?.status !== "paid" && org.owner_id) {
-    await notifySafe({
+    let emailed = false;
+    const { data: ownerProfile } = await supabaseAdmin.from("profiles").select("email").eq("id", org.owner_id).maybeSingle();
+    if (ownerProfile?.email) {
+      try {
+        await sendEmail({
+          to: ownerProfile.email,
+          ...payoutArrivedEmail({
+            businessName: org.name,
+            amountCents: payout.amount,
+            currency,
+            arrivalDate: payout.arrival_date
+              ? new Date(payout.arrival_date * 1000).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" })
+              : "próximamente",
+          }),
+          idempotencyKey: `payout-${payout.id}`,
+        });
+        emailed = true;
+      } catch (e) {
+        log.warn("payout_email_failed", { payout_id: payout.id, error: String(e) });
+      }
+    }
+
+    const notification: EnqueueNotificationOpts = {
       user_id: org.owner_id,
       category: "system",
       kind: "payout_arrived",
       title: "Payout en camino",
-      body: `${(payout.amount / 100).toFixed(2)} ${currency}`,
+      body: formatMoney(payout.amount, currency),
       link: "/#/partner-dashboard/stripe",
-    });
-
-    const { data: ownerProfile } = await supabaseAdmin.from("profiles").select("email").eq("id", org.owner_id).maybeSingle();
-    if (ownerProfile?.email) {
-      await sendEmail({
-        to: ownerProfile.email,
-        ...payoutArrivedEmail({
-          businessName: org.name,
-          amountCents: payout.amount,
-          currency,
-          arrivalDate: payout.arrival_date
-            ? new Date(payout.arrival_date * 1000).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" })
-            : "próximamente",
-        }),
-        idempotencyKey: `payout-${payout.id}`,
-      }).catch((e) => log.warn("payout_email_failed", { payout_id: payout.id, error: String(e) }));
-    }
+    };
+    // Con su email ya enviado, el aviso va solo a la app: dispatch-notification
+    // mandaba además un email genérico (B5-11).
+    if (emailed) await notifyInAppOnly(notification);
+    else await notifySafe(notification);
   }
   return "processed";
 }
@@ -518,7 +717,11 @@ function route(stripe: Stripe, event: Stripe.Event): Promise<Outcome> {
     case "charge.refunded":
       return handleChargeRefunded(stripe, event.data.object as Stripe.Charge);
     case "refund.updated":
-      return handleRefundUpdated(event.data.object as Stripe.Refund);
+      return handleRefundUpdated(stripe, event.data.object as Stripe.Refund);
+    case "charge.dispute.created":
+      return handleDisputeCreated(stripe, event.data.object as Stripe.Dispute);
+    case "charge.dispute.closed":
+      return handleDisputeClosed(stripe, event.data.object as Stripe.Dispute);
     case "account.updated":
       return handleAccountUpdated(event.data.object as Stripe.Account);
     case "payout.paid":
