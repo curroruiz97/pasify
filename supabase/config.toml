@@ -89,6 +89,15 @@ verify_jwt = false
 [functions.send-ticket-transfer]
 verify_jwt = false
 
+# El comprador abandona un pago: caduca su sesión de Stripe y libera las plazas.
+[functions.cancel-checkout]
+verify_jwt = false
+
+# Reenvío del email con las entradas: el comprador del pedido o un admin de
+# plataforma (isPlatformAdmin en el código).
+[functions.resend-tickets-email]
+verify_jwt = false
+
 # -------- Solo admins de plataforma --------
 [functions.admin-cancel-partner-subscription]
 verify_jwt = false
@@ -110,4 +119,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.notify-admin-message]
+verify_jwt = false
+
+# Conciliación de pedidos pendientes con Stripe: pg_cron + pg_net cada 10 min
+# con la cabecera x-pasify-internal (migración 20260927110000).
+[functions.reconcile-pending-orders]
 verify_jwt = false

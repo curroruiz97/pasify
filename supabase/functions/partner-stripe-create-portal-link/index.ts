@@ -1,6 +1,8 @@
 // Pasify · partner-stripe-create-portal-link
 // Genera un Stripe Billing Portal session URL para que el partner
 // gestione su Stripe Connect account o su subscription Pasify.
+// return_url tiene que ser de un origen propio (_shared/urls.ts): Stripe
+// manda ahí al local al salir del portal.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handlePreflight, jsonResponse, errorResponse } from "../_shared/cors.ts";
@@ -8,6 +10,7 @@ import { supabaseAdmin, requireUser, callerHasOrgRole } from "../_shared/supabas
 import { requireStripe } from "../_shared/stripe.ts";
 import { logger } from "../_shared/logger.ts";
 import { safeErrorResponse } from "../_shared/internal-auth.ts";
+import { isAllowedReturnUrl, safeOrigin } from "../_shared/urls.ts";
 
 interface Payload {
   org_id: string;
@@ -23,8 +26,12 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return errorResponse("method_not_allowed", 405);
     await requireUser(req);
-    const body = (await req.json()) as Payload;
-    if (!body.org_id || !body.return_url || !body.kind) return errorResponse("invalid_payload", 400);
+    const body = (await req.json().catch(() => null)) as Payload | null;
+    if (!body?.org_id || !body.return_url || !body.kind) return errorResponse("invalid_payload", 400);
+    if (!isAllowedReturnUrl(body.return_url)) {
+      logger.warn("portal_return_url_rejected", { return_origin: safeOrigin(body.return_url) });
+      return errorResponse("invalid_return_url", 400, "invalid_return_url");
+    }
 
     // has_org_role usa auth.uid(): con el cliente admin devolvía siempre false
     // (403 para todos). Va con el JWT del usuario.
