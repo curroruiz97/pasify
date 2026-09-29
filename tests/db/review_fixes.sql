@@ -52,8 +52,9 @@ BEGIN
   END;
   RESET ROLE;
 
-  -- Plazo de reembolso amplio: la solicitud queda pendiente (no automática)
-  UPDATE public.ticket_tiers SET refundable_until_hours_before = 1000 WHERE id = v_tier;
+  -- Tipo con devolución hasta 48 h antes (evento a 10 días): la solicitud
+  -- queda pendiente y la decide el local (Ola 2, o2_reembolsos).
+  UPDATE public.ticket_tiers SET refundable_until_hours_before = 48 WHERE id = v_tier;
 
   -- Dos entradas pagadas del cliente
   SELECT * INTO v_order FROM public.create_ticket_order(v_event, v_tier, 2, v_client, 'rf-client@pasify.test', 'Rita', 'Fernández');
@@ -178,15 +179,16 @@ BEGIN
   -- ------------------------------------------------------------------
   SELECT * INTO v_order FROM public.create_ticket_order(v_event, v_small, 2, v_friend, 'rf-friend@pasify.test', 'Fer', 'Amigo');
   UPDATE public.ticket_orders SET expires_at = now() - INTERVAL '5 minutes' WHERE id = v_order.order_id;
+  -- Otro comprador (con cuenta: sin ella ya no hay pedido, buyer_user_required)
   v_ok := FALSE;
   BEGIN
-    PERFORM public.create_ticket_order(v_event, v_small, 1, NULL, 'rf-otro@pasify.test', 'Otro', 'Comprador');
+    PERFORM public.create_ticket_order(v_event, v_small, 1, v_client, 'rf-otro@pasify.test', 'Otro', 'Comprador');
   EXCEPTION WHEN OTHERS THEN
     v_ok := SQLERRM = 'tier_sold_out';
   END;
   IF NOT v_ok THEN RAISE EXCEPTION 'FAIL se revendió una plaza en el margen de 15 min'; END IF;
   UPDATE public.ticket_orders SET expires_at = now() - INTERVAL '20 minutes' WHERE id = v_order.order_id;
-  PERFORM public.create_ticket_order(v_event, v_small, 1, NULL, 'rf-otro@pasify.test', 'Otro', 'Comprador');
+  PERFORM public.create_ticket_order(v_event, v_small, 1, v_client, 'rf-otro@pasify.test', 'Otro', 'Comprador');
 
   RAISE NOTICE 'PASS review_fixes: reembolsos por RPC, partner_id NULL, transferencias, cuenta rechazada y reserva';
 END $$;

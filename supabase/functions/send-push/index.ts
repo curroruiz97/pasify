@@ -2,6 +2,8 @@
 // Helper invocable: envía push FCM a 1 device token o multicast.
 // Solo servidor→servidor: ningún cliente la llama (dispatch-notification usa
 // _shared/firebase.ts directamente). Abierta, cualquiera mandaba pushes.
+// Sin FCM configurado no sale nada: la respuesta lo dice (simulated) y no
+// cuenta como enviado.
 //
 // Body: { token, title, body, data?, link?, image?, badge?, channel? } | { tokens: [...], ... }
 
@@ -31,8 +33,9 @@ Deno.serve(async (req) => {
         androidChannelId: body.channel ?? "default",
       });
       const success = res.filter((r) => r.success).length;
-      log.info("push_multicast_sent", { total: res.length, success });
-      return jsonResponse({ total: res.length, success, results: res });
+      const simulated = res.filter((r) => r.simulated).length;
+      log.info("push_multicast_sent", { total: res.length, success, simulated });
+      return jsonResponse({ total: res.length, success, simulated, results: res });
     }
 
     if (!body.token) return errorResponse("token_or_tokens_required", 400);
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
       badge: body.badge,
       androidChannelId: body.channel ?? "default",
     });
-    return jsonResponse({ id: r.id, provider: r.provider });
+    return jsonResponse({ id: r.id, provider: r.provider, simulated: r.provider !== "fcm" });
   } catch (err) {
     logger.error("send-push failed", { error: String(err) });
     return safeErrorResponse(err);

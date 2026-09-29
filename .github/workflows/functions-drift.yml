@@ -1,0 +1,87 @@
+name: CI · funciones en producción vs repo
+
+# Compara las edge functions publicadas en producción (la misma lista que
+# `supabase functions list`, leída de la Management API) con las carpetas de
+# supabase/functions/. Llegó a haber 54 publicadas y solo 13 con llamador: lo
+# que sobra sigue respondiendo en internet aunque ya no esté en el repo.
+#
+#   - Publicada y sin carpeta → retirada a medias: `supabase functions delete <nombre>`.
+#   - Carpeta y sin publicar → falta desplegarla (deploy-production.yml).
+# Cualquiera de las dos deja el job en rojo.
+#
+# Corre tras cada despliegue, cada mañana y a mano. Necesita el secreto de
+# repositorio SUPABASE_ACCESS_TOKEN y la variable
+# SUPABASE_PROJECT_REF_PRODUCTION; sin ellos (o si el token solo existe en el
+# environment `production`) se salta con un aviso.
+
+on:
+  workflow_run:
+    workflows: ["Deploy · producción"]
+    types: [completed]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Funciones publicadas = carpetas del repo
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Sin credenciales, se salta
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.PROJECT_REF == ''
+        run: |
+          echo "::notice::Comparación saltada: falta el secreto SUPABASE_ACCESS_TOKEN o la variable SUPABASE_PROJECT_REF_PRODUCTION (Settings → Secrets and variables → Actions)."
+
+      - name: Comparar
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.PROJECT_REF != ''
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/functions" > "$RUNNER_TEMP/functions.json"
+          jq -r '.[].slug' "$RUNNER_TEMP/functions.json" | sort -u > "$RUNNER_TEMP/prod.txt"
+          for dir in supabase/functions/*/; do
+            name="$(basename "$dir")"
+            [[ "$name" == _* || ! -f "$dir/index.ts" ]] && continue
+            echo "$name"
+          done | sort -u > "$RUNNER_TEMP/repo.txt"
+
+          only_prod="$(comm -23 "$RUNNER_TEMP/prod.txt" "$RUNNER_TEMP/repo.txt")"
+          only_repo="$(comm -13 "$RUNNER_TEMP/prod.txt" "$RUNNER_TEMP/repo.txt")"
+
+          {
+            echo "### Edge functions: producción vs repo"
+            echo ""
+            echo "- En producción: $(wc -l < "$RUNNER_TEMP/prod.txt")"
+            echo "- En el repo: $(wc -l < "$RUNNER_TEMP/repo.txt")"
+            if [[ -n "$only_prod" ]]; then
+              echo ""
+              echo "**Publicadas sin carpeta en el repo** (bórralas):"
+              echo '```'
+              sed 's/^/supabase functions delete /' <<<"$only_prod"
+              echo '```'
+            fi
+            if [[ -n "$only_repo" ]]; then
+              echo ""
+              echo "**En el repo sin publicar** (falta desplegarlas):"
+              sed 's/^/- /' <<<"$only_repo"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -n "$only_prod" || -n "$only_repo" ]]; then
+            [[ -n "$only_prod" ]] && echo "::error::Publicadas sin carpeta en el repo: $(tr '\n' ' ' <<<"$only_prod")"
+            [[ -n "$only_repo" ]] && echo "::error::En el repo sin publicar: $(tr '\n' ' ' <<<"$only_repo")"
+            exit 1
+          fi
+          echo "✓ Las $(wc -l < "$RUNNER_TEMP/repo.txt") funciones del repo son exactamente las publicadas"

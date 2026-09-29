@@ -7,10 +7,16 @@
 //   POST { id, k }            (equivalente, cómodo con supabase.functions.invoke)
 //
 // Returns 200:
-//   { ticket: { id, status, tier_name, holder_name, qr_token | null, used_at },
-//     event:  { title, date_start, date_end, venue_name, address, city, image_url, timezone } }
-// `qr_token` solo viaja con la entrada pagada ('paid'); usada, reembolsada o
-// cancelada → null. Nunca devuelve email, teléfono ni datos del comprador.
+//   { ticket: { id, status, tier_name, holder_name, qr_token | null, used_at,
+//               refund_status: 'refunded' | 'in_progress' | 'failed' | null },
+//     event:  { title, date_start, date_end, venue_name, address, city, image_url,
+//               timezone, status } }
+// `qr_token` solo viaja con la entrada pagada ('paid') de un evento NO
+// cancelado; usada, reembolsada, anulada o de un evento cancelado → null.
+// Al cancelar un evento sus entradas siguen en 'paid' hasta que Stripe
+// confirma cada reembolso: por eso se mira `events.status`, no solo la entrada.
+// `refund_status` solo se rellena si la entrada está reembolsada o su evento
+// cancelado. Nunca devuelve email, teléfono ni datos del comprador.
 // 404 { error: 'ticket_not_found', message } si id/k no casan (no distingue).
 //
 // verify_jwt = false (config.toml). Rate limit por IP.
@@ -32,6 +38,24 @@ function fail(status: number, code: string, message: string): Response {
 }
 
 const notFound = () => fail(404, "ticket_not_found", "No encontramos esta entrada. Revisa que el enlace esté completo.");
+
+type RefundStatus = "refunded" | "in_progress" | "failed" | null;
+
+/** Estado de la devolución para el comprador, sin detalles internos de Stripe. */
+function refundStatusFrom(requestStatus: string | null | undefined): RefundStatus {
+  switch (requestStatus) {
+    case "refunded":
+      return "refunded";
+    case "pending":
+    case "approved":
+    case "processing":
+      return "in_progress";
+    case "failed":
+      return "failed";
+    default:
+      return null; // sin solicitud (entrada gratuita) o rechazada
+  }
+}
 
 async function readParams(req: Request): Promise<{ id: string; k: string }> {
   if (req.method === "POST") {
@@ -82,7 +106,7 @@ Deno.serve(async (req) => {
         : Promise.resolve({ data: null, error: null }),
       supabaseAdmin
         .from("events")
-        .select("title, date_start, date_end, venue_name, address, city, image_url, venue_id")
+        .select("title, date_start, date_end, venue_name, address, city, image_url, venue_id, status")
         .eq("id", ticket.event_id)
         .maybeSingle(),
     ]);
@@ -92,17 +116,35 @@ Deno.serve(async (req) => {
       return fail(500, "internal_error", "No hemos podido cargar la entrada. Inténtalo de nuevo.");
     }
     const ev = eventRes.data;
+    const eventCancelled = ev.status === "cancelled";
 
-    let venue: { name: string | null; address: string | null; city: string | null; timezone: string | null } | null = null;
-    if (ev.venue_id) {
-      const { data, error } = await supabaseAdmin
-        .from("venues")
-        .select("name, address, city, timezone")
-        .eq("id", ev.venue_id)
-        .maybeSingle();
-      if (error) log.warn("venue_query_failed", { error: error.message });
-      venue = data ?? null;
-    }
+    const [venueRes, refundRes] = await Promise.all([
+      ev.venue_id
+        ? supabaseAdmin.from("venues").select("name, address, city, timezone").eq("id", ev.venue_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      // Evento cancelado: el comprador recupera lo pagado; ¿en qué punto está?
+      // (Una entrada ya reembolsada no hace falta mirarla.)
+      eventCancelled && ticket.status !== "refunded"
+        ? supabaseAdmin
+            .from("refund_requests")
+            .select("status")
+            .eq("ticket_id", ticket.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (venueRes.error) log.warn("venue_query_failed", { error: venueRes.error.message });
+    if (refundRes.error) log.warn("refund_query_failed", { ticket_id: ticket.id, error: refundRes.error.message });
+    const venue = (venueRes.data ?? null) as
+      | { name: string | null; address: string | null; city: string | null; timezone: string | null }
+      | null;
+    const refundStatus: RefundStatus =
+      ticket.status === "refunded"
+        ? "refunded"
+        : eventCancelled
+        ? refundStatusFrom((refundRes.data as { status?: string } | null)?.status)
+        : null;
 
     const holderName = [ticket.holder_first_name, ticket.holder_last_name]
       .map((s: string | null) => (s ?? "").trim())
@@ -115,8 +157,10 @@ Deno.serve(async (req) => {
         status: ticket.status,
         tier_name: tierRes.data?.name ?? null,
         holder_name: holderName,
-        qr_token: ticket.status === "paid" ? ticket.qr_token : null,
+        // Evento cancelado: la entrada ya no da acceso, aunque siga en 'paid'.
+        qr_token: ticket.status === "paid" && !eventCancelled ? ticket.qr_token : null,
         used_at: ticket.used_at ?? null,
+        refund_status: refundStatus,
       },
       event: {
         title: ev.title,
@@ -127,6 +171,7 @@ Deno.serve(async (req) => {
         city: ev.city ?? venue?.city ?? null,
         image_url: ev.image_url ?? null,
         timezone: venue?.timezone || DEFAULT_TIMEZONE,
+        status: ev.status,
       },
     }, { headers: NO_STORE });
   } catch (err) {

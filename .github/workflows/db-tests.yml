@@ -1,0 +1,84 @@
+name: DB · tests
+
+# Todos los tests de base de datos (tests/db/*.sql) sobre un Supabase local
+# con todas las migraciones del repo aplicadas.
+#
+#   - En cada PR a main: es un check del PR (márcalo como obligatorio en la
+#     protección de la rama). Sin filtro de rutas a propósito: un check
+#     obligatorio que no se lanza deja el PR esperando para siempre.
+#   - Desde deploy-production.yml (workflow_call): es el primer paso del
+#     despliegue; si falla no se aplican migraciones ni se despliegan funciones.
+#
+# Cada fichero abre su transacción y acaba en ROLLBACK; un fallo es un
+# RAISE EXCEPTION 'FAIL …' (o un NOTICE FAIL) y psql termina con error.
+# Un test nuevo solo tiene que dejarse en tests/db/: entra por el glob.
+#
+# La versión del CLI es la misma que en deploy-production.yml: súbelas juntas.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  db-tests:
+    name: DB · tests (tests/db/*.sql)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: db-tests-${{ github.workflow }}-${{ github.ref }}
+      # En un PR, un push nuevo cancela la pasada anterior; en el despliegue nunca.
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      # `supabase start` crea la base de datos y aplica todas las migraciones de
+      # supabase/migrations (no hay seed). Fuera lo que los tests SQL no usan.
+      - name: Arrancar Supabase local
+        run: supabase start -x studio,imgproxy,mailpit,logflare,vector,edge-runtime,supavisor,postgres-meta
+
+      - name: Ejecutar tests/db/*.sql
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set +e -uo pipefail
+          shopt -s nullglob
+          files=(tests/db/*.sql)
+          if (( ${#files[@]} == 0 )); then
+            echo "::error::No hay ningún test en tests/db/"
+            exit 1
+          fi
+          failed=()
+          for f in "${files[@]}"; do
+            log="$RUNNER_TEMP/$(basename "$f").log"
+            echo "::group::$f"
+            psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "$f" > "$log" 2>&1
+            status=$?
+            cat "$log"
+            echo "::endgroup::"
+            if (( status != 0 )) || grep -q -E 'NOTICE: +FAIL' "$log"; then
+              failed+=("$f")
+              echo "::error file=$f::$(grep -m1 -E 'ERROR|FAIL' "$log" | cut -c1-300)"
+            else
+              echo "✓ $f"
+            fi
+          done
+          echo "════════════════════════════════════════════"
+          echo "tests/db: $(( ${#files[@]} - ${#failed[@]} )) bien · ${#failed[@]} mal (de ${#files[@]})"
+          echo "════════════════════════════════════════════"
+          if (( ${#failed[@]} > 0 )); then
+            printf '  ✗ %s\n' "${failed[@]}"
+            exit 1
+          fi
+
+      - name: Parar Supabase
+        if: always()
+        run: supabase stop --no-backup || true

@@ -273,6 +273,13 @@ export function ticketPurchasedEmail(opts: {
   const addressLine = [address, venue && !cityInAddress ? city : ""].filter(Boolean).join(", ");
   const ref = orderReference(opts.orderId);
   const firstName = oneLine(opts.firstName);
+  // Entradas gratis (create_free_ticket_order): ni «compra» ni «total pagado».
+  const free = opts.totalCents <= 0;
+  const money = (cents: number) => (cents <= 0 ? "Gratis" : formatMoney(cents, currency));
+  const intro = free
+    ? `tu reserva está confirmada. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`
+    : `gracias por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`;
+  const totalLabel = free ? "Total" : "Total pagado";
 
   const mono = "font-family:'Geist Mono',ui-monospace,monospace;";
   const eyebrow = `${mono}font-size:11px;text-transform:uppercase;letter-spacing:0.18em;`;
@@ -323,7 +330,7 @@ export function ticketPurchasedEmail(opts: {
   const summaryRows = [...groups.values()].map((g) => `
     <tr>
       <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;color:#1A1612;">${g.count} × ${esc(g.tier)}</td>
-      <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;text-align:right;${mono}color:#1A1612;">${esc(formatMoney(g.cents, currency))}</td>
+      <td class="ink" style="padding:8px 0;border-bottom:1px solid #E8E1D4;text-align:right;${mono}color:#1A1612;">${esc(money(g.cents))}</td>
     </tr>`).join("");
 
   const showQrText = single
@@ -334,7 +341,7 @@ export function ticketPurchasedEmail(opts: {
     title: `${single ? "Tu entrada está" : "Tus entradas están"} <span style="font-family:'Instrument Serif',serif;font-style:italic;color:#E8542A;font-weight:400;">${single ? "lista" : "listas"}</span>.`,
     preheader: `${single ? "1 entrada" : `${n} entradas`} · ${title}${when ? ` · ${when}` : ""}`,
     body: `
-      <p>${firstName ? `Hola ${esc(firstName)}, gracias` : "Gracias"} por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:</p>
+      <p>${firstName ? `Hola ${esc(firstName)}, ${esc(intro)}` : esc(intro.charAt(0).toUpperCase() + intro.slice(1))}</p>
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="panel" style="margin:20px 0;background:#FDF3EE;border:1px solid #F3C9B8;border-radius:14px;">
         <tr>
           <td style="padding:16px 18px;">
@@ -352,8 +359,8 @@ export function ticketPurchasedEmail(opts: {
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 0 0;">
         ${summaryRows}
         <tr>
-          <td class="ink" style="padding:12px 0 0 0;font-weight:600;color:#1A1612;">Total pagado</td>
-          <td style="padding:12px 0 0 0;text-align:right;${mono}font-weight:600;font-size:16px;color:#E8542A;">${esc(formatMoney(opts.totalCents, currency))}</td>
+          <td class="ink" style="padding:12px 0 0 0;font-weight:600;color:#1A1612;">${totalLabel}</td>
+          <td style="padding:12px 0 0 0;text-align:right;${mono}font-weight:600;font-size:16px;color:#E8542A;">${esc(money(opts.totalCents))}</td>
         </tr>
       </table>
       <p class="muted" style="margin:16px 0 0 0;font-size:13px;color:#5C544A;">Referencia del pedido: <span style="${mono}letter-spacing:0.06em;">${esc(ref)}</span></p>
@@ -374,7 +381,7 @@ export function ticketPurchasedEmail(opts: {
   const text = [
     firstName ? `Hola ${firstName},` : "Hola,",
     "",
-    `Gracias por tu compra. ${single ? "Aquí tienes tu entrada" : `Aquí tienes tus ${n} entradas`} para:`,
+    intro.charAt(0).toUpperCase() + intro.slice(1),
     "",
     ...[title, when, placeLine, addressLine].filter(Boolean),
     "",
@@ -382,7 +389,7 @@ export function ticketPurchasedEmail(opts: {
     "",
     showQrText,
     "",
-    `Total pagado: ${formatMoney(opts.totalCents, currency)}`,
+    `${totalLabel}: ${money(opts.totalCents)}`,
     `Referencia del pedido: ${ref}`,
     "",
     "Cada QR es personal y solo se valida una vez: no reenvíes este correo.",
@@ -405,7 +412,8 @@ export function refundDecidedEmail(opts: {
   status: "approved" | "rejected";
   decisionNote: string | null;
 }): { subject: string; html: string } {
-  const formatEur = (cents: number) => `${(cents / 100).toFixed(2)} €`;
+  // "30,00 €", no "30.00 €".
+  const formatEur = (cents: number) => formatMoney(cents, "EUR");
   if (opts.status === "approved") {
     return {
       subject: `Reembolso aprobado · ${opts.eventTitle}`,
@@ -470,31 +478,73 @@ export function teamInvitationEmail(opts: {
   };
 }
 
+/**
+ * Entrada enviada a otra persona (send-ticket-transfer). La fecha va en la
+ * zona horaria del local (antes salía en UTC) y el enlace es el de la página
+ * de aceptar (`/#/transferencia?token=`), que construye quien llama.
+ */
 export function ticketTransferEmail(opts: {
   fromName: string | null;
   eventTitle: string;
-  eventDate: string;
+  /** ISO de events.date_start. */
+  eventDateStart: string | null;
+  /** Zona horaria del local. Por defecto Europe/Madrid. */
+  timezone?: string | null;
+  venueName?: string | null;
+  tierName?: string | null;
   acceptUrl: string;
   message: string | null;
-}): { subject: string; html: string } {
+  /** ISO de ticket_transfers.expires_at. */
+  expiresAt?: string | null;
+}): { subject: string; html: string; text: string } {
+  const from = oneLine(opts.fromName);
+  const title = oneLine(opts.eventTitle) || "un evento";
+  const when = formatEventDateTime(opts.eventDateStart, opts.timezone, "long");
+  const venue = oneLine(opts.venueName);
+  const tier = oneLine(opts.tierName);
+  const message = (opts.message ?? "").trim();
+  const expires = formatEventDateTime(opts.expiresAt, opts.timezone, "long");
+  // "caduca el sábado, …" (formatEventDateTime empieza en mayúscula).
+  const expiresText = expires
+    ? `Este envío caduca el ${expires.charAt(0).toLowerCase()}${expires.slice(1)}.`
+    : "Este envío caduca en 7 días.";
+
+  const html = renderBaseEmail({
+    title: "Te han enviado una entrada.",
+    preheader: `${from || "Un amigo"} te envía una entrada para ${title}`,
+    body: `
+      <p>${from ? `<strong>${esc(from)}</strong> te ha enviado` : "Te han enviado"} una entrada para:</p>
+      <div class="panel" style="margin:16px 0;padding:16px;background:linear-gradient(135deg,rgba(232,84,42,0.06),rgba(184,56,26,0.02));border:1px solid rgba(232,84,42,0.25);border-radius:14px;">
+        <div class="ink" style="font-size:18px;font-weight:600;color:#1A1612;">${esc(title)}</div>
+        ${when ? `<div class="muted" style="font-size:13px;color:#5C544A;margin-top:4px;">${esc(when)}</div>` : ""}
+        ${venue ? `<div class="muted" style="font-size:13px;color:#5C544A;margin-top:2px;">${esc(venue)}</div>` : ""}
+        ${tier ? `<div class="muted" style="font-size:13px;color:#5C544A;margin-top:2px;">${esc(tier)}</div>` : ""}
+      </div>
+      ${message ? `<p style="padding:12px;background:#F7F3EC;border-left:3px solid #E8542A;border-radius:6px;font-style:italic;color:#5C544A;">"${esc(message)}"</p>` : ""}
+      <p>Pulsa el botón y entra con este email para quedártela. La entrada pasará a tu cuenta de Pasify con un QR nuevo y el de quien te la envía dejará de valer.</p>
+    `,
+    ctaLabel: "Aceptar entrada",
+    ctaUrl: opts.acceptUrl,
+    footer: esc(expiresText),
+  });
+
+  const text = [
+    `${from || "Alguien"} te ha enviado una entrada para:`,
+    "",
+    ...[title, when, venue, tier].filter(Boolean),
+    ...(message ? ["", `"${message}"`] : []),
+    "",
+    `Acéptala aquí (entra con este email): ${opts.acceptUrl}`,
+    "",
+    expiresText,
+    "",
+    `${PLATFORM_NAME} · ${APP_URL}`,
+  ].join("\n");
+
   return {
-    subject: `${opts.fromName ?? "Alguien"} te ha enviado una entrada para ${opts.eventTitle}`,
-    html: renderBaseEmail({
-      title: "Te han enviado una entrada.",
-      preheader: `${opts.fromName ?? "Un amigo"} te transfiere una entrada para ${opts.eventTitle}`,
-      body: `
-        <p>${opts.fromName ? `<strong>${esc(opts.fromName)}</strong> te ha transferido` : "Te han transferido"} una entrada para:</p>
-        <div style="margin:16px 0;padding:16px;background:linear-gradient(135deg,rgba(232,84,42,0.06),rgba(184,56,26,0.02));border:1px solid rgba(232,84,42,0.25);border-radius:14px;">
-          <div style="font-size:18px;font-weight:600;color:#1A1612;">${esc(opts.eventTitle)}</div>
-          <div style="font-size:13px;color:#5C544A;margin-top:4px;">${esc(opts.eventDate)}</div>
-        </div>
-        ${opts.message ? `<p style="padding:12px;background:#F7F3EC;border-left:3px solid #E8542A;border-radius:6px;font-style:italic;color:#5C544A;">"${esc(opts.message)}"</p>` : ""}
-        <p>Para activarla en tu cuenta solo tienes que pulsar el botón. La entrada quedará en tu Wallet Pasify y el QR original del remitente se anulará automáticamente.</p>
-      `,
-      ctaLabel: "Aceptar entrada",
-      ctaUrl: opts.acceptUrl,
-      footer: "Esta transferencia caduca en 7 días.",
-    }),
+    subject: `${from || "Alguien"} te ha enviado una entrada para ${title}`,
+    html,
+    text,
   };
 }
 

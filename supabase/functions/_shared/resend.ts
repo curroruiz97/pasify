@@ -1,7 +1,10 @@
 // Pasify · Email transaccional vía Resend
 // Reemplaza completamente _shared/gmail.ts (Pasify legacy).
 // Sin RESEND_API_KEY no se envía nada: se registra un warn y se devuelve un
-// id simulado, para que los flujos que mandan correo no revienten.
+// id simulado (provider "fallback"), para que los flujos que mandan correo no
+// revienten. Ese resultado NO es un envío: quien apunte que un email salió
+// (p. ej. ticket_orders.tickets_email_sent_at) tiene que comprobar
+// `emailDelivered(res)`.
 
 import { logger } from "./logger.ts";
 
@@ -28,7 +31,13 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   id: string;
+  /** "resend": lo aceptó Resend. "fallback": simulado, no ha salido nada. */
   provider: "resend" | "fallback";
+}
+
+/** true solo si el proveedor real aceptó el envío (no el simulado sin clave). */
+export function emailDelivered(res: SendEmailResult | null | undefined): boolean {
+  return res?.provider === "resend";
 }
 
 /** Tiempo máximo por intento: un Resend colgado no debe bloquear un webhook. */

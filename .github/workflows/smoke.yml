@@ -2,8 +2,8 @@ name: Smoke · post-deploy
 
 # Ejecuta smoke tests contra producción cuando Vercel confirma deployment.
 # Tres niveles de verificación: HTTP routes (web SPA), Supabase health-check
-# edge function, y validación de seguridad básica (un endpoint admin requiere
-# auth).
+# edge function, y seguridad básica: las funciones protegidas contestan 401 o
+# 403 sin sesión (cualquier otra cosa, también un 404 o un 500, es un fallo).
 #
 # Los checks contra Supabase son condicionales: si las repo vars/secrets
 # requeridas no están configuradas, los steps se SALTAN con un mensaje
@@ -111,24 +111,52 @@ jobs:
           [[ -z "$SUPABASE_ANON_KEY" ]] && echo "   · repo secret SUPABASE_ANON_KEY (anon key del proyecto producción)"
           echo "   Settings → Secrets and variables → Actions"
 
-      - name: Security — admin endpoint rejects anonymous
+      - name: Security — funciones protegidas rechazan sin sesión (401/403)
         if: env.SUPABASE_PROJECT_REF != '' && env.SUPABASE_ANON_KEY != ''
         run: |
-          set -e
-          URL="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/admin-cancel-partner-subscription"
-          echo "→ POST $URL (esperamos rechazo)"
-          # Esta edge function debe rechazar requests sin JWT válido (verify_jwt=true default).
-          # Esperamos 401 / 403 / 400 (cualquier rechazo), NO 200.
-          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Content-Type: application/json" \
-            --max-time 15 \
-            "$URL")
-          if [[ "$status" == "200" ]]; then
-            echo "✗ admin-cancel-partner-subscription returned 200 to anonymous — security regression"
-            exit 1
-          fi
-          echo "✓ admin endpoint correctly rejects anonymous (status $status)"
+          set -uo pipefail
+          # Todas se despliegan con --no-verify-jwt: quien rechaza es el código
+          # de cada función (requireUser / requireAdmin / requireServiceRole),
+          # que sin cabecera Authorization contesta 401. Se exige 401 o 403:
+          #   200 → la función está abierta;
+          #   400 → lee el cuerpo antes de comprobar quién llama;
+          #   404 → no está desplegada (o se ha borrado sin quitarla de aquí);
+          #   5xx → se cae antes de llegar a la comprobación.
+          # Las hay de los tres tipos: solo admin, con sesión y solo servidor.
+          fns=(
+            admin-cancel-partner-subscription
+            delete-user
+            process-refund
+            partner-cancel-event
+            gdpr-export-data
+            delete-own-account
+            dispatch-notification
+            send-push
+            send-sms
+            notify-admin-message
+            decide-refund
+            cancel-checkout
+            resend-tickets-email
+            reconcile-pending-orders
+            retake-stale-refunds
+          )
+          failed=0
+          for fn in "${fns[@]}"; do
+            url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/${fn}"
+            status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Content-Type: application/json" \
+              --data '{}' \
+              --max-time 15 \
+              "$url")
+            if [[ "$status" == "401" || "$status" == "403" ]]; then
+              echo "✓ $fn → $status"
+            else
+              echo "✗ $fn → $status (se esperaba 401 o 403)"
+              failed=1
+            fi
+          done
+          exit "$failed"
 
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK_OPS != ''

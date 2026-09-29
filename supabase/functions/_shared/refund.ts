@@ -1,14 +1,16 @@
 // Pasify · ejecución de un reembolso aprobado en Stripe.
 //
-// Compartido por process-refund (solicitud de un comprador), partner-cancel-event
-// (cancelación de un evento) y el pago que llega tarde a un evento ya cancelado
+// Compartido por decide-refund (el local aprueba), process-refund (reintentos
+// y el comprador de un evento cancelado), partner-cancel-event (cancelación
+// de un evento) y el pago que llega tarde a un evento ya cancelado
 // (_shared/order-paid.ts). La AUTORIZACIÓN la hace cada llamador; aquí solo se
 // valida que el reembolso tenga sentido y se ejecuta una sola vez.
 //
 // El importe, el pedido y la organización salen de la entrada (ticket → pedido
 // → evento), nunca de columnas de la solicitud. El webhook charge.refunded
 // cierra la solicitud con mark_refund_processed usando pasify_refund_request_id
-// de los metadatos del reembolso.
+// de los metadatos del reembolso (un reembolso sin esos metadatos es externo:
+// mark_external_refund).
 //
 // Nunca dos reembolsos para una solicitud:
 //   - Se reclama (approved → processing) en una sola sentencia.
@@ -18,14 +20,18 @@
 //   - Solo un error definitivo de Stripe (tarjeta, petición inválida) marca la
 //     solicitud como fallida. Si Stripe no contesta, se queda en 'processing'
 //     y resumeStaleRefund la retoma más tarde.
+//
+// Avisos al comprador (B5-11): el email propio (refundDecidedEmail) y, si ha
+// salido, el aviso SOLO en la app (notifyInAppOnly). Con enqueueNotification
+// dispatch-notification mandaba además su email genérico: dos correos.
 
 import type Stripe from "npm:stripe@14";
 import { supabaseAdmin } from "./supabase.ts";
 import { requireStripe } from "./stripe.ts";
 import { logger } from "./logger.ts";
 import { sendEmail } from "./resend.ts";
-import { refundDecidedEmail } from "./email-templates.ts";
-import { enqueueNotification } from "./notify.ts";
+import { formatMoney, refundDecidedEmail } from "./email-templates.ts";
+import { enqueueNotification, type EnqueueNotificationOpts } from "./notify.ts";
 
 export interface RefundContext {
   rr: {
@@ -41,6 +47,8 @@ export interface RefundContext {
     reason_code: string | null;
     created_at: string;
     updated_at: string;
+    /** `retries`: un elemento por cada «Reintentar» del admin (admin_retry_refund). */
+    metadata: { retries?: unknown } | null;
   };
   ticket: {
     id: string;
@@ -98,7 +106,7 @@ export async function loadRefundContext(
   const { data: rr } = await supabaseAdmin
     .from("refund_requests")
     .select(
-      "id, status, ticket_id, requester_user_id, requester_email, currency, decision_note, stripe_refund_id, auto_approved, reason_code, created_at, updated_at",
+      "id, status, ticket_id, requester_user_id, requester_email, currency, decision_note, stripe_refund_id, auto_approved, reason_code, created_at, updated_at, metadata",
     )
     .eq("id", requestId)
     .maybeSingle();
@@ -123,6 +131,21 @@ export async function loadRefundContext(
 
   return { rr, ticket, order, event } as RefundContext;
 }
+
+/** Intento actual de una solicitud: 0 el primero, +1 por cada «Reintentar». */
+const refundAttempt = (metadata: RefundContext["rr"]["metadata"]): number =>
+  Array.isArray(metadata?.retries) ? metadata.retries.length : 0;
+
+/**
+ * Clave de idempotencia del reembolso en Stripe. El primer intento conserva
+ * la clave de siempre (un reembolso retomado tras un despliegue no cambia de
+ * clave); cada reintento añade su número.
+ */
+const refundIdempotencyKey = (rr: RefundContext["rr"]): string => {
+  const base = `refund-${rr.id}-${Date.parse(rr.created_at)}`;
+  const attempt = refundAttempt(rr.metadata);
+  return attempt > 0 ? `${base}-${attempt}` : base;
+};
 
 /** ¿Es una solicitud atascada en 'processing' que hay que retomar? */
 export const isStaleProcessing = (ctx: RefundContext, now = Date.now()): boolean =>
@@ -276,19 +299,25 @@ async function createOrAdoptRefund(
             pasify_order_id: order.id,
           },
         },
-        { idempotencyKey: `refund-${rr.id}-${Date.parse(rr.created_at)}` },
+        // El número de intento va en la clave: tras un «Reintentar» del admin,
+        // Stripe tiene que ver una petición nueva y no devolver durante 24 h
+        // el resultado guardado del intento que falló.
+        { idempotencyKey: refundIdempotencyKey(rr) },
       ));
     if (existing) log.warn("refund_adopted_existing", { stripe_refund_id: existing.id });
   } catch (stripeErr) {
     if (isDefinitiveStripeError(stripeErr)) {
       log.error("stripe_refund_failed", { connect: isConnectCharge, error: String(stripeErr) });
+      // Solo si sigue en proceso: un reembolso hecho en el panel de Stripe
+      // (mark_external_refund) puede haberla cerrado mientras tanto.
       await supabaseAdmin
         .from("refund_requests")
         .update({
           status: "failed",
           stripe_failure_reason: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
         })
-        .eq("id", rr.id);
+        .eq("id", rr.id)
+        .eq("status", "processing");
       return fail("stripe_refund_failed", 502);
     }
     // Sin respuesta clara: puede que Stripe lo haya creado. Se queda en
@@ -297,7 +326,8 @@ async function createOrAdoptRefund(
     await supabaseAdmin
       .from("refund_requests")
       .update({ stripe_failure_reason: `sin confirmar: ${String(stripeErr).slice(0, 200)}` })
-      .eq("id", rr.id);
+      .eq("id", rr.id)
+      .eq("status", "processing");
     return fail("stripe_unavailable", 503);
   }
 
@@ -337,17 +367,53 @@ async function shortHash(text: string): Promise<string> {
     .join("");
 }
 
+/**
+ * Aviso solo en la app: fila en `notifications` (enqueue_notification de SQL)
+ * sin llamar a dispatch-notification. Para los tipos que ya envían su propio
+ * email (refund_decided, event_cancelled_refund, payout_arrived): por la vía
+ * normal el usuario recibía además el email genérico del aviso (B5-11).
+ * Vive aquí porque _shared/notify.ts es de todos. Nunca lanza.
+ */
+export async function notifyInAppOnly(opts: EnqueueNotificationOpts): Promise<void> {
+  const { error } = await supabaseAdmin.rpc("enqueue_notification", {
+    _user_id: opts.user_id,
+    _category: opts.category,
+    _kind: opts.kind,
+    _title: opts.title,
+    _body: opts.body ?? null,
+    _link: opts.link ?? null,
+    _payload: opts.payload ?? {},
+    _priority: opts.priority ?? "normal",
+  });
+  if (error) logger.warn("in_app_notification_failed", { kind: opts.kind, user_id: opts.user_id, error: error.message });
+}
+
+/** Email propio enviado → aviso solo en la app; si no salió, aviso normal (push y email genérico). */
+async function notifyAfterEmail(emailed: boolean, opts: EnqueueNotificationOpts): Promise<void> {
+  if (emailed) {
+    await notifyInAppOnly(opts);
+    return;
+  }
+  await enqueueNotification(opts).catch((e) =>
+    logger.warn("refund_notification_failed", { kind: opts.kind, user_id: opts.user_id, error: String(e) })
+  );
+}
+
+async function requesterFirstName(rr: RefundContext["rr"]): Promise<string | null> {
+  if (!rr.requester_user_id) return null;
+  const { data } = await supabaseAdmin.from("profiles").select("first_name").eq("id", rr.requester_user_id).maybeSingle();
+  return data?.first_name ?? null;
+}
+
 async function notifyOne(ctx: RefundContext, amount: number, requestIds: string[]): Promise<void> {
   const { rr, ticket, event } = ctx;
   const cancelled = rr.reason_code === "event_cancelled";
   const currency = ticket.currency ?? rr.currency ?? "EUR";
-  const { data: profile } = rr.requester_user_id
-    ? await supabaseAdmin.from("profiles").select("first_name").eq("id", rr.requester_user_id).maybeSingle()
-    : { data: null };
 
+  let emailed = false;
   if (rr.requester_email) {
     const email = refundDecidedEmail({
-      firstName: profile?.first_name ?? null,
+      firstName: await requesterFirstName(rr),
       eventTitle: event.title ?? "tu evento",
       amountCents: amount,
       status: "approved",
@@ -355,22 +421,74 @@ async function notifyOne(ctx: RefundContext, amount: number, requestIds: string[
         ? `El local ha cancelado el evento${rr.decision_note ? `: ${rr.decision_note}` : ""}. Te devolvemos el importe completo.`
         : rr.decision_note,
     });
-    await sendEmail({
-      to: rr.requester_email,
-      ...(cancelled ? { ...email, subject: `Evento cancelado · ${event.title}` } : email),
-      idempotencyKey: `refund-${await shortHash([...requestIds].sort().join(","))}`,
-    }).catch((e) => logger.warn("refund_email_failed", { request_ids: requestIds, error: String(e) }));
+    try {
+      await sendEmail({
+        to: rr.requester_email,
+        // El aviso de la cancelación ya se titula "Evento cancelado": este es el del dinero.
+        ...(cancelled ? { ...email, subject: `Reembolso por cancelación · ${event.title}` } : email),
+        idempotencyKey: `refund-${await shortHash([...requestIds].sort().join(","))}`,
+      });
+      emailed = true;
+    } catch (e) {
+      logger.warn("refund_email_failed", { request_ids: requestIds, error: String(e) });
+    }
   }
 
   if (rr.requester_user_id) {
-    await enqueueNotification({
+    await notifyAfterEmail(emailed, {
       user_id: rr.requester_user_id,
       category: "tickets",
       kind: cancelled ? "event_cancelled_refund" : "refund_decided",
-      title: cancelled ? `Evento cancelado: ${event.title}` : "Reembolso aprobado",
-      body: `${(amount / 100).toFixed(2)} ${currency} en camino`,
+      // "Evento cancelado: …" ya lo dice el aviso de partner_cancel_event.
+      title: cancelled ? `Reembolso por cancelación: ${event.title}` : "Reembolso aprobado",
+      body: `${formatMoney(amount, currency)} en camino`,
       link: "/#/client-dashboard",
       priority: "high",
+      payload: { refund_request_ids: requestIds, status: "approved" },
     });
+  }
+}
+
+/**
+ * Solicitud denegada (decide-refund): email refundDecidedEmail({ status:
+ * 'rejected' }) con el motivo y aviso en la app. Nunca lanza.
+ */
+export async function notifyRefundRejected(ctx: RefundContext, note: string): Promise<void> {
+  const { rr, ticket, event } = ctx;
+  try {
+    let emailed = false;
+    if (rr.requester_email) {
+      const email = refundDecidedEmail({
+        firstName: await requesterFirstName(rr),
+        eventTitle: event.title ?? "tu evento",
+        amountCents: ticket.amount_paid_cents ?? 0,
+        status: "rejected",
+        decisionNote: note,
+      });
+      try {
+        await sendEmail({
+          to: rr.requester_email,
+          ...email,
+          // Una solicitud denegada se puede volver a pedir (created_at nuevo) y volver a denegar.
+          idempotencyKey: `refund-rejected-${rr.id}-${Date.parse(rr.created_at)}`,
+        });
+        emailed = true;
+      } catch (e) {
+        logger.warn("refund_rejected_email_failed", { request_id: rr.id, error: String(e) });
+      }
+    }
+    if (rr.requester_user_id) {
+      await notifyAfterEmail(emailed, {
+        user_id: rr.requester_user_id,
+        category: "tickets",
+        kind: "refund_decided",
+        title: "Reembolso denegado",
+        body: `${event.title ?? "Tu evento"}: ${note}`.slice(0, 280),
+        link: "/#/client-dashboard",
+        payload: { refund_request_id: rr.id, status: "rejected" },
+      });
+    }
+  } catch (e) {
+    logger.warn("refund_rejected_notify_failed", { request_id: rr.id, error: String(e) });
   }
 }

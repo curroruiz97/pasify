@@ -1,0 +1,268 @@
+name: Deploy · producción
+
+# Único camino a producción de la base de datos y de las edge functions.
+# Sustituye a db-migrate-production.yml y deploy-edge-functions.yml, que
+# corrían por separado y en paralelo, sin tests delante.
+#
+#   1. Tests de BD (db-tests.yml sobre un Supabase local).
+#   2. Migraciones: `supabase db push` SIN --include-all. Si en producción hay
+#      una migración que no está en el repo, o una del repo es anterior a la
+#      última aplicada, el push se para: eso hay que mirarlo, no taparlo.
+#   3. Edge functions: todas (o la indicada a mano), con --no-verify-jwt. Si
+#      una falla, se siguen desplegando las demás y el job acaba en rojo.
+#   Aparte, tras las migraciones: tipos de TypeScript regenerados (commit a
+#   main). Si eso falla no frena las funciones.
+#
+# Solo arranca con cambios en supabase/ o tests/db/; migraciones y funciones
+# solo se tocan si cambiaron desde el último despliegue que acabó bien. A mano
+# (Actions → Run workflow) se puede desplegar una sola función.
+#
+# Configuración manual en GitHub (Settings):
+#   - Environment `production` con revisores obligatorios: los jobs de
+#     migraciones y funciones esperan aprobación (uno detrás del otro).
+#   - Secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD_PRODUCTION (y
+#     SUPABASE_ANON_KEY para el health-check). Variable:
+#     SUPABASE_PROJECT_REF_PRODUCTION.
+#   - Desactivar el despliegue automático de la integración de GitHub de
+#     Supabase: si no, migraciones y funciones llegan por dos caminos.
+#
+# La versión del CLI es la misma que en db-tests.yml: súbelas juntas.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - "tests/db/**"
+      - ".github/workflows/deploy-production.yml"
+      - ".github/workflows/db-tests.yml"
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: "Desplegar solo esta función (vacío = todas)"
+        type: string
+        required: false
+        default: ""
+      skip_migrations:
+        description: "No aplicar migraciones (solo funciones)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Qué ha cambiado
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      migrations: ${{ steps.diff.outputs.migrations }}
+      functions: ${{ steps.diff.outputs.functions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # La base es el último despliegue (de un push) que acabó bien, no el push
+      # anterior: si un despliegue falló, o GitHub descartó uno que esperaba en
+      # la cola (el grupo de concurrencia solo guarda el más reciente), lo que
+      # traía entra en este.
+      - id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SKIP_MIGRATIONS: ${{ inputs.skip_migrations }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            # A mano: `db push` sin nada pendiente no hace nada.
+            if [[ "$SKIP_MIGRATIONS" == "true" ]]; then migrations=false; else migrations=true; fi
+            echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
+            echo "functions=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Solo cuentan los despliegues de un push: uno a mano puede haber
+          # desplegado una única función.
+          base="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-production.yml --branch main \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)"
+          if [[ -z "$base" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "Sin despliegue anterior utilizable: se da todo por cambiado."
+            base=""
+            files="$(git ls-files supabase)"
+          else
+            echo "Cambios desde el último despliegue correcto (${base})"
+            files="$(git diff --name-only "$base" "$GITHUB_SHA")"
+          fi
+          echo "$files"
+          migrations=false
+          functions=false
+          if grep -q '^supabase/migrations/' <<<"$files"; then migrations=true; fi
+          if grep -q -E '^(supabase/functions/|supabase/config\.toml$)' <<<"$files"; then functions=true; fi
+          echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
+          echo "functions=$functions" >> "$GITHUB_OUTPUT"
+          # Una función borrada del repo sigue publicada hasta que alguien la borre.
+          if [[ -n "$base" ]]; then
+            git diff --name-only --diff-filter=D "$base" "$GITHUB_SHA" \
+              | sed -n -E 's#^supabase/functions/([^_/][^/]*)/index\.ts$#\1#p' \
+              | while read -r gone; do
+                  echo "::warning::${gone} ya no está en el repo: bórrala en producción con \`supabase functions delete ${gone}\`."
+                done
+          fi
+
+  db-tests:
+    name: Tests de BD
+    uses: ./.github/workflows/db-tests.yml
+
+  migrate:
+    name: Migraciones → producción
+    needs: [changes, db-tests]
+    if: needs.changes.outputs.migrations == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    outputs:
+      types: ${{ steps.types.outcome }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PRODUCTION }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - name: Enlazar el proyecto de producción
+        run: supabase link --project-ref "$PROJECT_REF"
+      - name: Migraciones pendientes
+        run: supabase db push --dry-run
+      - name: Aplicar migraciones
+        run: supabase db push --yes
+      # Los tipos salen de la base ya migrada; el commit lo hace el job `types`
+      # (este no tiene permiso de escritura en el repo).
+      - name: Generar tipos de TypeScript
+        id: types
+        continue-on-error: true
+        run: supabase gen types --lang typescript --linked > "$RUNNER_TEMP/types.ts"
+      - name: Guardar tipos
+        if: steps.types.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-types
+          path: ${{ runner.temp }}/types.ts
+          retention-days: 7
+
+  types:
+    name: Tipos de TypeScript → main
+    needs: migrate
+    if: needs.migrate.outputs.types == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: supabase-types
+          path: ${{ runner.temp }}/supabase-types
+      - name: Commit si han cambiado
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/supabase-types/types.ts" src/integrations/supabase/types.ts
+          if git diff --quiet -- src/integrations/supabase/types.ts; then
+            echo "✓ Los tipos no han cambiado"
+            exit 0
+          fi
+          git config user.email "ci@pasify.es"
+          git config user.name "Pasify CI"
+          git add src/integrations/supabase/types.ts
+          git commit -m "chore(types): regenerate supabase types after prod migration"
+          # Si main ha avanzado mientras tanto, encima de lo último.
+          git push origin HEAD:main || { git pull --rebase origin main && git push origin HEAD:main; }
+
+  functions:
+    name: Edge functions → producción
+    needs: [changes, db-tests, migrate]
+    # Tras los tests y, si había migraciones, solo si se aplicaron bien.
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.result == 'success'
+      && needs.db-tests.result == 'success'
+      && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
+      && needs.changes.outputs.functions == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PRODUCTION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      # --no-verify-jwt a propósito (también en supabase/config.toml): la app
+      # usa la publishable key (sb_publishable_…), que no es un JWT, y el
+      # gateway rechazaría toda llamada sin sesión. La autorización la hace
+      # cada función en su código (requireUser, requireAdmin/isPlatformAdmin o
+      # requireServiceRole de supabase/functions/_shared). Una función nueva
+      # sin una de esas comprobaciones queda abierta: revísalo en cada PR.
+      #
+      # El nombre elegido a mano llega por `env` y se valida: nunca se
+      # interpola en el script.
+      - name: Desplegar
+        env:
+          FUNCTION_NAME: ${{ inputs.function_name }}
+        run: |
+          set -uo pipefail
+          names=()
+          if [[ -n "${FUNCTION_NAME:-}" ]]; then
+            if [[ ! "$FUNCTION_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ || ! -f "supabase/functions/$FUNCTION_NAME/index.ts" ]]; then
+              echo "::error::No hay ninguna función que se llame así en supabase/functions/"
+              exit 1
+            fi
+            names=("$FUNCTION_NAME")
+          else
+            for dir in supabase/functions/*/; do
+              name="$(basename "$dir")"
+              # Las carpetas con `_` delante son código compartido, no funciones.
+              [[ "$name" == _* || ! -f "$dir/index.ts" ]] && continue
+              names+=("$name")
+            done
+          fi
+          failed=()
+          for name in "${names[@]}"; do
+            echo "::group::$name"
+            if supabase functions deploy "$name" --project-ref "$PROJECT_REF" --no-verify-jwt; then
+              echo "✓ $name"
+            else
+              failed+=("$name")
+              echo "::error::No se ha podido desplegar $name"
+            fi
+            echo "::endgroup::"
+          done
+          echo "Desplegadas: $(( ${#names[@]} - ${#failed[@]} )) de ${#names[@]}"
+          if (( ${#failed[@]} > 0 )); then
+            printf '  ✗ %s\n' "${failed[@]}"
+            exit 1
+          fi
+      - name: health-check
+        if: always()
+        continue-on-error: true
+        env:
+          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -fsS --max-time 15 -H "apikey: ${ANON_KEY}" \
+            "https://${PROJECT_REF}.supabase.co/functions/v1/health-check" | jq .
