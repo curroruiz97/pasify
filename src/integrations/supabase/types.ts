@@ -320,13 +320,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ai_decisions_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "ai_decisions_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -1130,13 +1123,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cashless_wallets_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "cashless_wallets_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
@@ -1233,13 +1219,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "compliance_age_policies_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "compliance_age_policies_org_id_fkey"
@@ -1744,13 +1723,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "door_scans_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "door_scans_scanner_user_id_fkey"
             columns: ["scanner_user_id"]
             isOneToOne: false
@@ -1829,13 +1801,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "door_vision_events_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "door_vision_events_reviewed_by_fkey"
@@ -2019,13 +1984,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "events_festival_parent_id_fkey"
-            columns: ["festival_parent_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "events_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -2087,13 +2045,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "favorites_v2_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "favorites_v2_user_id_fkey"
@@ -2188,13 +2139,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forecast_predictions_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
         ]
       }
@@ -2416,13 +2360,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "loyalty_points_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "loyalty_points_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -2582,13 +2519,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "marketing_campaigns_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "marketing_campaigns_org_id_fkey"
@@ -3098,6 +3028,8 @@ export type Database = {
           subscription_current_period_end: string | null
           subscription_plan_code: string | null
           subscription_status: string | null
+          suspended_at: string | null
+          suspended_reason: string | null
           tier: string
           trial_ends_at: string | null
           updated_at: string
@@ -3127,6 +3059,8 @@ export type Database = {
           subscription_current_period_end?: string | null
           subscription_plan_code?: string | null
           subscription_status?: string | null
+          suspended_at?: string | null
+          suspended_reason?: string | null
           tier?: string
           trial_ends_at?: string | null
           updated_at?: string
@@ -3156,6 +3090,8 @@ export type Database = {
           subscription_current_period_end?: string | null
           subscription_plan_code?: string | null
           subscription_status?: string | null
+          suspended_at?: string | null
+          suspended_reason?: string | null
           tier?: string
           trial_ends_at?: string | null
           updated_at?: string
@@ -3175,19 +3111,22 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          org_id: string
+          org_id: string | null
+          partner_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          org_id: string
+          org_id?: string | null
+          partner_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          org_id?: string
+          org_id?: string | null
+          partner_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -3196,6 +3135,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_favorites_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3309,6 +3255,57 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_settlements: {
+        Row: {
+          amount_cents: number
+          bank_reference: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          note: string | null
+          org_id: string
+          paid_at: string
+        }
+        Insert: {
+          amount_cents: number
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          note?: string | null
+          org_id: string
+          paid_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          note?: string | null
+          org_id?: string
+          paid_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_settlements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_settlements_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -3518,13 +3515,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pos_cash_closures_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "pos_cash_closures_partner_user_id_fkey"
             columns: ["partner_user_id"]
             isOneToOne: false
@@ -3624,13 +3614,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pos_sales_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "pos_sales_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
@@ -3722,13 +3705,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_proposals_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "pricing_proposals_tier_id_fkey"
@@ -3924,24 +3900,36 @@ export type Database = {
           id: string
           referee_user_id: string
           referral_code: string
+          referrer_rewarded: boolean
           referrer_user_id: string
           reward_points: number
+          rewarded_at: string | null
+          rewarded_order_id: string | null
+          status: string
         }
         Insert: {
           claimed_at?: string
           id?: string
           referee_user_id: string
           referral_code: string
+          referrer_rewarded?: boolean
           referrer_user_id: string
           reward_points?: number
+          rewarded_at?: string | null
+          rewarded_order_id?: string | null
+          status?: string
         }
         Update: {
           claimed_at?: string
           id?: string
           referee_user_id?: string
           referral_code?: string
+          referrer_rewarded?: boolean
           referrer_user_id?: string
           reward_points?: number
+          rewarded_at?: string | null
+          rewarded_order_id?: string | null
+          status?: string
         }
         Relationships: [
           {
@@ -3963,6 +3951,13 @@ export type Database = {
             columns: ["referrer_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_claims_rewarded_order_id_fkey"
+            columns: ["rewarded_order_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -4128,13 +4123,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refund_requests_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "refund_requests_order_id_fkey"
@@ -4645,13 +4633,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "support_conversations_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "support_conversations_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -4674,7 +4655,7 @@ export type Database = {
           created_at: string
           id: string
           read_at: string | null
-          sender_id: string
+          sender_id: string | null
           sender_kind: Database["public"]["Enums"]["support_sender_t"]
         }
         Insert: {
@@ -4683,7 +4664,7 @@ export type Database = {
           created_at?: string
           id?: string
           read_at?: string | null
-          sender_id: string
+          sender_id?: string | null
           sender_kind: Database["public"]["Enums"]["support_sender_t"]
         }
         Update: {
@@ -4692,7 +4673,7 @@ export type Database = {
           created_at?: string
           id?: string
           read_at?: string | null
-          sender_id?: string
+          sender_id?: string | null
           sender_kind?: Database["public"]["Enums"]["support_sender_t"]
         }
         Relationships: [
@@ -4927,10 +4908,13 @@ export type Database = {
           buyer_user_id: string | null
           created_at: string
           currency: string
+          dispute_status: string | null
+          disputed_at: string | null
           event_id: string
           expires_at: string | null
           fees_cents: number
           id: string
+          livemode: boolean | null
           metadata: Json
           org_id: string | null
           paid_at: string | null
@@ -4938,6 +4922,7 @@ export type Database = {
           request_id: string
           status: Database["public"]["Enums"]["ticket_order_status_t"]
           stripe_destination_account: string | null
+          stripe_dispute_id: string | null
           stripe_payment_intent_id: string | null
           stripe_session_id: string | null
           subtotal_cents: number
@@ -4952,10 +4937,13 @@ export type Database = {
           buyer_user_id?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           event_id: string
           expires_at?: string | null
           fees_cents?: number
           id?: string
+          livemode?: boolean | null
           metadata?: Json
           org_id?: string | null
           paid_at?: string | null
@@ -4963,6 +4951,7 @@ export type Database = {
           request_id?: string
           status?: Database["public"]["Enums"]["ticket_order_status_t"]
           stripe_destination_account?: string | null
+          stripe_dispute_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           subtotal_cents?: number
@@ -4977,10 +4966,13 @@ export type Database = {
           buyer_user_id?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           event_id?: string
           expires_at?: string | null
           fees_cents?: number
           id?: string
+          livemode?: boolean | null
           metadata?: Json
           org_id?: string | null
           paid_at?: string | null
@@ -4988,6 +4980,7 @@ export type Database = {
           request_id?: string
           status?: Database["public"]["Enums"]["ticket_order_status_t"]
           stripe_destination_account?: string | null
+          stripe_dispute_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           subtotal_cents?: number
@@ -5008,13 +5001,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_orders_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "ticket_orders_org_id_fkey"
@@ -5077,13 +5063,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ticket_scan_logs_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "ticket_scan_logs_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -5125,7 +5104,7 @@ export type Database = {
           name: string
           per_user_max: number
           price_cents: number
-          refundable_until_hours_before: number
+          refundable_until_hours_before: number | null
           sale_ends_at: string | null
           sale_starts_at: string | null
           sold: number
@@ -5146,7 +5125,7 @@ export type Database = {
           name: string
           per_user_max?: number
           price_cents: number
-          refundable_until_hours_before?: number
+          refundable_until_hours_before?: number | null
           sale_ends_at?: string | null
           sale_starts_at?: string | null
           sold?: number
@@ -5167,7 +5146,7 @@ export type Database = {
           name?: string
           per_user_max?: number
           price_cents?: number
-          refundable_until_hours_before?: number
+          refundable_until_hours_before?: number | null
           sale_ends_at?: string | null
           sale_starts_at?: string | null
           sold?: number
@@ -5184,13 +5163,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ticket_tiers_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
         ]
       }
@@ -5354,13 +5326,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tickets_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "tickets_order_id_fkey"
@@ -5797,13 +5762,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "vip_bookings_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "v_event_revenue_summary"
-            referencedColumns: ["event_id"]
-          },
-          {
             foreignKeyName: "vip_bookings_holder_user_id_fkey"
             columns: ["holder_user_id"]
             isOneToOne: false
@@ -5992,66 +5950,15 @@ export type Database = {
         }
         Relationships: []
       }
-      v_event_revenue_summary: {
-        Row: {
-          capacity: number | null
-          city: string | null
-          date_start: string | null
-          event_id: string | null
-          fees_cents: number | null
-          gross_revenue_cents: number | null
-          net_revenue_cents: number | null
-          org_id: string | null
-          paid_orders: number | null
-          partner_id: string | null
-          pending_refunds: number | null
-          refunded_orders: number | null
-          status: Database["public"]["Enums"]["event_status_t"] | null
-          tickets_sold: number | null
-          title: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "events_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_partner_id_fkey"
-            columns: ["partner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_partner_kpis_daily: {
-        Row: {
-          day: string | null
-          gross_cents: number | null
-          net_cents: number | null
-          orders_paid: number | null
-          org_id: string | null
-          platform_fees_cents: number | null
-          tickets_paid: number | null
-          tickets_used: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "events_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: string }
       accept_ticket_transfer: { Args: { _token: string }; Returns: string }
+      admin_close_partner_account: { Args: { _user_id: string }; Returns: Json }
+      admin_create_refund_request: {
+        Args: { _note: string; _ticket_id: string }
+        Returns: string
+      }
       admin_grant_partner_access: {
         Args: { _user_id: string }
         Returns: undefined
@@ -6062,6 +5969,8 @@ export type Database = {
       }
       admin_list_users: {
         Args: {
+          _category?: string
+          _city?: string
           _limit?: number
           _offset?: number
           _role_filter?: string
@@ -6070,6 +5979,7 @@ export type Database = {
         }
         Returns: {
           account_status: string
+          business_category: string
           business_name: string
           city: string
           country: string
@@ -6078,7 +5988,9 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          phone: string
           role: string
+          total_count: number
         }[]
       }
       admin_metrics_timeseries: {
@@ -6091,6 +6003,91 @@ export type Database = {
           tickets_sold: number
         }[]
       }
+      admin_org_is_suspended: { Args: { _org: Json }; Returns: boolean }
+      admin_org_settlements: {
+        Args: { _org_id: string }
+        Returns: {
+          amount_cents: number
+          bank_reference: string
+          created_at: string
+          created_by: string
+          created_by_name: string
+          currency: string
+          id: string
+          note: string
+          org_id: string
+          paid_at: string
+        }[]
+      }
+      admin_partner_orgs: {
+        Args: { _owner_ids: string[] }
+        Returns: {
+          created_at: string
+          name: string
+          org_id: string
+          owner_id: string
+          status: string
+          suspended_at: string
+          suspended_reason: string
+        }[]
+      }
+      admin_record_settlement: {
+        Args: {
+          _allow_excess?: boolean
+          _amount_cents: number
+          _bank_reference?: string
+          _currency?: string
+          _note?: string
+          _org_id: string
+          _paid_at?: string
+        }
+        Returns: string
+      }
+      admin_refund_bucket: {
+        Args: {
+          _status: Database["public"]["Enums"]["refund_request_status_t"]
+          _stripe_refund_id: string
+          _updated_at: string
+        }
+        Returns: string
+      }
+      admin_refund_queue: {
+        Args: { _limit?: number; _offset?: number; _queue?: string }
+        Returns: {
+          amount_cents: number
+          auto_approved: boolean
+          created_at: string
+          currency: string
+          decided_at: string
+          decision_note: string
+          event_date: string
+          event_id: string
+          event_title: string
+          id: string
+          processed_at: string
+          queue: string
+          reason: string
+          reason_code: string
+          requester_email: string
+          retry_count: number
+          status: string
+          stripe_failure_reason: string
+          stripe_refund_id: string
+          stripe_refund_status: string
+          ticket_id: string
+          total_count: number
+          updated_at: string
+          venue_name: string
+        }[]
+      }
+      admin_refund_queue_counts: {
+        Args: never
+        Returns: {
+          queue: string
+          total: number
+        }[]
+      }
+      admin_retry_refund: { Args: { _request_id: string }; Returns: undefined }
       admin_revoke_partner_access: {
         Args: { _user_id: string }
         Returns: undefined
@@ -6098,6 +6095,77 @@ export type Database = {
       admin_revoke_partner_grant: {
         Args: { _org_id: string }
         Returns: undefined
+      }
+      admin_search_orders: {
+        Args: { _limit?: number; _q: string }
+        Returns: {
+          buyer_email: string
+          buyer_first_name: string
+          buyer_last_name: string
+          buyer_phone: string
+          buyer_user_id: string
+          created_at: string
+          currency: string
+          event_city: string
+          event_date_end: string
+          event_date_start: string
+          event_id: string
+          event_status: string
+          event_title: string
+          fees_cents: number
+          livemode: boolean
+          matched_by: string
+          order_id: string
+          org_id: string
+          org_name: string
+          paid_at: string
+          reference: string
+          refunded_at: string
+          refunded_cents: number
+          status: string
+          stripe_payment_intent_id: string
+          subtotal_cents: number
+          tickets: Json
+          tickets_email_sent_at: string
+          total_cents: number
+          venue_name: string
+        }[]
+      }
+      admin_set_org_suspension: {
+        Args: { _org_id: string; _reason: string; _suspended: boolean }
+        Returns: undefined
+      }
+      admin_settlement_overview: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _only_pending?: boolean
+          _search?: string
+        }
+        Returns: {
+          connect_orders: number
+          fee_cents: number
+          gross_cents: number
+          last_paid_at: string
+          net_cents: number
+          org_id: string
+          org_name: string
+          org_status: string
+          owner_email: string
+          owner_id: string
+          owner_name: string
+          paid_orders: number
+          pending_cents: number
+          refunded_cents: number
+          settled_cents: number
+          settlements_count: number
+          suspended_at: string
+          suspended_reason: string
+          total_count: number
+          total_net_cents: number
+          total_pending_cents: number
+          total_settled_cents: number
+        }[]
       }
       admin_subscription_funnel: {
         Args: never
@@ -6120,6 +6188,13 @@ export type Database = {
           title: string
         }[]
       }
+      admin_user_facets: {
+        Args: { _role_filter: string }
+        Returns: {
+          categories: string[]
+          cities: string[]
+        }[]
+      }
       apply_pricing_proposal: {
         Args: { _proposal_id: string }
         Returns: {
@@ -6134,14 +6209,9 @@ export type Database = {
       }
       auto_approve_if_allowed: { Args: { _role: string }; Returns: boolean }
       cancel_ticket_order: { Args: { _order_id: string }; Returns: undefined }
-      cashless_pay: {
-        Args: {
-          _amount_cents: number
-          _bar_id?: string
-          _items?: Json
-          _wallet_id: string
-        }
-        Returns: number
+      cancel_ticket_transfer: {
+        Args: { _transfer_id: string }
+        Returns: undefined
       }
       cashless_topup: {
         Args: {
@@ -6159,6 +6229,20 @@ export type Database = {
       claim_initial_role: {
         Args: { _role: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      claim_notification_dispatches: {
+        Args: {
+          _lease_seconds?: number
+          _limit?: number
+          _max_attempts?: number
+          _notification_id?: string
+        }
+        Returns: {
+          attempt_count: number
+          channel: string
+          dispatch_id: string
+          notification_id: string
+        }[]
       }
       claim_partner_free_plan: {
         Args: never
@@ -6190,6 +6274,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_partner_signup: { Args: never; Returns: string }
+      convert_new_client_to_partner: {
+        Args: { _business_name?: string }
+        Returns: Json
+      }
       create_cancellation_refund_requests: {
         Args: {
           _decided_by: string
@@ -6198,6 +6287,25 @@ export type Database = {
           _order_id?: string
         }
         Returns: string[]
+      }
+      create_free_ticket_order: {
+        Args: {
+          _buyer_email: string
+          _buyer_first_name?: string
+          _buyer_last_name?: string
+          _buyer_phone?: string
+          _buyer_user_id: string
+          _event_id: string
+          _qty: number
+          _tier_id: string
+        }
+        Returns: {
+          event_id: string
+          order_id: string
+          org_id: string
+          qty: number
+          request_id: string
+        }[]
       }
       create_organization: {
         Args: { _country?: string; _name: string; _slug?: string }
@@ -6289,6 +6397,18 @@ export type Database = {
         }
         Returns: string
       }
+      event_availability: {
+        Args: { _event_id: string }
+        Returns: {
+          remaining: number
+          sold_out: boolean
+          tier_id: string
+        }[]
+      }
+      event_capacity_from_tiers: {
+        Args: { _event_id: string }
+        Returns: undefined
+      }
       event_has_sales: { Args: { _event_id: string }; Returns: boolean }
       expire_ticket_order: { Args: { _session_id: string }; Returns: string }
       get_app_setting_bool: { Args: { _key: string }; Returns: boolean }
@@ -6310,6 +6430,10 @@ export type Database = {
           subtitle: string
           title: string
         }[]
+      }
+      grant_referral_on_first_purchase: {
+        Args: { _user_id: string }
+        Returns: undefined
       }
       has_org_role: {
         Args: {
@@ -6352,6 +6476,7 @@ export type Database = {
       is_member_of_venue: { Args: { _venue_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin_self: { Args: never; Returns: boolean }
+      live_payments_required: { Args: never; Returns: boolean }
       loyalty_balance: { Args: { _user_id: string }; Returns: number }
       loyalty_grant_points: {
         Args: {
@@ -6366,9 +6491,33 @@ export type Database = {
         }
         Returns: number
       }
+      loyalty_revoke_refunded_points: {
+        Args: { _order_id: string; _ticket_id?: string }
+        Returns: number
+      }
       mark_conversation_read: {
         Args: { _as_kind: string; _conversation_id: string }
         Returns: undefined
+      }
+      mark_external_refund: {
+        Args: {
+          _amount_cents: number
+          _full: boolean
+          _payment_intent_id: string
+          _source?: string
+          _stripe_object_id: string
+        }
+        Returns: Json
+      }
+      mark_order_dispute: {
+        Args: {
+          _amount_cents?: number
+          _dispute_id: string
+          _payment_intent_id: string
+          _reason?: string
+          _status: string
+        }
+        Returns: Json
       }
       mark_order_paid: {
         Args: {
@@ -6383,6 +6532,7 @@ export type Database = {
         Args: {
           _amount_total_cents: number
           _application_fee_cents?: number
+          _livemode?: boolean
           _payment_intent_id: string
           _session_id: string
         }
@@ -6404,19 +6554,6 @@ export type Database = {
         }
         Returns: string
       }
-      mark_ticket_used: {
-        Args: { _qr_token: string }
-        Returns: {
-          already_used: boolean
-          event_id: string
-          event_title: string
-          holder_first_name: string
-          holder_last_name: string
-          status: string
-          ticket_id: string
-          tier_name: string
-        }[]
-      }
       open_conversation: {
         Args: {
           _event_id?: string
@@ -6427,11 +6564,14 @@ export type Database = {
         }
         Returns: string
       }
+      org_can_sell: { Args: { _org_id: string }; Returns: boolean }
       partner_cancel_event: {
         Args: { _event_id: string; _reason: string }
         Returns: Json
       }
       partner_close_account: { Args: never; Returns: Json }
+      partner_conversion_blocker: { Args: { _uid: string }; Returns: string }
+      partner_conversion_status: { Args: never; Returns: Json }
       partner_event_attendees: {
         Args: { _event_id: string }
         Returns: {
@@ -6494,6 +6634,29 @@ export type Database = {
           user_id: string
         }[]
       }
+      pasify_functions_base_url: { Args: never; Returns: string }
+      pasify_internal_post: {
+        Args: { _body?: Json; _function: string }
+        Returns: number
+      }
+      pasify_schedule_internal_call: {
+        Args: {
+          _body?: Json
+          _function: string
+          _job_name: string
+          _only_if?: string
+          _schedule: string
+        }
+        Returns: string
+      }
+      pending_orders_to_reconcile: {
+        Args: { _exclude?: string[]; _limit?: number }
+        Returns: {
+          order_id: string
+          reason: string
+          stripe_session_id: string
+        }[]
+      }
       public_partner_rows: {
         Args: never
         Returns: {
@@ -6506,11 +6669,30 @@ export type Database = {
           id: string
         }[]
       }
+      record_service_status: {
+        Args: { _checks: Json }
+        Returns: {
+          previous_at: string
+          previous_status: string
+          service: string
+        }[]
+      }
       redeem_referral_code: {
         Args: { _code: string }
         Returns: {
           claim_id: string
           reward_points: number
+        }[]
+      }
+      referral_revert_for_order: {
+        Args: { _order_id: string }
+        Returns: number
+      }
+      refunds_to_retake: {
+        Args: { _exclude?: string[]; _limit?: number }
+        Returns: {
+          request_id: string
+          status: string
         }[]
       }
       reject_pricing_proposal: {
@@ -6610,6 +6792,10 @@ export type Database = {
           tier_name: string
         }[]
       }
+      schedule_dispatch_notifications: { Args: never; Returns: string }
+      schedule_health_check: { Args: never; Returns: string }
+      schedule_reconcile_pending_orders: { Args: never; Returns: string }
+      schedule_retake_stale_refunds: { Args: never; Returns: string }
       set_admin_by_email: { Args: { _email: string }; Returns: string }
       set_app_setting: {
         Args: { _key: string; _value: Json }
@@ -6618,6 +6804,11 @@ export type Database = {
       set_order_stripe_session: {
         Args: { _order_id: string; _session_id: string }
         Returns: undefined
+      }
+      signup_meta_country: { Args: { _value: string }; Returns: string }
+      signup_meta_text: {
+        Args: { _max: number; _value: string }
+        Returns: string
       }
       start_partner_trial: {
         Args: { _org_id?: string }
@@ -6633,6 +6824,10 @@ export type Database = {
           trial_starts_at: string
         }[]
       }
+      support_close_duplicate_open_conversations: {
+        Args: never
+        Returns: number
+      }
       switch_active_venue: { Args: { _venue_id: string }; Returns: undefined }
       tenant_for_user: {
         Args: never
@@ -6645,6 +6840,10 @@ export type Database = {
           venue_id: string
           venue_name: string
         }[]
+      }
+      ticket_seats_held: {
+        Args: { _buyer_user_id?: string; _event_id: string; _tier_id?: string }
+        Returns: number
       }
       tier_has_sales: { Args: { _tier_id: string }; Returns: boolean }
       toggle_ai_kill_switch: {
@@ -6809,6 +7008,7 @@ export type Database = {
         | "forbidden"
         | "outside_window"
         | "event_cancelled"
+        | "test_payment"
       stripe_payout_status_t:
         | "pending"
         | "in_transit"
@@ -7156,6 +7356,7 @@ export const Constants = {
         "forbidden",
         "outside_window",
         "event_cancelled",
+        "test_payment",
       ],
       stripe_payout_status_t: [
         "pending",
