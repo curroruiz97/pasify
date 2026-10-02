@@ -373,8 +373,11 @@ const App = () => {
           {/* Floating multi-role switcher (visible when user tiene 2+ roles
               y está en una ruta de dashboard). */}
           <PanelSwitcher />
-          <Suspense fallback={<PageLoader />}>
-            <PageTransitions>
+          {/* Suspense DENTRO de la transición: si envolviera al motion.div, al
+              cargar una pieza diferida React lo oculta y lo vuelve a montar y
+              la animación se queda en opacity 0 (panel del local en negro). */}
+          <PageTransitions>
+            <Suspense fallback={<PageLoader />}>
             <DoorLockGuard>
             <Routes>
               {/* Loggato → dashboard appropriata según rol efectivo
@@ -505,8 +508,8 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
             </Routes>
             </DoorLockGuard>
-            </PageTransitions>
-          </Suspense>
+            </Suspense>
+          </PageTransitions>
         </HashRouter>
       </TooltipProvider>
     </QueryClientProvider>
