@@ -28,7 +28,7 @@ android {
         // Play no admite. De ahi el 3.
         // Antes de cada envio, comprueba el versionCode de la ultima version
         // en Play y sube desde ahi, no desde lo que ponga este fichero.
-        versionCode 7
+        versionCode 8
         versionName "1.1.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
