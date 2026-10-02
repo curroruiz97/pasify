@@ -239,6 +239,9 @@ const Login = () => {
                 type="email"
                 required
                 autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="tu@email.com"
                 className="h-11 rounded-xl border-slate-200 bg-white pl-10 focus-visible:ring-orange-500"
                 value={formData.email}
