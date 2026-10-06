@@ -199,9 +199,12 @@ void import('@capacitor/preferences')
   )
   .catch(() => { /* sin plugin o sin storage: nada que borrar */ });
 
+// Versión de la build (vite.config.ts), para el detalle de la pantalla de error.
+declare const __PASIFY_RELEASE__: string;
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary
-    fallback={
+    fallback={({ error, componentStack }) => (
       // Fallback con bg + colores Pasify explícitos para que NO se vea
       // un pantallazo negro indistinguible de "la app no carga". Antes el
       // h1 heredaba el foreground del body en dark mode y el botón cyan
@@ -243,8 +246,8 @@ createRoot(document.getElementById("root")!).render(
           maxWidth: "28rem",
           lineHeight: 1.5,
         }}>
-          Hemos enviado el error a nuestro equipo. Recarga la página para
-          continuar — tu sesión y tus tickets están a salvo.
+          Recarga la página para continuar — tu sesión y tus tickets están a
+          salvo. Si vuelve a pasar, envíanos una captura de esta pantalla.
         </p>
         <button
           onClick={() => window.location.reload()}
@@ -276,8 +279,28 @@ createRoot(document.getElementById("root")!).render(
         >
           o volver al inicio →
         </a>
+        {/* Detalle técnico: sin Sentry en la web, la captura del usuario es
+            lo único que nos dice qué ha fallado. */}
+        <pre style={{
+          marginTop: "2rem",
+          maxWidth: "28rem",
+          width: "100%",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          textAlign: "left",
+          fontFamily: "'Geist Mono', ui-monospace, monospace",
+          fontSize: "10px",
+          lineHeight: 1.4,
+          color: "rgba(244,238,226,0.4)",
+        }}>
+          {[
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            componentStack?.trim().split("\n").slice(0, 4).map((l) => l.trim()).join("\n"),
+            `${typeof __PASIFY_RELEASE__ !== "undefined" ? __PASIFY_RELEASE__ : "pasify@dev"} · ${window.location.hash.split("?")[0] || "#/"}`,
+          ].filter(Boolean).join("\n")}
+        </pre>
       </div>
-    }
+    )}
   >
     {/* prefers-reduced-motion: framer-motion respeta la preferencia del
         sistema en toda la app, también en la transición entre páginas. */}
