@@ -62,15 +62,15 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 | `admin-cancel-partner-subscription` | admin | Cancela la suscripción de un local. Sin llamador en el repo |
 | `gdpr-export-data` | sesión | JSON con los datos del usuario (columnas explícitas, sin tokens ni secretos), 5 al día. «Descargar mis datos» en `SettingsSheet.tsx` |
 | `notify-new-registration` | sesión (el recién registrado) | Email de bienvenida a la cuenta nueva (cliente o local, según sus roles). `RegisterClient.tsx` |
-| `verify-captcha` | pública (límite por IP) | Valida un token de Cloudflare Turnstile del alta y de «¿Olvidaste tu contraseña?» (solo web y con `VITE_TURNSTILE_SITE_KEY`). En producción, sin secreto falla cerrado (503) |
+| `verify-captcha` | pública (límite por IP) | Valida un token de Cloudflare Turnstile del alta y de «¿Olvidaste tu contraseña?» (solo web y con `VITE_TURNSTILE_SITE_KEY`). Exige `action` y que coincida con la del token (400 `action_required` / `action_mismatch`). En producción, sin secreto falla cerrado (503) |
 
 ### Avisos (solo servidor → servidor)
 
 | Función | Autorización | Qué hace |
 |---|---|---|
 | `dispatch-notification` | servicio | Envía los avisos pendientes de `notification_dispatches` por email, push o SMS según las preferencias (horas de silencio en la zona del usuario). Al momento desde `_shared/notify.ts` y en lotes cada minuto con `pg_cron` |
-| `send-push` | servicio | Push de FCM a uno o varios tokens |
-| `send-sms` | servicio | SMS por Twilio |
+| `send-push` | servicio | Push de FCM a uno o varios tokens (hasta 500; el cuerpo se valida entero, con 400 si algo no es del tipo esperado) |
+| `send-sms` | servicio | SMS por Twilio. El destino tiene que ser E.164 (400 `invalid_phone`); se normaliza y con él se cuenta el límite de 5 SMS por hora y número |
 | `notify-admin-message` | servicio | Email a los admins cuando un usuario abre una conversación sin leer (trigger de `support_messages` con `pg_net`) |
 | `retake-stale-refunds` | servicio | Retoma los reembolsos atascados en `processing` y los aprobados sin lanzar (lotes de 10). `pg_cron` + `pg_net` cada 10 min |
 
@@ -159,6 +159,7 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 | `pasify-process-dsar` | 06:00 | `cron_process_dsar_deadlines()` |
 | `pasify-cleanup-old-notifs` | domingos 04:00 | `cron_cleanup_old_notifications()` |
 | `pasify-cleanup-logs` | domingos 05:00 | `cron_cleanup_logs()` |
+| `pasify-purge-webhook-payloads` | 04:30 | `cron_purge_webhook_payloads()`: deja `payload = '{}'` (datos del comprador) en los eventos de `stripe_webhook_events` ya tratados con más de 30 días; no borra filas (eso lo hace `cron_cleanup_logs` a los 180 días) |
 | `pasify-reconcile-pending-orders` | cada 10 min | `POST` a `reconcile-pending-orders` con `pg_net`; solo si Vault tiene `pasify_internal_secret` (luego `SELECT public.schedule_reconcile_pending_orders();`) |
 | `pasify-dispatch-notifications` | cada minuto | `POST` a `dispatch-notification` (lotes) con `pg_net`; mismo requisito (`SELECT public.schedule_dispatch_notifications();`) |
 | `pasify-health-check` | cada 15 min | `POST` a `health-check` (completo) con `pg_net`; mismo requisito (`SELECT public.schedule_health_check();`) |
