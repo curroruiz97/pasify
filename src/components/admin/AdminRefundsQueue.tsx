@@ -6,6 +6,15 @@ import { AlertTriangle, Check, Loader2, Play, RefreshCw, RotateCcw, X as XIcon }
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -95,6 +104,34 @@ const motivoFallo = (raw: string | null): string | null => {
 const euros = (cents: number, currency: string) =>
   `${(cents / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency === "EUR" ? "€" : currency}`;
 
+/**
+ * Aprobar, reintentar y retomar mueven dinero en Stripe y no se deshacen:
+ * antes de lanzarlos se pide una confirmación con el importe y el comprador.
+ */
+type AccionReembolso = "aprobar" | "reintentar" | "retomar";
+
+const CONFIRMACION: Record<
+  AccionReembolso,
+  { titulo: (importe: string) => string; descripcion: string; boton: (importe: string) => string }
+> = {
+  aprobar: {
+    titulo: (importe) => `¿Aprobar y reembolsar ${importe}?`,
+    descripcion:
+      "El reembolso se ejecuta ahora en Stripe y no se puede deshacer. El comprador recibirá el dinero y un aviso.",
+    boton: (importe) => `Aprobar y reembolsar ${importe}`,
+  },
+  reintentar: {
+    titulo: (importe) => `¿Reintentar el reembolso de ${importe}?`,
+    descripcion: "Se vuelve a pedir a Stripe el reembolso que falló. Si Stripe lo acepta, no se puede deshacer.",
+    boton: () => "Reintentar reembolso",
+  },
+  retomar: {
+    titulo: (importe) => `¿Retomar el reembolso de ${importe}?`,
+    descripcion: "Se vuelve a lanzar en Stripe la solicitud ya aprobada. Si se completa, no se puede deshacer.",
+    boton: () => "Retomar reembolso",
+  },
+};
+
 export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -102,6 +139,10 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
   const [page, setPage] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rechazando, setRechazando] = useState<AdminRefundRow | null>(null);
+  // Qué se confirma y si el diálogo está abierto van por separado: al cerrarlo el
+  // contenido se queda mientras dura la animación de salida.
+  const [confirmando, setConfirmando] = useState<{ r: AdminRefundRow; accion: AccionReembolso } | null>(null);
+  const [confirmAbierta, setConfirmAbierta] = useState(false);
 
   const counts = useAdminRefundCounts(uid);
   const lista = useAdminRefundQueue(uid, queue, page, PAGE_SIZE);
@@ -185,6 +226,21 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
     }
   };
 
+  const pedirConfirmacion = (r: AdminRefundRow, accion: AccionReembolso) => {
+    setConfirmando({ r, accion });
+    setConfirmAbierta(true);
+  };
+
+  // Tras confirmar se cierra el diálogo y la fila muestra el spinner (busyId).
+  const ejecutarConfirmada = () => {
+    if (!confirmando) return;
+    const { r, accion } = confirmando;
+    setConfirmAbierta(false);
+    if (accion === "aprobar") void aprobar(r);
+    else if (accion === "reintentar") void reintentar(r);
+    else void retomar(r);
+  };
+
   const c = counts.data;
   const desde = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const hasta = Math.min(total, (page + 1) * PAGE_SIZE);
@@ -263,10 +319,10 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
                 r={r}
                 busy={busyId === r.id}
                 bloqueado={busyId !== null && busyId !== r.id}
-                onApprove={() => void aprobar(r)}
+                onApprove={() => pedirConfirmacion(r, "aprobar")}
                 onReject={() => setRechazando(r)}
-                onRetry={() => void reintentar(r)}
-                onResume={() => void retomar(r)}
+                onRetry={() => pedirConfirmacion(r, "reintentar")}
+                onResume={() => pedirConfirmacion(r, "retomar")}
               />
             ))}
           </div>
@@ -299,6 +355,37 @@ export const AdminRefundsQueue = ({ uid }: { uid: string | null }) => {
           if (await denegar(rechazando, nota)) setRechazando(null);
         }}
       />
+
+      <AlertDialog open={confirmAbierta} onOpenChange={setConfirmAbierta}>
+        <AlertDialogContent>
+          {confirmando && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {CONFIRMACION[confirmando.accion].titulo(euros(confirmando.r.amount_cents, confirmando.r.currency))}
+                </AlertDialogTitle>
+                <AlertDialogDescription>{CONFIRMACION[confirmando.accion].descripcion}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-xl border p-3 text-sm">
+                <dt className="text-muted-foreground">Importe</dt>
+                <dd className="font-medium" style={mono}>
+                  {euros(confirmando.r.amount_cents, confirmando.r.currency)}
+                </dd>
+                <dt className="text-muted-foreground">Comprador</dt>
+                <dd className="min-w-0 break-words">{confirmando.r.requester_email ?? "—"}</dd>
+                <dt className="text-muted-foreground">Evento</dt>
+                <dd className="min-w-0 break-words">{confirmando.r.event_title ?? "Evento"}</dd>
+              </dl>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <Button onClick={ejecutarConfirmada}>
+                  {CONFIRMACION[confirmando.accion].boton(euros(confirmando.r.amount_cents, confirmando.r.currency))}
+                </Button>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

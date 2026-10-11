@@ -33,6 +33,7 @@ export default defineConfig({
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
+    "**/admin-reembolsos.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,
