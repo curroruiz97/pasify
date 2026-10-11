@@ -26,6 +26,10 @@ interface Props {
   step?: number;
   /** Si false, permite valores negativos (no recomendado para precio). */
   clampToMin?: boolean;
+  /** El valor no es válido: se marca con aria-invalid y apunta a su mensaje. */
+  invalid?: boolean;
+  /** id del mensaje de error (se enlaza con aria-describedby solo si `invalid`). */
+  describedBy?: string;
 }
 
 const fmt = (n: number): string => {
@@ -43,6 +47,8 @@ export const PasifyPriceInput = ({
   min = 0,
   step = 0.1,
   clampToMin = true,
+  invalid,
+  describedBy,
 }: Props) => {
   const bump = (delta: number) => {
     const current = parseFloat(value || "0");
@@ -64,6 +70,8 @@ export const PasifyPriceInput = ({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? describedBy : undefined}
         className="no-spinner pr-16 tabular-nums"
       />
       <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center gap-1">

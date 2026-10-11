@@ -4,7 +4,8 @@ import { FAKE_SUPABASE_KEY, FAKE_SUPABASE_URL } from "./tests/e2e/support/fake-s
 /**
  * Panel de local con Supabase simulado: smoke (tests/e2e/partner-shell.spec.ts),
  * caché de datos (tests/e2e/partner-cache.spec.ts), modo puerta
- * (tests/e2e/door-pin.spec.ts) y cuentas y acceso (tests/e2e/cuentas.spec.ts).
+ * (tests/e2e/door-pin.spec.ts), cuentas y acceso (tests/e2e/cuentas.spec.ts) y
+ * validaciones del editor de eventos (tests/e2e/editor-validaciones.spec.ts).
  *
  * Config aparte de playwright.config.ts: arranca su propio Vite en :8090 con
  * VITE_SUPABASE_URL apuntando a un puerto local donde no escucha nadie, y el
@@ -33,6 +34,7 @@ export default defineConfig({
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
+    "**/editor-validaciones.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

@@ -89,6 +89,7 @@ export default defineConfig({
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
+    "**/editor-validaciones.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
