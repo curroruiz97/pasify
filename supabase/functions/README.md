@@ -1,6 +1,6 @@
 # Pasify · Edge functions
 
-32 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
+30 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
 `_shared/` es código común: no es una función y no se despliega sola.
 
 - **Despliegue:** solo por `.github/workflows/deploy-production.yml`, después de

@@ -19,7 +19,7 @@ con QR, y un panel de admin supervisa la plataforma.
   i18next (solo `es`). En web es una PWA (`vite-plugin-pwa`); en móvil,
   Capacitor 7.
 - **Backend:** Supabase. Postgres con RLS y RPC (`supabase/migrations/`),
-  Auth, Storage, Realtime y 31 edge functions en Deno (`supabase/functions/`,
+  Auth, Storage, Realtime y 30 edge functions en Deno (`supabase/functions/`,
   ver su [README](./supabase/functions/README.md)). Tareas periódicas con
   `pg_cron`.
 - **Pagos:** Stripe Checkout con Stripe Connect: el cobro va a la cuenta del
