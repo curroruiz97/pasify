@@ -121,8 +121,18 @@ const handleRecoveryTokens = () => {
     } catch {
       /* sin sessionStorage: UpdatePassword pedirá un enlace nuevo */
     }
-    // Clean URL and redirect to update-password route
-    window.location.replace(window.location.origin + '/#/update-password');
+    // Clean URL and redirect to update-password route. Con replaceState y no
+    // con location.replace: si los tokens venían en la query, replace es una
+    // navegación entre documentos y `location` los conserva hasta que se
+    // confirma; auth-js (que arranca en diferido) llegaba a leerlos, pedía el
+    // usuario y guardaba una sesión sin que nadie pulsara «Continuar».
+    // replaceState cambia la URL en el acto y no recarga la página.
+    const destino = window.location.origin + '/#/update-password';
+    try {
+      window.history.replaceState(window.history.state, '', destino);
+    } catch {
+      window.location.replace(destino);
+    }
     return true; // Tokens were handled
   }
 
