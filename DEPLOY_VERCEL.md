@@ -34,7 +34,56 @@ la sección 6.
   `manifest.webmanifest`, una hora.
 - Cabeceras: `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`,
-  `X-Frame-Options: SAMEORIGIN`.
+  `X-Frame-Options: SAMEORIGIN` y `Content-Security-Policy-Report-Only` (ver
+  1.1). HSTS no está en `vercel.json` a propósito: según la documentación de
+  Vercel (Encryption and TLS) lo envía por defecto, con `max-age=63072000` y,
+  en `*.vercel.app`, además `includeSubDomains; preload`; repetirlo aquí con
+  otro valor lo pisaría. Se comprueba con
+  `curl -sI https://pasifyy.vercel.app | grep -i strict-transport`. Si algún
+  día no saliera (por ejemplo en el dominio propio), el valor a añadir al
+  bloque `/(.*)` es `Strict-Transport-Security: max-age=63072000`.
+
+### 1.1 · Content-Security-Policy (solo informe)
+
+`Content-Security-Policy-Report-Only` **no bloquea nada**: el navegador
+comprueba cada recurso contra la política y, si no encaja, lo deja en la
+consola de DevTools (`[Report Only] Refused to load …`) y en el evento
+`securitypolicyviolation`. Sirve para ver qué se rompería antes de pasarla a
+`Content-Security-Policy`. No hay endpoint de informes: se mira abriendo la web
+con DevTools (consola, filtrando por «Report Only», o la pestaña Issues). Las
+del service worker salen en su propia consola (Application → Service Workers →
+inspect).
+
+| Directiva | Admite | Por qué |
+|---|---|---|
+| `script-src` | `'self'`, el hash de cada script en línea y `https://challenges.cloudflare.com` | `index.html` (2 scripts), `404.html` y las páginas de `public/landing/` llevan scripts en línea; Turnstile carga su `api.js` |
+| `style-src` | `'self'`, `'unsafe-inline'`, `https://fonts.googleapis.com` | Estilos en línea (Radix, Sonner, las páginas estáticas) y la hoja de Google Fonts |
+| `font-src` | `'self'`, `https://fonts.gstatic.com` | Inter, Instrument Serif y Geist |
+| `img-src` | `'self'`, `data:`, `blob:`, el Supabase de producción (Storage), `https://images.unsplash.com` | QR como `data:`, previsualización de fotos (`blob:`), portadas y avatares del Storage, y el carrusel del hero de `/#/calendar` (`HERO_MARQUEE_IMAGES` de `Calendar.tsx`, imágenes temporales de Unsplash: cuando se cambien por carteles propios sobra el host) |
+| `connect-src` | `'self'`, el Supabase de producción (`https` y `wss`), `*.ingest.sentry.io` (también `.de.` y `.us.`), `https://challenges.cloudflare.com`, `https://fonts.googleapis.com` y `https://fonts.gstatic.com` | API, Auth, Realtime y funciones; envío de errores a Sentry. Las dos de Google Fonts son por el service worker: Workbox pide las fuentes con `fetch()` y ahí el navegador las mide contra `connect-src`, no contra `font-src` |
+| `frame-src` | `'self'`, `https://challenges.cloudflare.com` | La landing y la política de privacidad se cargan en un `<iframe>` propio; el widget de Turnstile |
+| `worker-src` | `'self'`, `blob:` | El service worker; `qr-scanner` crea su worker desde un `blob:` |
+| el resto | `manifest-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'self'` | |
+
+Stripe no aparece: el pago es una redirección a Checkout (`window.location.href`),
+la web no carga Stripe.js.
+
+Qué mantener a mano:
+
+- El host de Supabase (`ixkyfwzkknehvsqpopof`) está escrito en `img-src` y
+  `connect-src`: si cambia `VITE_SUPABASE_URL`, cámbialo también en
+  `vercel.json`.
+- Si el DSN de Sentry (`VITE_SENTRY_DSN`) usa otro host que `*.ingest.sentry.io`,
+  `.de.` o `.us.`, añádelo a `connect-src`.
+- Los scripts en línea entran por su hash. Si cambias uno (`index.html`,
+  `404.html`, `public/landing/**`), tras `npm run build` ejecuta
+  `node scripts/csp-hashes.mjs`: lista los hashes y `--check` falla si alguno
+  falta en el `script-src` de `vercel.json`.
+
+Para pasar a bloquear: primero recoger informes de usuarios reales durante unos
+días (Sentry da un endpoint en el proyecto → Settings → Security Headers; se
+añade `; report-uri <endpoint>` a la política) y, con la lista limpia,
+renombrar la cabecera a `Content-Security-Policy`.
 
 ---
 
