@@ -1,12 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
   Download,
   Euro,
   Loader2,
+  RefreshCcw,
   ScanLine,
   Star,
   Ticket,
@@ -22,15 +24,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format, subDays, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { RefreshIndicator } from "@/components/ui/refresh-indicator";
+import { filtroEventosDelLocal, orgIdsDelLocal, timed } from "@/hooks/queries/partnerData";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
 import { getErrorMessage } from "@/lib/sentry";
+import { TimeoutError } from "@/lib/withTimeout";
+import { addDaysToDate } from "@/components/partner/zonedTime";
+import {
+  diasDesdeEnero,
+  fechaDeEtiqueta,
+  momentoEnMadrid,
+  ventanaDelInforme,
+  type VentanaInforme,
+} from "@/components/partner/reportWindow";
 import {
   fileDateStamp,
   formatCsvDateTime,
@@ -44,8 +56,13 @@ import {
  * PartnerReports — métricas y BI del partner con datos reales.
  *
  * Antes este componente era 100% mock (`buildSeries()` local). Ahora
- * todas las cifras provienen de queries SQL contra `tickets` filtradas
- * por `partner_id = auth.uid()` y por rango de fechas.
+ * todas las cifras provienen de queries SQL contra `tickets`, de los eventos
+ * del local (los que creó y los de sus organizaciones) y de los últimos N días
+ * de Madrid (reportWindow.ts).
+ *
+ * Las cifras son completas o no se enseñan: se lee de mil en mil filas hasta
+ * agotarlas (PostgREST corta cada respuesta en 1.000) y, si una lectura falla,
+ * sale «Informe incompleto» con su «Reintentar» en vez de números a medias.
  *
  * Si el partner no tiene ventas todavía, mostramos empty state honesto
  * con CTA "Crea tu primer evento" en lugar de cifras mock que engañan.
@@ -88,16 +105,12 @@ interface EventRow {
   title: string;
 }
 
-const rangeToDays = (range: Range): number => {
+const rangeToDays = (range: Range, ahora: Date): number => {
   switch (range) {
     case "7d": return 7;
     case "30d": return 30;
     case "90d": return 90;
-    case "ytd": {
-      const now = new Date();
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-      return Math.ceil((now.getTime() - yearStart.getTime()) / 86_400_000);
-    }
+    case "ytd": return diasDesdeEnero(ahora);
   }
 };
 
@@ -109,89 +122,187 @@ interface ReportsData {
   prevTickets: PrevTicketRow[];
   /** Títulos de los eventos del rango (objeto plano: la caché no guarda Map). */
   eventTitles: Record<string, string>;
+  /**
+   * Días (de Madrid) con los que se leyó. La gráfica sale de esta misma
+   * ventana y no de la hora a la que se pinta, para que sumen lo mismo que los
+   * KPIs y el CSV aunque se pinte pasada la medianoche.
+   */
+  ventana: VentanaInforme;
+  /** Se llegó al tope de páginas: hay más ventas de las leídas. */
+  parcial: boolean;
+  /** El periodo previo tampoco se leyó entero: su delta no es fiable. */
+  previoParcial: boolean;
 }
 
 const SIN_TICKETS: TicketRow[] = [];
 const SIN_TICKETS_PREVIOS: PrevTicketRow[] = [];
 
-async function leerInformes(uid: string, days: number): Promise<ReportsData> {
-  const now = new Date();
-  const start = startOfDay(subDays(now, days)).toISOString();
-  const prevStart = startOfDay(subDays(now, days * 2)).toISOString();
-  const prevEnd = startOfDay(subDays(now, days)).toISOString();
+/** PostgREST corta cada respuesta en 1.000 filas (db-max-rows de Supabase): se pide de mil en mil. */
+const FILAS_POR_PAGINA = 1_000;
+/** Tope de seguridad: 50 páginas = 50.000 ventas por lectura. Pasado eso, el informe sale marcado como parcial. */
+const MAX_PAGINAS = 50;
+/** Ids por consulta de títulos: un `in.(…)` con cientos de uuids pasaría del límite de la URL. */
+const IDS_POR_CONSULTA = 100;
 
-  // Tickets del rango actual
-  const { data: curRows, error: curErr } = await supabase
-    .from("tickets")
-    .select(
-      // tickets NO tiene partner_id: el vinculo con el partner va por
-      // tickets.event_id -> events.partner_id. El !inner fuerza el join
-      // para poder filtrar por la columna de la tabla relacionada.
-      "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email, events!inner(partner_id)"
-    )
-    .eq("events.partner_id", uid)
-    .in("status", ["paid", "used"])
-    .gte("paid_at", start);
-  if (curErr) throw curErr;
+interface LecturaPaginada<T> {
+  filas: T[];
+  /** false si se paró en el tope de páginas con más filas por leer. */
+  completo: boolean;
+}
 
-  // Tickets del rango anterior (para delta)
-  const { data: prevRows } = await supabase
-    .from("tickets")
-    .select("id, status, amount_paid_cents, paid_at, events!inner(partner_id)")
-    .eq("events.partner_id", uid)
-    .in("status", ["paid", "used"])
-    .gte("paid_at", prevStart)
-    .lt("paid_at", prevEnd);
+/**
+ * Lee una consulta en páginas de FILAS_POR_PAGINA hasta agotarla. `pedir` debe
+ * llevar un orden total (created_at, id): con offsets, una página se parte en
+ * dos o se repite si el orden no es estable. Cualquier página que falle (error
+ * de la consulta o timeout) rechaza la lectura entera: nunca se devuelve la
+ * mitad. Con `corte.cortada`, la lectura para antes de la página siguiente (si
+ * la otra lectura del informe ya ha fallado, no hay que seguir pidiendo).
+ */
+async function leerPaginas<T extends { id: string }>(
+  etiqueta: string,
+  corte: { cortada: boolean },
+  pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<LecturaPaginada<T>> {
+  const filas: T[] = [];
+  const vistas = new Set<string>();
+  for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+    if (corte.cortada) throw new Error(`[informes] ${etiqueta}: lectura cortada`);
+    const desde = pagina * FILAS_POR_PAGINA;
+    const { data, error } = await timed(pedir(desde, desde + FILAS_POR_PAGINA - 1), `${etiqueta}.${pagina + 1}`);
+    if (error) throw error;
+    const lote = data ?? [];
+    // Una venta que cambia de sitio mientras se lee (se paga una reserva, p. ej.) puede salir en dos páginas.
+    for (const fila of lote) {
+      if (vistas.has(fila.id)) continue;
+      vistas.add(fila.id);
+      filas.push(fila);
+    }
+    if (lote.length < FILAS_POR_PAGINA) return { filas, completo: true };
+  }
+  return { filas, completo: false };
+}
+
+/** Títulos de los eventos (objeto plano: la caché no guarda Map). */
+async function leerTitulos(eventIds: string[]): Promise<Record<string, string>> {
+  const titulos: Record<string, string> = {};
+  const ids = Array.from(new Set(eventIds.filter(Boolean)));
+  const trozos: string[][] = [];
+  for (let i = 0; i < ids.length; i += IDS_POR_CONSULTA) trozos.push(ids.slice(i, i + IDS_POR_CONSULTA));
+  const respuestas = await Promise.all(
+    trozos.map((trozo) => timed(supabase.from("events").select("id, title").in("id", trozo), "informes.eventos")),
+  );
+  for (const { data, error } of respuestas) {
+    if (error) throw error;
+    for (const e of (data ?? []) as EventRow[]) titulos[e.id] = e.title;
+  }
+  return titulos;
+}
+
+async function leerInformes(uid: string, range: Range): Promise<ReportsData> {
+  const ahora = new Date();
+  const ventana = ventanaDelInforme(rangeToDays(range, ahora), ahora);
+
+  // Los mismos eventos que «Mis eventos»: los que creó este usuario y los de sus
+  // organizaciones. Filtrar solo por partner_id perdía los de otros miembros.
+  // `estricto`: sin saber las organizaciones faltarían ventas sin avisar.
+  const orgIds = await orgIdsDelLocal(uid, { estricto: true });
+  const delLocal = filtroEventosDelLocal(uid, orgIds);
+
+  // tickets NO tiene partner_id ni org_id: el vínculo va por tickets.event_id ->
+  // events. El !inner fuerza el join para poder filtrar por las columnas de la
+  // tabla relacionada. Las dos lecturas (periodo y previo) van a la vez.
+  const corte = { cortada: false };
+  const [actual, previo] = await Promise.all([
+    leerPaginas<TicketRow>("informes.tickets", corte, (desde, hasta) =>
+      supabase
+        .from("tickets")
+        .select(
+          "id, event_id, status, amount_paid_cents, paid_at, used_at, buyer_user_id, buyer_email, events!inner(partner_id,org_id)",
+        )
+        .or(delLocal, { referencedTable: "events" })
+        .in("status", ["paid", "used"])
+        .gte("paid_at", ventana.inicio)
+        .lt("paid_at", ventana.fin)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(desde, hasta),
+    ),
+    // Periodo previo (para el delta): de la misma longitud, justo antes.
+    leerPaginas<PrevTicketRow>("informes.previo", corte, (desde, hasta) =>
+      supabase
+        .from("tickets")
+        .select("id, status, amount_paid_cents, paid_at, events!inner(partner_id,org_id)")
+        .or(delLocal, { referencedTable: "events" })
+        .in("status", ["paid", "used"])
+        .gte("paid_at", ventana.inicioPrevio)
+        .lt("paid_at", ventana.inicio)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(desde, hasta),
+    ),
+  ]).catch((err: unknown) => {
+    corte.cortada = true; // la otra lectura no sigue pidiendo páginas de un informe que ya no vale
+    throw err;
+  });
 
   // Eventos referenciados para top events / titulares
-  const eventTitles: Record<string, string> = {};
-  const eventIds = Array.from(new Set((curRows ?? []).map((t) => t.event_id).filter(Boolean)));
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase.from("events").select("id, title").in("id", eventIds);
-    for (const e of (evData ?? []) as EventRow[]) eventTitles[e.id] = e.title;
-  }
+  const eventTitles = await leerTitulos(actual.filas.map((t) => t.event_id));
 
   return {
-    tickets: (curRows ?? []) as TicketRow[],
-    prevTickets: (prevRows ?? []) as PrevTicketRow[],
+    tickets: actual.filas,
+    prevTickets: previo.filas,
     eventTitles,
+    ventana,
+    parcial: !actual.completo,
+    previoParcial: !previo.completo,
   };
 }
+
+/** Texto del fallo para quien mira el informe. */
+const describirFallo = (err: unknown): string =>
+  err instanceof TimeoutError
+    ? "El servidor no responde. Revisa tu conexión y vuelve a intentarlo."
+    : getErrorMessage(err);
 
 export const PartnerReports = () => {
   const { toast } = useToast();
   const uid = useCurrentUserId();
   const [range, setRange] = useState<Range>("30d");
-  const days = rangeToDays(range);
 
   // Informes en la caché, por rango. Llevan emails de compradores: solo en
   // memoria (nunca en el dispositivo) y fuera a la media hora sin verse. Al
   // cambiar de rango se siguen viendo los del anterior hasta que llegan.
   const query = useQuery({
     queryKey: qk.partner.reports(uid ?? "", range),
-    queryFn: () => leerInformes(uid as string, days),
+    queryFn: () => leerInformes(uid as string, range),
     enabled: !!uid,
     placeholderData: keepPreviousData,
     gcTime: 30 * 60_000,
   });
-  const tickets = query.data?.tickets ?? SIN_TICKETS;
-  const prevTickets = query.data?.prevTickets ?? SIN_TICKETS_PREVIOS;
+  const data = query.data;
+  const tickets = data?.tickets ?? SIN_TICKETS;
+  const prevTickets = data?.prevTickets ?? SIN_TICKETS_PREVIOS;
   const events = useMemo(() => {
     const m = new Map<string, EventRow>();
-    for (const [id, title] of Object.entries(query.data?.eventTitles ?? {})) m.set(id, { id, title });
+    for (const [id, title] of Object.entries(data?.eventTitles ?? {})) m.set(id, { id, title });
     return m;
-  }, [query.data?.eventTitles]);
+  }, [data?.eventTitles]);
   // Solo la primera vez (sin nada que enseñar) hay "Cargando métricas…".
   const loading = !!uid && query.isPending;
-  const error = query.error && !query.data ? getErrorMessage(query.error) : null;
-  const refrescando = query.isFetching && !!query.data;
+  // Una lectura fallida sin nada que enseñar es un informe incompleto: ni
+  // cifras a medias ni «aún no hay ventas». Con un informe completo de antes a
+  // la vista, un refresco fallido solo se avisa (y se puede reintentar).
+  const incompleto = query.isError && data === undefined;
+  const desactualizado = query.isError && data !== undefined;
+  const refrescando = query.isFetching && !!data;
 
   useEffect(() => {
-    if (!query.error) return;
-    const msg = getErrorMessage(query.error);
-    console.error("[PartnerReports] load:", query.error);
-    toast({ title: "Error al cargar reports", description: msg, variant: "destructive" });
-  }, [query.error, toast]);
+    if (query.error) console.error("[PartnerReports] load:", query.error);
+  }, [query.error]);
+
+  // Día y hora de cada venta en Madrid (como el CSV): los comparten la
+  // gráfica y el heatmap.
+  const momentos = useMemo(() => tickets.map((t) => momentoEnMadrid(t.paid_at)), [tickets]);
 
   // Agregados
   const stats = useMemo(() => {
@@ -204,37 +315,40 @@ export const PartnerReports = () => {
         .filter((x) => x.length > 0)
     ).size;
 
+    // El periodo previo dura lo mismo y acaba donde empieza este. Si uno de los
+    // dos no se pudo leer entero, el delta se calla antes que enseñar uno falso.
     const prevSold = prevTickets.length;
     const prevRev = prevTickets.reduce((s, t) => s + (t.amount_paid_cents ?? 0), 0);
-    const deltaSoldPct = prevSold > 0 ? ((sold - prevSold) / prevSold) * 100 : 0;
-    const deltaRevPct = prevRev > 0 ? ((revenue - prevRev) / prevRev) * 100 : 0;
+    const comparable = !data?.parcial && !data?.previoParcial;
+    const deltaSoldPct = !comparable ? null : prevSold > 0 ? ((sold - prevSold) / prevSold) * 100 : 0;
+    const deltaRevPct = !comparable ? null : prevRev > 0 ? ((revenue - prevRev) / prevRev) * 100 : 0;
 
     return { sold, revenue, used, usageRate, uniqueBuyers, deltaSoldPct, deltaRevPct };
-  }, [tickets, prevTickets]);
+  }, [tickets, prevTickets, data?.parcial, data?.previoParcial]);
 
-  // Serie diaria
+  // Serie diaria: una columna por día de la ventana con la que se leyó (la
+  // misma que filtra los KPIs), así que la suma de la gráfica es la de los KPIs.
+  const ventana = data?.ventana;
   const series = useMemo(() => {
-    const now = new Date();
+    if (!ventana) return [];
     const buckets = new Map<string, { sold: number; rev: number }>();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = subDays(now, i);
-      buckets.set(format(d, "yyyy-MM-dd"), { sold: 0, rev: 0 });
+    for (let i = 0; i < ventana.dias; i++) {
+      buckets.set(addDaysToDate(ventana.primerDia, i), { sold: 0, rev: 0 });
     }
-    for (const t of tickets) {
-      if (!t.paid_at) continue;
-      const key = format(new Date(t.paid_at), "yyyy-MM-dd");
-      const cur = buckets.get(key);
+    tickets.forEach((t, i) => {
+      const cur = buckets.get(momentos[i]?.dia ?? "");
       if (cur) {
         cur.sold++;
         cur.rev += t.amount_paid_cents ?? 0;
       }
-    }
-    return Array.from(buckets.entries()).map(([date, v]) => ({
-      date: new Date(date),
+    });
+    return Array.from(buckets.entries()).map(([day, v]) => ({
+      day,
+      date: fechaDeEtiqueta(day),
       sold: v.sold,
       revenueCents: v.rev,
     }));
-  }, [tickets, days]);
+  }, [tickets, momentos, ventana]);
 
   // Top eventos por recaudación
   const topEvents = useMemo(() => {
@@ -258,18 +372,14 @@ export const PartnerReports = () => {
       .slice(0, 5);
   }, [tickets, events]);
 
-  // Heatmap dia/hora (Lun=1..Dom=0)
+  // Heatmap dia/hora (Dom=0..Sáb=6), en hora de Madrid
   const heatmap = useMemo(() => {
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
-    for (const t of tickets) {
-      if (!t.paid_at) continue;
-      const d = new Date(t.paid_at);
-      const dow = d.getDay();
-      const h = d.getHours();
-      grid[dow][h]++;
+    for (const m of momentos) {
+      if (m) grid[m.diaSemana][m.hora]++;
     }
     return grid;
-  }, [tickets]);
+  }, [momentos]);
 
   const [exporting, setExporting] = useState(false);
 
@@ -329,9 +439,12 @@ export const PartnerReports = () => {
             </h2>
             <RefreshIndicator active={refrescando} />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground" style={mono}>
-            Datos reales · {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} en el rango
-          </p>
+          {/* Con el informe incompleto no hay ninguna cifra que dar, tampoco «0 tickets». */}
+          {!incompleto && (
+            <p className="mt-1 text-xs text-muted-foreground" style={mono}>
+              Datos reales · {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} en el rango
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Select value={range} onValueChange={(v) => setRange(v as Range)}>
@@ -360,15 +473,19 @@ export const PartnerReports = () => {
         </div>
       </header>
 
-      {error && (
-        <div
-          className="rounded-2xl border p-4 text-sm"
-          style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
-        >
-          <p className="font-semibold text-foreground">No pudimos cargar los reports</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{error}</p>
-        </div>
+      {incompleto && (
+        <InformeIncompleto
+          detalle={describirFallo(query.error)}
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
       )}
+
+      {desactualizado && (
+        <InformeDesactualizado onRetry={() => void query.refetch()} retrying={query.isFetching} />
+      )}
+
+      {data?.parcial && <InformeParcial />}
 
       {loading && (
         <div className="rounded-2xl border border-dashed border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
@@ -377,7 +494,7 @@ export const PartnerReports = () => {
         </div>
       )}
 
-      {!loading && tickets.length === 0 && !error && (
+      {!loading && tickets.length === 0 && !incompleto && (
         <PasifyEmptyState
           icon={<BarChart3 className="h-7 w-7" />}
           eyebrow="Sin datos todavía"
@@ -390,6 +507,7 @@ export const PartnerReports = () => {
         <>
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <Kpi
+              testId="kpi-entradas"
               icon={<Ticket className="h-4 w-4" />}
               color="#FF7A4D"
               eyebrow="Entradas vendidas"
@@ -397,6 +515,7 @@ export const PartnerReports = () => {
               deltaPct={stats.deltaSoldPct}
             />
             <Kpi
+              testId="kpi-recaudado"
               icon={<Euro className="h-4 w-4" />}
               color="#E8542A"
               eyebrow="Recaudado"
@@ -443,6 +562,7 @@ const Kpi = ({
   value,
   deltaPct,
   sub,
+  testId,
 }: {
   icon: React.ReactNode;
   color: string;
@@ -450,8 +570,11 @@ const Kpi = ({
   value: string;
   deltaPct: number | null;
   sub?: string;
+  /** Para los tests: el KPI, su valor (`<id>-valor`) y su delta (`<id>-delta`). */
+  testId?: string;
 }) => (
   <article
+    data-testid={testId}
     className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5"
     style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset" }}
   >
@@ -469,6 +592,7 @@ const Kpi = ({
       </div>
       {deltaPct !== null && (
         <span
+          data-testid={testId ? `${testId}-delta` : undefined}
           className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px]"
           style={{
             ...mono,
@@ -488,7 +612,11 @@ const Kpi = ({
       >
         {eyebrow}
       </div>
-      <div className="mt-0.5 text-2xl font-bold text-foreground" style={mono}>
+      <div
+        data-testid={testId ? `${testId}-valor` : undefined}
+        className="mt-0.5 text-2xl font-bold text-foreground"
+        style={mono}
+      >
         {value}
       </div>
       {sub && (
@@ -501,10 +629,95 @@ const Kpi = ({
 );
 
 // =============================================================
+// Avisos: informe incompleto, parcial o sin actualizar
+// =============================================================
+
+/** Una lectura ha fallado: no se enseña nada a medias, solo cómo reintentar. */
+const InformeIncompleto = ({
+  detalle,
+  onRetry,
+  retrying,
+}: {
+  detalle: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) => (
+  <div
+    role="alert"
+    className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+    style={{ background: "rgba(232,84,42,0.08)", borderColor: "rgba(232,84,42,0.32)" }}
+  >
+    <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+        style={{ background: "linear-gradient(180deg, #FF7A4D 0%, #B8381A 100%)" }}
+      >
+        <AlertTriangle className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-foreground">Informe incompleto</div>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+          Ha fallado la lectura de las ventas de este periodo y no queremos enseñarte cifras a medias.
+        </p>
+        <p className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground/80">{detalle}</p>
+      </div>
+    </div>
+    <Button size="sm" onClick={onRetry} disabled={retrying} className="shrink-0 max-md:h-11">
+      {retrying ? (
+        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+      )}
+      Reintentar
+    </Button>
+  </div>
+);
+
+/** Un refresco ha fallado con el informe completo de antes a la vista. */
+const InformeDesactualizado = ({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) => (
+  <div
+    role="status"
+    className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+  >
+    <span className="flex items-center gap-2 text-muted-foreground">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+      El informe no se ha podido actualizar: ves el último que se cargó.
+    </span>
+    <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying} className="shrink-0 max-md:h-11">
+      {retrying ? (
+        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+      )}
+      Reintentar
+    </Button>
+  </div>
+);
+
+/** Se llegó al tope de páginas: las cifras y el CSV son de las primeras ventas. */
+const InformeParcial = () => (
+  <div
+    role="status"
+    className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
+  >
+    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+    <span>
+      <strong className="font-semibold text-foreground">Informe parcial.</strong> Este periodo tiene más de{" "}
+      {(FILAS_POR_PAGINA * MAX_PAGINAS).toLocaleString("es-ES")} ventas y solo hemos leído las primeras: las cifras y
+      el CSV no están completos. Prueba con un periodo más corto.
+    </span>
+  </div>
+);
+
+// =============================================================
 // Revenue chart (SVG simple, sin libs externas)
 // =============================================================
 
-const RevenueChart = ({ series }: { series: Array<{ date: Date; sold: number; revenueCents: number }> }) => {
+const RevenueChart = ({
+  series,
+}: {
+  series: Array<{ day: string; date: Date; sold: number; revenueCents: number }>;
+}) => {
   if (series.length === 0) return null;
   const maxRev = Math.max(...series.map((s) => s.revenueCents), 1);
   const W = 600;
@@ -521,7 +734,15 @@ const RevenueChart = ({ series }: { series: Array<{ date: Date; sold: number; re
     .join(" ");
 
   return (
-    <article className="rounded-2xl border border-border bg-card p-5">
+    <article
+      className="rounded-2xl border border-border bg-card p-5"
+      // Para los tests: lo que suma la gráfica y lo de cada día ("día:entradas:céntimos").
+      data-testid="grafica-ventas"
+      data-dias={series.length}
+      data-entradas={series.reduce((s, d) => s + d.sold, 0)}
+      data-ingresos-cents={series.reduce((s, d) => s + d.revenueCents, 0)}
+      data-serie={series.map((d) => `${d.day}:${d.sold}:${d.revenueCents}`).join(" ")}
+    >
       <header className="mb-4 flex items-center justify-between">
         <div
           className="inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
