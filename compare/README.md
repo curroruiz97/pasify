@@ -62,7 +62,7 @@ Con el comparador desactivado, `npm run build` produce exactamente lo de antes. 
 1. `compare/v1/files/` guarda la versión antigua de los 38 ficheros de `src/` e `index.html` que cambiaron (631 KiB). `compare/v1/manifest.json` lista esos ficheros y los 4 que v1 no tiene.
 2. `npm run build` hace `vite build` (v2, en `dist/`) y después `node scripts/build-v1.mjs`.
 3. `scripts/build-v1.mjs` copia `src/` a `.v1/src`, quita los ficheros que v1 no tiene, pisa los 38 con su versión antigua y compila esa copia con la misma toolchain en `dist/v1`: `base=/v1/`, sin service worker, con las variables de entorno del build. `.v1/` es temporal y se borra al terminar.
-4. `scripts/compare-plugin.mjs` añade a los dos `index.html` las etiquetas `pasify-variant` y `pasify-sha` y el script `/compare-switcher.js` (`scripts/compare-switcher.js`, sin dependencias, en Shadow DOM).
+4. `scripts/compare-plugin.mjs` añade a los dos `index.html` las etiquetas `pasify-variant` y `pasify-sha` y el script `/compare-switcher.<hash>.js`: la copia de `scripts/compare-switcher.js` (sin dependencias, en Shadow DOM) con el hash de su contenido en el nombre, porque `vercel.json` cachea los `.js` un año.
 5. Si v1 no se pudo construir en una vista previa, el despliegue sigue sin v1 y el selector deja su botón apagado. Con `PASIFY_COMPARE=1` el fallo corta el build.
 
 ## Mantenimiento

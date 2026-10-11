@@ -1,6 +1,6 @@
 /* Selector v1 / v2 de la web (solo en vistas previas; ver compare/README.md).
  *
- * Lo carga index.html con <script src="/compare-switcher.js" defer>. No tiene
+ * Lo carga index.html con <script src="/compare-switcher.<hash>.js" defer>. No tiene
  * dependencias y se pinta en un Shadow DOM propio, así que ni los estilos de la
  * app le afectan ni él afecta a la app. La ruta (HashRouter) se conserva al
  * cambiar de versión. Atajo de teclado: Alt+V.

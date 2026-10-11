@@ -2,6 +2,7 @@
 //
 // Solo actúa cuando el comparador está activado (vista previa de Vercel o
 // PASIFY_COMPARE=1). En producción no añade nada al bundle ni a index.html.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -21,11 +22,15 @@ export function compareEnabled(env = process.env) {
 
 /**
  * Inyecta en index.html el selector v1/v2 y las etiquetas que lo identifican.
- * La build de la raíz (v2) además emite `compare-switcher.js`; la de v1 solo
- * lo referencia (se sirve desde la raíz).
+ * La build de la raíz (v2) además emite `compare-switcher.<hash>.js`; la de v1
+ * solo lo referencia (se sirve desde la raíz). El nombre lleva el hash del
+ * contenido porque vercel.json cachea los .js un año como inmutables: así un
+ * cambio del selector llega a todos los navegadores.
  */
 export function comparePlugin({ variant, root, sha, emitScript = false }) {
   if (!compareEnabled()) return null;
+  const source = fs.readFileSync(path.join(root, "scripts", "compare-switcher.js"), "utf8");
+  const fileName = `compare-switcher.${crypto.createHash("sha256").update(source).digest("hex").slice(0, 8)}.js`;
   return {
     name: "pasify-compare",
     apply: "build",
@@ -39,17 +44,13 @@ export function comparePlugin({ variant, root, sha, emitScript = false }) {
         if (variant === "v1") {
           tags.push({ tag: "meta", attrs: { name: "robots", content: "noindex" }, injectTo: "head-prepend" });
         }
-        tags.push({ tag: "script", attrs: { src: "/compare-switcher.js", defer: true }, injectTo: "body" });
+        tags.push({ tag: "script", attrs: { src: `/${fileName}`, defer: true }, injectTo: "body" });
         return tags;
       },
     },
     generateBundle() {
       if (!emitScript) return;
-      this.emitFile({
-        type: "asset",
-        fileName: "compare-switcher.js",
-        source: fs.readFileSync(path.join(root, "scripts", "compare-switcher.js"), "utf8"),
-      });
+      this.emitFile({ type: "asset", fileName, source });
     },
   };
 }
