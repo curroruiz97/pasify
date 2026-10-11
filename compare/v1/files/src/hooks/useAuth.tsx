@@ -1,0 +1,730 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { AuthChangeEvent, User, Session } from '@supabase/supabase-js';
+import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '@/integrations/supabase/client';
+import { capacitorStorage } from '@/lib/capacitorStorage';
+import { withTimeout } from '@/lib/withTimeout';
+import { captureError, getErrorMessage, setSentryTag, setSentryUser } from '@/lib/sentry';
+import { queryClient } from '@/lib/cache/queryClient';
+import { qk } from '@/lib/cache/keys';
+import { getSessionSnapshot, noteSession, resolverSesion, subscribeSession } from '@/lib/cache/session';
+import { anotarCierreForzado, anotarCierreVoluntario } from '@/lib/cache/lifecycle';
+
+/**
+ * Pasify auth hook · super-admin/dev mode.
+ *
+ * Modelo de rol DESPUÉS de Fase 1 (security hardening):
+ *
+ *  - Usuarios normales tienen UN SOLO rol (client | partner | admin) enforced
+ *    por RLS `user_roles_self_insert` (migración 20260513120000). El backend
+ *    impide acumular roles vía RPC `claim_initial_role` que sólo permite
+ *    reclamar si el usuario aún no tiene rol. Única excepción: una cuenta de
+ *    cliente nueva y sin compras puede pasar a local desde Ajustes
+ *    (`convert_new_client_to_partner`); `refrescarRoles` lo aplica sin recargar.
+ *
+ *  - El "modo super-admin" es exclusivo de Francisco
+ *    (francisco@avenuemedia.io + rol admin). La verificación canónica es
+ *    `rpc('is_super_admin', { _user_id })` en backend; el frontend lo espeja
+ *    en `isSuperAdminDev` para gatear UI.
+ *
+ *  - `canSwitchPanels` = isSuperAdminDev && env flag `VITE_ENABLE_SUPER_ADMIN_SWITCHER=true`
+ *    && userRoles.length >= 2. Sólo true para Francisco con env opt-in. El
+ *    PanelSwitcher y ProtectedRoute auto-switch leen este flag.
+ *
+ *  - `effectiveRole` es el rol más privilegiado del usuario (admin > partner > client).
+ *    Para usuarios normales `userRole === effectiveRole` siempre; localStorage
+ *    se ignora. Para super-admin, `userRole` puede divergir si está cambiando
+ *    entre paneles vía PanelSwitcher.
+ *
+ *  - `resolveInitialDashboard(roles, lastActiveVenueId?)` es helper exportable
+ *    que devuelve la ruta inicial post-login según el rol más privilegiado.
+ *
+ * Estabilidad de sesión (Fase 0 del panel de local):
+ *
+ *  - auth-js emite `SIGNED_IN` cada vez que la pestaña/app vuelve a ser visible
+ *    (y también lo reenvía desde otras pestañas por BroadcastChannel) y
+ *    `TOKEN_REFRESHED` ~cada hora. Antes cada evento ponía `roleLoading=true`
+ *    y volvía a pedir los roles; ProtectedRoute pintaba el loader en lugar
+ *    del panel y se DESMONTABA todo (asistente de evento a medias, escáner…).
+ *
+ *  - Ahora los roles se cargan UNA vez por usuario (`user.id`). Los eventos
+ *    del mismo usuario solo actualizan la sesión (manteniendo las mismas
+ *    referencias si no cambió nada). Un cambio de usuario sí recarga, y
+ *    nunca deja ver los roles del usuario anterior.
+ *
+ *  - `roleLoading` solo es true en la PRIMERA carga de roles de un usuario.
+ *    `rolesLoaded` indica que ya se conocen; `roleError` que la primera
+ *    carga falló (red/timeout) → ProtectedRoute ofrece "Reintentar" en vez de
+ *    redirigir al usuario a un panel que no es el suyo.
+ *
+ * Caché (src/lib/cache):
+ *
+ *  - Los roles se guardan en la caché del usuario (`qk.me.roles`). Al abrir o
+ *    recargar la app se usan los guardados al instante y se revalidan UNA vez
+ *    por ejecución en segundo plano: sin loader entre el splash y el panel, y
+ *    sin conexión la app sigue abriendo. Los roles solo deciden qué pantalla
+ *    se pinta; los permisos reales los aplica el servidor (RLS/RPC).
+ *
+ *  - Una instancia que se monta cuando la sesión ya se conoce (todas menos la
+ *    de App en el arranque) empieza ya con sesión y roles: sin un render en
+ *    "cargando".
+ *
+ * Sin red (src/lib/cache/session.ts):
+ *
+ *  - Cada instancia sigue también la sesión publicada en session.ts: al
+ *    arrancar sin cobertura y con el token caducado, allí se publica la
+ *    sesión guardada "sin verificar" (~2 s) y la app enseña lo guardado del
+ *    usuario en vez de mandarle al login.
+ *  - Un INITIAL_SESSION null de auth-js que no es un cierre de sesión (no ha
+ *    podido renovar el token sin red) no echa al usuario: `resolverSesion`.
+ *
+ * Cuenta sin rol: `rolesLoaded` con `userRoles` vacío es una cuenta sin
+ * ningún panel (p. ej. un local al que el admin ha retirado el acceso). Las
+ * rutas lo tratan aparte (CuentaSinAcceso); `dashboardPathForRole(null)` ya no
+ * manda al panel de cliente, sino a /login.
+ */
+
+const ACTIVE_ROLE_KEY = 'pasify.activeRole';
+
+const SUPER_ADMIN_ENV_ENABLED =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env?.VITE_ENABLE_SUPER_ADMIN_SWITCHER === 'true';
+
+// Orden de privilegio (mayor → menor). Se usa para resolver effectiveRole
+// cuando el usuario tiene varios roles (sólo super-admin en producción).
+const ROLE_PRIORITY: Record<string, number> = {
+  admin: 3,
+  partner: 2,
+  client: 1,
+};
+
+// Límite para pedir los roles: una promesa colgada (bridge nativo de
+// Capacitor, red móvil) no puede dejar la app en el loader para siempre. La
+// sesión la lee session.ts, con su propio límite (~2 s).
+const AUTH_TIMEOUT_MS = 10_000;
+
+// Sin rol no hay panel: antes devolvía /client-dashboard y ProtectedRoute no
+// pintaba nada (pantalla negra sin salida).
+const dashboardPathFor = (role: string | null | undefined): string => {
+  if (role === 'admin') return '/admin';
+  if (role === 'partner') return '/partner-dashboard';
+  if (role === 'client') return '/client-dashboard';
+  return '/login';
+};
+
+/**
+ * Resuelve la ruta inicial post-login según el conjunto de roles del usuario.
+ * Para super-admin (Francisco) respeta el último panel activo si se proporciona.
+ * Para usuarios normales devuelve el dashboard correspondiente al rol más
+ * privilegiado — nunca redirige a un panel que no tienen.
+ */
+export const resolveInitialDashboard = (
+  roles: string[],
+  opts?: { lastActivePath?: string | null; allowLastActive?: boolean },
+): string => {
+  if (!roles || roles.length === 0) return '/login';
+  const sorted = [...roles].sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0));
+  const top = sorted[0];
+  if (opts?.allowLastActive && opts.lastActivePath) {
+    // Validamos que la ruta last-active corresponda a un rol que el usuario
+    // realmente tiene; si no, fallback al top role.
+    if (opts.lastActivePath === '/admin' && roles.includes('admin')) return '/admin';
+    if (opts.lastActivePath === '/partner-dashboard' && roles.includes('partner')) return '/partner-dashboard';
+    if (opts.lastActivePath === '/client-dashboard' && roles.includes('client')) return '/client-dashboard';
+  }
+  return dashboardPathFor(top);
+};
+
+// Solo roles que la app conoce: uno desconocido llevaría a una ruta que no
+// existe (y /login, con sesión, volvería a redirigir a sí misma).
+const sortRolesByPrivilege = (roles: string[]): string[] =>
+  roles
+    .filter((r) => r in ROLE_PRIORITY)
+    .sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0));
+
+const readStoredRole = (): string | null => {
+  try {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem(ACTIVE_ROLE_KEY)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredRole = (role: string | null) => {
+  try {
+    if (typeof window === 'undefined') return;
+    if (role) window.localStorage.setItem(ACTIVE_ROLE_KEY, role);
+    else window.localStorage.removeItem(ACTIVE_ROLE_KEY);
+  } catch {
+    /* noop */
+  }
+};
+
+/** Consulta de Supabase (thenable) con límite de tiempo. */
+function conTimeout<T>(query: PromiseLike<T>, label: string): Promise<Awaited<T>> {
+  return withTimeout(Promise.resolve(query), AUTH_TIMEOUT_MS, label);
+}
+
+interface RolesResult {
+  /** Ordenados por privilegio (el primero es el efectivo). */
+  roles: string[];
+  isSuperAdmin: boolean;
+}
+
+interface RolesState extends RolesResult {
+  /** Usuario al que pertenecen estos roles; null = no hay roles cargados. */
+  userId: string | null;
+}
+
+const ROLES_VACIOS: RolesState = { userId: null, roles: [], isSuperAdmin: false };
+// Referencia estable: `userRoles` va en dependencias de efectos (ProtectedRoute).
+const SIN_ROLES: string[] = [];
+
+const mismosRoles = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((r, i) => r === b[i]);
+
+const mismoUsuario = (a: User | null, b: User | null) =>
+  a === b || (!!a && !!b && a.id === b.id && a.updated_at === b.updated_at);
+
+const mismaSesion = (a: Session | null, b: Session | null) =>
+  a === b || (!!a && !!b && a.access_token === b.access_token && mismoUsuario(a.user, b.user));
+
+// Peticiones de roles en vuelo, compartidas entre instancias del hook: App,
+// ProtectedRoute, PanelSwitcher, MobileTopBar… montan a la vez y cada una
+// lanzaría las mismas dos RPC. Los resultados van a la caché (qk.me.roles).
+const rolesEnVuelo = new Map<string, Promise<RolesResult>>();
+
+// Usuarios cuyos roles ya se han comprobado contra el servidor en esta
+// ejecución de la app. Los que vienen de la caché se revalidan una vez.
+const rolesRevalidados = new Set<string>();
+
+/** Roles guardados en la caché para `userId`, si tienen buena forma. */
+const leerRolesGuardados = (userId: string): RolesResult | null => {
+  const d = queryClient.getQueryData<RolesResult>(qk.me.roles(userId));
+  if (
+    !d ||
+    !Array.isArray(d.roles) ||
+    d.roles.length === 0 ||
+    !d.roles.every((r) => typeof r === 'string') ||
+    typeof d.isSuperAdmin !== 'boolean'
+  ) {
+    return null;
+  }
+  const roles = sortRolesByPrivilege(d.roles);
+  return roles.length > 0 ? { roles, isSuperAdmin: d.isSuperAdmin } : null;
+};
+
+/** Rol activo para unos roles (sin efectos: no toca localStorage). */
+const rolActivoPara = ({ roles, isSuperAdmin }: RolesResult): string | null => {
+  const canPersist = isSuperAdmin && SUPER_ADMIN_ENV_ENABLED && roles.length >= 2;
+  const stored = readStoredRole();
+  return canPersist && stored && roles.includes(stored) ? stored : roles[0] ?? null;
+};
+
+/**
+ * Roles de `userId` del servidor (compartiendo la petición en vuelo). Con
+ * `forzar` siempre sale una petición nueva: la que estuviera en vuelo pudo
+ * salir antes de un cambio de rol.
+ */
+const fetchRoles = (userId: string, { forzar = false }: { forzar?: boolean } = {}): Promise<RolesResult> => {
+  const existente = rolesEnVuelo.get(userId);
+  if (existente && !forzar) return existente;
+
+  const peticion = (async (): Promise<RolesResult> => {
+    const [rolesRes, isSuperAdmin] = await Promise.all([
+      conTimeout(supabase.rpc('get_user_roles', { _user_id: userId }), 'rpc get_user_roles'),
+      // Flag super-admin (RPC de la migración 20260513120000). Si falla o no
+      // existe todavía, degradamos a "no super-admin" → nadie ve el
+      // PanelSwitcher. Comportamiento seguro.
+      conTimeout(supabase.rpc('is_super_admin', { _user_id: userId }), 'rpc is_super_admin')
+        .then(({ data, error }) => !error && Boolean(data))
+        .catch(() => false),
+    ]);
+    if (rolesRes.error) throw rolesRes.error;
+    const resultado: RolesResult = {
+      roles: sortRolesByPrivilege((rolesRes.data as string[] | null) ?? []),
+      isSuperAdmin,
+    };
+    rolesRevalidados.add(userId);
+    // Sin roles no se guarda nada: la próxima apertura vuelve a preguntar.
+    if (resultado.roles.length > 0) queryClient.setQueryData(qk.me.roles(userId), resultado);
+    else queryClient.removeQueries({ queryKey: qk.me.roles(userId), exact: true });
+    return resultado;
+  })();
+
+  rolesEnVuelo.set(userId, peticion);
+  const limpiar = () => {
+    if (rolesEnVuelo.get(userId) === peticion) rolesEnVuelo.delete(userId);
+  };
+  peticion.then(limpiar, limpiar);
+  return peticion;
+};
+
+/** Aviso a todas las instancias del hook de que los roles de un usuario han cambiado. */
+const EVENTO_ROLES_REFRESCADOS = 'pasify:roles-refrescados';
+
+interface DetalleRolesRefrescados {
+  userId: string;
+  resultado: RolesResult;
+}
+
+/**
+ * Vuelve a pedir los roles al servidor, los guarda en la caché y los aplica
+ * en todas las instancias montadas de useAuth, sin recargar la app. Para
+ * cuando cambian en esta sesión (p. ej. un cliente que pasa a local desde
+ * Ajustes): los roles se cargan una vez por usuario y no se enterarían.
+ * Lanza si no se pueden leer.
+ */
+export async function refrescarRoles(userId: string): Promise<string[]> {
+  const resultado = await fetchRoles(userId, { forzar: true });
+  try {
+    window.dispatchEvent(
+      new CustomEvent<DetalleRolesRefrescados>(EVENTO_ROLES_REFRESCADOS, { detail: { userId, resultado } }),
+    );
+  } catch {
+    /* noop */
+  }
+  return resultado.roles;
+}
+
+// Enlace de recuperación de contraseña procesado por auth-js en ESTA carga
+// (evento PASSWORD_RECOVERY). Se escucha a nivel de módulo porque auth-js lo
+// emite al arrancar, antes de que UpdatePassword (lazy) llegue a montarse.
+let usuarioEnRecuperacion: string | null = null;
+supabase.auth.onAuthStateChange((event, nextSession) => {
+  if (event === 'PASSWORD_RECOVERY') usuarioEnRecuperacion = nextSession?.user?.id ?? null;
+  else if (event === 'SIGNED_OUT') usuarioEnRecuperacion = null;
+});
+
+/**
+ * ¿La sesión de `userId` llegó en esta carga por un enlace de recuperación?
+ * Solo entonces UpdatePassword deja poner una contraseña nueva sin la actual.
+ */
+export const isPasswordRecoverySession = (userId: string | null | undefined): boolean =>
+  !!userId && usuarioEnRecuperacion === userId;
+
+// Cerrar sesión: cuánto se espera al servidor (revocar la sesión) y, después,
+// a que auth-js termine lo que tenga en curso.
+const SIGN_OUT_RED_MS = 4_000;
+const SIGN_OUT_LOCAL_MS = 3_000;
+
+/** Lo que borra auth-js al cerrar sesión (_removeSession), sin pasar por su lock. */
+const CLAVES_SESION = [
+  SUPABASE_AUTH_STORAGE_KEY,
+  `${SUPABASE_AUTH_STORAGE_KEY}-code-verifier`,
+  `${SUPABASE_AUTH_STORAGE_KEY}-user`,
+];
+
+const borrarSesionDelDispositivo = () =>
+  Promise.all(CLAVES_SESION.map((clave) => capacitorStorage.removeItem(clave).catch(() => undefined)));
+
+/** signOut de este dispositivo con límite de tiempo. Devuelve el error; nunca lanza. */
+async function intentarSignOut(ms: number, label: string): Promise<Error | null> {
+  try {
+    const { error } = await withTimeout(supabase.auth.signOut({ scope: 'local' }), ms, label);
+    return error ?? null;
+  } catch (err) {
+    return err instanceof Error ? err : new Error(getErrorMessage(err));
+  }
+}
+
+/** Recarga la app en /login (último recurso de signOutLocal). */
+function recargarEnLogin() {
+  try {
+    // Sin hashchange: que el router no llegue a pintar /login con la sesión vieja.
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/login`);
+  } catch {
+    /* noop */
+  }
+  window.location.reload();
+}
+
+/**
+ * Cierra la sesión SOLO en este dispositivo (`scope: 'local'`). El scope
+ * global por defecto revoca los refresh tokens de todas las sesiones del
+ * usuario: echaría al resto de dispositivos del local (p.ej. la tablet de
+ * puerta) y rompe el multi-cuenta.
+ *
+ * Todas las salidas de la app pasan por aquí, y la sesión sale de este
+ * dispositivo aunque no haya red (antes, sin cobertura, el botón no hacía
+ * nada y la sesión seguía viva en un móvil compartido):
+ *  1. signOut normal, que también revoca la sesión en el servidor. Sin red
+ *     (navigator.onLine) ni se intenta.
+ *  2. Si falla (sin red auth-js devuelve el error SIN borrar la sesión), se
+ *     borra del storage aquí y se repite: sin sesión guardada auth-js ya no
+ *     sale a la red, solo emite SIGNED_OUT, y la app reacciona como siempre
+ *     (useAuth, caché y bloqueo del modo puerta en cache/lifecycle.ts).
+ *  3. Si auth-js sigue ocupado (sin red y con el token caducado, un refresco
+ *     con reintentos retiene su lock ~25 s), se recarga en /login: la recarga
+ *     corta lo que tuviera en curso y, al arrancar sin sesión, la caché
+ *     termina la limpieza (anotarCierreForzado).
+ *
+ * Nunca se anuncia un SIGNED_OUT a mano: un refresco en curso podría volver a
+ * guardar la sesión y la app seguiría dentro, ya sin el bloqueo de la puerta.
+ *
+ * Es la salida voluntaria (botón "Cerrar sesión", borrar la cuenta, olvidar el
+ * PIN de la puerta): solo entonces se borran también los borradores del
+ * usuario (anotarCierreVoluntario). Si la sesión caduca o la revoca el
+ * servidor, se conservan para cuando vuelva a entrar.
+ */
+export const signOutLocal = async (): Promise<{ error: Error | null }> => {
+  writeStoredRole(null);
+  const userId = getSessionSnapshot().userId;
+  if (userId) anotarCierreVoluntario(userId);
+  const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if (!sinRed) {
+    const error = await intentarSignOut(SIGN_OUT_RED_MS, 'auth.signOut');
+    if (!error) {
+      setSentryUser(null);
+      return { error: null };
+    }
+    console.warn('[useAuth] signOut sin servidor; se cierra solo en este dispositivo:', getErrorMessage(error));
+  }
+
+  await borrarSesionDelDispositivo();
+  const error = await intentarSignOut(SIGN_OUT_LOCAL_MS, 'auth.signOut(local)');
+  if (!error) {
+    setSentryUser(null);
+    return { error: null };
+  }
+
+  console.error('[useAuth] auth-js no ha podido cerrar la sesión; se recarga la app:', error);
+  captureError(error, { where: 'signOutLocal' });
+  await borrarSesionDelDispositivo();
+  if (userId) anotarCierreForzado(userId);
+  setSentryUser(null);
+  recargarEnLogin();
+  return { error: null };
+};
+
+export const useAuth = () => {
+  // Si la sesión ya se conoce (cualquier instancia salvo la de App al
+  // arrancar), se empieza con ella y con los roles de la caché: sin render en
+  // "cargando" ni loader entre pantallas.
+  const [inicial] = useState(() => {
+    const snap = getSessionSnapshot();
+    if (!snap.ready) return null;
+    const u = snap.session?.user ?? null;
+    const roles = u ? leerRolesGuardados(u.id) : null;
+    return {
+      session: snap.session,
+      user: u,
+      roles: u && roles ? ({ userId: u.id, ...roles } as RolesState) : ROLES_VACIOS,
+      activeRole: roles ? rolActivoPara(roles) : null,
+    };
+  });
+  const [user, setUser] = useState<User | null>(inicial?.user ?? null);
+  const [session, setSession] = useState<Session | null>(inicial?.session ?? null);
+  const [loading, setLoading] = useState(!inicial);
+  const [rolesState, setRolesState] = useState<RolesState>(inicial?.roles ?? ROLES_VACIOS);
+  const [activeRole, setActiveRoleState] = useState<string | null>(inicial?.activeRole ?? null);
+  const [roleErrorState, setRoleErrorState] = useState<{ userId: string; message: string } | null>(null);
+
+  // Estado de control en refs (no provoca renders y el callback de auth lo
+  // lee siempre actualizado).
+  const mountedRef = useRef(true);
+  // Usuario de la última sesión aplicada.
+  const userIdRef = useRef<string | null>(inicial?.user?.id ?? null);
+  // Espejo de `rolesState`: qué usuario tiene los roles ya cargados.
+  const rolesRef = useRef<RolesState>(inicial?.roles ?? ROLES_VACIOS);
+  // Carga de roles en curso en esta instancia (evita la doble llamada
+  // SIGNED_IN + INITIAL_SESSION al arrancar).
+  const cargaRolesRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
+  // Última sesión aplicada en esta instancia (la de session.ts puede ir por
+  // delante: la sesión guardada "sin verificar", o la salida tras comprobar
+  // que ya no hay sesión en el dispositivo).
+  const sesionAplicadaRef = useRef<Session | null>(inicial?.session ?? null);
+
+  const guardarRoles = useCallback((next: RolesState) => {
+    const prev = rolesRef.current;
+    if (
+      prev.userId === next.userId &&
+      prev.isSuperAdmin === next.isSuperAdmin &&
+      mismosRoles(prev.roles, next.roles)
+    ) {
+      return; // mismos roles: conservamos referencias (sin renders ni efectos)
+    }
+    rolesRef.current = next;
+    setRolesState(next);
+  }, []);
+
+  const aplicarRoles = useCallback(
+    (userId: string, { roles, isSuperAdmin }: RolesResult) => {
+      // Rol activo:
+      //  - Super-admin (Francisco) con env flag: respeta localStorage si es
+      //    válido, fallback al rol más privilegiado.
+      //  - Usuario normal: ignora localStorage; siempre usa el rol más
+      //    privilegiado de su set. Esto blinda el escenario en que un usuario
+      //    tuviera basura en localStorage de sesiones anteriores.
+      const canPersist = isSuperAdmin && SUPER_ADMIN_ENV_ENABLED && roles.length >= 2;
+      const stored = readStoredRole();
+      const candidate = canPersist && stored && roles.includes(stored) ? stored : roles[0] ?? null;
+
+      // Limpia el localStorage del usuario normal: si tenía un rol guardado
+      // que no corresponde a su rol real, lo borramos.
+      if (!canPersist) {
+        if (stored && stored !== candidate) writeStoredRole(null);
+      } else if (candidate && candidate !== stored) {
+        writeStoredRole(candidate);
+      }
+
+      guardarRoles({ userId, roles, isSuperAdmin });
+      setActiveRoleState(candidate);
+      setRoleErrorState(null);
+      setSentryTag('role', roles[0] ?? null);
+    },
+    [guardarRoles],
+  );
+
+  const cargarRoles = useCallback(
+    (userId: string): Promise<void> => {
+      const enCurso = cargaRolesRef.current;
+      if (enCurso && enCurso.userId === userId) return enCurso.promise;
+
+      const carga = { userId, promise: Promise.resolve() };
+      carga.promise = (async () => {
+        try {
+          const resultado = await fetchRoles(userId);
+          // Respuesta obsoleta: el usuario cambió (o se desmontó) mientras tanto.
+          if (!mountedRef.current || userIdRef.current !== userId) return;
+          aplicarRoles(userId, resultado);
+        } catch (err) {
+          if (!mountedRef.current || userIdRef.current !== userId) return;
+          if (rolesRef.current.userId === userId) {
+            // Refresco en segundo plano: un fallo de red no borra los roles
+            // que ya teníamos (antes dejaba userRoles=[] y ProtectedRoute
+            // mandaba al partner al panel de cliente).
+            console.warn('[useAuth] refresco de roles fallido; se mantienen los actuales:', getErrorMessage(err));
+          } else {
+            console.error('Error fetching user roles:', err);
+            setRoleErrorState({ userId, message: getErrorMessage(err) });
+            captureError(err, { where: 'useAuth.cargarRoles' });
+          }
+        } finally {
+          if (cargaRolesRef.current === carga) cargaRolesRef.current = null;
+        }
+      })();
+      cargaRolesRef.current = carga;
+      return carga.promise;
+    },
+    [aplicarRoles],
+  );
+
+  /**
+   * Aplica una sesión recibida de auth-js (o publicada en session.ts).
+   * Idempotente por `user.id`: se puede llamar con cada evento sin efectos
+   * secundarios si nada cambió.
+   */
+  const aplicarSesion = useCallback(
+    (event: AuthChangeEvent, recibida: Session | null) => {
+      // Un INITIAL_SESSION null sin red no es un cierre de sesión.
+      const nextSession = resolverSesion(event, recibida);
+      sesionAplicadaRef.current = nextSession;
+      noteSession(nextSession);
+      const nextUser = nextSession?.user ?? null;
+      const uid = nextUser?.id ?? null;
+      const uidAnterior = userIdRef.current;
+      userIdRef.current = uid;
+
+      // Mismas referencias si no cambió nada relevante: el SIGNED_IN de volver
+      // a la pestaña trae la misma sesión y no debe re-renderizar la app.
+      setSession((prev) => (mismaSesion(prev, nextSession) ? prev : nextSession));
+      setUser((prev) => (mismoUsuario(prev, nextUser) ? prev : nextUser));
+
+      if (!uid) {
+        cargaRolesRef.current = null;
+        guardarRoles(ROLES_VACIOS);
+        setActiveRoleState(null);
+        setRoleErrorState(null);
+        // Logout limpia el role activo persistido
+        if (event === 'SIGNED_OUT') writeStoredRole(null);
+        setSentryUser(null);
+        setSentryTag('role', null);
+        setLoading(false);
+        return;
+      }
+
+      if (uid !== uidAnterior) setSentryUser(uid);
+
+      // Diferido: llamar a Supabase dentro del callback de onAuthStateChange
+      // puede bloquear el lock de auth-js (deadlock visto en iOS).
+      const programarCarga = () =>
+        setTimeout(() => {
+          if (mountedRef.current) void cargarRoles(uid);
+        }, 0);
+
+      if (rolesRef.current.userId === uid) {
+        // Roles ya cargados para este usuario: TOKEN_REFRESHED (~cada hora),
+        // SIGNED_IN (cada vez que la pestaña vuelve a ser visible) o
+        // USER_UPDATED no los recargan — refrescar el token no cambia los roles.
+        // Excepciones, siempre en segundo plano y sin loader: si no tenía
+        // ningún rol (p.ej. aún no lo había reclamado) un SIGNED_IN reintenta,
+        // y los que salieron de la caché se comprueban una vez con el servidor.
+        if (event === 'SIGNED_IN' && rolesRef.current.roles.length === 0) programarCarga();
+        else if (!rolesRevalidados.has(uid)) programarCarga();
+      } else {
+        // Primera carga para este usuario (arranque, login o cambio de cuenta)
+        // o reintento tras un fallo. Nunca dejamos los roles de otro usuario.
+        if (rolesRef.current.userId !== null) {
+          guardarRoles(ROLES_VACIOS);
+          setActiveRoleState(null);
+        }
+        setRoleErrorState(null);
+        // Con roles guardados se pinta ya; la carga los revalida detrás (y si
+        // falla, p.ej. sin conexión, se conservan los guardados).
+        const guardados = leerRolesGuardados(uid);
+        if (guardados) aplicarRoles(uid, guardados);
+        programarCarga();
+      }
+
+      setLoading(false);
+    },
+    [aplicarRoles, cargarRoles, guardarRoles],
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let vivo = true;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!vivo) return;
+      aplicarSesion(event, nextSession);
+    });
+
+    // La sesión publicada en session.ts: la del arranque (también la guardada
+    // "sin verificar" si auth-js no contesta sin red, en ~2 s) y la salida si
+    // el dispositivo confirma que ya no hay sesión. Antes cada instancia leía
+    // además getSession() con 10 s de límite: sin red, 10 s de splash.
+    const seguirSesionPublicada = (forzar: boolean) => {
+      const snap = getSessionSnapshot();
+      if (!vivo || !snap.ready) return;
+      if (!forzar && mismaSesion(snap.session, sesionAplicadaRef.current)) return;
+      aplicarSesion(snap.session || forzar ? 'INITIAL_SESSION' : 'SIGNED_OUT', snap.session);
+    };
+    const bajaSesionPublicada = subscribeSession(() => seguirSesionPublicada(false));
+    // Al montar con la sesión ya conocida: roles al momento (de la caché) y su
+    // carga o revalidación, sin esperar al INITIAL_SESSION de auth-js (sin
+    // red, con el token caducado, tarda ~50 s).
+    seguirSesionPublicada(true);
+
+    return () => {
+      vivo = false;
+      mountedRef.current = false;
+      subscription.unsubscribe();
+      bajaSesionPublicada();
+    };
+  }, [aplicarSesion]);
+
+  // Super-admin: ProtectedRoute/PanelSwitcher cambian el rol activo en SU
+  // instancia y lo anuncian con este evento; el resto de instancias se
+  // sincronizan aquí (antes lo hacían de rebote al recargar roles en cada
+  // SIGNED_IN).
+  useEffect(() => {
+    const onRoleChanged = (e: Event) => {
+      const role = (e as CustomEvent<{ role?: string }>).detail?.role;
+      const actuales = rolesRef.current;
+      if (!role || actuales.userId === null || actuales.userId !== userIdRef.current) return;
+      const canPersist = actuales.isSuperAdmin && SUPER_ADMIN_ENV_ENABLED && actuales.roles.length >= 2;
+      if (!canPersist || !actuales.roles.includes(role)) return;
+      setActiveRoleState((prev) => (prev === role ? prev : role));
+    };
+    window.addEventListener('pasify:role-changed', onRoleChanged);
+    return () => window.removeEventListener('pasify:role-changed', onRoleChanged);
+  }, []);
+
+  // refrescarRoles(): roles nuevos del mismo usuario (de cliente a local).
+  useEffect(() => {
+    const onRolesRefrescados = (e: Event) => {
+      const detalle = (e as CustomEvent<DetalleRolesRefrescados>).detail;
+      if (!detalle?.userId || !detalle.resultado || detalle.userId !== userIdRef.current) return;
+      aplicarRoles(detalle.userId, detalle.resultado);
+    };
+    window.addEventListener(EVENTO_ROLES_REFRESCADOS, onRolesRefrescados);
+    return () => window.removeEventListener(EVENTO_ROLES_REFRESCADOS, onRolesRefrescados);
+  }, [aplicarRoles]);
+
+  // Derivados. Solo se exponen roles si pertenecen al usuario actual: durante
+  // un cambio de cuenta nunca se ven (ni un render) los del anterior.
+  const rolesLoaded = !!user && rolesState.userId === user.id;
+  const userRoles = rolesLoaded ? rolesState.roles : SIN_ROLES;
+  const isSuperAdminDev = rolesLoaded && rolesState.isSuperAdmin;
+  const userRole = rolesLoaded ? activeRole : null;
+  const roleError = user && roleErrorState?.userId === user.id ? roleErrorState.message : null;
+  // true solo en la PRIMERA carga de roles del usuario (sin roles aún y sin
+  // error). Los refrescos en segundo plano nunca la activan.
+  const roleLoading = !!user && !rolesLoaded && !roleError;
+
+  // Derivado: ¿puede este usuario cambiar de panel? Sólo super-admin con env on.
+  const canSwitchPanels = isSuperAdminDev && SUPER_ADMIN_ENV_ENABLED && userRoles.length >= 2;
+
+  // Rol más privilegiado (effectiveRole). `userRoles` ya viene ordenado por
+  // privilegio. Para usuarios normales es igual a userRole. Para super-admin
+  // es el "tope" de su set, independiente del userRole activo del switcher.
+  const effectiveRole = userRoles.length > 0 ? userRoles[0] : null;
+
+  /**
+   * Cambia el role activo. Sólo permitido para super-admin con env flag.
+   * Para cualquier otro usuario es un no-op (devuelve la ruta del rol efectivo).
+   */
+  const setActiveRole = useCallback(
+    (role: string): string => {
+      if (!canSwitchPanels) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            '[useAuth] setActiveRole bloqueado: usuario no es super-admin o env flag off.',
+            { isSuperAdminDev, env: SUPER_ADMIN_ENV_ENABLED, userRoles },
+          );
+        }
+        return dashboardPathFor(effectiveRole);
+      }
+      if (!userRoles.includes(role)) {
+        console.warn(`[useAuth] setActiveRole('${role}') — role no disponible. Roles válidos:`, userRoles);
+        return dashboardPathFor(userRole);
+      }
+      setActiveRoleState(role);
+      writeStoredRole(role);
+      try {
+        window.dispatchEvent(new CustomEvent('pasify:role-changed', { detail: { role } }));
+      } catch {
+        /* noop */
+      }
+      return dashboardPathFor(role);
+    },
+    [canSwitchPanels, userRoles, userRole, effectiveRole, isSuperAdminDev],
+  );
+
+  /**
+   * Reintenta cargar los roles (botón "Reintentar"). Si ya estaban cargados
+   * es un refresco en segundo plano: no activa `roleLoading`.
+   */
+  const reloadRoles = useCallback(async () => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+    setRoleErrorState(null);
+    await cargarRoles(uid);
+  }, [cargarRoles]);
+
+  const signOut = useCallback(() => signOutLocal(), []);
+
+  return {
+    user,
+    session,
+    loading,
+    userRole,
+    userRoles,
+    effectiveRole,
+    isSuperAdminDev,
+    canSwitchPanels,
+    setActiveRole,
+    roleLoading,
+    rolesLoaded,
+    roleError,
+    reloadRoles,
+    signOut,
+    isAuthenticated: !!user,
+  };
+};
+
+export const dashboardPathForRole = dashboardPathFor;

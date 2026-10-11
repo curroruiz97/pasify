@@ -17,6 +17,9 @@ export default tseslint.config(
   {
     ignores: [
       "dist",
+      // Comparador v1/v2: copia congelada de ficheros antiguos y su carpeta de trabajo.
+      "compare/**",
+      ".v1/**",
       "tools/legacy-supabase-functions/**",
       "supabase/functions/_legacy/**",
       "supabase/migrations.legacy-backup/**",

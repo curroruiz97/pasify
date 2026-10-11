@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Carpeta de trabajo de scripts/build-v1.mjs (comparador v1/v2)
+.v1/
 *.local
 
 # Salida de Playwright

@@ -4,6 +4,7 @@ import path from "path";
 import { execSync } from "node:child_process";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import { comparePlugin } from "./scripts/compare-plugin.mjs";
 
 // Sentry release tag: el git SHA del commit que se está construyendo.
 // Resuelto en build time. Vercel inyecta `VERCEL_GIT_COMMIT_SHA`; en local
@@ -129,6 +130,9 @@ export default defineConfig(({ mode, command }) => ({
     react(),
     mode === "development" && componentTagger(),
     sentryPlugins(command),
+    // Selector v1/v2 (compare/README.md): solo en vistas previas de Vercel o con
+    // PASIFY_COMPARE=1. En producción devuelve null y no añade nada.
+    comparePlugin({ variant: "v2", root: __dirname, sha: GIT_SHA, emitScript: true }),
     VitePWA({
       registerType: "autoUpdate",
       // Sin script inyectado en index.html: main.tsx registra el service
@@ -150,8 +154,9 @@ export default defineConfig(({ mode, command }) => ({
         // Rutas que resuelve el servidor, no la SPA (HashRouter): sin esto el
         // service worker contesta con index.html a /e/<id> y /p/<id> y se pierde
         // el redirect de api/e|p a /#/e/<id>. /.well-known/ queda reservado para
-        // los universal links.
-        navigateFallbackDenylist: [/^\/api\//, /^\/e\//, /^\/p\//, /^\/\.well-known\//],
+        // los universal links. /v1/ es la copia de la web anterior del
+        // comparador (compare/README.md): sin esto la pisaría el shell de v2.
+        navigateFallbackDenylist: [/^\/api\//, /^\/e\//, /^\/p\//, /^\/v1\//, /^\/\.well-known\//],
         // Runtime caching strategies
         runtimeCaching: [
           {
