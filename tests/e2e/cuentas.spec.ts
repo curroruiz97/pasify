@@ -446,7 +446,8 @@ test("el enlace nuevo de recuperación (token_hash) pide confirmar y no abre ses
 // El enlace antiguo: GoTrue pone los tokens en el hash (con la ruta delante o
 // sin ella; en el segundo caso los aparta main.tsx antes de que HashRouter
 // pise el hash) y, según la configuración, también pueden llegar en la query
-// (main.tsx los aparta y recarga la página sin ella: sessionStorage aguanta).
+// (main.tsx los aparta y quita la query sin recargar, antes de que auth-js lea
+// la URL: si la leyera con los tokens, pediría el usuario y guardaría la sesión).
 const ENLACES_ANTIGUOS: Array<[string, (accessToken: string) => string]> = [
   [
     "con la ruta delante",
@@ -458,7 +459,7 @@ const ENLACES_ANTIGUOS: Array<[string, (accessToken: string) => string]> = [
     (jwt) => `/#access_token=${jwt}&expires_in=86400&refresh_token=e2e-refresh-token&token_type=bearer&type=recovery`,
   ],
   [
-    "en la query, main.tsx los aparta y recarga",
+    "en la query, main.tsx los aparta sin recargar",
     (jwt) => `/?access_token=${jwt}&expires_in=86400&refresh_token=e2e-refresh-token&token_type=bearer&type=recovery`,
   ],
 ];
