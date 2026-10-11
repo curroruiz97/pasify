@@ -32,13 +32,23 @@ import { captureError } from './sentry';
  * alargan por los reintentos.
  *
  * En la web es localStorage tal cual (síncrono y fiable, y compartido entre
- * pestañas: ahí una copia en memoria se quedaría atrasada).
+ * pestañas: ahí una copia en memoria se quedaría atrasada). Solo si
+ * localStorage lanza (almacenamiento lleno, Safari privado antiguo) lo que no
+ * cabe se queda en memoria (`memoriaWeb`): antes el login fallaba con «No
+ * hemos podido completarlo» porque setItem lanzaba. La sesión vale entonces
+ * hasta recargar la pestaña.
  */
 const NATIVE_STORAGE_TIMEOUT_MS = 4000;
 /** Esperas entre reintentos de una escritura que no ha llegado al disco. */
 const REINTENTOS_MS = [1_000, 3_000, 10_000];
 
 const esNativo = () => Capacitor.isNativePlatform();
+
+/**
+ * Web: valores que localStorage no ha dejado escribir. Vacío con un
+ * localStorage sano. Lo que haya aquí es lo último escrito y manda al leer.
+ */
+const memoriaWeb = new Map<string, string>();
 
 /** Último valor conocido de cada clave (null = borrada). Solo nativo. */
 const memoria = new Map<string, string | null>();
@@ -112,7 +122,15 @@ async function guardarNativo(key: string, valor: string | null): Promise<void> {
 
 export const capacitorStorage = {
   async getItem(key: string): Promise<string | null> {
-    if (!esNativo()) return localStorage.getItem(key);
+    if (!esNativo()) {
+      const enMemoria = memoriaWeb.get(key);
+      if (enMemoria !== undefined) return enMemoria;
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
     if (memoria.has(key)) return memoria.get(key) ?? null;
     const leido = await leerDelDisco(key);
     // Sin respuesta: "sin valor", pero no se apunta, la próxima vez se vuelve a leer.
@@ -124,7 +142,13 @@ export const capacitorStorage = {
 
   async setItem(key: string, value: string): Promise<void> {
     if (!esNativo()) {
-      localStorage.setItem(key, value);
+      try {
+        localStorage.setItem(key, value);
+        memoriaWeb.delete(key); // vuelve a mandar localStorage
+      } catch (err) {
+        console.warn('[capacitorStorage] localStorage no deja escribir; se guarda solo en memoria:', err);
+        memoriaWeb.set(key, value);
+      }
       return;
     }
     await guardarNativo(key, value);
@@ -132,7 +156,12 @@ export const capacitorStorage = {
 
   async removeItem(key: string): Promise<void> {
     if (!esNativo()) {
-      localStorage.removeItem(key);
+      memoriaWeb.delete(key);
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* sin localStorage: no hay nada guardado que borrar */
+      }
       return;
     }
     await guardarNativo(key, null);
@@ -145,6 +174,8 @@ export const capacitorStorage = {
    */
   async consultar(key: string): Promise<string | null | undefined> {
     if (!esNativo()) {
+      const enMemoria = memoriaWeb.get(key);
+      if (enMemoria !== undefined) return enMemoria;
       try {
         return localStorage.getItem(key);
       } catch {

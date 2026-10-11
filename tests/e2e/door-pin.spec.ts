@@ -84,9 +84,14 @@ async function comprobarSesionCerrada(page: Page, supabase: SupabaseFalso) {
   supabase.sinRed = false;
   await page.reload();
   await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 30_000 });
-  for (const ruta of ["/#/partner-dashboard", "/#/door"]) {
+  // El enlace guardado al panel vuelve a él tras entrar (`next`); /door no lleva
+  // `next`: la puerta la gestiona DoorLockGuard.
+  for (const [ruta, login] of [
+    ["/#/partner-dashboard", /#\/login\?next=%2Fpartner-dashboard$/],
+    ["/#/door", /#\/login$/],
+  ] as const) {
     await page.goto(ruta);
-    await expect(page, `${ruta} con la sesión cerrada`).toHaveURL(/#\/login$/);
+    await expect(page, `${ruta} con la sesión cerrada`).toHaveURL(login);
     await expect(page.locator('input[type="email"]')).toBeVisible();
   }
   await expect(page.getByRole("heading", { level: 1, name: "Métricas" })).toHaveCount(0);

@@ -4,6 +4,7 @@ import { useAuth, dashboardPathForRole, signOutLocal } from '@/hooks/useAuth';
 import LoaderOne from '@/components/ui/loader-one';
 import AuthErrorScreen, { CuentaSinAcceso } from '@/components/auth/AuthErrorScreen';
 import { isDoorLocked } from '@/lib/doorLock';
+import { withNext } from '@/lib/redirect-url';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,6 +15,9 @@ interface ProtectedRouteProps {
 // ProtectedRoute renderizan los children sin requerir auth. Los datos saldrán
 // vacíos porque las queries fallarán, pero el layout es visible.
 const DEV_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW === 'true';
+
+/** Rutas del modo puerta (`/door`). */
+const esRutaDePuerta = (pathname: string) => pathname === '/door' || pathname.startsWith('/door/');
 
 /**
  * Pasify ProtectedRoute · post Fase 1 hardening.
@@ -44,6 +48,12 @@ const DEV_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW === 
  *  - Roles cargados y vacíos (p. ej. un local al que el admin ha retirado el
  *    acceso): pantalla de cuenta sin acceso con el contacto de soporte y
  *    "Cerrar sesión". Antes no se pintaba nada: pantalla negra sin salida.
+ *
+ *  - Sin sesión se va a /login. Si en este montaje nunca hubo usuario (un
+ *    enlace guardado, una recarga con la sesión caducada) se lleva `?next=`
+ *    para volver aquí tras entrar; antes se acababa en el panel por defecto.
+ *    Si había usuario y se va (cerrar sesión), al login a secas. Nunca con
+ *    /door: DoorLockGuard (App.tsx) ya gestiona esas rutas.
  */
 const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   const {
@@ -64,6 +74,9 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   // Usuario al que ya se le concedió esta ruta. Mientras sea el mismo, los
   // children siguen montados aunque los roles se estén recargando.
   const concedidoARef = useRef<string | null>(null);
+  // ¿Hubo usuario alguna vez en este montaje? Distingue «llegué sin sesión»
+  // (se guarda el destino en `next`) de «he cerrado sesión» (login a secas).
+  const huboUsuarioRef = useRef(false);
 
   // ¿Tiene acceso? Solo significativo cuando `rolesLoaded`.
   // Super-admin: basta con tener el rol en su set. Usuario normal: el rol
@@ -77,9 +90,14 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     if (loading) return;
     if (!user) {
       concedidoARef.current = null;
-      navigate('/login', { replace: true });
+      const volverA =
+        huboUsuarioRef.current || esRutaDePuerta(location.pathname)
+          ? null
+          : `${location.pathname}${location.search}`;
+      navigate(withNext('/login', volverA), { replace: true });
       return;
     }
+    huboUsuarioRef.current = true;
     if (!requireRole) return; // ruta protegida sin rol específico
     // Roles aún desconocidos (primera carga o error): no se decide nada.
     if (!rolesLoaded) return;
@@ -135,6 +153,8 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     requireRole,
     navigate,
     setActiveRole,
+    location.pathname,
+    location.search,
   ]);
 
   if (DEV_PREVIEW) {
