@@ -82,6 +82,10 @@ const noSelect: React.CSSProperties = {
 
 export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  // Si generar el QR falla se dice y se deja reintentar: antes el esqueleto de
+  // carga se quedaba para siempre en la pantalla de la puerta.
+  const [qrError, setQrError] = useState(false);
+  const [qrIntento, setQrIntento] = useState(0);
   const isUsed = ticket?.status === "used";
   // Una entrada usada sigue siendo "usada" aunque luego se cancele el evento
   // (la cancelación solo devuelve las pagadas sin usar).
@@ -93,9 +97,11 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
   useEffect(() => {
     if (!open || !qrToken) {
       setQrDataUrl(null);
+      setQrError(false);
       return;
     }
     let cancelled = false;
+    setQrError(false);
     QRCodeLib.toDataURL(qrToken, {
       width: 360,
       margin: 2,
@@ -105,11 +111,14 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
       .then((url: string) => {
         if (!cancelled) setQrDataUrl(url);
       })
-      .catch(console.error);
+      .catch((err: unknown) => {
+        console.error(err);
+        if (!cancelled) setQrError(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, qrToken]);
+  }, [open, qrToken, qrIntento]);
 
   // Anti-capturas mientras el QR está en pantalla.
   useEffect(() => {
@@ -247,6 +256,20 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
                   </div>
                 </div>
               )}
+            </div>
+          ) : qrError ? (
+            <div
+              role="alert"
+              className="flex h-72 w-72 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center"
+              style={{ borderColor: "rgba(184,56,26,0.45)", color: "#B8381A" }}
+            >
+              <p className="text-base font-bold leading-snug">No hemos podido generar el código QR</p>
+              <p className="text-[12px] font-medium leading-relaxed" style={{ color: "#0F0F0F" }}>
+                En la puerta puedes dar el código que ves debajo.
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setQrIntento((n) => n + 1)}>
+                Reintentar
+              </Button>
             </div>
           ) : (
             <div className="h-72 w-72 animate-pulse rounded-2xl bg-black/10" />

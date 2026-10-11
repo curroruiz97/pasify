@@ -655,6 +655,37 @@ test.describe("web", () => {
     });
   });
 
+  test("si el QR no se puede generar, se dice y se puede reintentar (no queda el esqueleto de carga)", async ({
+    page,
+  }) => {
+    // La librería qrcode saca la imagen con canvas.toDataURL: se hace fallar hasta que el test lo suelte.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __qrRoto?: boolean };
+      const original = HTMLCanvasElement.prototype.toDataURL;
+      w.__qrRoto = true;
+      HTMLCanvasElement.prototype.toDataURL = function (...args: Parameters<typeof original>) {
+        if (w.__qrRoto) throw new Error("canvas.toDataURL bloqueado por el test");
+        return original.apply(this, args);
+      };
+    });
+    const app = await abrirCliente(page);
+    await irA(page, app, "Tickets");
+
+    await page.getByRole("button", { name: /Ver mi QR/ }).first().click();
+    const modal = page.getByRole("dialog");
+    await expect(modal.getByRole("alert")).toContainText("No hemos podido generar el código QR");
+    // Sin QR no puede quedarse el esqueleto de carga girando para siempre.
+    await expect(modal.locator(".animate-pulse")).toHaveCount(0);
+    await expect(modal.getByRole("img", { name: "Código QR de la entrada" })).toHaveCount(0);
+
+    await page.evaluate(() => {
+      (window as unknown as { __qrRoto?: boolean }).__qrRoto = false;
+    });
+    await modal.getByRole("button", { name: "Reintentar" }).click();
+    await expect(modal.getByRole("img", { name: "Código QR de la entrada" })).toBeVisible();
+    await expect(modal.getByRole("alert")).toHaveCount(0);
+  });
+
   test("Ola 2: locales favoritos, una sola ciudad y acciones de la cartera", async ({ page }) => {
     const app = await abrirCliente(page);
     const { estado } = app;
