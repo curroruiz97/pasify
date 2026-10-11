@@ -6369,6 +6369,7 @@ export type Database = {
       cron_expire_ticket_transfers: { Args: never; Returns: number }
       cron_mark_past_events: { Args: never; Returns: number }
       cron_process_dsar_deadlines: { Args: never; Returns: number }
+      cron_purge_webhook_payloads: { Args: never; Returns: number }
       decide_ai_decision: {
         Args: { _decision: string; _decision_id: string; _note?: string }
         Returns: undefined
