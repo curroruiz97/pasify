@@ -53,13 +53,11 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 | `ai-forecast-event` | sesión (miembro del local) o admin | Previsión de venta con la media de eventos comparables del local (estadística, no IA). `PartnerForecast.tsx` |
 | `ai-pricing-propose` | servicio o admin | Propuestas de precio por velocidad de venta en `pricing_proposals`. `PartnerDynamicPricing.tsx` (los locales reciben 403) |
 
-### Cuentas y administración
+### Cuentas
 
 | Función | Autorización | Qué hace · quién la llama |
 |---|---|---|
 | `delete-own-account` | sesión | Borra la cuenta de quien llama: 409 a los admins, con un reembolso en curso o si es un local con ventas futuras (antes cierra su actividad con `partner_close_account`); borra sus ficheros de Storage y revoca Sign in with Apple si hay secretos y código. `SettingsSheet.tsx` |
-| `delete-user` | admin | Borra la cuenta de otro usuario. Sin llamador en el repo |
-| `admin-cancel-partner-subscription` | admin | Cancela la suscripción de un local. Sin llamador en el repo |
 | `gdpr-export-data` | sesión | JSON con los datos del usuario (columnas explícitas, sin tokens ni secretos), 5 al día. «Descargar mis datos» en `SettingsSheet.tsx` |
 | `notify-new-registration` | sesión (el recién registrado) | Email de bienvenida a la cuenta nueva (cliente o local, según sus roles). `RegisterClient.tsx` |
 | `verify-captcha` | pública (límite por IP) | Valida un token de Cloudflare Turnstile del alta y de «¿Olvidaste tu contraseña?» (solo web y con `VITE_TURNSTILE_SITE_KEY`). En producción, sin secreto falla cerrado (503) |
@@ -110,7 +108,7 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 
 | Secreto | Lo usa |
 |---|---|
-| `STRIPE_SECRET_KEY` | `_shared/stripe.ts`, `admin-cancel-partner-subscription`, `health-check` |
+| `STRIPE_SECRET_KEY` | `_shared/stripe.ts`, `health-check` |
 | `STRIPE_WEBHOOK_SECRET` · `STRIPE_CONNECT_WEBHOOK_SECRET` | Firma de los dos endpoints del webhook (plataforma y Connect) |
 | `STRIPE_CONNECT_CLIENT_ID` | `_shared/stripe.ts` (opcional) |
 | `PASIFY_ENV` | `"production"` en producción; si falta, se deduce de `SUPABASE_URL` |

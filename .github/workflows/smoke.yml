@@ -122,10 +122,8 @@ jobs:
           #   400 → lee el cuerpo antes de comprobar quién llama;
           #   404 → no está desplegada (o se ha borrado sin quitarla de aquí);
           #   5xx → se cae antes de llegar a la comprobación.
-          # Las hay de los tres tipos: solo admin, con sesión y solo servidor.
+          # Las hay de dos tipos: con sesión (o admin de plataforma) y solo servidor.
           fns=(
-            admin-cancel-partner-subscription
-            delete-user
             process-refund
             partner-cancel-event
             gdpr-export-data

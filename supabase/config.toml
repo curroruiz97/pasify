@@ -103,13 +103,7 @@ verify_jwt = false
 [functions.resend-tickets-email]
 verify_jwt = false
 
-# -------- Solo admins de plataforma --------
-[functions.admin-cancel-partner-subscription]
-verify_jwt = false
-
-[functions.delete-user]
-verify_jwt = false
-
+# -------- Admin de plataforma o servidor --------
 [functions.ai-pricing-propose]
 verify_jwt = false
 
