@@ -1,6 +1,6 @@
 # Pasify · Edge functions
 
-32 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
+30 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
 `_shared/` es código común: no es una función y no se despliega sola.
 
 - **Despliegue:** solo por `.github/workflows/deploy-production.yml`, después de
@@ -49,17 +49,15 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 | `partner-stripe-refresh-account` | sesión | Sincroniza el estado de la cuenta de Connect en `organizations`. Sin llamador en el repo |
 | `partner-stripe-create-portal-link` | sesión | Enlace al portal de Stripe del local. Sin llamador en el repo |
 | `send-team-invitation` | sesión | Email de invitación a un miembro de la organización. Sin llamador en el repo |
-| `accept-team-invitation` | token de la invitación | Acepta una invitación de equipo. Sin llamador en el repo (el email de `send-team-invitation` enlaza a `/#/accept-invitation`, ruta que la app no tiene) |
+| `accept-team-invitation` | token de la invitación + sesión para aceptar | Sin sesión describe una invitación pendiente y vigente (límite por IP); con sesión la acepta si la cuenta es la invitada y tiene el email confirmado. Sin llamador en el repo (el email de `send-team-invitation` enlaza a `/#/accept-invitation`, ruta que la app no tiene) |
 | `ai-forecast-event` | sesión (miembro del local) o admin | Previsión de venta con la media de eventos comparables del local (estadística, no IA). `PartnerForecast.tsx` |
 | `ai-pricing-propose` | servicio o admin | Propuestas de precio por velocidad de venta en `pricing_proposals`. `PartnerDynamicPricing.tsx` (los locales reciben 403) |
 
-### Cuentas y administración
+### Cuentas
 
 | Función | Autorización | Qué hace · quién la llama |
 |---|---|---|
 | `delete-own-account` | sesión | Borra la cuenta de quien llama: 409 a los admins, con un reembolso en curso o si es un local con ventas futuras (antes cierra su actividad con `partner_close_account`); borra sus ficheros de Storage y revoca Sign in with Apple si hay secretos y código. `SettingsSheet.tsx` |
-| `delete-user` | admin | Borra la cuenta de otro usuario. Sin llamador en el repo |
-| `admin-cancel-partner-subscription` | admin | Cancela la suscripción de un local. Sin llamador en el repo |
 | `gdpr-export-data` | sesión | JSON con los datos del usuario (columnas explícitas, sin tokens ni secretos), 5 al día. «Descargar mis datos» en `SettingsSheet.tsx` |
 | `notify-new-registration` | sesión (el recién registrado) | Email de bienvenida a la cuenta nueva (cliente o local, según sus roles). `RegisterClient.tsx` |
 | `verify-captcha` | pública (límite por IP) | Valida un token de Cloudflare Turnstile del alta y de «¿Olvidaste tu contraseña?» (solo web y con `VITE_TURNSTILE_SITE_KEY`). Exige `action` y que coincida con la del token (400 `action_required` / `action_mismatch`). En producción, sin secreto falla cerrado (503) |
@@ -110,7 +108,7 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 
 | Secreto | Lo usa |
 |---|---|
-| `STRIPE_SECRET_KEY` | `_shared/stripe.ts`, `admin-cancel-partner-subscription`, `health-check` |
+| `STRIPE_SECRET_KEY` | `_shared/stripe.ts`, `health-check` |
 | `STRIPE_WEBHOOK_SECRET` · `STRIPE_CONNECT_WEBHOOK_SECRET` | Firma de los dos endpoints del webhook (plataforma y Connect) |
 | `STRIPE_CONNECT_CLIENT_ID` | `_shared/stripe.ts` (opcional) |
 | `PASIFY_ENV` | `"production"` en producción; si falta, se deduce de `SUPABASE_URL` |

@@ -702,7 +702,7 @@ BEGIN
   RESET ROLE;
 
   -- ------------------------------------------------------------------
-  -- 9) Baja de un local desde el admin (delete-user)
+  -- 9) Baja de un local desde el admin (admin_close_partner_account)
   -- ------------------------------------------------------------------
   PERFORM set_config('request.jwt.claim.sub', v_closing::text, true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_closing, 'role', 'authenticated')::text, true);
