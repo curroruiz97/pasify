@@ -60,14 +60,45 @@ export function readDraft<T>(formulario: string): { savedAt: number; data: T } |
   }
 }
 
-export function writeDraft<T>(formulario: string, data: T) {
+/**
+ * Qué pasó al guardar: "ok"; "sin-sesion" (no hay usuario: no se guarda);
+ * "otro-usuario" (la sesión ya no es de quien escribió el formulario);
+ * "mas-nuevo" (ya hay un borrador guardado después del cambio, de otra
+ * pestaña, y no se pisa); "fallo" (sin almacenamiento, o lleno).
+ */
+export type ResultadoBorrador = "ok" | "sin-sesion" | "otro-usuario" | "mas-nuevo" | "fallo";
+
+export interface OpcionesBorrador {
+  /** De quién es el formulario: si la sesión es de otro usuario, no se guarda nada. */
+  usuario?: string;
+  /**
+   * Cuándo se hizo el cambio que se guarda (Date.now()). Si en el dispositivo ya
+   * hay un borrador guardado después de eso, es más nuevo y no se pisa.
+   */
+  editadoEn?: number;
+}
+
+/** Guarda el borrador y dice qué pasó: quien llama avisa si falla, en vez de tragárselo. */
+export function writeDraft<T>(formulario: string, data: T, opciones: OpcionesBorrador = {}): ResultadoBorrador {
   const userId = usuarioActual();
-  if (!userId) return;
+  if (!userId) return "sin-sesion";
+  if (opciones.usuario && opciones.usuario !== userId) return "otro-usuario";
   try {
+    const clave = claveDe(userId, formulario);
+    if (opciones.editadoEn !== undefined) {
+      let guardado: Envoltorio<T> | null = null;
+      try {
+        guardado = leerEnvoltorio<T>(clave);
+      } catch {
+        /* ilegible: se sobrescribe */
+      }
+      if (guardado && guardado.savedAt > opciones.editadoEn) return "mas-nuevo";
+    }
     const env: Envoltorio<T> = { savedAt: Date.now(), data };
-    localStorage.setItem(claveDe(userId, formulario), JSON.stringify(env));
+    localStorage.setItem(clave, JSON.stringify(env));
+    return "ok";
   } catch {
-    /* sin storage o lleno: el formulario sigue funcionando sin borrador */
+    return "fallo";
   }
 }
 

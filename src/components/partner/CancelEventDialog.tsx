@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -22,6 +22,10 @@ import { supabase } from "@/integrations/supabase/client";
  * avisa a los titulares y reembolsa por tandas: aquí se repite mientras
  * queden. Si alguno falla, el evento sigue cancelado y el menú ofrece
  * "Reintentar reembolsos".
+ *
+ * Antes de cancelar se dice cuántas entradas y cuántos euros se devolverán:
+ * las pagadas y sin usar, con el importe que pagó cada una (lo mismo que
+ * crea create_cancellation_refund_requests), leídas de partner_event_attendees.
  */
 
 export interface CancelTarget {
@@ -47,6 +51,64 @@ const ERRORS: Record<string, string> = {
   event_not_cancellable: "Este evento ya terminó y no se puede cancelar.",
   cancel_reason_required: "Escribe el motivo de la cancelación.",
   rate_limit_exceeded: "Demasiados intentos seguidos. Espera unos minutos.",
+};
+
+/** Lo que se devolverá al cancelar: entradas pagadas sin usar y su importe. */
+interface ResumenReembolso {
+  entradas: number;
+  centimos: number;
+  /** Entradas ya escaneadas: entraron, no se devuelven. */
+  usadas: number;
+  /** La lista llegó cortada por el límite de filas de la API: las cifras son un mínimo. */
+  parcial: boolean;
+}
+
+/** Filas que devuelve la API de una vez (db-max-rows de PostgREST). */
+const LIMITE_FILAS = 1000;
+
+async function leerResumen(eventId: string): Promise<ResumenReembolso> {
+  const { data, error } = await supabase.rpc("partner_event_attendees", { _event_id: eventId });
+  if (error) throw error;
+  const filas = (data ?? []) as unknown as Array<{
+    status: string | null;
+    used_at: string | null;
+    amount_paid_cents: number | null;
+  }>;
+  let entradas = 0;
+  let centimos = 0;
+  let usadas = 0;
+  for (const f of filas) {
+    if (f.status === "used" || (f.status === "paid" && f.used_at)) {
+      usadas += 1;
+    } else if (f.status === "paid" && (f.amount_paid_cents ?? 0) > 0) {
+      // Mismo criterio que la cancelación: pagada, sin usar y de pago.
+      entradas += 1;
+      centimos += f.amount_paid_cents ?? 0;
+    }
+  }
+  return { entradas, centimos, usadas, parcial: filas.length >= LIMITE_FILAS };
+}
+
+const importe = (cents: number) => {
+  try {
+    return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} €`;
+  }
+};
+
+/** «Se devolverán 4 entradas (60,00 €). 2 ya han entrado y no se devuelven.» */
+const textoResumen = (r: ResumenReembolso): string => {
+  const masDe = r.parcial ? "al menos " : "";
+  const devolver =
+    r.entradas === 0
+      ? "No hay entradas de pago que devolver."
+      : `Se devolverán ${masDe}${r.entradas} ${r.entradas === 1 ? "entrada" : "entradas"} (${masDe}${importe(r.centimos)}).`;
+  const usadas =
+    r.usadas > 0
+      ? ` ${r.usadas} ${r.usadas === 1 ? "ya ha entrado y no se devuelve" : "ya han entrado y no se devuelven"}.`
+      : "";
+  return devolver + usadas;
 };
 
 async function callCancel(eventId: string, reason: string): Promise<CancelResult> {
@@ -78,6 +140,23 @@ export const CancelEventDialog = ({
   const [reason, setReason] = useState("");
   const [working, setWorking] = useState(false);
   const retry = target?.status === "cancelled";
+  // Un evento sin ventas no tiene nada que devolver ni que leer.
+  const eventoConVentas = target && !retry && target.tickets_sold > 0 ? target.id : null;
+  // Qué se devolverá, de qué evento: "error" si no se pudo leer (se enseña
+  // entonces el número de ventas de siempre). Lo de otro evento no se enseña.
+  const [leido, setLeido] = useState<{ id: string; valor: ResumenReembolso | "error" } | null>(null);
+  const resumen = eventoConVentas && leido?.id === eventoConVentas ? leido.valor : "cargando";
+
+  useEffect(() => {
+    if (!eventoConVentas) return;
+    let vigente = true;
+    leerResumen(eventoConVentas)
+      .then((valor) => vigente && setLeido({ id: eventoConVentas, valor }))
+      .catch(() => vigente && setLeido({ id: eventoConVentas, valor: "error" }));
+    return () => {
+      vigente = false;
+    };
+  }, [eventoConVentas]);
 
   const run = async () => {
     if (!target) return;
@@ -146,8 +225,12 @@ export const CancelEventDialog = ({
         {!retry && (
           <div className="space-y-2">
             {target && target.tickets_sold > 0 && (
-              <p className="text-sm font-medium text-foreground">
-                {target.tickets_sold} entrada(s) vendidas se reembolsarán.
+              <p className="text-sm font-medium text-foreground" data-testid="resumen-reembolso">
+                {resumen === "cargando"
+                  ? "Calculando lo que se devolverá…"
+                  : resumen === "error"
+                  ? `${target.tickets_sold} entrada(s) vendidas se reembolsarán.`
+                  : textoResumen(resumen)}
               </p>
             )}
             <Label htmlFor="cancel-reason" className="text-xs">

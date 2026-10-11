@@ -131,6 +131,15 @@ import {
  *
  * Organización suspendida (`publishBlockedReason`): se puede editar y guardar
  * como borrador, pero no publicar.
+ *
+ * Borrador de "Nuevo evento": se escribe con una pausa de 400 ms, y se escribe
+ * ya, sin esperarla, al ocultar la pestaña, al irse la página y al cerrar el
+ * asistente (`volcarBorrador`). Si el dispositivo no deja guardarlo, se avisa
+ * una vez.
+ *
+ * Editar un evento publicado con entradas vendidas: si se cambia su día, su
+ * hora o su lugar se avisa de que los compradores verán el cambio sin que
+ * Pasify se lo diga (`avisoCambio`). Solo avisa.
  */
 
 /**
@@ -243,6 +252,10 @@ const tierPorDefecto = (venue: EditorVenue | null | undefined): TierDraft => ({
 /** Estado de un tipo de entrada según su interruptor "Activo". */
 const estadoDelTipo = (active: boolean): "active" | "hidden" => (active ? "active" : "hidden");
 
+/** ["el día", "la hora", "el lugar"] → "el día, la hora y el lugar". */
+const unirLista = (cosas: string[]): string =>
+  cosas.length > 1 ? `${cosas.slice(0, -1).join(", ")} y ${cosas[cosas.length - 1]}` : cosas[0] ?? "";
+
 interface Props {
   mode: EditorMode;
   open: boolean;
@@ -345,6 +358,13 @@ export const EventEditorWizard = ({
   );
   // Estado del evento al abrirlo en "edit": guardar no lo cambia.
   const [originalStatus, setOriginalStatus] = useState<string | null>(null);
+  // Día, horas y lugar del evento al abrirlo en "edit": para avisar si se
+  // cambian estando publicado y con entradas vendidas.
+  const [cuandoOriginal, setCuandoOriginal] = useState<{
+    dateTime: DateTimeValue;
+    location: LocationValue;
+    venueId: string | null;
+  } | null>(null);
 
   // "Nuevo evento" recuperado de un borrador: cuándo se guardó (null = no).
   const [borradorDe, setBorradorDe] = useState<number | null>(null);
@@ -357,10 +377,41 @@ export const EventEditorWizard = ({
   // "Nuevo evento" ya rellenado (con el borrador o vacío). Hasta entonces no
   // se guarda borrador: el formulario en blanco de mientras borraría el de verdad.
   const [formListo, setFormListo] = useState(false);
+  // Borrador de "Nuevo evento": lo último que dejó el formulario y está por
+  // escribir (`borrador: null` = formulario sin tocar, se borra el guardado),
+  // con cuándo se hizo ese cambio.
+  const pendienteRef = useRef<{ clave: string; borrador: BorradorEvento | null; editadoEn: number } | null>(null);
+  // Guardado el evento, su borrador ya no hace falta y no se vuelve a escribir.
+  const borradorHechoRef = useRef(false);
+  // El aviso de «no se puede guardar el borrador» sale una sola vez.
+  const avisadoSinEspacioRef = useRef(false);
 
   // Local del evento y rótulo de su hora («Hora de Santa Cruz de Tenerife»).
   const venueActual = venues.find((v) => v.id === venueId) ?? null;
   const etiquetaHora = timeZoneLabel(venueActual?.city, timeZone);
+
+  // Evento publicado con entradas vendidas: si se cambia su día, su hora o su
+  // lugar, los compradores lo ven en su entrada (la cartera lee el evento tal
+  // cual está) y hoy nadie les avisa del cambio. Solo se avisa, no se impide.
+  const avisoCambio = (() => {
+    const o = cuandoOriginal;
+    if (mode !== "edit" || originalStatus !== "published" || !eventHasSales || !o) return null;
+    const cambios: string[] = [];
+    if (dateTime.date !== o.dateTime.date) cambios.push("el día");
+    if (dateTime.startTime !== o.dateTime.startTime || dateTime.endTime !== o.dateTime.endTime) {
+      cambios.push("la hora");
+    }
+    if (
+      venueId !== o.venueId ||
+      location.city.trim() !== o.location.city.trim() ||
+      location.venueName.trim() !== o.location.venueName.trim() ||
+      location.address.trim() !== o.location.address.trim()
+    ) {
+      cambios.push("el lugar");
+    }
+    if (cambios.length === 0) return null;
+    return `Has cambiado ${unirLista(cambios)} de un evento publicado que ya tiene entradas vendidas. Los compradores verán el cambio en su entrada, pero Pasify no les avisa: si es importante, díselo tú (por tus redes, por email…).`;
+  })();
 
   // Sin poder publicar (organización suspendida): nunca "Publicar al guardar".
   useEffect(() => {
@@ -391,52 +442,69 @@ export const EventEditorWizard = ({
   /** "Empezar de cero": fuera el borrador recuperado. */
   const descartarBorrador = () => {
     if (claveBorrador) removeDraft(claveBorrador);
+    // Lo que estuviera por escribirse era de lo que se descarta.
+    pendienteRef.current = null;
     setBorradorDe(null);
     setStep(0);
     aplicarValoresDeNuevo();
   };
 
+  /**
+   * Escribe ya el borrador pendiente. No pisa uno guardado después de ese
+   * cambio (otra pestaña) ni escribe si la sesión ya es de otro usuario
+   * (lib/drafts), y avisa, una vez, si el dispositivo no deja guardar.
+   */
+  const volcarBorrador = () => {
+    const p = pendienteRef.current;
+    pendienteRef.current = null;
+    if (!p || borradorHechoRef.current) return;
+    if (p.borrador === null) {
+      removeDraft(p.clave);
+      return;
+    }
+    const resultado = writeDraft(p.clave, p.borrador, { usuario: partnerId, editadoEn: p.editadoEn });
+    if (resultado === "fallo" && !avisadoSinEspacioRef.current) {
+      avisadoSinEspacioRef.current = true;
+      toast({
+        title: "No se puede guardar el borrador",
+        description:
+          "Tu dispositivo no tiene espacio o no deja guardar datos. Lo que has escrito sigue aquí, pero si cierras o recargas esta página se perderá.",
+      });
+    }
+  };
+  // Los oyentes de abajo llaman siempre a la versión más reciente.
+  const volcarBorradorRef = useRef(volcarBorrador);
+  volcarBorradorRef.current = volcarBorrador;
+
   // Guarda el borrador de "Nuevo evento" mientras se rellena (con una pausa
   // para no escribir en cada tecla). Un formulario sin tocar no deja borrador.
   useEffect(() => {
     if (!open || mode !== "create" || !claveBorrador || !formListo) return;
-    const t = setTimeout(() => {
-      const [primero] = tiers;
-      // El cupo que viene del aforo del local no cuenta como "tocado".
-      const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
-      const tocado =
-        !!title.trim() ||
-        !!description.trim() ||
-        !!dateTime.date ||
-        !!imageUrl ||
-        tiers.length !== 1 ||
-        primero?.name !== porDefecto.name ||
-        primero?.description !== porDefecto.description ||
-        primero?.priceEur !== porDefecto.priceEur ||
-        primero?.capacity !== porDefecto.capacity ||
-        primero?.perUserMax !== porDefecto.perUserMax ||
-        primero?.active !== porDefecto.active ||
-        primero?.refundMode !== porDefecto.refundMode ||
-        primero?.transferAllowed !== porDefecto.transferAllowed;
-      if (!tocado) {
-        removeDraft(claveBorrador);
-        return;
-      }
-      const borrador: BorradorEvento = {
-        v: 1,
-        step,
-        title,
-        description,
-        dateTime,
-        location,
-        tiers,
-        imageUrl,
-        willPublish,
-        venueId,
-        timeZone,
-      };
-      writeDraft(claveBorrador, borrador);
-    }, 400);
+    const [primero] = tiers;
+    // El cupo que viene del aforo del local no cuenta como "tocado".
+    const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
+    const tocado =
+      !!title.trim() ||
+      !!description.trim() ||
+      !!dateTime.date ||
+      !!imageUrl ||
+      tiers.length !== 1 ||
+      primero?.name !== porDefecto.name ||
+      primero?.description !== porDefecto.description ||
+      primero?.priceEur !== porDefecto.priceEur ||
+      primero?.capacity !== porDefecto.capacity ||
+      primero?.perUserMax !== porDefecto.perUserMax ||
+      primero?.active !== porDefecto.active ||
+      primero?.refundMode !== porDefecto.refundMode ||
+      primero?.transferAllowed !== porDefecto.transferAllowed;
+    pendienteRef.current = {
+      clave: claveBorrador,
+      borrador: tocado
+        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, timeZone }
+        : null,
+      editadoEn: Date.now(),
+    };
+    const t = setTimeout(() => volcarBorradorRef.current(), 400);
     return () => clearTimeout(t);
   }, [
     open,
@@ -456,6 +524,25 @@ export const EventEditorWizard = ({
     timeZone,
   ]);
 
+  // La pausa de arriba no puede perder lo último que se escribió: al ocultar
+  // la pestaña (cambio de app o de pestaña; en iOS puede ser lo último que
+  // ocurra antes de que el sistema cierre la app), al irse la página y al
+  // cerrar o desmontar el asistente se escribe ya lo pendiente.
+  useEffect(() => {
+    if (!open || mode !== "create") return;
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === "hidden") volcarBorradorRef.current();
+    };
+    const alIrse = () => volcarBorradorRef.current();
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    window.addEventListener("pagehide", alIrse);
+    return () => {
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+      window.removeEventListener("pagehide", alIrse);
+      volcarBorradorRef.current();
+    };
+  }, [open, mode]);
+
   // -----------------------------------------------------------------
   // Reset / load según mode al abrir (con el contexto del local ya cargado:
   // sin él, el día y las horas se leerían con la zona del dispositivo)
@@ -470,6 +557,9 @@ export const EventEditorWizard = ({
     setRemovedTierDbIds(new Set());
 
     if (mode === "create") {
+      // Apertura nueva: su borrador vuelve a escribirse y el aviso a poder salir.
+      borradorHechoRef.current = false;
+      avisadoSinEspacioRef.current = false;
       const guardado = claveBorrador ? readDraft<unknown>(claveBorrador) : null;
       if (guardado && esBorradorValido(guardado.data)) {
         const b = guardado.data;
@@ -590,14 +680,18 @@ export const EventEditorWizard = ({
         return { date, startTime: inicio.time, endTime: fin?.time ?? "" };
       })();
 
-      setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
-      setDescription(evt.description ?? "");
-      setDateTime(dt);
-      setLocation({
+      const lugar: LocationValue = {
         city: evt.city ?? defaultCity,
         venueName: evt.venue_name ?? defaultVenueName,
         address: evt.address ?? "",
-      });
+      };
+      setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
+      setDescription(evt.description ?? "");
+      setDateTime(dt);
+      setLocation(lugar);
+      setCuandoOriginal(
+        m === "edit" ? { dateTime: dt, location: lugar, venueId: evt.venue_id ?? defaultVenueId ?? null } : null
+      );
       setImageUrl(evt.image_url ?? "");
       // Una copia nace como borrador; en edit el estado no se toca al guardar.
       setWillPublish(false);
@@ -842,8 +936,10 @@ export const EventEditorWizard = ({
             ? "Ya aparece en el calendario público y se puede comprar."
             : "Lo encontrarás en Mis eventos.",
       });
-      // Guardado: el borrador ya no hace falta.
+      // Guardado: el borrador ya no hace falta, ni el que estaba por escribirse.
       if (mode === "create" && claveBorrador) removeDraft(claveBorrador);
+      pendienteRef.current = null;
+      borradorHechoRef.current = true;
       setBorradorDe(null);
       await onSaved();
       onOpenChange(false);
@@ -1235,6 +1331,7 @@ export const EventEditorWizard = ({
                   )}
                   {step === 1 && (
                     <StepWhenWhere
+                      aviso={avisoCambio}
                       dateTime={dateTime}
                       onDateTimeChange={setDateTime}
                       location={location}
@@ -1309,6 +1406,7 @@ export const EventEditorWizard = ({
                       eventHasSales={eventHasSales}
                       mode={mode}
                       blockedReason={publishBlockedReason}
+                      avisoCambio={avisoCambio}
                     />
                   )}
                 </>
@@ -1484,6 +1582,7 @@ const StepInfo = ({
 );
 
 const StepWhenWhere = ({
+  aviso,
   dateTime,
   onDateTimeChange,
   location,
@@ -1496,6 +1595,8 @@ const StepWhenWhere = ({
   onVenueChange,
   disabled,
 }: {
+  /** Aviso de que los compradores verán el cambio de día, hora o lugar (evento publicado con ventas). */
+  aviso?: string | null;
   dateTime: DateTimeValue;
   onDateTimeChange: (v: DateTimeValue) => void;
   location: LocationValue;
@@ -1516,6 +1617,7 @@ const StepWhenWhere = ({
     subtitle="Si el evento cruza medianoche detectamos automáticamente que finaliza al día siguiente."
   >
     <div className="mx-auto max-w-2xl space-y-6">
+      {aviso && <AvisoCambioConVentas texto={aviso} />}
       <section>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <CalendarIcon className="h-4 w-4 text-orange-500" />
@@ -1780,6 +1882,21 @@ const StepPublish = ({
 );
 
 /**
+ * Aviso de que se está cambiando el día, la hora o el lugar de un evento
+ * publicado con entradas vendidas. Solo avisa: guardar sigue permitido.
+ */
+const AvisoCambioConVentas = ({ texto }: { texto: string }) => (
+  <div
+    className="flex items-start gap-3 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-[12px] leading-relaxed text-orange-200"
+    role="status"
+    data-testid="aviso-cambio-con-ventas"
+  >
+    <AlertTriangle className="mt-[1px] h-4 w-4 shrink-0 text-orange-500" />
+    <span>{texto}</span>
+  </div>
+);
+
+/**
  * Aviso de que no se puede publicar (organización suspendida). Un evento que
  * ya estaba publicado no se despublica: se oculta al público mientras dure.
  */
@@ -1803,11 +1920,14 @@ const StepReview = ({
   eventHasSales,
   mode,
   blockedReason,
+  avisoCambio,
 }: {
   summary: EventSummary;
   eventHasSales: boolean;
   mode: EditorMode;
   blockedReason?: string | null;
+  /** Aviso de que los compradores verán el cambio de día, hora o lugar (evento publicado con ventas). */
+  avisoCambio?: string | null;
 }) => {
   const politicas = summarizePolicies(summary.policies ?? []);
   return (
@@ -1821,6 +1941,7 @@ const StepReview = ({
           {blockedReason && (
             <PublishBlockedNote reason={blockedReason} published={mode === "edit" && summary.willPublish} />
           )}
+          {avisoCambio && <AvisoCambioConVentas texto={avisoCambio} />}
           <ReviewRow label="Título" value={summary.title || "—"} />
           <ReviewRow
             label="Fecha"
