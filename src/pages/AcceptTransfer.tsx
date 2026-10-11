@@ -238,8 +238,16 @@ const AcceptTransfer = () => {
         goToLogin();
         return;
       }
-      if (res.code === "email_mismatch" || res.httpStatus === 403) {
+      // Solo email_mismatch es «otra cuenta»: un 403 sin ese código no lo es.
+      if (res.code === "email_mismatch") {
         setAccept({ kind: "wrong_account" });
+        return;
+      }
+      // Ya no está pendiente (la aceptó otra pestaña, la canceló quien la envió…):
+      // se vuelve a leer para enseñar su estado real en vez de un «inténtalo de
+      // nuevo» que no puede salir bien.
+      if (res.code === "transfer_not_pending") {
+        void fetchTransfer();
         return;
       }
       const closed = closedStatusFor(res.code, res.httpStatus);
@@ -263,7 +271,7 @@ const AcceptTransfer = () => {
     } finally {
       acceptingRef.current = false;
     }
-  }, [token, user, queryClient, navigate, goToLogin]);
+  }, [token, user, queryClient, navigate, goToLogin, fetchTransfer]);
 
   return (
     <div

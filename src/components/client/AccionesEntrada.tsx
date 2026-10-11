@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -567,6 +567,8 @@ const SolicitarDevolucion = ({
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // Un id por diálogo: con varias entradas en pantalla no se repite.
+  const motivoId = useId();
 
   const enviar = async () => {
     if (enviando) return;
@@ -597,9 +599,9 @@ const SolicitarDevolucion = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 text-sm">
-          <Label htmlFor="motivo-reembolso">Motivo</Label>
+          <Label htmlFor={motivoId}>Motivo</Label>
           <Textarea
-            id="motivo-reembolso"
+            id={motivoId}
             placeholder="Enfermedad, cambio de planes…"
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}

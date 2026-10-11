@@ -45,6 +45,8 @@ const transferencia = (status: string) => ({
 interface Opciones {
   sesion: boolean;
   estado?: string;
+  /** Estado que devuelve el GET una vez intentada la aceptación (por defecto, el mismo `estado`). */
+  estadoTrasAceptar?: string;
   /** Respuesta del POST (aceptar). Por defecto, aceptada. */
   aceptar?: { status: number; json: unknown };
 }
@@ -65,6 +67,7 @@ async function abrirTransferencia(page: Page, opciones: Opciones, token = TOKEN)
     sembrarSesion: opciones.sesion ? "siempre" : "nunca",
   });
   const pagina: Pagina = { supabase, errores, consultas: [], aceptaciones: [] };
+  let aceptacionIntentada = false;
 
   await page.route(
     (url) => url.origin === ORIGEN_SUPABASE && url.pathname === "/functions/v1/accept-ticket-transfer",
@@ -75,8 +78,11 @@ async function abrirTransferencia(page: Page, opciones: Opciones, token = TOKEN)
       let json: unknown;
       if (req.method() === "GET") {
         pagina.consultas.push(new URL(req.url()).searchParams.get("token") ?? "");
-        json = transferencia(opciones.estado ?? "pending");
+        json = transferencia(
+          aceptacionIntentada && opciones.estadoTrasAceptar ? opciones.estadoTrasAceptar : (opciones.estado ?? "pending"),
+        );
       } else {
+        aceptacionIntentada = true;
         pagina.aceptaciones.push((req.postDataJSON() as Record<string, unknown> | null) ?? {});
         const respuesta = opciones.aceptar ?? { status: 200, json: { ticket_id: TICKET } };
         status = respuesta.status;
@@ -147,6 +153,39 @@ test("con otra cuenta (403): no se acepta y se ofrece cambiar de cuenta", async 
   await expect(page.getByRole("button", { name: "Cambiar de cuenta" })).toBeVisible();
   await expect(page).toHaveURL(/#\/transferencia\?token=/);
   await sinFallos(page, pagina, "con otra cuenta");
+});
+
+test("ya no está pendiente (409): se vuelve a leer y se enseña su estado real, sin «inténtalo de nuevo»", async ({
+  page,
+}) => {
+  const pagina = await abrirTransferencia(page, {
+    sesion: true,
+    estadoTrasAceptar: "cancelled",
+    aceptar: { status: 409, json: { error: { message: "transfer_not_pending", code: "generic_error" } } },
+  });
+
+  await page.getByRole("button", { name: "Aceptar entrada" }).click({ timeout: 90_000 });
+  await expect(page.getByRole("heading", { name: /Se ha cancelado el envío/ })).toBeVisible();
+  await expect(page.getByText("No hemos podido aceptar la entrada")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aceptar entrada" })).toHaveCount(0);
+  // La lectura inicial y la de después del 409; una sola aceptación.
+  expect(pagina.consultas).toEqual([TOKEN, TOKEN]);
+  expect(pagina.aceptaciones).toHaveLength(1);
+  await sinFallos(page, pagina, "con la transferencia ya cerrada");
+});
+
+test("un 403 que no es email_mismatch no se toma por otra cuenta", async ({ page }) => {
+  const pagina = await abrirTransferencia(page, {
+    sesion: true,
+    aceptar: { status: 403, json: { error: { message: "forbidden", code: "generic_error" } } },
+  });
+
+  await page.getByRole("button", { name: "Aceptar entrada" }).click({ timeout: 90_000 });
+  await expect(page.getByText(/No hemos podido aceptar la entrada/)).toBeVisible();
+  // No es el aviso de «otra cuenta» (que sustituye el botón de aceptar).
+  await expect(page.getByText(/Esta entrada es para/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aceptar entrada" })).toBeVisible();
+  await sinFallos(page, pagina, "con un 403 genérico");
 });
 
 // Estados claros: una página nueva por caso (misma URL: en la misma pestaña

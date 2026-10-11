@@ -154,6 +154,8 @@ const PublicTicket = () => {
 
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
+  const [qrIntento, setQrIntento] = useState(0);
   const requestRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -232,9 +234,11 @@ const PublicTicket = () => {
   useEffect(() => {
     if (!showQr || !qrToken) {
       setQrDataUrl(null);
+      setQrError(false);
       return;
     }
     let cancelled = false;
+    setQrError(false);
     QRCodeLib.toDataURL(qrToken, {
       width: 560,
       margin: 2,
@@ -244,11 +248,14 @@ const PublicTicket = () => {
       .then((dataUrl: string) => {
         if (!cancelled) setQrDataUrl(dataUrl);
       })
-      .catch((err: unknown) => console.error("[PublicTicket] QR", err));
+      .catch((err: unknown) => {
+        console.error("[PublicTicket] QR", err);
+        if (!cancelled) setQrError(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [showQr, qrToken]);
+  }, [showQr, qrToken, qrIntento]);
 
   return (
     <div
@@ -305,7 +312,13 @@ const PublicTicket = () => {
         )}
 
         {state.kind === "ready" && (
-          <TicketView data={state.data} qrDataUrl={qrDataUrl} showQr={showQr} />
+          <TicketView
+            data={state.data}
+            qrDataUrl={qrDataUrl}
+            showQr={showQr}
+            qrError={qrError}
+            onRetryQr={() => setQrIntento((n) => n + 1)}
+          />
         )}
       </main>
     </div>
@@ -316,10 +329,14 @@ const TicketView = ({
   data,
   qrDataUrl,
   showQr,
+  qrError,
+  onRetryQr,
 }: {
   data: PublicTicketData;
   qrDataUrl: string | null;
   showQr: boolean;
+  qrError: boolean;
+  onRetryQr: () => void;
 }) => {
   const { ticket, event } = data;
   const doorCode = showQr ? ticketDoorCode(ticket.qr_token) : null;
@@ -514,6 +531,25 @@ const TicketView = ({
                   className="mx-auto aspect-square w-full max-w-[320px]"
                   draggable={false}
                 />
+              ) : qrError ? (
+                <div
+                  role="alert"
+                  className="mx-auto flex aspect-square w-full max-w-[320px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center"
+                  style={{ borderColor: "rgba(184,56,26,0.45)", color: "#B8381A" }}
+                >
+                  <p className="text-base font-bold leading-snug">No hemos podido generar el código QR</p>
+                  <p className="text-[12px] font-medium leading-relaxed" style={{ color: "#0F0F0F" }}>
+                    En la puerta puedes dar el código que ves debajo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onRetryQr}
+                    className="rounded-full border px-4 py-1.5 text-sm font-semibold"
+                    style={{ borderColor: "#B8381A", color: "#B8381A" }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
               ) : (
                 <div className="mx-auto aspect-square w-full max-w-[320px] animate-pulse rounded-2xl bg-black/10" />
               )}
