@@ -21,7 +21,6 @@ export const Wordmark = ({ height, className, style }: WordmarkProps) => (
       outline: 0,
       userSelect: "none",
       WebkitUserSelect: "none",
-      WebkitUserDrag: "none" as unknown as string,
       ...(height !== undefined ? { height } : {}),
       ...style,
     }}

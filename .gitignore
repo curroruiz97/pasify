@@ -70,6 +70,7 @@ supabase/.branches/
 .vercel/
 .next/
 
-.vercel
-.env*.local
 supabase/migrations.legacy-backup/
+
+# Copias de seguridad de editores y de Xcode/CocoaPods
+*.bak

@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { Json } from "@/integrations/supabase/types";
 import type {
   PartnerOrg,
   PartnerBrand,
@@ -416,7 +417,7 @@ export const PartnerSettingsBlock = ({
           vat_id: orgForm.vatId.trim() || null,
           city: orgForm.city.trim() || null,
           address: orgForm.address.trim() || null,
-          metadata: orgMetadata,
+          metadata: orgMetadata as Json,
         })
         .eq("id", org.id);
       if (orgErr) throw new Error(orgErr.message);

@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SpanishCitySelect } from "@/components/ui/spanish-city-select";
 import { PartnerImageUploader } from "@/components/partner/PartnerImageUploader";
 import { cn } from "@/lib/utils";
+import type { Json } from "@/integrations/supabase/types";
 import type {
   PartnerBrand,
   PartnerOrg,
@@ -434,7 +435,7 @@ export const PartnerOnboardingWizard = ({
           billing_email: data.orgBillingEmail.trim() || null,
           contact_email: data.opNotificationEmail.trim() || data.orgBillingEmail.trim() || null,
           contact_phone: data.orgContactPhone.trim() || null,
-          metadata: orgMetadata,
+          metadata: orgMetadata as Json,
         })
         .eq("id", orgId)
         .select("id");
@@ -469,7 +470,7 @@ export const PartnerOnboardingWizard = ({
             accent_color: data.brandAccentColor || null,
             website_url: data.orgWebsite.trim() || null,
             instagram_handle: data.orgInstagram.trim() || null,
-            metadata: brandMetadata,
+            metadata: brandMetadata as Json,
           })
           .eq("id", brandRow.id);
         if (brandErr) throw new Error(brandErr.message);

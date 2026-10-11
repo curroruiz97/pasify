@@ -1,14 +1,1 @@
-{
-  "src/components/Wordmark.tsx": {
-    "TS2353: Object literal may only specify known properties, and 'WebkitUserDrag' does not exist in type 'Properties<string | number, string & {}>'.": 1
-  },
-  "src/components/partner/PartnerOnboardingWizard.tsx": {
-    "TS2322: Type 'Record<string, unknown>' is not assignable to type 'Json'.": 2
-  },
-  "src/components/shared/PartnerSettingsBlock.tsx": {
-    "TS2322: Type 'Record<string, unknown>' is not assignable to type 'Json'.": 1
-  },
-  "src/components/ui/loader-one.tsx": {
-    "TS2353: Object literal may only specify known properties, and 'WebkitUserDrag' does not exist in type 'Properties<string | number, string & {}>'.": 1
-  }
-}
+{}
