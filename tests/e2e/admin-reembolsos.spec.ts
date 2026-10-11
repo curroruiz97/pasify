@@ -86,7 +86,10 @@ async function abrirReembolsos(page: Page): Promise<Llamadas> {
 
   await page.goto("/#/admin");
   await expect(page.getByRole("heading", { level: 1, name: "Métricas" })).toBeVisible({ timeout: 90_000 });
-  await page.locator("aside nav").getByRole("button", { name: /^Reembolsos/ }).click();
+  // «Reembolsos» cuelga del grupo desplegable «Gobierno».
+  const menu = page.locator("aside nav");
+  await menu.getByRole("button", { name: "Gobierno" }).click();
+  await menu.getByRole("button", { name: /^Reembolsos/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Reembolsos" })).toBeVisible();
   return llamadas;
 }
