@@ -55,10 +55,20 @@ export type City = { id: string; name: string; slug: string };
 const PROFILE_COLUMNS = "id, business_name, business_category, city, business_city, account_status";
 
 /**
- * Eventos del local: los suyos (partner_id, legacy) y los de las
- * organizaciones de las que es miembro o dueño.
+ * Organizaciones del local: aquellas de las que es miembro activo y aquellas
+ * de las que es dueño (organizations.owner_id). Con ellas se decide qué
+ * eventos, y las ventas de sus entradas, son suyos además de los que creó él.
+ *
+ * Por defecto, si una consulta falla (RLS, tabla que no existe…) se sigue solo
+ * con los eventos propios y únicamente un timeout se propaga. Con `estricto`
+ * no se disimula ningún fallo: lo usa quien no puede dar cifras a medias
+ * (los informes), porque sin las organizaciones faltarían las ventas de los
+ * eventos de otros miembros sin que nada lo avisara.
  */
-async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
+export async function orgIdsDelLocal(
+  uid: string,
+  { estricto = false }: { estricto?: boolean } = {},
+): Promise<string[]> {
   let orgIds: string[] = [];
   try {
     const [members, owned] = await Promise.all([
@@ -69,6 +79,10 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
       // Fallback: organizations donde el user es owner_id directo
       timed(supabase.from("organizations").select("id").eq("owner_id", uid), "organizations"),
     ]);
+    if (estricto) {
+      if (members.error) throw members.error;
+      if (owned.error) throw owned.error;
+    }
     orgIds = (members.data ?? [])
       .map((m: { org_id: string | null }) => m.org_id)
       .filter((id): id is string => !!id);
@@ -77,12 +91,27 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
     }
   } catch (err) {
     // Sin respuesta: mejor un error visible que una lista incompleta.
-    if (err instanceof TimeoutError) throw err;
+    if (estricto || err instanceof TimeoutError) throw err;
     /* RLS o tabla no existente — caemos a sólo partner_id */
   }
+  return orgIds;
+}
 
-  const filter =
-    orgIds.length > 0 ? `partner_id.eq.${uid},org_id.in.(${orgIds.join(",")})` : `partner_id.eq.${uid}`;
+/**
+ * Filtro PostgREST (`or`) de los eventos del local: los que creó él
+ * (partner_id) y los de sus organizaciones. Sirve tanto para `events` como,
+ * con `referencedTable: "events"`, para lo que cuelga de ellos (tickets).
+ */
+export const filtroEventosDelLocal = (uid: string, orgIds: string[]): string =>
+  orgIds.length > 0 ? `partner_id.eq.${uid},org_id.in.(${orgIds.join(",")})` : `partner_id.eq.${uid}`;
+
+/**
+ * Eventos del local: los suyos (partner_id, legacy) y los de las
+ * organizaciones de las que es miembro o dueño.
+ */
+async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
+  const orgIds = await orgIdsDelLocal(uid);
+  const filter = filtroEventosDelLocal(uid, orgIds);
 
   const { data, error } = await timed(
     supabase
