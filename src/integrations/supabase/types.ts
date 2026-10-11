@@ -6756,6 +6756,7 @@ export type Database = {
           _force?: boolean
           _force_reason?: string
           _qr_token: string
+          _request_id?: string
         }
         Returns: {
           already_used_at: string
@@ -6780,6 +6781,7 @@ export type Database = {
           _event_id: string
           _force?: boolean
           _force_reason?: string
+          _request_id?: string
         }
         Returns: {
           already_used_at: string
