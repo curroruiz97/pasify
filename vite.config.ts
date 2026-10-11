@@ -147,6 +147,11 @@ export default defineConfig(({ mode, command }) => ({
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         // Navigazione SPA
         navigateFallback: "/index.html",
+        // Rutas que resuelve el servidor, no la SPA (HashRouter): sin esto el
+        // service worker contesta con index.html a /e/<id> y /p/<id> y se pierde
+        // el redirect de api/e|p a /#/e/<id>. /.well-known/ queda reservado para
+        // los universal links.
+        navigateFallbackDenylist: [/^\/api\//, /^\/e\//, /^\/p\//, /^\/\.well-known\//],
         // Runtime caching strategies
         runtimeCaching: [
           {
