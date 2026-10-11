@@ -102,11 +102,24 @@ const handleRecoveryTokens = () => {
     }
   }
 
-  // If we found recovery tokens, save them and redirect to update-password
-  if (accessToken && (type === 'recovery' || type === 'magiclink' || hash.includes('update-password') || hash.includes('password-recovery'))) {
-    sessionStorage.setItem('recovery_access_token', accessToken);
-    if (refreshToken) {
-      sessionStorage.setItem('recovery_refresh_token', refreshToken);
+  // If we found recovery tokens, save them and redirect to update-password.
+  // Solo con `type=recovery`: es higiene, no una frontera (quien arma la URL
+  // puede ponerle el tipo). Lo que importa es que UpdatePassword no abre
+  // ninguna sesión con estos tokens hasta que el usuario pulsa «Continuar».
+  // Cualquier otro fragmento con access_token (p. ej. la vuelta de Google, que
+  // no lleva `type`) sigue en manos de auth-js (detectSessionInUrl).
+  // Los que se aparten aquí los consume (y borra de sessionStorage) esa
+  // pantalla: no se limpian al arrancar sin tokens, porque la redirección de
+  // abajo puede recargar la página y los borraría antes de que se lean.
+  if (accessToken && type === 'recovery') {
+    try {
+      sessionStorage.setItem('recovery_access_token', accessToken);
+      // Siempre el par: un refresh token de un enlace anterior no puede
+      // quedarse acompañando a este access token.
+      if (refreshToken) sessionStorage.setItem('recovery_refresh_token', refreshToken);
+      else sessionStorage.removeItem('recovery_refresh_token');
+    } catch {
+      /* sin sessionStorage: UpdatePassword pedirá un enlace nuevo */
     }
     // Clean URL and redirect to update-password route
     window.location.replace(window.location.origin + '/#/update-password');

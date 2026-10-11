@@ -5,21 +5,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff, Mail, Lock, CircleAlert, MailWarning } from "lucide-react";
+import { Loader2, Eye, EyeOff, Mail, Lock, CircleAlert, CircleCheck, MailWarning } from "lucide-react";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import AppleAuthButton from "@/components/auth/AppleAuthButton";
 import { esCuentaDesactivada, esLimiteDePeticiones, mensajeErrorAuth, SUPPORT_EMAIL } from "@/components/auth/authErrors";
 import { ESPERA_REENVIO_S, reenviarEmailDeConfirmacion, useCuentaAtras } from "@/components/auth/confirmacionEmail";
-import { resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
+import { refrescarRoles, resolveInitialDashboard, signOutLocal } from "@/hooks/useAuth";
+import { isNativeApp } from "@/lib/platform";
 import { sanitizeNextPath, withNext } from "@/lib/redirect-url";
 
 const serif = { fontFamily: "'Instrument Serif', Georgia, serif", fontStyle: "italic" as const, fontWeight: 400 };
 
-/** Avisos con los que se llega al login desde fuera (main.tsx). */
-const AVISOS: Record<string, string> = {
-  google: "No hemos podido entrar con Google. Vuelve a intentarlo o entra con tu email.",
+interface Aviso {
+  texto: string;
+  /** Bueno en vez de problema: otro color y no es una alerta. */
+  ok?: boolean;
+  /** Línea de más, solo en la web (la app no la necesita). */
+  soloWeb?: string;
+}
+
+/** Avisos con los que se llega al login desde fuera (main.tsx, UpdatePassword). */
+const AVISOS: Record<string, Aviso> = {
+  google: { texto: "No hemos podido entrar con Google. Vuelve a intentarlo o entra con tu email." },
+  // Tras cambiar la contraseña desde el enlace del email (UpdatePassword).
+  contrasena: {
+    texto: "Contraseña cambiada. Entra con la nueva.",
+    ok: true,
+    soloWeb: "Si usas la app de Pasify, vuelve a la app e inicia sesión con la contraseña nueva.",
+  },
 };
 
 class CuentaDesactivadaError extends Error {}
@@ -107,6 +122,15 @@ async function destinoTrasEntrar(userId: string): Promise<string> {
     console.error("claim_initial_role:", claimError);
     return "/";
   }
+  // Los roles se cargan una vez por usuario y useAuth ya los había leído sin
+  // rol: sin esto, ProtectedRoute enseña «Tu cuenta no tiene acceso» hasta el
+  // siguiente SIGNED_IN. Si falla no se rompe el login: ese SIGNED_IN los
+  // vuelve a pedir.
+  try {
+    await refrescarRoles(userId);
+  } catch (err) {
+    console.warn("refrescarRoles tras claim_initial_role:", err);
+  }
   return rol === "partner" ? "/partner-dashboard" : "/client-dashboard";
 }
 
@@ -114,7 +138,9 @@ const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextPath = sanitizeNextPath(searchParams.get("next"));
-  const aviso = AVISOS[searchParams.get("aviso") ?? ""] ?? null;
+  // Solo claves propias: `?aviso=constructor` no puede devolver nada de Object.prototype.
+  const claveAviso = searchParams.get("aviso") ?? "";
+  const aviso = Object.prototype.hasOwnProperty.call(AVISOS, claveAviso) ? AVISOS[claveAviso] : null;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -205,11 +231,22 @@ const Login = () => {
 
         {aviso && (
           <div
-            role="alert"
-            className="mb-5 flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800"
+            role={aviso.ok ? "status" : "alert"}
+            className={
+              aviso.ok
+                ? "mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800"
+                : "mb-5 flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800"
+            }
           >
-            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{aviso}</span>
+            {aviso.ok ? (
+              <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <span>
+              {aviso.texto}
+              {aviso.soloWeb && !isNativeApp() && <span className="mt-1 block">{aviso.soloWeb}</span>}
+            </span>
           </div>
         )}
 

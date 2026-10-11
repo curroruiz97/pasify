@@ -304,6 +304,15 @@ supabase.auth.onAuthStateChange((event, nextSession) => {
 export const isPasswordRecoverySession = (userId: string | null | undefined): boolean =>
   !!userId && usuarioEnRecuperacion === userId;
 
+/**
+ * UpdatePassword la llama al terminar o al abandonar la recuperación. Solo
+ * SIGNED_OUT limpiaba `usuarioEnRecuperacion`: si cerrar la sesión falla (sin
+ * red), esa cuenta seguiría pudiendo poner contraseña sin la actual.
+ */
+export const olvidarRecuperacion = (): void => {
+  usuarioEnRecuperacion = null;
+};
+
 // Cerrar sesión: cuánto se espera al servidor (revocar la sesión) y, después,
 // a que auth-js termine lo que tenga en curso.
 const SIGN_OUT_RED_MS = 4_000;
@@ -316,7 +325,7 @@ const CLAVES_SESION = [
   `${SUPABASE_AUTH_STORAGE_KEY}-user`,
 ];
 
-const borrarSesionDelDispositivo = () =>
+export const borrarSesionDelDispositivo = () =>
   Promise.all(CLAVES_SESION.map((clave) => capacitorStorage.removeItem(clave).catch(() => undefined)));
 
 /** signOut de este dispositivo con límite de tiempo. Devuelve el error; nunca lanza. */
