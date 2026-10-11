@@ -5905,6 +5905,10 @@ export type Database = {
     Views: {
       partner_balance_v: {
         Row: {
+          connect_fee_cents: number | null
+          connect_gross_cents: number | null
+          connect_net_cents: number | null
+          connect_refunded_cents: number | null
           fee_cents: number | null
           gross_cents: number | null
           net_cents: number | null
@@ -6143,6 +6147,7 @@ export type Database = {
           _search?: string
         }
         Returns: {
+          connect_net_cents: number
           connect_orders: number
           fee_cents: number
           gross_cents: number
