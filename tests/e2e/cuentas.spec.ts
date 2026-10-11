@@ -446,3 +446,102 @@ test("Ajustes: «Descargar mis datos» guarda el JSON del servidor y avisa del l
   expect(exportaciones).toBe(2);
   expect(fallos).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// Ola 4 · plan gratuito: cuenta de local cerrada o en pausa (WP9 · 9b)
+//
+//   - PartnerGate lanzaba complete_partner_signup siempre que el plan no daba
+//     acceso, y el servidor "activaba" también un plan en pausa o de una
+//     organización cerrada. Ahora el servidor contesta 55000 org_closed si está
+//     cerrada y no pisa un plan en pausa, y el gate no lo lanza con `paused`.
+// ---------------------------------------------------------------------------
+
+/** La fila que lee usePartnerSubscription, con el estado dado. */
+const filaSuscripcion = (status: string) => [
+  {
+    id: IDS.suscripcion,
+    org_id: IDS.org,
+    plan_code: "free",
+    status,
+    trial_ends_at: null,
+    current_period_end: null,
+    cancel_at_period_end: false,
+    admin_granted_until: null,
+  },
+];
+
+test("una cuenta de local cerrada ve «cuenta cerrada» (sin Reintentar) y puede cerrar sesión", async ({ page }) => {
+  const fallos = errores(page);
+  await instalarSupabaseFalso(page, { sembrarSesion: "una-vez" });
+  const llamadas: string[] = [];
+  // partner_close_account cancela el plan y cierra la organización.
+  await contestar(page, "/rest/v1/partner_subscriptions", () => ({ body: filaSuscripcion("cancelled") }));
+  // RAISE … ERRCODE '55000': PostgREST pone el SQLSTATE y el mensaje en el cuerpo.
+  await contestar(page, "/rest/v1/rpc/complete_partner_signup", () => {
+    llamadas.push("complete_partner_signup");
+    return { status: 500, body: { code: "55000", details: null, hint: null, message: "org_closed" } };
+  });
+
+  await page.goto("/#/partner-dashboard");
+  await expect(page.getByRole("heading", { name: "Esta cuenta de local está cerrada" })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  // Reintentar no arregla una cuenta cerrada, y no es un fallo de activación.
+  await expect(page.getByRole("button", { name: "Reintentar" })).toHaveCount(0);
+  await expect(page.getByText("No pudimos preparar tu cuenta de local")).toHaveCount(0);
+  // Una sola llamada: ni bucle ni reintento automático.
+  await page.waitForTimeout(1_500);
+  expect(llamadas).toEqual(["complete_partner_signup"]);
+
+  await page.getByRole("button", { name: "Cerrar sesión" }).click();
+  await expect.poll(() => page.evaluate((clave) => window.localStorage.getItem(clave), CLAVE_SESION)).toBeNull();
+  expect(fallos).toEqual([]);
+});
+
+test("un plan en pausa no se reactiva solo: avisa, no llama al servidor y deja volver a comprobar", async ({ page }) => {
+  const fallos = errores(page);
+  await instalarSupabaseFalso(page, { sembrarSesion: "una-vez" });
+  const llamadas: string[] = [];
+  let estado = "paused";
+  await contestar(page, "/rest/v1/partner_subscriptions", () => ({ body: filaSuscripcion(estado) }));
+  for (const rpc of ["complete_partner_signup", "claim_partner_free_plan"]) {
+    await contestar(page, `/rest/v1/rpc/${rpc}`, () => {
+      llamadas.push(rpc);
+      return { body: null };
+    });
+  }
+
+  await page.goto("/#/partner-dashboard");
+  await expect(page.getByRole("heading", { name: "Tu plan está en pausa" })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  expect(llamadas).toEqual([]);
+
+  // Cuando soporte lo reactiva, «Reintentar» solo vuelve a leer el estado y entra al panel.
+  estado = "active";
+  await page.getByRole("button", { name: "Reintentar" }).click();
+  await expect(page.getByRole("heading", { name: "Métricas" })).toBeVisible({ timeout: 30_000 });
+  expect(llamadas).toEqual([]);
+  expect(fallos).toEqual([]);
+});
+
+test("si tras la llamada el plan sigue sin dar acceso, no se dice que está activado", async ({ page }) => {
+  const fallos = errores(page);
+  await instalarSupabaseFalso(page, { sembrarSesion: "una-vez" });
+  let llamadas = 0;
+  await contestar(page, "/rest/v1/partner_subscriptions", () => ({ body: filaSuscripcion("cancelled") }));
+  await contestar(page, "/rest/v1/rpc/complete_partner_signup", () => {
+    llamadas++;
+    return { body: null };
+  });
+
+  await page.goto("/#/partner-dashboard");
+  await expect(page.getByText("No hemos podido confirmar tu plan gratuito.")).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText(/se ha activado/)).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  expect(llamadas).toBe(1);
+
+  await page.getByRole("button", { name: "Reintentar" }).click();
+  await expect.poll(() => llamadas).toBe(2);
+  await expect(page.getByText("No hemos podido confirmar tu plan gratuito.")).toBeVisible();
+  expect(fallos).toEqual([]);
+});
