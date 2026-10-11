@@ -594,17 +594,26 @@ export interface SettlementOverviewRow {
   gross_cents: number;
   refunded_cents: number;
   fee_cents: number;
+  /** Neto de todos los pedidos, también de los cobrados con el Stripe del local. */
   net_cents: number;
   settled_cents: number;
-  /** neto − liquidado; negativo si Pasify ha transferido de más. */
+  /**
+   * neto − cobrado por Connect − liquidado; negativo si Pasify ha transferido
+   * de más. Con la base sin la migración 20260929110000 no descuenta Connect
+   * (es neto − liquidado).
+   */
   pending_cents: number;
   settlements_count: number;
   last_paid_at: string | null;
-  /**
-   * Pedidos cobrados con el Stripe del propio local (cargo con destino): ese
-   * dinero ya le llegó, pero el neto de partner_balance_v lo incluye.
-   */
+  /** Pedidos cobrados con el Stripe del propio local (cargo con destino). */
   connect_orders: number;
+  /**
+   * Neto (cobrado − reembolsos − comisión) de esos pedidos: ya le llegó por
+   * Stripe y el servidor lo descuenta de pending_cents. null = la base de datos
+   * aún no tiene la migración 20260929110000 y no manda la columna: ahí el
+   * pendiente todavía lo incluye (el front sale antes que la migración).
+   */
+  connect_net_cents: number | null;
 }
 
 export interface SettlementOverview {
@@ -624,7 +633,9 @@ export interface SettlementOverviewParams {
   pageSize: number;
 }
 
-type SettlementOverviewDbRow = SettlementOverviewRow & {
+type SettlementOverviewDbRow = Omit<SettlementOverviewRow, "connect_net_cents"> & {
+  /** Ausente si la base no tiene aún la migración 20260929110000. */
+  connect_net_cents?: number | string | null;
   total_count: number | string;
   total_net_cents: number | string;
   total_settled_cents: number | string;
@@ -664,6 +675,7 @@ export function useAdminSettlementOverview(uid: string | null, p: SettlementOver
           pending_cents: num(r.pending_cents),
           settlements_count: num(r.settlements_count),
           connect_orders: num(r.connect_orders),
+          connect_net_cents: r.connect_net_cents == null ? null : num(r.connect_net_cents),
         })),
         total: primera ? num(primera.total_count) : 0,
         totals: {

@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronRight, Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Info, Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,16 +36,30 @@ import { Chip, ErrorCard, Eyebrow } from "./AdminUi";
    Liquidaciones (B5-4). Pasify cobra las entradas por los locales que aún no
    cobran con su propio Stripe y les transfiere lo suyo a mano. Por cada
    organización: bruto, reembolsos, comisión y neto (partner_balance_v, sin
-   pagos de prueba mientras require_live_payments), lo ya liquidado
-   (partner_settlements) y lo pendiente. «Registrar» apunta una
-   transferencia hecha; el historial sale al desplegar la fila.
+   pagos de prueba mientras require_live_payments), lo cobrado con el Stripe
+   del propio local (Connect: ese dinero ya le llegó y no se le debe), lo ya
+   liquidado (partner_settlements) y lo pendiente = neto − Connect −
+   liquidado. «Registrar» apunta una transferencia hecha; el historial y el
+   desglose del pendiente salen al desplegar la fila.
    Un local suspendido no se liquida (D-8): el servidor lo rechaza.
    ============================================================================ */
 
 const PAGE_SIZE = 25;
 
-const AVISO_CONNECT =
-  "Tiene pedidos cobrados con su propia cuenta de Stripe: ese dinero ya le llegó directamente, pero el neto de aquí lo incluye. Descuéntalo antes de transferir.";
+/**
+ * La base de datos aún no tiene la migración 20260929110000 (el front sale antes
+ * que ella): el pendiente todavía incluye lo cobrado con Connect y hay que
+ * descontarlo a mano.
+ */
+const AVISO_CONNECT_SIN_DESCONTAR =
+  "Tiene pedidos cobrados con su propia cuenta de Stripe: ese dinero ya le llegó directamente, pero el neto y el pendiente de aquí lo incluyen. Descuéntalo antes de transferir.";
+
+/** Qué pasa con los pedidos que el local cobró con su propio Stripe, según lo que mande el servidor. */
+function notaConnect(r: SettlementOverviewRow): string {
+  if (r.connect_net_cents === null) return AVISO_CONNECT_SIN_DESCONTAR;
+  const pedidos = r.connect_orders === 1 ? "1 pedido cobrado" : `${r.connect_orders} pedidos cobrados`;
+  return `${pedidos} con su propia cuenta de Stripe (neto ${euros(r.connect_net_cents)}). Ese dinero ya le llegó directamente: está descontado del pendiente y no hay que transferirlo.`;
+}
 
 /** Lo tecleado en el buscador, 300 ms después de dejar de escribir. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -72,6 +86,8 @@ export const AdminSettlements = ({ uid }: { uid: string | null }) => {
   const filas = resumen.data?.rows ?? [];
   const total = resumen.data?.total ?? 0;
   const totales = resumen.data?.totals;
+  // La base aún sin la migración de Connect: el pendiente que llega incluye esos pedidos.
+  const baseSinMigrar = filas.some((r) => r.connect_net_cents === null);
 
   // Otro filtro: de vuelta a la primera página.
   useEffect(() => setPage(0), [search, soloPendiente]);
@@ -185,7 +201,7 @@ export const AdminSettlements = ({ uid }: { uid: string | null }) => {
                                 {suspendida && <Chip color="#E5484D">Suspendido</Chip>}
                                 {r.org_status === "closed" && <Chip color="#8A8275">Cerrado</Chip>}
                                 {r.connect_orders > 0 && (
-                                  <span title={AVISO_CONNECT}>
+                                  <span title={notaConnect(r)}>
                                     <Chip color="#8FB8DE">Cobra con su Stripe · {r.connect_orders}</Chip>
                                   </span>
                                 )}
@@ -228,6 +244,7 @@ export const AdminSettlements = ({ uid }: { uid: string | null }) => {
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
                               <TableCell />
                               <TableCell colSpan={8}>
+                                <Desglose fila={r} />
                                 <Historial uid={uid} fila={r} />
                               </TableCell>
                             </TableRow>
@@ -260,9 +277,11 @@ export const AdminSettlements = ({ uid }: { uid: string | null }) => {
       </Card>
 
       <p className="mt-4 max-w-3xl text-xs text-muted-foreground">
-        Neto = cobrado − reembolsos − comisión de Pasify. Los pagos de prueba de Stripe no cuentan. Un pendiente en
-        negativo es dinero transferido de más. Los locales que cobran con su propio Stripe reciben el dinero
-        directamente: no hay que liquidarles.
+        Neto = cobrado − reembolsos − comisión de Pasify.{" "}
+        {baseSinMigrar
+          ? "Los pedidos cobrados con el Stripe del propio local siguen dentro del neto y del pendiente: descuéntalos a mano antes de transferir."
+          : "Pendiente = neto − lo cobrado con el Stripe del propio local (ese dinero les llega directamente y no se les debe) − lo ya liquidado."}{" "}
+        Los pagos de prueba de Stripe no cuentan. Un pendiente en negativo es dinero transferido de más.
       </p>
 
       <RegisterDialog
@@ -290,6 +309,77 @@ const Resumen = ({ etiqueta, valor, destacado }: { etiqueta: string; valor: numb
     </CardContent>
   </Card>
 );
+
+/**
+ * Un término del desglose: la etiqueta pequeña encima y el importe debajo, con su
+ * operador delante (juntos, para que no se separen al saltar de línea en móvil).
+ */
+const Termino = ({
+  etiqueta,
+  operador,
+  children,
+  color,
+}: {
+  etiqueta: string;
+  operador?: "−" | "=";
+  children: ReactNode;
+  color?: string;
+}) => (
+  <div className="flex items-end gap-2">
+    {operador && (
+      <span aria-hidden="true" className="pb-0.5 text-muted-foreground">
+        {operador}
+      </span>
+    )}
+    <div>
+      <Eyebrow className="mb-0.5">{etiqueta}</Eyebrow>
+      <div className="font-medium tabular-nums" style={{ color }}>
+        {children}
+      </div>
+    </div>
+  </div>
+);
+
+/**
+ * De dónde sale el pendiente de la fila desplegada: neto − cobrado por Connect −
+ * liquidado. Lo cobrado con el Stripe del propio local ya le llegó y no se le debe.
+ */
+const Desglose = ({ fila }: { fila: SettlementOverviewRow }) => {
+  const connect = fila.connect_net_cents ?? 0;
+  // Solo se resta (y se enseña) si el servidor lo descuenta; con la base sin migrar el pendiente aún lo incluye.
+  const restaConnect = fila.connect_net_cents !== null && (fila.connect_orders > 0 || connect !== 0);
+  return (
+    // La fila desplegada ocupa el ancho de toda la tabla (que en móvil se desplaza): el desglose se
+    // queda a la vista en el borde izquierdo y se ajusta al ancho de pantalla.
+    <div className="sticky left-0 max-w-[calc(100vw-7rem)] pt-2">
+      <Eyebrow className="mb-2">Cómo sale el pendiente de {fila.org_name}</Eyebrow>
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 text-sm">
+        <Termino etiqueta="Neto">{euros(fila.net_cents)}</Termino>
+        {restaConnect && (
+          <Termino etiqueta="Cobrado por Connect" operador="−">
+            {euros(connect)}
+          </Termino>
+        )}
+        <Termino etiqueta="Liquidado" operador="−">
+          {euros(fila.settled_cents)}
+        </Termino>
+        <Termino etiqueta="Pendiente" operador="=" color={colorPendiente(fila.pending_cents)}>
+          {euros(fila.pending_cents)}
+        </Termino>
+      </div>
+      {fila.connect_orders > 0 && (
+        <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+          {fila.connect_net_cents === null ? (
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          ) : (
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          )}
+          {notaConnect(fila)}
+        </p>
+      )}
+    </div>
+  );
+};
 
 const Historial = ({ uid, fila }: { uid: string | null; fila: SettlementOverviewRow }) => {
   const historial = useAdminOrgSettlements(uid, fila.org_id);
@@ -489,8 +579,12 @@ const RegisterDialog = ({
 
         {fila && fila.connect_orders > 0 && (
           <p className="flex items-start gap-2 text-sm text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            {AVISO_CONNECT}
+            {fila.connect_net_cents === null ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            ) : (
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            {notaConnect(fila)}
           </p>
         )}
 
