@@ -182,8 +182,9 @@ test("un 403 que no es email_mismatch no se toma por otra cuenta", async ({ page
 
   await page.getByRole("button", { name: "Aceptar entrada" }).click({ timeout: 90_000 });
   await expect(page.getByText(/No hemos podido aceptar la entrada/)).toBeVisible();
+  // No es el aviso de «otra cuenta» (que sustituye el botón de aceptar).
   await expect(page.getByText(/Esta entrada es para/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Cambiar de cuenta" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aceptar entrada" })).toBeVisible();
   await sinFallos(page, pagina, "con un 403 genérico");
 });
 

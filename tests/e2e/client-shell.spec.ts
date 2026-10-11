@@ -674,8 +674,9 @@ test.describe("web", () => {
     await page.getByRole("button", { name: /Ver mi QR/ }).first().click();
     const modal = page.getByRole("dialog");
     await expect(modal.getByRole("alert")).toContainText("No hemos podido generar el código QR");
-    // Sin QR no puede quedarse el esqueleto de carga girando para siempre.
-    await expect(modal.locator(".animate-pulse")).toHaveCount(0);
+    // Sin QR no puede quedarse el esqueleto de carga girando para siempre
+    // (el chip «Válida» también lleva un punto animate-pulse: se apunta al esqueleto).
+    await expect(modal.locator("div.h-72.w-72.animate-pulse")).toHaveCount(0);
     await expect(modal.getByRole("img", { name: "Código QR de la entrada" })).toHaveCount(0);
 
     await page.evaluate(() => {
