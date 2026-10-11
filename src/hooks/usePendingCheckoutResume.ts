@@ -3,6 +3,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { capacitorStorage } from "@/lib/capacitorStorage";
+import { fetchTextConTiempo, withTimeout } from "@/lib/withTimeout";
 import { buildAppUrl } from "@/lib/redirect-url";
 import { parseEdgeError } from "@/components/tickets/ticketUtils";
 import { invokeEdge } from "@/components/tickets/edge";
@@ -116,6 +117,11 @@ export interface ConfirmCheckoutResult {
   message: string | null;
 }
 
+/** Tiempos máximos: sin ellos un servidor que no contesta dejaba la comprobación «en curso» para siempre. */
+const SESSION_TIMEOUT_MS = 8_000;
+const CONFIRM_TIMEOUT_MS = 15_000;
+const CANCEL_TIMEOUT_MS = 20_000;
+
 /**
  * Pregunta al servidor en qué estado está la sesión de Stripe (y, si Stripe
  * dice que está pagada, la marca como pagada). Funciona SIN sesión de
@@ -135,15 +141,16 @@ export async function confirmCheckoutSession(
   try {
     const {
       data: { session },
-    } = await supabase.auth.getSession();
+    } = await withTimeout(supabase.auth.getSession(), SESSION_TIMEOUT_MS, "getSession");
     if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
   } catch {
     /* sin sesion: la funcion acepta la llamada si session_id y order_id casan */
   }
 
   let resp: Response;
+  let raw: string;
   try {
-    resp = await fetch(
+    ({ resp, raw } = await fetchTextConTiempo(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-checkout-session`,
       {
         method: "POST",
@@ -152,8 +159,10 @@ export async function confirmCheckoutSession(
           session_id: sessionId,
           ...(orderId ? { order_id: orderId } : {}),
         }),
-      }
-    );
+      },
+      CONFIRM_TIMEOUT_MS,
+      "confirm-checkout-session"
+    ));
   } catch {
     return {
       ok: false,
@@ -167,7 +176,7 @@ export async function confirmCheckoutSession(
 
   let body: unknown = null;
   try {
-    body = await resp.json();
+    body = raw ? JSON.parse(raw) : null;
   } catch {
     body = null;
   }
@@ -244,13 +253,14 @@ export function cancelCheckoutOrder(orderId: string): Promise<CancelCheckoutResu
     try {
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await withTimeout(supabase.auth.getSession(), SESSION_TIMEOUT_MS, "getSession");
       if (!session) return { ok: false, status: null, httpStatus: 401, code: "auth_required" };
     } catch {
       return { ok: false, status: null, httpStatus: 0, code: "session_unavailable" };
     }
     const res = await invokeEdge<{ status?: unknown }>("cancel-checkout", {
       body: { order_id: orderId },
+      timeoutMs: CANCEL_TIMEOUT_MS,
     });
     const status = res.data && typeof res.data.status === "string" ? res.data.status : null;
     if (res.ok && status && CANCEL_STATUSES.has(status)) {

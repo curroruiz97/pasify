@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
+import { TimeoutError, fetchTextConTiempo, withTimeout } from "@/lib/withTimeout";
 import { buildExternalReturnUrl } from "@/lib/redirect-url";
 import { loginPathWithNext } from "@/lib/eventLinks";
 import {
@@ -88,8 +89,20 @@ export interface UseTicketCheckoutOptions {
 
 const NO_TIERS: TierOption[] = [];
 
-/** Si el navegador no ha salido hacia Stripe en este tiempo, desbloqueamos. */
-const REDIRECT_WATCHDOG_MS = 15_000;
+/**
+ * Si el navegador no ha salido hacia Stripe en este tiempo, desbloqueamos. Un
+ * segundo toque con la navegación aún en curso crea otro pedido y caduca la
+ * sesión que se está abriendo, así que el margen es generoso.
+ */
+const REDIRECT_WATCHDOG_MS = 30_000;
+
+/**
+ * Tiempos máximos de lo que se espera antes de salir hacia Stripe. Sin ellos,
+ * un servidor o una red a medias dejaban `busyRef` y `submitting` activos: el
+ * botón en «Preparando el pago…» y la hoja sin poder cerrarse hasta recargar.
+ */
+const CHECKOUT_PREP_TIMEOUT_MS = 10_000; // sesión, perfil y tipos de entrada
+const CHECKOUT_REQUEST_TIMEOUT_MS = 25_000; // stripe-create-checkout
 
 /** Ruta actual del HashRouter sin query: la de vuelta si se cancela el pago. */
 function currentRoutePath(): string {
@@ -343,6 +356,13 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
     const res = await cancelCheckoutOrder(orderId);
     if (!res.ok) {
       console.warn("[useTicketCheckout] no se pudo anular el pedido abandonado", res);
+      if (res.code === "payment_in_progress") {
+        // Volvió «sin pagar» pero el cobro sigue en curso (3-D Secure, el banco…):
+        // no se puede anular y antes no se decía nada.
+        toast("Tu pago se está procesando", {
+          description: "Cuando termine, tus entradas aparecerán en Mis entradas. Si no se completa, la reserva se anulará sola.",
+        });
+      }
       // Transitorio: la marca se queda para la próxima vuelta a la página.
       if (cancelIsRetryable(res)) releasedOrders.delete(orderId);
       else forgetWebCheckout(orderId);
@@ -424,14 +444,14 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
         // 1) Sesión obligatoria
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await withTimeout(supabase.auth.getSession(), CHECKOUT_PREP_TIMEOUT_MS, "getSession");
         if (!session) {
           goToLogin();
           return;
         }
 
         // 2) Tipos de entrada activos del evento, con la disponibilidad real
-        const tiers = await fetchEventTiers(input.id);
+        const tiers = await withTimeout(fetchEventTiers(input.id), CHECKOUT_PREP_TIMEOUT_MS, "fetchEventTiers");
         if (tiers.length === 0) {
           toast.error("Venta no disponible", {
             description:
@@ -486,7 +506,7 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await withTimeout(supabase.auth.getSession(), CHECKOUT_PREP_TIMEOUT_MS, "getSession");
         if (!session) {
           setPickerOpen(false);
           goToLogin();
@@ -494,11 +514,15 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
         }
 
         // Datos del comprador desde su propio perfil
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, phone")
-          .eq("id", session.user.id)
-          .maybeSingle();
+        const { data: profile } = await withTimeout(
+          supabase
+            .from("profiles")
+            .select("first_name, last_name, phone")
+            .eq("id", session.user.id)
+            .maybeSingle(),
+          CHECKOUT_PREP_TIMEOUT_MS,
+          "profiles",
+        );
         const email = session.user.email || "";
         if (!email) {
           toast.error(CHECKOUT_ERRORS.buyer_email_required.title, {
@@ -508,7 +532,7 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
         }
 
         const native = Capacitor.isNativePlatform();
-        const resp = await fetch(
+        const { resp, raw } = await fetchTextConTiempo(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-checkout`,
           {
             method: "POST",
@@ -537,10 +561,11 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
               success_url: buildExternalReturnUrl(native ? "/ticket/gracias" : "/ticket/success"),
               cancel_url: buildExternalReturnUrl(native ? "/ticket/gracias" : currentRoutePath()),
             }),
-          }
+          },
+          CHECKOUT_REQUEST_TIMEOUT_MS,
+          "stripe-create-checkout"
         );
 
-        const raw = await resp.text();
         let body: unknown = null;
         try {
           body = raw ? JSON.parse(raw) : null;
@@ -598,9 +623,21 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
         window.location.href = data.url;
       } catch (e) {
         console.error("[useTicketCheckout] checkout failed", e);
-        toast.error(free ? "No se pudo completar la reserva" : "No se pudo iniciar el pago", {
-          description: "Comprueba tu conexión e inténtalo de nuevo.",
-        });
+        if (e instanceof TimeoutError) {
+          // El servidor puede haber llegado a crear el pedido: en una reserva
+          // gratis eso son entradas ya emitidas, así que se manda mirar antes
+          // de repetir. En un pago no se ha cobrado nada hasta pagar en Stripe,
+          // y el siguiente intento libera el pedido pendiente anterior.
+          toast.error(free ? "La reserva está tardando más de lo normal" : "El pago está tardando más de lo normal", {
+            description: free
+              ? "Revisa Mis entradas antes de volver a intentarlo: puede que ya la tengas."
+              : "No se te ha cobrado nada. Inténtalo de nuevo en unos segundos.",
+          });
+        } else {
+          toast.error(free ? "No se pudo completar la reserva" : "No se pudo iniciar el pago", {
+            description: "Comprueba tu conexión e inténtalo de nuevo.",
+          });
+        }
       } finally {
         if (!leavingPage) {
           busyRef.current = false;

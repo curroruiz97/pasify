@@ -325,6 +325,60 @@ test("volver de Stripe sin pagar (cancel_url): se anula el pedido, se avisa y se
   await sinFallos(page, compra, "al volver sin pagar");
 });
 
+test("volver de Stripe con el pago en curso (409 payment_in_progress): se dice en vez de callar", async ({ page }) => {
+  const compra = await prepararCompra(page);
+  // Registrada después: gana a la de prepararCompra.
+  await responder(page, "/functions/v1/cancel-checkout", (_req, _url, args) => {
+    compra.cancelaciones.push(args);
+    return {
+      status: 409,
+      json: { error: "payment_in_progress", message: "Tu pago se está procesando y ya no se puede cancelar." },
+    };
+  });
+  await page.goto(`/#/e/${EVENTO}?order_id=${T.pedidoPendiente}`);
+  await expect(page.getByRole("heading", { name: "Concierto E2E" })).toBeVisible({ timeout: 90_000 });
+
+  await expect(page.getByText("Tu pago se está procesando")).toBeVisible();
+  await expect(page.getByText("Pago cancelado")).toHaveCount(0);
+  expect(compra.cancelaciones).toEqual([{ order_id: T.pedidoPendiente }]);
+  await sinFallos(page, compra, "al volver con el pago en curso");
+});
+
+test("el servidor de pagos no contesta: avisa, desbloquea el botón y deja cerrar la hoja", async ({ page }) => {
+  // El plazo de la petición es de 25 s: hay que dejarlo vencer de verdad.
+  test.setTimeout(150_000);
+  const compra = await prepararCompra(page);
+  let llamadas = 0;
+  // Registrada después: gana a la de prepararCompra. El preflight de CORS pasa;
+  // el POST no se contesta nunca.
+  await page.route(
+    (url) => url.origin === ORIGEN_SUPABASE && url.pathname === "/functions/v1/stripe-create-checkout",
+    (route) => {
+      if (route.request().method() === "OPTIONS") return route.fallback();
+      llamadas++;
+      return new Promise<void>(() => {});
+    },
+  );
+  await page.goto(`/#/e/${EVENTO}`);
+  await expect(page.getByRole("heading", { name: "Concierto E2E" })).toBeVisible({ timeout: 90_000 });
+
+  await page.getByRole("button", { name: "Conseguir entradas" }).click();
+  const selector = page.getByRole("dialog");
+  await selector.getByRole("radio", { name: /General/ }).click();
+  await selector.getByRole("button", { name: /Continuar al pago/ }).click();
+  await expect.poll(() => llamadas).toBe(1);
+
+  // Mientras espera, la hoja no se cierra; al vencer el plazo avisa y se libera.
+  await expect(page.getByText("El pago está tardando más de lo normal")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("No se te ha cobrado nada")).toBeVisible();
+  await expect(selector.getByRole("button", { name: /Continuar al pago/ })).toBeEnabled();
+  expect(llamadas).toBe(1);
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await sinFallos(page, compra, "tras el plazo del pago");
+});
+
 test("volver de Stripe cuando el pago ya estaba hecho: a la confirmación", async ({ page }) => {
   const compra = await prepararCompra(page, { cancelStatus: "already_paid" });
   await page.goto(`/#/e/${EVENTO}?order_id=${T.pedidoPagado}`);

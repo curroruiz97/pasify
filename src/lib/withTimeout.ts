@@ -19,6 +19,34 @@ export class TimeoutError extends Error {
   }
 }
 
+/**
+ * `fetch` con tiempo máximo que lee el cuerpo como texto dentro del mismo
+ * plazo. Si vence, aborta la petición y rechaza con `TimeoutError`; sin esto,
+ * un servidor que no contesta dejaba el botón de pago girando hasta recargar
+ * (`withTimeout` a secas no cancela la red).
+ */
+export async function fetchTextConTiempo(
+  url: string,
+  init: RequestInit,
+  ms: number,
+  label = "fetch",
+): Promise<{ resp: Response; raw: string }> {
+  const controller = new AbortController();
+  try {
+    return await withTimeout(
+      (async () => {
+        const resp = await fetch(url, { ...init, signal: controller.signal });
+        return { resp, raw: await resp.text() };
+      })(),
+      ms,
+      label,
+    );
+  } catch (e) {
+    controller.abort();
+    throw e;
+  }
+}
+
 // PromiseLike: las consultas de Supabase son thenables, no Promise.
 export function withTimeout<T>(promise: PromiseLike<T>, ms: number, label = "operation"): Promise<T> {
   return new Promise<T>((resolve, reject) => {
