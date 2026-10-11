@@ -849,7 +849,7 @@ BEGIN
       ('public.cancel_ticket_transfer(uuid)', 'authenticated', TRUE),
       ('public.accept_ticket_transfer(uuid)', 'anon', FALSE),
       ('public.redeem_referral_code(text)', 'anon', FALSE),
-      ('public.scan_ticket(uuid,text,uuid,boolean,text)', 'anon', FALSE)
+      ('public.scan_ticket(uuid,text,uuid,boolean,text,uuid)', 'anon', FALSE)
     ) AS p(fn, rol, esperado)
   LOOP
     IF has_function_privilege(v_row.rol, v_row.fn, 'execute') IS DISTINCT FROM v_row.esperado THEN

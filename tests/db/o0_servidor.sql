@@ -3,6 +3,8 @@
 -- Datos sintéticos y ROLLBACK; un fallo lanza RAISE EXCEPTION 'FAIL …'.
 --
 -- Necesita las migraciones 20260925110000, 20260925110100 y 20260925110200.
+-- La firma de scan_ticket que comprueba es la de 20260929130000 (con
+-- _request_id): hace falta una base que ya la tenga aplicada.
 -- Para probarlas sin aplicarlas, todo en una transacción que acaba en ROLLBACK
 -- (el BEGIN de este fichero avisa de que ya hay una abierta y su ROLLBACK
 -- deshace también las migraciones):
@@ -352,7 +354,7 @@ BEGIN
     -- Y la rama entera con un valor ya confirmado en el literal (solo en
     -- esta transacción): el local tiene permiso, así que 'forbidden' solo
     -- puede salir de ahí.
-    EXECUTE replace(pg_get_functiondef('public.scan_ticket(uuid,text,uuid,boolean,text)'::regprocedure),
+    EXECUTE replace(pg_get_functiondef('public.scan_ticket(uuid,text,uuid,boolean,text,uuid)'::regprocedure),
                     '''test_payment''', '''forbidden''');
     v_expected := 'forbidden';
   END IF;
@@ -623,8 +625,8 @@ BEGIN
       ('public.create_ticket_order(uuid,uuid,integer,uuid,text,text,text,text,numeric,integer)', 'anon', FALSE),
       ('public.create_ticket_order(uuid,uuid,integer,uuid,text,text,text,text,numeric,integer)', 'authenticated', FALSE),
       ('public.create_ticket_order(uuid,uuid,integer,uuid,text,text,text,text,numeric,integer)', 'service_role', TRUE),
-      ('public.scan_ticket(uuid,text,uuid,boolean,text)', 'anon', FALSE),
-      ('public.scan_ticket(uuid,text,uuid,boolean,text)', 'authenticated', TRUE),
+      ('public.scan_ticket(uuid,text,uuid,boolean,text,uuid)', 'anon', FALSE),
+      ('public.scan_ticket(uuid,text,uuid,boolean,text,uuid)', 'authenticated', TRUE),
       ('public.audit_changes()', 'anon', FALSE),
       ('public.audit_changes()', 'authenticated', FALSE)
     ) AS t(fn, rol, esperado)
