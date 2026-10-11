@@ -24,6 +24,11 @@ interface EdgeOptions {
   body?: Record<string, unknown>;
   /** Parámetros de la URL (para GET). */
   query?: Record<string, string>;
+  /**
+   * Tiempo máximo de la petición. Al vencer se aborta y sale como `httpStatus` 0
+   * (`network_error`), reintentable. Sin él, no hay límite (como hasta ahora).
+   */
+  timeoutMs?: number;
 }
 
 /** El `context` de FunctionsHttpError / FunctionsRelayError es la Response. */
@@ -42,6 +47,7 @@ export async function invokeEdge<T>(name: string, options: EdgeOptions = {}): Pr
     result = await supabase.functions.invoke(`${name}${qs}`, {
       method: options.method ?? "POST",
       ...(options.body ? { body: options.body } : {}),
+      ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
     });
   } catch {
     return { ok: false, data: null, httpStatus: 0, code: "network_error", message: null };

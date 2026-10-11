@@ -314,6 +314,12 @@ Deno.serve(async (req) => {
     // En producción con una clave de Stripe que no es live no se reserva
     // nada: 503 payments_unavailable (ver _shared/stripe.ts).
     assertLivePayments();
+    // Sin clave de Stripe tampoco se reserva nada: antes se reservaban las
+    // plazas y `requireStripe()` lanzaba después un Error genérico (500), con el
+    // pedido pendiente hasta que caducara. Mismo 503 que assertLivePayments.
+    if (!stripeClient) {
+      throw new HttpError(503, "payments_unavailable", "Los pagos no están disponibles en este momento.");
+    }
 
     if (!isAllowedReturnUrl(body.success_url) || !isAllowedReturnUrl(body.cancel_url)) {
       log.warn("return_url_rejected", {
@@ -412,7 +418,9 @@ Deno.serve(async (req) => {
         },
         ...(destination
           ? {
-              application_fee_amount: order.fee_cents,
+              // Con comisión 0 (porcentaje bajo o importe pequeño tras el floor)
+              // se omite: no se manda un application_fee_amount de 0.
+              ...(order.fee_cents > 0 ? { application_fee_amount: order.fee_cents } : {}),
               transfer_data: { destination },
               on_behalf_of: destination,
             }
