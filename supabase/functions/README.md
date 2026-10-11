@@ -49,7 +49,7 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 | `partner-stripe-refresh-account` | sesión | Sincroniza el estado de la cuenta de Connect en `organizations`. Sin llamador en el repo |
 | `partner-stripe-create-portal-link` | sesión | Enlace al portal de Stripe del local. Sin llamador en el repo |
 | `send-team-invitation` | sesión | Email de invitación a un miembro de la organización. Sin llamador en el repo |
-| `accept-team-invitation` | token de la invitación | Acepta una invitación de equipo. Sin llamador en el repo (el email de `send-team-invitation` enlaza a `/#/accept-invitation`, ruta que la app no tiene) |
+| `accept-team-invitation` | token de la invitación + sesión para aceptar | Sin sesión describe una invitación pendiente y vigente (límite por IP); con sesión la acepta si la cuenta es la invitada y tiene el email confirmado. Sin llamador en el repo (el email de `send-team-invitation` enlaza a `/#/accept-invitation`, ruta que la app no tiene) |
 | `ai-forecast-event` | sesión (miembro del local) o admin | Previsión de venta con la media de eventos comparables del local (estadística, no IA). `PartnerForecast.tsx` |
 | `ai-pricing-propose` | servicio o admin | Propuestas de precio por velocidad de venta en `pricing_proposals`. `PartnerDynamicPricing.tsx` (los locales reciben 403) |
 

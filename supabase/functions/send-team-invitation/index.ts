@@ -47,7 +47,9 @@ Deno.serve(async (req) => {
     await sendEmail({
       to: member.email,
       ...email,
-      idempotencyKey: `invite-${member.id}`,
+      // La clave lleva el token del enlace: al reenviar, invite_member lo regenera y, con una
+      // clave fija, Resend deduplicaba por ella y no mandaba el email nuevo.
+      idempotencyKey: `invite-${member.id}-${member.invitation_token}`,
       tags: [{ name: "kind", value: "team_invitation" }],
     });
 
