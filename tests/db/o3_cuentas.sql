@@ -1,9 +1,11 @@
 -- Pasify · Ola 3, cuentas: de cliente a local (B3-01 / B4-07) y alta de local
--- con confirmación de email (B3-16). Migración 20260928140000_o3_cuentas.
+-- con confirmación de email (B3-16). Migración 20260928140000_o3_cuentas. Los
+-- casos del plan gratuito (en pausa, organización cerrada) son de la migración
+-- 20260929140000 (WP9 · 9b).
 -- Datos sintéticos y ROLLBACK; un fallo lanza RAISE EXCEPTION 'FAIL …'.
 --
 -- Local (con las migraciones posteriores a 20260925110000 en la misma
--- transacción, la 20260928140000 incluida):
+-- transacción, la 20260929140000 incluida):
 --   $env:PGPASSWORD='postgres'; $m = Get-ChildItem supabase\migrations\*.sql | ? { $_.Name -gt '20260925110000' } | Sort-Object Name; $a=@('-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1','-q','-c','BEGIN;'); foreach($f in $m){$a+=@('-f',$f.FullName)}; $a+=@('-f','tests\db\o3_cuentas.sql','-c','ROLLBACK;'); & psql @a
 
 BEGIN;
@@ -162,7 +164,11 @@ BEGIN
   IF v_org2 IS DISTINCT FROM v_org OR v_count <> 1 THEN
     RAISE EXCEPTION 'FAIL complete_partner_signup duplicó la organización (% organizaciones)', v_count;
   END IF;
-  -- Con el plan cancelado lo reactiva, como claim_partner_free_plan.
+  -- Con el plan cancelado, en una organización activa, lo reactiva (como
+  -- claim_partner_free_plan) y dice lo que hay: plan gratuito, activo.
+  IF NOT EXISTS (SELECT 1 FROM public.organizations WHERE id = v_org AND status = 'active') THEN
+    RAISE EXCEPTION 'FAIL preparación: la organización del alta no está activa';
+  END IF;
   UPDATE public.partner_subscriptions SET status = 'cancelled' WHERE org_id = v_org;
   PERFORM pg_temp.como(v_alta);
   SET LOCAL ROLE authenticated;
@@ -170,6 +176,105 @@ BEGIN
   RESET ROLE;
   IF NOT EXISTS (SELECT 1 FROM public.partner_subscriptions WHERE org_id = v_org AND status = 'active') THEN
     RAISE EXCEPTION 'FAIL complete_partner_signup no reactivó el plan';
+  END IF;
+  UPDATE public.partner_subscriptions SET status = 'past_due' WHERE org_id = v_org;
+  PERFORM pg_temp.como(v_alta);
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_rec FROM public.claim_partner_free_plan();
+  RESET ROLE;
+  IF v_rec.out_org_id IS DISTINCT FROM v_org OR v_rec.out_plan_code IS DISTINCT FROM 'free' OR v_rec.out_status IS DISTINCT FROM 'active'
+     OR NOT EXISTS (SELECT 1 FROM public.partner_subscriptions
+                     WHERE id = v_rec.out_subscription_id AND org_id = v_org AND status = 'active' AND plan_code = 'free') THEN
+    RAISE EXCEPTION 'FAIL claim_partner_free_plan con el plan vencido: % / % / % / %',
+      v_rec.out_subscription_id, v_rec.out_org_id, v_rec.out_plan_code, v_rec.out_status;
+  END IF;
+
+  -- Un plan en pausa lo decide Pasify: ni complete_partner_signup ni
+  -- claim_partner_free_plan lo pisan (la fila queda exactamente igual), no
+  -- fallan, y lo que contestan es el estado de verdad, no «activo».
+  UPDATE public.partner_subscriptions SET status = 'paused', paused_at = now() WHERE org_id = v_org;
+  SELECT to_jsonb(ps) INTO v_json FROM public.partner_subscriptions ps WHERE ps.org_id = v_org;
+  PERFORM pg_temp.como(v_alta);
+  SET LOCAL ROLE authenticated;
+  v_org2 := public.complete_partner_signup();
+  SELECT * INTO v_rec FROM public.claim_partner_free_plan();
+  RESET ROLE;
+  IF v_org2 IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'FAIL complete_partner_signup con el plan en pausa devolvió otra organización: %', v_org2;
+  END IF;
+  IF (SELECT to_jsonb(ps) FROM public.partner_subscriptions ps WHERE ps.org_id = v_org) IS DISTINCT FROM v_json THEN
+    RAISE EXCEPTION 'FAIL se pisó un plan en pausa: % -> %', v_json, (SELECT to_jsonb(ps) FROM public.partner_subscriptions ps WHERE ps.org_id = v_org);
+  END IF;
+  IF v_rec.out_subscription_id IS DISTINCT FROM (v_json->>'id')::UUID OR v_rec.out_org_id IS DISTINCT FROM v_org
+     OR v_rec.out_status IS DISTINCT FROM 'paused' THEN
+    RAISE EXCEPTION 'FAIL claim_partner_free_plan con el plan en pausa contestó % / % / % / %',
+      v_rec.out_subscription_id, v_rec.out_org_id, v_rec.out_plan_code, v_rec.out_status;
+  END IF;
+  -- start_partner_trial (versiones antiguas de la app) delega en ella y sigue devolviendo la fila.
+  PERFORM pg_temp.como(v_alta);
+  SET LOCAL ROLE authenticated;
+  SELECT status INTO v_text FROM public.start_partner_trial();
+  RESET ROLE;
+  IF v_text IS DISTINCT FROM 'paused' THEN RAISE EXCEPTION 'FAIL start_partner_trial con el plan en pausa: %', v_text; END IF;
+
+  -- Organización cerrada (partner_close_account, admin_close_partner_account):
+  -- no se «activa» un plan que no sirve. 55000 org_closed por las dos vías y la
+  -- suscripción no cambia.
+  UPDATE public.partner_subscriptions SET status = 'cancelled' WHERE org_id = v_org;
+  UPDATE public.organizations SET status = 'closed' WHERE id = v_org;
+  SELECT to_jsonb(ps) INTO v_json FROM public.partner_subscriptions ps WHERE ps.org_id = v_org;
+  FOR v_rec IN SELECT * FROM (VALUES ('complete_partner_signup'), ('claim_partner_free_plan'), ('start_partner_trial')) AS t(fn) LOOP
+    v_state := NULL;
+    v_text := NULL;
+    PERFORM pg_temp.como(v_alta);
+    SET LOCAL ROLE authenticated;
+    BEGIN
+      IF v_rec.fn = 'complete_partner_signup' THEN
+        PERFORM public.complete_partner_signup();
+      ELSIF v_rec.fn = 'claim_partner_free_plan' THEN
+        PERFORM public.claim_partner_free_plan();
+      ELSE
+        PERFORM public.start_partner_trial();
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      v_state := SQLSTATE;
+      v_text := SQLERRM;
+    END;
+    RESET ROLE;
+    IF v_state IS DISTINCT FROM '55000' OR v_text IS DISTINCT FROM 'org_closed' THEN
+      RAISE EXCEPTION 'FAIL % con la organización cerrada: % / %', v_rec.fn, v_state, v_text;
+    END IF;
+  END LOOP;
+  IF (SELECT to_jsonb(ps) FROM public.partner_subscriptions ps WHERE ps.org_id = v_org) IS DISTINCT FROM v_json THEN
+    RAISE EXCEPTION 'FAIL se tocó el plan de una organización cerrada';
+  END IF;
+  -- Un miembro owner/admin activo de una organización cerrada tampoco la reactiva.
+  INSERT INTO public.organization_members (org_id, user_id, email, role, status)
+  VALUES (v_org, v_admin, 'o3-miembro@pasify.test', 'admin', 'active');
+  v_state := NULL;
+  v_text := NULL;
+  PERFORM pg_temp.como(v_admin);
+  SET LOCAL ROLE authenticated;
+  BEGIN
+    PERFORM public.claim_partner_free_plan();
+  EXCEPTION WHEN OTHERS THEN
+    v_state := SQLSTATE;
+    v_text := SQLERRM;
+  END;
+  RESET ROLE;
+  -- (v_admin es admin de plataforma y cliente: puede llamarla; sin organización propia, la de la que es miembro)
+  IF v_state IS DISTINCT FROM '55000' OR v_text IS DISTINCT FROM 'org_closed' THEN
+    RAISE EXCEPTION 'FAIL un admin miembro de una organización cerrada la reactivó: % / %', v_state, v_text;
+  END IF;
+  DELETE FROM public.organization_members WHERE org_id = v_org AND user_id = v_admin;
+  -- Reabierta (la ha reabierto Pasify), vuelve a funcionar como antes.
+  UPDATE public.organizations SET status = 'active' WHERE id = v_org;
+  PERFORM pg_temp.como(v_alta);
+  SET LOCAL ROLE authenticated;
+  PERFORM public.complete_partner_signup();
+  RESET ROLE;
+  IF NOT EXISTS (SELECT 1 FROM public.partner_subscriptions WHERE org_id = v_org AND status = 'active' AND plan_code = 'free') THEN
+    RAISE EXCEPTION 'FAIL la organización reabierta no recuperó el plan gratuito';
   END IF;
 
   -- Un local sin datos de negocio: organización con el nombre del email.
@@ -392,7 +497,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  RAISE NOTICE 'PASS o3_cuentas: datos del alta en el perfil (con y sin confirmar), organización y plan del local tras entrar, y paso de cliente a local (elegible, antigua, con compras, desactivada y con otro rol)';
+  RAISE NOTICE 'PASS o3_cuentas: datos del alta en el perfil (con y sin confirmar), organización y plan del local tras entrar (reactiva un plan cancelado o vencido, no pisa uno en pausa y da org_closed con la organización cerrada), y paso de cliente a local (elegible, antigua, con compras, desactivada y con otro rol)';
 END $$;
 
 ROLLBACK;

@@ -29,6 +29,14 @@ export const llamarRpc = (nombre: string, args?: Record<string, unknown>): Promi
 export const esFuncionQueNoExiste = (error: { code?: string; message?: string } | null | undefined): boolean =>
   !!error && (error.code === "PGRST202" || /could not find the function/i.test(error.message ?? ""));
 
+/**
+ * La organización del local está cerrada: claim_partner_free_plan (y con ella
+ * complete_partner_signup) contesta `org_closed` con el SQLSTATE 55000. No es
+ * un fallo que se arregle reintentando.
+ */
+export const esOrganizacionCerrada = (error: { code?: string; message?: string } | null | undefined): boolean =>
+  !!error && (error.code === "55000" || /\borg_closed\b/.test(error.message ?? ""));
+
 const texto = (valor: string | null | undefined): string | undefined => {
   const limpio = (valor ?? "").trim();
   return limpio ? limpio : undefined;

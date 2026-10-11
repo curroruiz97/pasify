@@ -6,11 +6,12 @@ import { withTimeout } from "@/lib/withTimeout";
 import { captureError, getErrorMessage } from "@/lib/sentry";
 import LoaderOne from "@/components/ui/loader-one";
 import AuthErrorScreen from "@/components/auth/AuthErrorScreen";
-import { prepararCuentaDeLocal } from "@/components/auth/alta";
+import { SUPPORT_EMAIL } from "@/components/auth/authErrors";
+import { esOrganizacionCerrada, prepararCuentaDeLocal } from "@/components/auth/alta";
 
 const CLAIM_TIMEOUT_MS = 10_000;
 
-type EstadoReclamo = "pendiente" | "reclamando" | "hecho" | "fallido";
+type EstadoReclamo = "pendiente" | "reclamando" | "hecho" | "fallido" | "cerrada";
 
 /**
  * Pasify · PartnerGate.
@@ -29,6 +30,11 @@ type EstadoReclamo = "pendiente" | "reclamando" | "hecho" | "fallido";
  *     del negocio del alta, y el plan; idempotente) y continúa. Es lo que
  *     termina un alta de local hecha con «Confirm email», que no tuvo sesión
  *     para crearlos. Solo si falla → pantalla de error con "Reintentar".
+ *   - plan en pausa (`paused`) → NO se llama: lo decide Pasify y el servidor
+ *     tampoco lo pisa. Pantalla para escribir a soporte (y volver a comprobar).
+ *   - organización cerrada (el servidor contesta 55000 `org_closed`) → pantalla
+ *     «cuenta cerrada» para escribir a soporte, sin "Reintentar": no se arregla
+ *     reintentando.
  *   - no se pudo comprobar (red, timeout) → "Reintentar". Un fallo de red
  *     NO es "sin plan": nunca dispara el claim.
  *   - NUNCA redirige a /partner/choose-plan ni muestra precios.
@@ -39,7 +45,7 @@ type EstadoReclamo = "pendiente" | "reclamando" | "hecho" | "fallido";
  */
 export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
-  const { loading, error, hasAccess, orgId, refetch } = usePartnerSubscription();
+  const { loading, error, hasAccess, orgId, status, refetch } = usePartnerSubscription();
 
   const [concedido, setConcedido] = useState(false);
   const [reclamo, setReclamo] = useState<{ estado: EstadoReclamo; error: string | null }>({
@@ -50,6 +56,8 @@ export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
 
   const accesoAhora = !loading && !error && hasAccess;
   const sinAcceso = !loading && !error && !hasAccess;
+  // Un plan en pausa no se reactiva solo (claim_partner_free_plan tampoco lo pisa).
+  const enPausa = sinAcceso && status === "paused";
 
   useEffect(() => {
     if (accesoAhora) setConcedido(true);
@@ -67,18 +75,24 @@ export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
       await refetch();
       setReclamo({ estado: "hecho", error: null });
     } catch (err) {
+      if (esOrganizacionCerrada(err as { code?: string; message?: string })) {
+        // Un estado de la cuenta, no un fallo: no va a Sentry ni se puede reintentar.
+        setReclamo({ estado: "cerrada", error: null });
+        return;
+      }
       console.error("[PartnerGate] complete_partner_signup:", err);
       captureError(err, { where: "PartnerGate.complete_partner_signup", orgId });
       setReclamo({ estado: "fallido", error: getErrorMessage(err) });
     }
   }, [refetch, orgId]);
 
-  // Sin acceso y sin error → activamos el plan gratuito automáticamente, UNA vez.
+  // Sin acceso y sin error → activamos el plan gratuito automáticamente, UNA vez
+  // (salvo un plan en pausa).
   useEffect(() => {
-    if (!sinAcceso || concedido || autoReclamoHechoRef.current) return;
+    if (!sinAcceso || enPausa || concedido || autoReclamoHechoRef.current) return;
     autoReclamoHechoRef.current = true;
     void reclamarPlanGratuito();
-  }, [sinAcceso, concedido, reclamarPlanGratuito]);
+  }, [sinAcceso, enPausa, concedido, reclamarPlanGratuito]);
 
   const cerrarSesion = useCallback(async () => {
     await signOutLocal();
@@ -91,6 +105,29 @@ export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
 
   if (reclamo.estado === "reclamando") {
     return <LoaderOne />;
+  }
+
+  if (reclamo.estado === "cerrada") {
+    return (
+      <AuthErrorScreen
+        title="Esta cuenta de local está cerrada"
+        description="La cuenta de este local está cerrada y no se puede usar. Si crees que es un error, escríbenos y lo revisamos."
+        contactEmail={SUPPORT_EMAIL}
+        onSignOut={cerrarSesion}
+      />
+    );
+  }
+
+  if (enPausa) {
+    return (
+      <AuthErrorScreen
+        title="Tu plan está en pausa"
+        description="De momento no puedes entrar al panel de tu local porque su plan está en pausa. Escríbenos y lo revisamos."
+        contactEmail={SUPPORT_EMAIL}
+        onRetry={refetch}
+        onSignOut={cerrarSesion}
+      />
+    );
   }
 
   if (reclamo.estado === "fallido") {
@@ -122,11 +159,13 @@ export const PartnerGate = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (reclamo.estado === "hecho") {
-    // El claim respondió bien pero la suscripción sigue sin dar acceso.
+    // La llamada respondió bien pero la suscripción sigue sin dar acceso: el
+    // servidor no dice que el plan esté activo, así que tampoco lo decimos aquí.
     return (
       <AuthErrorScreen
         title="No pudimos preparar tu cuenta de local"
-        description="Tu plan gratuito se ha activado, pero no hemos podido confirmarlo. Vuelve a intentarlo en unos segundos."
+        description="No hemos podido confirmar tu plan gratuito. Vuelve a intentarlo en unos segundos; si sigue igual, escríbenos a soporte."
+        contactEmail={SUPPORT_EMAIL}
         onRetry={reclamarPlanGratuito}
         onSignOut={cerrarSesion}
       />
