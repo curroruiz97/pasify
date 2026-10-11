@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { haptic } from "@/lib/haptics";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
+import { createRequestIdGate, newRequestId } from "@/lib/scanRequest";
 import { appPlatform } from "@/lib/platform";
 import { eventPhase, isWithinDoorWindow, listEventChoices, pickActiveEvent } from "@/lib/pickActiveEvent";
 import { Button } from "@/components/ui/button";
@@ -64,9 +65,15 @@ import {
  *     scanner.pause() no vale para esto: suelta el stream a los 300 ms y cada
  *     lectura obligaba a reabrir la cámara. destroy() al apagar la cámara o
  *     salir: no queda ninguna cámara encendida.
- *   - Timeout de 5 s en la RPC: sin respuesta o sin red, pantalla roja "Sin
+ *   - Timeout de 8 s en la RPC: sin respuesta o sin red, pantalla roja "Sin
  *     conexión: no se ha validado. Reintenta" (reintenta el mismo código),
  *     nunca un verde. Sin red, además, aviso fijo arriba.
+ *   - Cada lectura envía un `_request_id` (UUID nuevo, de lib/scanRequest) y
+ *     "Reintentar" reenvía el MISMO: si la RPC llegó a ejecutarse pero la
+ *     respuesta no volvió, el servidor contesta otra vez con el éxito en vez de
+ *     "Entrada ya usada". Una lectura nueva, aunque sea del mismo QR, lleva
+ *     otro: es otro invitado. Con una BD que aún no tiene el parámetro se repite
+ *     la lectura sin él (el comportamiento de antes).
  *   - Con la cámara abierta la pantalla no se apaga (Screen Wake Lock, si el
  *     navegador lo tiene) y, si la cámara tiene linterna, botón "Linterna".
  *   - Permiso de cámara: en la app se pide con @capacitor/camera y, si está
@@ -75,7 +82,7 @@ import {
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-const SCAN_TIMEOUT_MS = 5_000;
+const SCAN_TIMEOUT_MS = 8_000;
 const OK_AUTO_CLOSE_MS = 1_500;
 /** "Código no válido" no deja nada que decidir: también se cierra solo. */
 const INVALID_AUTO_CLOSE_MS = 2_000;
@@ -147,14 +154,16 @@ interface ScanArgs {
   _event_id?: string;
   _force?: boolean;
   _force_reason?: string;
+  _request_id?: string;
 }
 
 type ForceRequest = { reason: string };
 
+// `requestId`: el de la lectura, para que "Reintentar" reenvíe el mismo.
 type Outcome =
   | { kind: "ticket"; row: ScanRow; token: string; forceAttempted: boolean }
-  | { kind: "offline"; token: string; force?: ForceRequest }
-  | { kind: "error"; token: string; message: string; force?: ForceRequest }
+  | { kind: "offline"; token: string; requestId: string; force?: ForceRequest }
+  | { kind: "error"; token: string; requestId: string; message: string; force?: ForceRequest }
   | { kind: "not_pasify" };
 
 type CameraState = "idle" | "starting" | "live" | "denied" | "error";
@@ -165,13 +174,14 @@ interface ScanByCodeArgs {
   _device_info: string | null;
   _force?: boolean;
   _force_reason?: string;
+  _request_id?: string;
 }
 
 type ScanRpc = {
   rpc: (
     name: "scan_ticket" | "scan_ticket_by_code",
     args: ScanArgs | ScanByCodeArgs
-  ) => PromiseLike<{ data: ScanRow[] | ScanRow | null; error: { message: string } | null }>;
+  ) => PromiseLike<{ data: ScanRow[] | ScanRow | null; error: { message: string; code?: string } | null }>;
 };
 
 // Cast hasta que se regeneren los types con la firma v2 de scan_ticket.
@@ -179,6 +189,10 @@ const scanTicketRpc = (args: ScanArgs) =>
   (supabase as unknown as ScanRpc).rpc("scan_ticket", args);
 const scanTicketByCodeRpc = (args: ScanByCodeArgs) =>
   (supabase as unknown as ScanRpc).rpc("scan_ticket_by_code", args);
+
+// Qué servidor admite `_request_id`: en memoria y común a todas las lecturas
+// (no se guarda: recargar la app lo vuelve a probar).
+const requestIdGate = createRequestIdGate();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TICKET_URL_RE = /\/t\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
@@ -667,7 +681,15 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
   // `token` es el qr_token leído o, si se tecleó el código corto, "code:<hex>".
   // `eventIdOverride`: el evento recién elegido con "Cambiar a ese evento"
   // (el estado aún no se ha actualizado en esta pasada).
-  const runScan = async (token: string, force?: ForceRequest, eventIdOverride?: string) => {
+  // `requestId`: solo "Reintentar" lo pasa, el de la lectura que reintenta. En
+  // cualquier otra llamada (lectura de la cámara, código tecleado, dar entrada
+  // igualmente, cambiar de evento) es una decisión nueva y lleva un UUID nuevo.
+  const runScan = async (
+    token: string,
+    force?: ForceRequest,
+    eventIdOverride?: string,
+    requestId: string = newRequestId()
+  ) => {
     const eventId = eventIdOverride ?? selectedEventId;
     const byCode = token.startsWith(CODE_PREFIX);
     // A scan_ticket solo llega un UUID: cualquier otra cosa ni sale del móvil.
@@ -676,26 +698,40 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
       return;
     }
     if (byCode && !eventId) {
-      presentOutcome({ kind: "error", token, message: "Elige arriba el evento para validar por código.", force });
+      presentOutcome({
+        kind: "error",
+        token,
+        requestId,
+        message: "Elige arriba el evento para validar por código.",
+        force,
+      });
       return;
     }
     setValidating(true);
-    const request = byCode
-      ? scanTicketByCodeRpc({
-          _code: token.slice(CODE_PREFIX.length),
-          _event_id: eventId as string,
-          _device_info: deviceInfo(),
-          ...(force ? { _force: true, _force_reason: force.reason } : {}),
-        })
-      : scanTicketRpc({
-          _qr_token: token,
-          _device_info: deviceInfo(),
-          ...(eventId ? { _event_id: eventId } : {}),
-          ...(force ? { _force: true, _force_reason: force.reason } : {}),
-        });
+    // `id` es el `_request_id`; sin él (BD sin el parámetro) es la misma lectura de siempre.
+    const send = byCode
+      ? (id?: string) =>
+          scanTicketByCodeRpc({
+            _code: token.slice(CODE_PREFIX.length),
+            _event_id: eventId as string,
+            _device_info: deviceInfo(),
+            ...(force ? { _force: true, _force_reason: force.reason } : {}),
+            ...(id ? { _request_id: id } : {}),
+          })
+      : (id?: string) =>
+          scanTicketRpc({
+            _qr_token: token,
+            _device_info: deviceInfo(),
+            ...(eventId ? { _event_id: eventId } : {}),
+            ...(force ? { _force: true, _force_reason: force.reason } : {}),
+            ...(id ? { _request_id: id } : {}),
+          });
+    // Mismo plazo para todo: si la BD no conoce `_request_id`, la repetición
+    // sin él cabe en los mismos segundos y no se lanza ya vencido el plazo.
+    const request = requestIdGate.send(send, requestId, Date.now() + SCAN_TIMEOUT_MS);
     try {
       const { data, error } = await withTimeout(
-        Promise.resolve(request),
+        request,
         SCAN_TIMEOUT_MS,
         byCode ? "scan_ticket_by_code" : "scan_ticket"
       );
@@ -703,14 +739,14 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
       if (error) {
         presentOutcome(
           looksOffline(error.message)
-            ? { kind: "offline", token, force }
-            : { kind: "error", token, message: error.message, force }
+            ? { kind: "offline", token, requestId, force }
+            : { kind: "error", token, requestId, message: error.message, force }
         );
         return;
       }
       const row = (Array.isArray(data) ? data[0] : data) ?? null;
       if (!row) {
-        presentOutcome({ kind: "error", token, message: "El servidor no ha devuelto resultado.", force });
+        presentOutcome({ kind: "error", token, requestId, message: "El servidor no ha devuelto resultado.", force });
         return;
       }
       if (isAdmitted(row)) setSessionOk((n) => n + 1);
@@ -721,8 +757,8 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
       const message = err instanceof Error ? err.message : String(err);
       presentOutcome(
         err instanceof TimeoutError || looksOffline(message)
-          ? { kind: "offline", token, force }
-          : { kind: "error", token, message, force }
+          ? { kind: "offline", token, requestId, force }
+          : { kind: "error", token, requestId, message, force }
       );
     } finally {
       if (mountedRef.current) setValidating(false);
@@ -802,7 +838,8 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
   const retry = () => {
     if (!outcome || validating) return;
     if (outcome.kind === "offline" || outcome.kind === "error") {
-      void runScan(outcome.token, outcome.force);
+      // La misma lectura: el mismo `_request_id`.
+      void runScan(outcome.token, outcome.force, undefined, outcome.requestId);
     }
   };
 
