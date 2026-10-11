@@ -79,7 +79,6 @@ const LoaderOne = ({ compact = false }: { compact?: boolean }) => {
             display: "block",
             border: 0,
             outline: 0,
-            WebkitUserDrag: "none" as unknown as string,
             userSelect: "none",
             WebkitUserSelect: "none",
           }}
