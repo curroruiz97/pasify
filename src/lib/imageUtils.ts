@@ -133,7 +133,12 @@ const imageCache = new Set<string>();
 
 /**
  * Comprimi un'immagine prima dell'upload
- * Ridimensiona e converte in JPEG per ridurre dimensioni
+ * Ridimensiona e converte in JPEG per ridurre dimensioni.
+ *
+ * `outputType` cambia el formato de salida (JPEG por defecto, con fondo
+ * blanco). Con "image/png" o "image/webp" se conserva la transparencia. Un
+ * navegador que no sabe codificar WebP (Safari antiguo) devuelve PNG: el
+ * formato real es `blob.type`, no el pedido.
  */
 export const compressImage = (
   file: File,
@@ -141,9 +146,10 @@ export const compressImage = (
     maxWidth?: number;
     maxHeight?: number;
     quality?: number;
+    outputType?: "image/jpeg" | "image/png" | "image/webp";
   } = {}
 ): Promise<Blob> => {
-  const { maxWidth = 800, maxHeight = 800, quality = 0.8 } = options;
+  const { maxWidth = 800, maxHeight = 800, quality = 0.8, outputType = "image/jpeg" } = options;
 
   return new Promise((resolve, reject) => {
     // Se non è un'immagine, ritorna il file originale
@@ -170,9 +176,11 @@ export const compressImage = (
       canvas.height = height;
 
       if (ctx) {
-        // Sfondo bianco per trasparenza PNG
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
+        if (outputType === 'image/jpeg') {
+          // Sfondo bianco per trasparenza PNG (il JPEG non ha canale alfa)
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+        }
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob(
@@ -183,7 +191,7 @@ export const compressImage = (
               reject(new Error('Failed to compress image'));
             }
           },
-          'image/jpeg',
+          outputType,
           quality
         );
       } else {

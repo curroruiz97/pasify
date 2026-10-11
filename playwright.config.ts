@@ -87,6 +87,7 @@ export default defineConfig({
     "**/editor-validaciones.spec.ts",
     "**/cuentas.spec.ts",
     "**/client-shell.spec.ts",
+    "**/editor-borrador.spec.ts",
     "**/checkout-back.spec.ts",
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",

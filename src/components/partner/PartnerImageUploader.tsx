@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ImagePlus, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { compressImage } from "@/lib/imageUtils";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,7 +16,14 @@ import { cn } from "@/lib/utils";
  * - Muestra preview inmediato (URL local + reemplazo cuando termina la
  *   subida). Soporta drag-and-drop.
  * - Variantes: "logo" (1:1 redondeado) y "cover" (16:9 ancho).
- * - Tamaño máximo 5MB por defecto; rechaza con toast claro.
+ * - Solo JPG, PNG y WebP (los demás se rechazan con un mensaje claro: un GIF
+ *   o una foto HEIC no se ven igual en todas partes). Antes de subirla se
+ *   reduce (logo hasta 512 px, portada hasta 1600×900) y se recomprime con
+ *   `compressImage`: una foto del móvil pasa de varios MB a unos cientos de
+ *   KB. Un PNG o un WebP siguen siéndolo, para que el logo sin fondo no se
+ *   quede con uno blanco.
+ * - Tamaño máximo 5MB por defecto (del archivo elegido, antes de reducirlo);
+ *   rechaza con toast claro.
  *
  * Si `orgId` es null (caso: partner aún sin org creada al inicio del
  * wizard), el botón queda deshabilitado y guía al usuario.
@@ -42,6 +50,30 @@ const mono: React.CSSProperties = {
 };
 
 const randId = () => Math.random().toString(36).slice(2, 8);
+
+/** Formatos que se admiten (y los que ofrece el selector de archivos; el GIF ya no). */
+const TIPOS_ADMITIDOS = ["image/jpeg", "image/png", "image/webp"] as const;
+type TipoAdmitido = (typeof TIPOS_ADMITIDOS)[number];
+const ACCEPT = TIPOS_ADMITIDOS.join(",");
+
+const esTipoAdmitido = (tipo: string): tipo is TipoAdmitido => (TIPOS_ADMITIDOS as readonly string[]).includes(tipo);
+
+const EXTENSION: Record<TipoAdmitido, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/** Lado mayor tras reducirla: el logo se pinta a unos 180 px y la portada a menos de 1.000 px de ancho. */
+const LADO_MAXIMO = { logo: { ancho: 512, alto: 512 }, cover: { ancho: 1600, alto: 900 } } as const;
+
+/** Por qué no se admite un archivo, según lo que sea. */
+const motivoNoAdmitido = (file: File): string => {
+  const nombre = file.name.toLowerCase();
+  if (/heic|heif/.test(file.type) || /\.(heic|heif)$/.test(nombre)) {
+    return "Las fotos en formato HEIC no se admiten. Sube una imagen JPG, PNG o WebP.";
+  }
+  if (file.type === "image/gif" || nombre.endsWith(".gif")) {
+    return "Los GIF no se admiten. Sube una imagen JPG, PNG o WebP.";
+  }
+  return "Sube una imagen JPG, PNG o WebP.";
+};
 
 export const PartnerImageUploader = ({
   orgId,
@@ -75,10 +107,10 @@ export const PartnerImageUploader = ({
       }
 
       // Validación: tipo + tamaño
-      if (!file.type.startsWith("image/")) {
+      if (!esTipoAdmitido(file.type)) {
         toast({
           title: "Formato no válido",
-          description: "Sube una imagen (JPG, PNG, WebP o GIF).",
+          description: motivoNoAdmitido(file),
           variant: "destructive",
         });
         return;
@@ -100,14 +132,29 @@ export const PartnerImageUploader = ({
 
       setUploading(true);
       try {
-        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-        const path = `${orgId}/${kind}/${Date.now()}-${randId()}.${ext}`;
+        // Se reduce y se recomprime en el mismo formato (JPEG sigue siendo
+        // JPEG; PNG y WebP conservan su transparencia).
+        const lado = LADO_MAXIMO[kind];
+        let blob: Blob;
+        try {
+          blob = await compressImage(file, {
+            maxWidth: lado.ancho,
+            maxHeight: lado.alto,
+            quality: 0.85,
+            outputType: file.type,
+          });
+        } catch {
+          throw new Error("No hemos podido leer la imagen: puede que esté dañada. Prueba con otra JPG, PNG o WebP.");
+        }
+        // Se sube con el formato que ha salido de verdad (Safari sin WebP saca PNG).
+        const tipo = esTipoAdmitido(blob.type) ? blob.type : "image/jpeg";
+        const path = `${orgId}/${kind}/${Date.now()}-${randId()}.${EXTENSION[tipo]}`;
         const { error } = await supabase.storage
           .from("partner-branding")
-          .upload(path, file, {
+          .upload(path, blob, {
             cacheControl: "3600",
             upsert: false,
-            contentType: file.type,
+            contentType: tipo,
           });
         if (error) throw error;
 
@@ -177,7 +224,7 @@ export const PartnerImageUploader = ({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept={ACCEPT}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -242,7 +289,7 @@ export const PartnerImageUploader = ({
               style={mono}
             >
               {orgId
-                ? `Arrastra o haz click · máx ${maxSizeMB}MB`
+                ? `Arrastra o haz click · JPG, PNG o WebP · máx ${maxSizeMB}MB`
                 : "Disponible al crear la organización"}
             </span>
           </button>
