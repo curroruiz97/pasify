@@ -6,9 +6,10 @@
 // En la app nativa no hay widget (Apple y Google lo desaconsejan dentro de
 // apps) y no se llama.
 //
-// Body: { token: string, action?: string }. `action` es la del widget
-// ("signup", "reset-password"): si llega, tiene que coincidir con la que
-// devuelve Cloudflare, así un token de un formulario no vale para otro.
+// Body: { token: string, action: string }. `action` es la del widget
+// ("signup", "reset-password") y es obligatoria: tiene que coincidir con la que
+// devuelve Cloudflare, así un token de un formulario no vale para otro. Sin
+// ella (o con una que Turnstile no admite) es un 400 action_required.
 // Respuesta: 200 { success: true } · 400 { success: false, errors } · 503
 // captcha_not_configured si falta el secreto en producción o Cloudflare dice
 // que no es válido (invalid-input-secret).
@@ -66,7 +67,11 @@ Deno.serve(async (req) => {
     if (!token || token.length > 2048) {
       return jsonResponse({ success: false, errors: ["token_required"] }, { status: 400 });
     }
+    // Obligatoria: si fuera opcional, quien omite la acción se saltaría la comparación.
     const action = typeof body.action === "string" && ACTION_RE.test(body.action) ? body.action : null;
+    if (!action) {
+      return jsonResponse({ success: false, errors: ["action_required"] }, { status: 400 });
+    }
 
     const params = new URLSearchParams();
     params.set("secret", TURNSTILE_SECRET);
@@ -94,7 +99,7 @@ Deno.serve(async (req) => {
       }
       return jsonResponse({ success: false, errors: errores }, { status: 400 });
     }
-    if (action && data.action !== action) {
+    if (data.action !== action) {
       return jsonResponse({ success: false, errors: ["action_mismatch"] }, { status: 400 });
     }
     if (ALLOWED_HOSTNAMES.length > 0 && !ALLOWED_HOSTNAMES.includes((data.hostname ?? "").toLowerCase())) {

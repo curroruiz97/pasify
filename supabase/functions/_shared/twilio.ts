@@ -23,6 +23,48 @@ export function isSmsConfigured(): boolean {
 }
 
 /**
+ * Teléfono en E.164 («+» y de 7 a 15 cifras, la primera distinta de 0), o null
+ * si no lo es. Antes de comprobarlo quita espacios, puntos, guiones y
+ * paréntesis, y lee un «00» inicial como «+»: «+34 600 00 00 00»,
+ * «0034600000000» y «+34600000000» dan el mismo resultado. Un número sin
+ * prefijo de país («600000000») no se adivina: null.
+ */
+export function normalizeE164(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let phone = raw.replace(/[\s.()-]/g, "");
+  if (phone.startsWith("00")) phone = `+${phone.slice(2)}`;
+  return /^\+[1-9]\d{6,14}$/.test(phone) ? phone : null;
+}
+
+export interface TwilioErrorSummary {
+  status: number;
+  /** El `code` de Twilio (21211, 20003…): su documentación explica cada uno. */
+  code: number | null;
+  /** El `message` de Twilio sin cifras; null si el cuerpo no era el JSON de un error. */
+  message: string | null;
+}
+
+/**
+ * Lo que se puede escribir en un log o en un error de una respuesta fallida de
+ * Twilio. El cuerpo entero no: lleva el teléfono del destinatario («The 'To'
+ * number +34… is not a valid phone number») y acabaría en los logs de las
+ * funciones y en notification_dispatches.error_message. Del `message` se
+ * quitan todas las cifras, y de un cuerpo que no sea JSON, todo.
+ */
+export function summarizeTwilioError(status: number, rawBody: string): TwilioErrorSummary {
+  let code: number | null = null;
+  let message: string | null = null;
+  try {
+    const body = JSON.parse(rawBody) as { code?: unknown; message?: unknown } | null;
+    if (typeof body?.code === "number" && Number.isFinite(body.code)) code = body.code;
+    if (typeof body?.message === "string") message = body.message.replace(/\+?\d+/g, "#").slice(0, 200);
+  } catch {
+    // Una página de error del proxy, por ejemplo: sin cuerpo.
+  }
+  return { status, code, message };
+}
+
+/**
  * Envía un SMS. Si Twilio no está configurado no envía nada: registra un warn
  * y devuelve un sid simulado con provider "fallback", que NO es un envío.
  */
@@ -53,9 +95,12 @@ export async function sendSms(opts: SendSmsOptions): Promise<SendSmsResult> {
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    logger.error("twilio_send_failed", { status: res.status, body: errText });
-    throw new Error(`Twilio send failed: ${res.status} ${errText.slice(0, 200)}`);
+    // Sin el cuerpo de Twilio: puede llevar el teléfono (ver summarizeTwilioError).
+    const err = summarizeTwilioError(res.status, await res.text());
+    logger.error("twilio_send_failed", { status: err.status, twilio_code: err.code, twilio_message: err.message });
+    throw new Error(
+      `Twilio send failed: ${err.status}${err.code !== null ? ` (code ${err.code})` : ""}${err.message ? ` ${err.message}` : ""}`,
+    );
   }
   const json = await res.json();
   return { sid: json.sid, provider: "twilio" };
