@@ -5,7 +5,8 @@ import { PasifyPriceInput } from "@/components/ui/pasify-price-input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { isBelowStripeMinimum } from "@/components/partner/tierPrice";
+import { isBelowStripeMinimum, priceFormatError } from "@/components/partner/tierPrice";
+import { MAX_PER_USER, parseCapacity, parsePerUserMax } from "@/components/partner/tierLimits";
 import {
   DEFAULT_REFUND_HOURS,
   MAX_REFUND_HOURS,
@@ -21,8 +22,8 @@ import {
  *   - Nombre (requerido)
  *   - Descripción corta opcional
  *   - Precio EUR (0 o al menos 0,50: Stripe no cobra menos)
- *   - Capacidad opcional
- *   - Límite por usuario (default 10)
+ *   - Capacidad opcional (vacía = sin límite; si no, un entero ≥ 1)
+ *   - Límite por usuario (entero de 1 a 10; ver tierLimits.ts)
  *   - Activo on/off
  *   - Devoluciones (D-3): "Sin devolución (salvo cancelación)", por defecto,
  *     o "Hasta N horas antes del evento" (tierPolicy.ts)
@@ -151,6 +152,10 @@ export const TicketTiersBuilder = ({
       {tiers.map((tier, idx) => {
         const sales = tier.dbId ? salesByDbId?.[tier.dbId] : undefined;
         const isLocked = !!sales?.hasSales;
+        // Errores que se ven en el propio campo (los mismos que impiden pasar de paso).
+        const capacidad = parseCapacity(tier.capacity, sales?.sold ?? 0);
+        const maxPorPersona = parsePerUserMax(tier.perUserMax);
+        const errorPrecio = isLocked ? null : priceFormatError(tier.priceEur);
         return (
           <article
             key={tier._key}
@@ -287,9 +292,16 @@ export const TicketTiersBuilder = ({
                   step={0.1}
                   min={0}
                   disabled={disabled || isLocked}
+                  invalid={!!errorPrecio || (!isLocked && isBelowStripeMinimum(tier.priceEur))}
+                  describedBy={`tier-price-error-${tier._key}`}
                 />
+                {errorPrecio && (
+                  <p id={`tier-price-error-${tier._key}`} className="mt-1 text-[11px] text-destructive" role="alert">
+                    {errorPrecio}
+                  </p>
+                )}
                 {!isLocked && isBelowStripeMinimum(tier.priceEur) && (
-                  <p className="mt-1 text-[11px] text-destructive" role="alert">
+                  <p id={`tier-price-error-${tier._key}`} className="mt-1 text-[11px] text-destructive" role="alert">
                     El mínimo que se puede cobrar es 0,50 €.
                   </p>
                 )}
@@ -325,12 +337,21 @@ export const TicketTiersBuilder = ({
                 <Input
                   id={`tier-cap-${tier._key}`}
                   type="number"
+                  inputMode="numeric"
+                  step={1}
                   min={sales?.sold ?? 1}
                   value={tier.capacity}
                   onChange={(e) => updateTier(tier._key, { capacity: e.target.value })}
                   placeholder={sales ? `≥ ${sales.sold}` : "Sin límite"}
                   disabled={disabled}
+                  aria-invalid={!!capacidad.error || undefined}
+                  aria-describedby={capacidad.error ? `tier-cap-error-${tier._key}` : undefined}
                 />
+                {capacidad.error && (
+                  <p id={`tier-cap-error-${tier._key}`} className="mt-1 text-[11px] text-destructive" role="alert">
+                    {capacidad.error}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor={`tier-max-${tier._key}`} className="text-xs">
@@ -339,13 +360,22 @@ export const TicketTiersBuilder = ({
                 <Input
                   id={`tier-max-${tier._key}`}
                   type="number"
-                  min="1"
-                  max="10"
+                  inputMode="numeric"
+                  step={1}
+                  min={1}
+                  max={MAX_PER_USER}
                   value={tier.perUserMax}
                   onChange={(e) => updateTier(tier._key, { perUserMax: e.target.value })}
                   placeholder="4"
                   disabled={disabled}
+                  aria-invalid={!!maxPorPersona.error || undefined}
+                  aria-describedby={maxPorPersona.error ? `tier-max-error-${tier._key}` : undefined}
                 />
+                {maxPorPersona.error && (
+                  <p id={`tier-max-error-${tier._key}`} className="mt-1 text-[11px] text-destructive" role="alert">
+                    {maxPorPersona.error}
+                  </p>
+                )}
               </div>
             </div>
 

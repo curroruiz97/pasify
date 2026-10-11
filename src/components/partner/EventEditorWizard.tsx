@@ -16,6 +16,16 @@ import {
   Upload,
   X as XIcon,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,7 +53,13 @@ import {
   type TierDraft,
   type TierSales,
 } from "@/components/partner/TicketTiersBuilder";
-import { isBelowStripeMinimum, priceEurToCents } from "@/components/partner/tierPrice";
+import { isBelowStripeMinimum, priceCentsForDb, priceEurToCents } from "@/components/partner/tierPrice";
+import {
+  capacityForDb,
+  parseCapacity,
+  parsePerUserMax,
+  perUserMaxForDb,
+} from "@/components/partner/tierLimits";
 import {
   DEFAULT_REFUND_HOURS,
   MAX_REFUND_HOURS,
@@ -51,13 +67,13 @@ import {
   refundHoursForDb,
   summarizePolicies,
 } from "@/components/partner/tierPolicy";
+import { EventDateTimeSection } from "@/components/partner/EventDateTimeSection";
 import {
-  EventDateTimeSection,
   composeIsoStartEnd,
   validateDateTime,
   type DateTimeValue,
-} from "@/components/partner/EventDateTimeSection";
-import { addDaysToDate, isoToWallClock, timeZoneLabel } from "@/components/partner/zonedTime";
+} from "@/components/partner/eventSchedule";
+import { addDaysToDate, formatInTimeZone, isoToWallClock, timeZoneLabel } from "@/components/partner/zonedTime";
 import { describeWriteError, expectRows } from "@/components/partner/writeErrors";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import {
@@ -128,6 +144,12 @@ import {
  * Políticas de cada tipo (D-3): devoluciones (NULL = sin devolución salvo
  * cancelación; N = hasta N horas antes) y transferencia; en el resumen se ven
  * las dos.
+ *
+ * Validaciones (las mismas que se ven en el campo y las que impiden pasar de
+ * paso o guardar): precio en euros con hasta dos decimales (tierPrice.ts),
+ * cupo vacío o entero ≥ 1 y máximo por usuario de 1 a 10 (tierLimits.ts), y
+ * horas HH:mm válidas, con un fin distinto del inicio (eventSchedule.ts).
+ * Publicar un evento cuyo inicio ya pasó pide confirmación.
  *
  * Organización suspendida (`publishBlockedReason`): se puede editar y guardar
  * como borrador, pero no publicar.
@@ -317,6 +339,9 @@ export const EventEditorWizard = ({
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Publicar con el inicio ya pasado pide confirmación: lo que se le enseña
+  // (null = nada pendiente).
+  const [confirmarPasado, setConfirmarPasado] = useState<{ cuando: string; terminado: boolean } | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -639,20 +664,20 @@ export const EventEditorWizard = ({
   // -----------------------------------------------------------------
   const summary: EventSummary = useMemo(() => {
     const activeTiers = tiers.filter((t) => t.active);
+    // Los mismos céntimos que se validan y se guardan (un precio que no se
+    // entiende no cuenta).
     const prices = activeTiers
-      .map((t) => parseFloat(t.priceEur))
-      .filter((n) => Number.isFinite(n) && n >= 0);
-    const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+      .map((t) => priceEurToCents(t.priceEur))
+      .filter((c): c is number => c !== null);
+    const minPrice = prices.length > 0 ? Math.min(...prices) / 100 : null;
 
     // Aforo = suma de los cupos de TODOS los tipos, también los ocultos (lo
     // que ya vendieron sigue ocupando sitio), como lo guarda la BD. Un tipo
-    // sin cupo deja el evento sin límite.
-    const caps = tiers
-      .map((t) => parseInt(t.capacity, 10))
-      .filter((n) => Number.isFinite(n) && n > 0);
+    // sin cupo (o con uno que no vale) deja el evento sin límite.
+    const cupos = tiers.map((t) => parseCapacity(t.capacity));
     const totalCap =
-      caps.length === tiers.length && caps.length > 0
-        ? caps.reduce((a, b) => a + b, 0)
+      cupos.length > 0 && cupos.every((c) => !c.error && c.value !== null)
+        ? cupos.reduce((suma, c) => suma + (c.value ?? 0), 0)
         : null;
 
     const { crossesMidnight } = composeIsoStartEnd(dateTime, timeZone);
@@ -703,9 +728,10 @@ export const EventEditorWizard = ({
         }
         for (const t of tiers) {
           if (!t.name.trim()) return "Todos los tickets necesitan un nombre";
-          const p = parseFloat(t.priceEur);
-          if (!Number.isFinite(p) || p < 0) {
-            return `El precio del ticket "${t.name}" no es válido`;
+          // Solo cifras con coma o punto y hasta dos decimales (priceEurToCents):
+          // ni "12.999" ni "1e3" ni un "0.001" que se quedaba en 0 €.
+          if (priceEurToCents(t.priceEur) === null) {
+            return `El precio del ticket "${t.name}" no es válido: escríbelo en euros con hasta dos decimales (por ejemplo, 12,50).`;
           }
           // Stripe no cobra de 0,01 a 0,49 € (el precio de un tipo con ventas
           // no se puede tocar, así que ese no se comprueba).
@@ -713,13 +739,12 @@ export const EventEditorWizard = ({
           if (!sales?.hasSales && isBelowStripeMinimum(t.priceEur)) {
             return `El precio de "${t.name}" es demasiado bajo: el mínimo que se puede cobrar es 0,50 €.`;
           }
-          // Capacity floor vs ventas
-          if (sales && t.capacity) {
-            const cap = parseInt(t.capacity, 10);
-            if (Number.isFinite(cap) && cap < sales.sold) {
-              return `El cupo de "${t.name}" no puede ser menor que las ventas (${sales.sold}).`;
-            }
-          }
+          // Cupo: vacío o un entero ≥ 1 (y, con ventas, no menor que lo vendido).
+          const cupo = parseCapacity(t.capacity, sales?.sold ?? 0);
+          if (cupo.error) return `El cupo de "${t.name}" no es válido. ${cupo.error}`;
+          // Máximo por persona: un entero de 1 a 10.
+          const maxPorPersona = parsePerUserMax(t.perUserMax);
+          if (maxPorPersona.error) return `El máximo por usuario de "${t.name}" no es válido. ${maxPorPersona.error}`;
           if (t.refundMode === "hours" && parseRefundHours(t.refundHours) === null) {
             return `El plazo de devolución de "${t.name}" tiene que ser un número entero de horas entre 1 y ${MAX_REFUND_HOURS}.`;
           }
@@ -792,7 +817,11 @@ export const EventEditorWizard = ({
     return null;
   };
 
-  const submit = async (status: "draft" | "published" | "keep") => {
+  /**
+   * `confirmado`: ya se aceptó publicar un evento cuyo inicio ha pasado (ver
+   * `confirmarPasado`); no se vuelve a preguntar.
+   */
+  const submit = async (status: "draft" | "published" | "keep", confirmado = false) => {
     const effective: "draft" | "published" =
       status === "keep" ? (originalStatus === "published" ? "published" : "draft") : status;
     // Organización suspendida: no se publica (el servidor también lo
@@ -813,12 +842,31 @@ export const EventEditorWizard = ({
       return;
     }
 
-    const activeTiers = tiers.filter((t) => t.active);
-    const tierPriceCents = activeTiers.map((t) => priceEurToCents(t.priceEur || "0") ?? 0);
-    const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
+    // Publicar un evento cuyo inicio ya pasó: se confirma. Un borrador con
+    // fecha pasada se deja guardar sin preguntar (gestión interna), y guardar
+    // cambios de un evento ya publicado tampoco es "publicar".
+    if (status === "published" && !confirmado) {
+      const ahora = Date.now();
+      const inicioMs = Date.parse(startIso);
+      if (inicioMs < ahora) {
+        // Sin hora de fin, la reserva de entradas da el evento por terminado a las 12 h.
+        const finMs = endIso ? Date.parse(endIso) : inicioMs + 12 * 3_600_000;
+        setConfirmarPasado({
+          cuando: formatInTimeZone(
+            startIso,
+            { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" },
+            timeZone
+          ),
+          terminado: finMs < ahora,
+        });
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
+      const tierPriceCents = tiers.filter((t) => t.active).map((t) => priceCentsForDb(t.priceEur));
+      const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
       if (mode === "edit" && eventId) {
         await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents);
       } else {
@@ -904,10 +952,10 @@ export const EventEditorWizard = ({
       event_id: createdEvent.id,
       name: t.name.trim(),
       description: t.description.trim() || null,
-      price_cents: priceEurToCents(t.priceEur || "0") ?? 0,
+      price_cents: priceCentsForDb(t.priceEur),
       currency: "EUR",
-      capacity: t.capacity ? parseInt(t.capacity, 10) : null,
-      per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+      capacity: capacityForDb(t.capacity),
+      per_user_max: perUserMaxForDb(t.perUserMax),
       status: estadoDelTipo(t.active),
       sort_order: idx,
       refundable_until_hours_before: refundHoursForDb(t.refundMode, t.refundHours),
@@ -979,8 +1027,8 @@ export const EventEditorWizard = ({
     for (let idx = 0; idx < tiers.length; idx++) {
       const t = tiers[idx];
       const sales = t.dbId ? tierSalesMap[t.dbId] : undefined;
-      const tierCap = t.capacity ? parseInt(t.capacity, 10) : null;
-      const tierPriceC = priceEurToCents(t.priceEur || "0") ?? 0;
+      const tierCap = capacityForDb(t.capacity);
+      const tierPriceC = priceCentsForDb(t.priceEur);
       // Políticas: también en un tipo con ventas (valen para lo que se pida
       // a partir de ahora; el editor lo avisa).
       const politicas = {
@@ -992,7 +1040,7 @@ export const EventEditorWizard = ({
         const update: TierUpdate = {
           name: t.name.trim(),
           description: t.description.trim() || null,
-          per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+          per_user_max: perUserMaxForDb(t.perUserMax),
           status: estadoDelTipo(t.active),
           sort_order: idx,
           ...politicas,
@@ -1020,7 +1068,7 @@ export const EventEditorWizard = ({
               price_cents: tierPriceC,
               currency: "EUR",
               capacity: tierCap,
-              per_user_max: t.perUserMax ? parseInt(t.perUserMax, 10) : 4,
+              per_user_max: perUserMaxForDb(t.perUserMax),
               status: estadoDelTipo(t.active),
               sort_order: idx,
               ...politicas,
@@ -1422,6 +1470,38 @@ export const EventEditorWizard = ({
           </footer>
         </div>
       </DialogContent>
+
+      {/* Publicar con el inicio ya pasado: se pide confirmación. */}
+      <AlertDialog
+        open={confirmarPasado !== null}
+        onOpenChange={(o) => {
+          if (!o) setConfirmarPasado(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Publicar un evento que ya ha empezado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La fecha de inicio ({confirmarPasado?.cuando}) ya ha pasado.{" "}
+              {confirmarPasado?.terminado
+                ? "El evento ya ha terminado, así que nadie podrá comprar entradas."
+                : "Se podrán comprar entradas mientras dure."}{" "}
+              ¿Quieres publicarlo igualmente?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStep(1)}>Revisar la fecha</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmarPasado(null);
+                void submit("published", true);
+              }}
+            >
+              Publicar igualmente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

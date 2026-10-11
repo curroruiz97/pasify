@@ -76,10 +76,20 @@ const wallClockIn = (utcMs: number, f: Intl.DateTimeFormat): WallClock => {
   return { year: p.year, month: p.month, day: p.day, hour: p.hour % 24, minute: p.minute, second: p.second };
 };
 
+/** Desfase de la zona en un instante: su hora de reloj leída como UTC − el instante. */
+const zoneOffsetMs = (utcMs: number, f: Intl.DateTimeFormat): number => {
+  const c = wallClockIn(utcMs, f);
+  return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute, c.second) - utcMs;
+};
+
 /**
  * Instante de una hora de reloj (y, m 1-12, d, h, min) en `timeZone`. Sin
  * zona válida, la del dispositivo. El día puede desbordar (d + 1 el último
  * día del mes pasa al mes siguiente).
+ *
+ * Con cambio de hora: una hora que no existe (salta de las 02:00 a las 03:00)
+ * se corre hacia delante (02:30 → 03:30) y una que se repite (02:30 pasa dos
+ * veces) toma la segunda vez. `wallTimeIssue` dice cuándo pasa.
  */
 export const zonedWallTimeToDate = (
   y: number,
@@ -93,17 +103,54 @@ export const zonedWallTimeToDate = (
   if (!f) return new Date(y, m - 1, d, h, min, 0, 0);
   const guess = Date.UTC(y, m - 1, d, h, min, 0, 0);
   if (!Number.isFinite(guess)) return new Date(Number.NaN);
-  // Desfase de la zona en un instante: su hora de reloj leída como UTC − el instante.
-  const offsetAt = (utcMs: number) => {
-    const c = wallClockIn(utcMs, f);
-    return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute, c.second) - utcMs;
-  };
-  const first = offsetAt(guess);
+  const first = zoneOffsetMs(guess, f);
   let utc = guess - first;
   // Si entre medias hay cambio de hora, el segundo desfase es el bueno.
-  const second = offsetAt(utc);
+  const second = zoneOffsetMs(utc, f);
   if (second !== first) utc = guess - second;
   return new Date(utc);
+};
+
+/** "no existe" (los relojes se adelantan) o "se repite" (se atrasan). */
+export type WallTimeIssue = "gap" | "ambiguous";
+
+const DAY_MS = 86_400_000;
+
+/**
+ * ¿Esa hora de reloj no existe o se repite en `timeZone` (sin zona válida, la
+ * del dispositivo)? En España pasa el último domingo de marzo (de las 02:00 a
+ * las 03:00: 02:30 no existe) y el último de octubre (de las 03:00 a las
+ * 02:00: 02:30 pasa dos veces). No bloquea nada: `zonedWallTimeToDate` la
+ * resuelve y el editor avisa.
+ */
+export const wallTimeIssue = (
+  y: number,
+  m: number,
+  d: number,
+  h: number,
+  min: number,
+  timeZone?: string
+): WallTimeIssue | null => {
+  const f = formatterFor(isValidTimeZone(timeZone) ? timeZone : deviceTimeZone() ?? "");
+  if (!f) return null;
+  const guess = Date.UTC(y, m - 1, d, h, min, 0, 0);
+  if (!Number.isFinite(guess)) return null;
+  // Desfase un día antes y un día después: si coinciden no hay cambio de hora cerca.
+  const antes = zoneOffsetMs(guess - DAY_MS, f);
+  const despues = zoneOffsetMs(guess + DAY_MS, f);
+  if (antes === despues) return null;
+  // Con cada desfase, ¿el instante que sale vuelve a marcar esa hora de reloj?
+  const posibles = [antes, despues].filter((offset) => zoneOffsetMs(guess - offset, f) === offset);
+  return posibles.length === 0 ? "gap" : posibles.length === 2 ? "ambiguous" : null;
+};
+
+/** "HH:mm" → { h, m }; null si no es una hora de reloj (00:00 a 23:59). Sin ajustar: "25:61" no vale. */
+export const parseHm = (value: string | null | undefined): { h: number; m: number } | null => {
+  const t = /^(\d{1,2}):(\d{1,2})$/.exec(value ?? "");
+  if (!t) return null;
+  const h = Number(t[1]);
+  const m = Number(t[2]);
+  return h <= 23 && m <= 59 ? { h, m } : null;
 };
 
 /** "YYYY-MM-DD" y "HH:mm" de un instante en `timeZone` (o en la del dispositivo). */

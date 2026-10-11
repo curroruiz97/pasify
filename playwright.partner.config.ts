@@ -28,6 +28,7 @@ export default defineConfig({
     "**/partner-shell.spec.ts",
     "**/partner-cache.spec.ts",
     "**/door-pin.spec.ts",
+    "**/editor-validaciones.spec.ts",
     "**/cuentas.spec.ts",
     "**/client-shell.spec.ts",
     "**/checkout-back.spec.ts",

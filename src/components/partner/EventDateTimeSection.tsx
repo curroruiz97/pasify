@@ -1,8 +1,14 @@
-import { CalendarDays, Clock, Globe2, Moon } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, Globe2, Moon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { PasifyDateInput } from "@/components/ui/pasify-date-input";
 import { PasifyTimeInput } from "@/components/ui/pasify-time-input";
-import { isoToWallClock, timeZoneLabel, zonedWallTimeToDate } from "@/components/partner/zonedTime";
+import { isoToWallClock, timeZoneLabel } from "@/components/partner/zonedTime";
+import {
+  composeIsoStartEnd,
+  scheduleNotices,
+  timesError,
+  type DateTimeValue,
+} from "@/components/partner/eventSchedule";
 
 /**
  * EventDateTimeSection — selector fecha + hora inicio + hora fin separados.
@@ -13,9 +19,14 @@ import { isoToWallClock, timeZoneLabel, zonedWallTimeToDate } from "@/components
  * medianoche (e.g. doors 23:30 → close 06:00).
  *
  * Cross-midnight smart: si endTime < startTime se interpreta como "del
- * día siguiente". El helper `composeIsoStartEnd` que vive abajo devuelve
+ * día siguiente". El helper `composeIsoStartEnd` (eventSchedule.ts) devuelve
  * tanto el ISO de inicio como el de fin con el +1 día aplicado cuando
- * procede.
+ * procede. Una hora de fin IGUAL a la de inicio no se convierte en 24 h:
+ * se rechaza (`validateDateTime`, que también está ahí).
+ *
+ * Avisos que no bloquean (`scheduleNotices`): un evento de más de 14 h, y una
+ * hora que no existe o se repite por el cambio de hora (en España, el último
+ * domingo de marzo y de octubre).
  *
  * Zona horaria: el día y las horas son los del reloj DEL LOCAL
  * (`venues.timezone`), no los del móvil de quien crea el evento. Un local de
@@ -29,14 +40,7 @@ import { isoToWallClock, timeZoneLabel, zonedWallTimeToDate } from "@/components
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-export interface DateTimeValue {
-  /** YYYY-MM-DD */
-  date: string;
-  /** HH:mm */
-  startTime: string;
-  /** HH:mm */
-  endTime: string;
-}
+export type { DateTimeValue } from "@/components/partner/eventSchedule";
 
 interface Props {
   value: DateTimeValue;
@@ -48,58 +52,6 @@ interface Props {
   placeName?: string | null;
 }
 
-/**
- * Devuelve los ISO timestamps para insertar en `events.date_start` /
- * `events.date_end`, con el día y las horas leídos en `timeZone` (la del
- * local; sin ella, la del dispositivo). Si endTime < startTime se asume
- * cross-midnight y se suma 1 día a date_end. Si date o startTime están
- * vacíos devuelve null.
- */
-export const composeIsoStartEnd = (
-  v: DateTimeValue,
-  timeZone?: string
-): { startIso: string | null; endIso: string | null; crossesMidnight: boolean } => {
-  if (!v.date || !v.startTime) {
-    return { startIso: null, endIso: null, crossesMidnight: false };
-  }
-  const [y, m, d] = v.date.split("-").map(Number);
-  const [sh, sm] = v.startTime.split(":").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
-    return { startIso: null, endIso: null, crossesMidnight: false };
-  }
-  const start = zonedWallTimeToDate(y, m, d, sh, sm, timeZone);
-  if (Number.isNaN(start.getTime())) {
-    return { startIso: null, endIso: null, crossesMidnight: false };
-  }
-
-  let endIso: string | null = null;
-  let crossesMidnight = false;
-  if (v.endTime) {
-    const [eh, em] = v.endTime.split(":").map(Number);
-    let end = zonedWallTimeToDate(y, m, d, eh, em, timeZone);
-    if (!Number.isNaN(end.getTime())) {
-      if (end <= start) {
-        // Cross-midnight: nightclub style. Adelantar 1 día.
-        end = zonedWallTimeToDate(y, m, d + 1, eh, em, timeZone);
-        crossesMidnight = true;
-      }
-      endIso = end.toISOString();
-    }
-  }
-  return { startIso: start.toISOString(), endIso, crossesMidnight };
-};
-
-/** Validación humana — devuelve mensaje de error o null si OK. */
-export const validateDateTime = (v: DateTimeValue, timeZone?: string): string | null => {
-  if (!v.date) return "Selecciona el día del evento";
-  if (!v.startTime) return "Selecciona la hora de inicio";
-  const { startIso } = composeIsoStartEnd(v, timeZone);
-  if (!startIso) return "La fecha o la hora no son válidas";
-  // No bloqueamos por evento "en el pasado" — el partner puede crear
-  // borradores históricos para gestión interna. Sólo valida la lógica.
-  return null;
-};
-
 export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, placeName }: Props) => {
   const { crossesMidnight } = composeIsoStartEnd(value, timeZone);
   const label = timeZoneLabel(placeName, timeZone);
@@ -109,6 +61,8 @@ export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, plac
   const ahoraAqui = isoToWallClock(new Date())?.time;
   const otraHora = !!ahoraLocal && !!ahoraAqui && ahoraLocal !== ahoraAqui;
   const lugar = placeName?.trim() || "el local";
+  const errorHoras = timesError(value);
+  const avisos = scheduleNotices(value, timeZone, lugar);
 
   return (
     <div className="space-y-4">
@@ -167,6 +121,24 @@ export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, plac
           </div>
         </div>
       </div>
+
+      {errorHoras && (
+        <p className="text-[11px] leading-relaxed text-destructive" role="alert" data-testid="evt-error-horas">
+          {errorHoras}
+        </p>
+      )}
+
+      {avisos.map((aviso) => (
+        <div
+          key={aviso.id}
+          className="flex items-start gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-[12px] leading-relaxed text-orange-200"
+          role="status"
+          data-testid="evt-aviso-horario"
+        >
+          <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0 text-orange-500" />
+          <span>{aviso.text}</span>
+        </div>
+      ))}
 
       {otraHora && (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
