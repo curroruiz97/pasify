@@ -308,10 +308,18 @@ BEGIN
         FROM paid p
         LEFT JOIN refunded r ON r.org_id = p.org_id
       )
+      -- Solo las 6 columnas de la definición anterior: la vista ganó al final las
+      -- connect_* (pedidos cobrados con Connect), que cubre o2_admin.sql.
       SELECT count(*) INTO v_count FROM (
-        (SELECT * FROM antes EXCEPT SELECT * FROM public.partner_balance_v)
+        (SELECT * FROM antes
+         EXCEPT
+         SELECT b.org_id, b.paid_orders, b.gross_cents, b.refunded_cents, b.fee_cents, b.net_cents
+           FROM public.partner_balance_v b)
         UNION ALL
-        (SELECT * FROM public.partner_balance_v EXCEPT SELECT * FROM antes)
+        (SELECT b.org_id, b.paid_orders, b.gross_cents, b.refunded_cents, b.fee_cents, b.net_cents
+           FROM public.partner_balance_v b
+         EXCEPT
+         SELECT * FROM antes)
       ) d;
       RESET ROLE;
       IF v_count <> 0 THEN

@@ -1,6 +1,8 @@
 -- Pasify · panel de admin, ola 2: liquidaciones (B5-4), pedidos y reembolso
 -- desde el admin (B5-7), organizaciones de los locales con su suspensión
--- (B5-3) y baja de un local desde el admin (B3-13).
+-- (B5-3) y baja de un local desde el admin (B3-13). Los pedidos cobrados con el
+-- Stripe del propio local (Connect) no cuentan como pendiente de liquidar
+-- (migración 20260929110000): apartados 3 y 10.
 -- Datos sintéticos y ROLLBACK; un fallo lanza RAISE EXCEPTION 'FAIL …'.
 --
 -- Local, con las migraciones posteriores a 20260925110000 en la misma
@@ -59,6 +61,15 @@ DECLARE
   v_ref       TEXT;
   v_code      TEXT;
   i           INT;
+  -- Sección 10: un local con pedidos cobrados con su propio Stripe (Connect)
+  v_conn_owner UUID := gen_random_uuid();
+  v_org_c     UUID;
+  v_event_c   UUID;
+  v_tier_c    UUID;
+  v_oc        RECORD;  -- pedido cobrado con el Stripe del local (Connect)
+  v_on        RECORD;  -- pedido cobrado por Pasify
+  v_ox        RECORD;  -- pago de prueba cobrado con el Stripe del local
+  v_tk        UUID;
 BEGIN
   INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role, instance_id, created_at, updated_at)
   VALUES
@@ -126,6 +137,11 @@ BEGIN
   SELECT * INTO v_row FROM public.partner_balance_v WHERE org_id = v_org;
   IF v_row.gross_cents <> 12000 OR v_row.fee_cents <> 600 OR v_row.refunded_cents <> 0 OR v_row.net_cents <> 11400 THEN
     RAISE EXCEPTION 'FAIL saldo de A: %', row_to_json(v_row);
+  END IF;
+  -- Sin pedidos Connect, las columnas connect_* valen 0 (no NULL)
+  IF v_row.connect_gross_cents IS DISTINCT FROM 0 OR v_row.connect_refunded_cents IS DISTINCT FROM 0
+     OR v_row.connect_fee_cents IS DISTINCT FROM 0 OR v_row.connect_net_cents IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'FAIL connect_* de A, que no tiene pedidos Connect: %', row_to_json(v_row);
   END IF;
 
   -- ------------------------------------------------------------------
@@ -283,15 +299,17 @@ BEGIN
   IF v_row.gross_cents <> 12000 OR v_row.refunded_cents <> 0 OR v_row.fee_cents <> 600 OR v_row.net_cents <> 11400
      OR v_row.settled_cents <> 11500 OR v_row.pending_cents <> -100 OR v_row.settlements_count <> 3
      OR v_row.paid_orders <> 2 OR v_row.org_name IS DISTINCT FROM 'O2A Local' OR v_row.owner_id IS DISTINCT FROM v_partner
-     OR v_row.owner_email NOT LIKE 'o2a-partner-%' OR v_row.org_status <> 'active' OR v_row.suspended_at IS NOT NULL THEN
+     OR v_row.owner_email NOT LIKE 'o2a-partner-%' OR v_row.org_status <> 'active' OR v_row.suspended_at IS NOT NULL
+     OR v_row.connect_orders IS DISTINCT FROM 0 OR v_row.connect_net_cents IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'FAIL resumen de A: %', row_to_json(v_row);
   END IF;
   SELECT * INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 50, 0) o WHERE o.org_id = v_org2;
   IF v_row.net_cents <> 2850 OR v_row.settled_cents <> 0 OR v_row.pending_cents <> 2850 OR v_row.settlements_count <> 0
-     OR v_row.connect_orders <> 0 THEN
+     OR v_row.connect_orders <> 0 OR v_row.connect_net_cents IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'FAIL resumen de B: %', row_to_json(v_row);
   END IF;
-  -- Un pedido cobrado con el Stripe del propio local se señala (ya le llegó)
+  -- Un pedido cobrado con el Stripe del propio local se señala (ya le llegó) y
+  -- no cuenta como pendiente: el neto sigue siendo el de todos los pedidos.
   RESET ROLE;
   UPDATE public.ticket_orders SET stripe_destination_account = 'acct_o2a_test' WHERE id = v_ob.order_id;
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
@@ -299,6 +317,25 @@ BEGIN
   SET LOCAL ROLE authenticated;
   SELECT o.connect_orders INTO v_bigint FROM public.admin_settlement_overview('O2A', FALSE, 50, 0) o WHERE o.org_id = v_org2;
   IF v_bigint IS DISTINCT FROM 1 THEN RAISE EXCEPTION 'FAIL pedidos con Stripe del local: %', v_bigint; END IF;
+  SELECT * INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 50, 0) o WHERE o.org_id = v_org2;
+  IF v_row.net_cents IS DISTINCT FROM 2850 OR v_row.connect_net_cents IS DISTINCT FROM 2850
+     OR v_row.settled_cents IS DISTINCT FROM 0 OR v_row.pending_cents IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'FAIL B con su único pedido cobrado por Connect: %', row_to_json(v_row);
+  END IF;
+  -- Nada que liquidar a B: ni un céntimo sin confirmarlo
+  BEGIN
+    PERFORM public.admin_record_settlement(v_org2, 1, now(), 'TRF-TODO-CONNECT');
+    RAISE EXCEPTION 'FAIL se liquida a un local cuyo único pedido se cobró con su Stripe';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM <> 'amount_exceeds_pending' THEN RAISE EXCEPTION 'FAIL esperaba amount_exceeds_pending y llegó %', SQLERRM; END IF;
+  END;
+  -- B ya no cuenta como pendiente (A, con −100, sí); los totales siguen igual de netos
+  SELECT count(*) INTO v_count FROM public.admin_settlement_overview('O2A', TRUE, 50, 0);
+  IF v_count <> 1 THEN RAISE EXCEPTION 'FAIL solo pendientes con B cobrado por Connect: % filas', v_count; END IF;
+  SELECT o.total_net_cents, o.total_pending_cents INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 50, 0) o LIMIT 1;
+  IF v_row.total_net_cents IS DISTINCT FROM 14250 OR v_row.total_pending_cents IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'FAIL totales con B cobrado por Connect: %', row_to_json(v_row);
+  END IF;
   RESET ROLE;
   UPDATE public.ticket_orders SET stripe_destination_account = NULL WHERE id = v_ob.order_id;
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
@@ -725,7 +762,152 @@ BEGIN
   SELECT owner_id INTO v_row FROM public.organizations WHERE id = v_org3;
   IF v_row.owner_id IS NOT NULL THEN RAISE EXCEPTION 'FAIL la organización del local borrado conserva dueño'; END IF;
 
-  RAISE NOTICE 'PASS o2_admin: liquidaciones (registro, límites, RLS, resumen, historial, suspensión), organizaciones de los locales, búsqueda de pedidos, reembolso desde el admin y baja de un local';
+  -- ------------------------------------------------------------------
+  -- 10) Pedidos cobrados con Stripe Connect: no son deuda de Pasify
+  -- ------------------------------------------------------------------
+  -- Un local con dos pedidos pagados: uno cobrado con su propio Stripe (total
+  -- 1000, comisión 100: ese dinero ya le llegó) y otro cobrado por Pasify (500,
+  -- comisión 50). Pasify solo le debe lo segundo: neto 1350 − Connect 900 = 450.
+  -- Va el último porque su nombre y sus pedidos no cuentan en las búsquedas ni
+  -- en los totales de las secciones anteriores.
+  INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role, instance_id, created_at, updated_at)
+  VALUES (v_conn_owner, 'o2a-connowner-' || v_conn_owner || '@pasify.test', '{"initial_role":"partner"}', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', now(), now());
+  PERFORM set_config('request.jwt.claim.sub', v_conn_owner::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_conn_owner, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_org_c := public.create_organization('O2A Connect', 'ES', NULL);
+  INSERT INTO public.events (partner_id, org_id, title, city, date_start, date_end, status, price_cents)
+  VALUES (v_conn_owner, v_org_c, 'O2A Evento Connect', 'Valencia', now() + INTERVAL '4 days', now() + INTERVAL '4 days 6 hours', 'published', 500)
+  RETURNING id INTO v_event_c;
+  INSERT INTO public.ticket_tiers (event_id, name, price_cents, capacity, per_user_max)
+  VALUES (v_event_c, 'General', 500, 100, 10) RETURNING id INTO v_tier_c;
+  RESET ROLE;
+
+  SELECT * INTO v_oc FROM public.create_ticket_order(v_event_c, v_tier_c, 2, v_client, 'o2a-connect@pasify.test', 'Carla', 'Conectada');
+  PERFORM public.set_order_stripe_session(v_oc.order_id, 'cs_test_o2a_c_' || v_oc.order_id);
+  PERFORM public.mark_order_paid_v2('cs_test_o2a_c_' || v_oc.order_id, 'pi_o2a_c_' || v_oc.order_id, 1000, 100, TRUE);
+  UPDATE public.ticket_orders SET stripe_destination_account = 'acct_o2a_connect' WHERE id = v_oc.order_id;
+  SELECT * INTO v_on FROM public.create_ticket_order(v_event_c, v_tier_c, 1, v_client, 'o2a-connect@pasify.test', 'Carla', 'Conectada');
+  PERFORM public.set_order_stripe_session(v_on.order_id, 'cs_test_o2a_n_' || v_on.order_id);
+  PERFORM public.mark_order_paid_v2('cs_test_o2a_n_' || v_on.order_id, 'pi_o2a_n_' || v_on.order_id, 500, 50, TRUE);
+  -- Y un pago de prueba (livemode = false) también con destino Connect, con su
+  -- reembolso: mientras require_live_payments no suma en nada, ni en connect_*
+  SELECT * INTO v_ox FROM public.create_ticket_order(v_event_c, v_tier_c, 1, v_client, 'o2a-connect@pasify.test', 'Carla', 'Conectada');
+  PERFORM public.set_order_stripe_session(v_ox.order_id, 'cs_test_o2a_x_' || v_ox.order_id);
+  PERFORM public.mark_order_paid_v2('cs_test_o2a_x_' || v_ox.order_id, 'pi_o2a_x_' || v_ox.order_id, 700, 70, FALSE);
+  UPDATE public.ticket_orders SET stripe_destination_account = 'acct_o2a_connect' WHERE id = v_ox.order_id;
+  SELECT t.id INTO v_tk FROM public.tickets t WHERE t.order_id = v_ox.order_id ORDER BY t.created_at, t.id LIMIT 1;
+  INSERT INTO public.refund_requests (ticket_id, order_id, event_id, org_id, requester_user_id, requester_email, amount_cents, reason, status)
+  VALUES (v_tk, v_ox.order_id, v_event_c, v_org_c, v_client, 'o2a-connect@pasify.test', 100, 'O2A reembolso de prueba', 'refunded');
+
+  -- La vista: neto de todos 1350, de ellos 900 ya cobrados por Connect
+  IF NOT public.live_payments_required() THEN RAISE EXCEPTION 'FAIL require_live_payments debería seguir activo'; END IF;
+  SELECT * INTO v_row FROM public.partner_balance_v WHERE org_id = v_org_c;
+  IF v_row.paid_orders IS DISTINCT FROM 2 OR v_row.gross_cents IS DISTINCT FROM 1500 OR v_row.fee_cents IS DISTINCT FROM 150
+     OR v_row.refunded_cents IS DISTINCT FROM 0 OR v_row.net_cents IS DISTINCT FROM 1350
+     OR v_row.connect_gross_cents IS DISTINCT FROM 1000 OR v_row.connect_fee_cents IS DISTINCT FROM 100
+     OR v_row.connect_refunded_cents IS DISTINCT FROM 0 OR v_row.connect_net_cents IS DISTINCT FROM 900 THEN
+    RAISE EXCEPTION 'FAIL saldo con un pedido Connect (sin el pago de prueba): %', row_to_json(v_row);
+  END IF;
+  -- Con el ajuste a false el pago de prueba entra, y también su reembolso (en
+  -- connect_* y en los de siempre); lo pendiente no se mueve: es todo Connect.
+  UPDATE public.app_settings SET value = 'false'::jsonb WHERE key = 'require_live_payments';
+  SELECT * INTO v_row FROM public.partner_balance_v WHERE org_id = v_org_c;
+  UPDATE public.app_settings SET value = 'true'::jsonb WHERE key = 'require_live_payments';
+  IF v_row.paid_orders IS DISTINCT FROM 3 OR v_row.gross_cents IS DISTINCT FROM 2200 OR v_row.fee_cents IS DISTINCT FROM 220
+     OR v_row.refunded_cents IS DISTINCT FROM 100 OR v_row.net_cents IS DISTINCT FROM 1880
+     OR v_row.connect_gross_cents IS DISTINCT FROM 1700 OR v_row.connect_fee_cents IS DISTINCT FROM 170
+     OR v_row.connect_refunded_cents IS DISTINCT FROM 100 OR v_row.connect_net_cents IS DISTINCT FROM 1430 THEN
+    RAISE EXCEPTION 'FAIL saldo con el pago de prueba contado: %', row_to_json(v_row);
+  END IF;
+  IF NOT public.live_payments_required() THEN RAISE EXCEPTION 'FAIL require_live_payments no se restauró'; END IF;
+
+  -- El resumen del admin: pendiente 450, no 1350
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_row FROM public.admin_settlement_overview('O2A Connect', FALSE, 50, 0) o WHERE o.org_id = v_org_c;
+  IF v_row.paid_orders IS DISTINCT FROM 2 OR v_row.net_cents IS DISTINCT FROM 1350 OR v_row.connect_net_cents IS DISTINCT FROM 900
+     OR v_row.connect_orders IS DISTINCT FROM 1 OR v_row.settled_cents IS DISTINCT FROM 0 OR v_row.pending_cents IS DISTINCT FROM 450
+     OR v_row.total_count IS DISTINCT FROM 1 OR v_row.total_net_cents IS DISTINCT FROM 1350
+     OR v_row.total_settled_cents IS DISTINCT FROM 0 OR v_row.total_pending_cents IS DISTINCT FROM 450 THEN
+    RAISE EXCEPTION 'FAIL resumen del local con un pedido Connect: %', row_to_json(v_row);
+  END IF;
+  SELECT count(*) INTO v_count FROM public.admin_settlement_overview('O2A Connect', TRUE, 50, 0);
+  IF v_count <> 1 THEN RAISE EXCEPTION 'FAIL solo pendientes no trae el local con 450 pendientes: % filas', v_count; END IF;
+
+  -- Liquidar: 451 supera lo pendiente (aunque el neto sea 1350); 450, no
+  BEGIN
+    PERFORM public.admin_record_settlement(v_org_c, 451, now(), 'TRF-CONNECT-451');
+    RAISE EXCEPTION 'FAIL se liquida más de lo pendiente contando lo cobrado por Connect';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM <> 'amount_exceeds_pending' THEN RAISE EXCEPTION 'FAIL esperaba amount_exceeds_pending y llegó %', SQLERRM; END IF;
+  END;
+  RESET ROLE;
+
+  -- Un reembolso de un pedido Connect lo asume el local (se le revierte la
+  -- transferencia): baja el neto y baja igual lo cobrado por Connect, así que
+  -- lo pendiente no cambia.
+  SELECT t.id INTO v_tk FROM public.tickets t WHERE t.order_id = v_oc.order_id ORDER BY t.created_at, t.id LIMIT 1;
+  INSERT INTO public.refund_requests (ticket_id, order_id, event_id, org_id, requester_user_id, requester_email, amount_cents, reason, status)
+  VALUES (v_tk, v_oc.order_id, v_event_c, v_org_c, v_client, 'o2a-connect@pasify.test', 300, 'O2A reembolso Connect', 'refunded');
+  SELECT * INTO v_row FROM public.partner_balance_v WHERE org_id = v_org_c;
+  IF v_row.refunded_cents IS DISTINCT FROM 300 OR v_row.net_cents IS DISTINCT FROM 1050
+     OR v_row.connect_refunded_cents IS DISTINCT FROM 300 OR v_row.connect_net_cents IS DISTINCT FROM 600 THEN
+    RAISE EXCEPTION 'FAIL saldo tras reembolsar un pedido Connect: %', row_to_json(v_row);
+  END IF;
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_row FROM public.admin_settlement_overview('O2A Connect', FALSE, 50, 0) o WHERE o.org_id = v_org_c;
+  IF v_row.net_cents IS DISTINCT FROM 1050 OR v_row.connect_net_cents IS DISTINCT FROM 600 OR v_row.pending_cents IS DISTINCT FROM 450 THEN
+    RAISE EXCEPTION 'FAIL un reembolso de un pedido Connect cambia lo pendiente: %', row_to_json(v_row);
+  END IF;
+  v_s1 := public.admin_record_settlement(v_org_c, 450, now(), 'TRF-CONNECT-450', 'Solo lo que Pasify cobró por el local');
+  SELECT * INTO v_row FROM public.admin_settlement_overview('O2A Connect', FALSE, 50, 0) o WHERE o.org_id = v_org_c;
+  IF v_row.settled_cents IS DISTINCT FROM 450 OR v_row.pending_cents IS DISTINCT FROM 0 OR v_row.total_pending_cents IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'FAIL pendiente tras liquidar los 450: %', row_to_json(v_row);
+  END IF;
+  -- Saldado: ya no sale en "solo con saldo pendiente" y ni un céntimo más sin confirmarlo
+  SELECT count(*) INTO v_count FROM public.admin_settlement_overview('O2A Connect', TRUE, 50, 0);
+  IF v_count <> 0 THEN RAISE EXCEPTION 'FAIL un local saldado sale en solo pendientes: % filas', v_count; END IF;
+  BEGIN
+    PERFORM public.admin_record_settlement(v_org_c, 1, now(), 'TRF-CONNECT-1');
+    RAISE EXCEPTION 'FAIL se liquida con el pendiente a 0 por culpa de lo cobrado por Connect';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM <> 'amount_exceeds_pending' THEN RAISE EXCEPTION 'FAIL esperaba amount_exceeds_pending y llegó %', SQLERRM; END IF;
+  END;
+  RESET ROLE;
+
+  -- Un reembolso de un pedido que cobró Pasify sí reduce lo pendiente (aquí, a
+  -- −200: ya se le transfirió todo)
+  SELECT t.id INTO v_tk FROM public.tickets t WHERE t.order_id = v_on.order_id ORDER BY t.created_at, t.id LIMIT 1;
+  INSERT INTO public.refund_requests (ticket_id, order_id, event_id, org_id, requester_user_id, requester_email, amount_cents, reason, status)
+  VALUES (v_tk, v_on.order_id, v_event_c, v_org_c, v_client, 'o2a-connect@pasify.test', 200, 'O2A reembolso de Pasify', 'refunded');
+  SELECT * INTO v_row FROM public.partner_balance_v WHERE org_id = v_org_c;
+  IF v_row.refunded_cents IS DISTINCT FROM 500 OR v_row.net_cents IS DISTINCT FROM 850
+     OR v_row.connect_refunded_cents IS DISTINCT FROM 300 OR v_row.connect_net_cents IS DISTINCT FROM 600 THEN
+    RAISE EXCEPTION 'FAIL saldo tras reembolsar un pedido de Pasify: %', row_to_json(v_row);
+  END IF;
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_row FROM public.admin_settlement_overview('O2A Connect', FALSE, 50, 0) o WHERE o.org_id = v_org_c;
+  IF v_row.net_cents IS DISTINCT FROM 850 OR v_row.connect_net_cents IS DISTINCT FROM 600
+     OR v_row.settled_cents IS DISTINCT FROM 450 OR v_row.pending_cents IS DISTINCT FROM -200 THEN
+    RAISE EXCEPTION 'FAIL un reembolso de un pedido de Pasify no reduce lo pendiente: %', row_to_json(v_row);
+  END IF;
+  -- Lo que más se debe, primero, por lo pendiente real y no por neto − liquidado:
+  -- B (1850), A (−100), C (−200); por neto − liquidado saldría B, C (400), A.
+  SELECT o.org_id INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 1, 0) o;
+  IF v_row.org_id IS DISTINCT FROM v_org2 THEN RAISE EXCEPTION 'FAIL el primero del resumen no es B (1850 pendientes): %', v_row.org_id; END IF;
+  SELECT o.org_id INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 1, 1) o;
+  IF v_row.org_id IS DISTINCT FROM v_org THEN RAISE EXCEPTION 'FAIL el segundo del resumen no es A (−100): %', v_row.org_id; END IF;
+  SELECT o.org_id INTO v_row FROM public.admin_settlement_overview('O2A', FALSE, 1, 2) o;
+  IF v_row.org_id IS DISTINCT FROM v_org_c THEN RAISE EXCEPTION 'FAIL el tercero del resumen no es el local con Connect (−200): %', v_row.org_id; END IF;
+  RESET ROLE;
+
+  RAISE NOTICE 'PASS o2_admin: liquidaciones (registro, límites, RLS, resumen, historial, suspensión, pedidos cobrados con Connect fuera de lo pendiente), organizaciones de los locales, búsqueda de pedidos, reembolso desde el admin y baja de un local';
 END $$;
 
 ROLLBACK;
