@@ -53,7 +53,7 @@ interface Props {
 
 type LoadState = "loading" | "ready" | "error" | "signed_out" | "empty";
 
-const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+const SUPPORT_EMAIL = "info@pasify.es";
 const HORARIO = "Te respondemos en horario laboral, de lunes a viernes";
 const MESSAGE_COLUMNS = "id, conversation_id, sender_id, sender_kind, body, created_at, read_at";
 

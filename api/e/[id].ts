@@ -1,4 +1,4 @@
-// Public shareable URL for an event:  https://pasifyy.vercel.app/e/<event-id>
+// Public shareable URL for an event:  https://pasify.es/e/<event-id>
 // (publicEventUrl / shareEventLink en src/lib/eventLinks.ts).
 //
 // WhatsApp / Telegram / Facebook / Twitter / LinkedIn scrape the URL with a
@@ -26,10 +26,9 @@ const SUPABASE_ANON =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   "";
-// `SITE_URL` lo configuras en Vercel Dashboard → Settings → Environment Variables.
-// Temporal: pasifyy.vercel.app. Cuando uses el dominio definitivo (pasify.es)
-// solo cambias la env var, no toca código.
-const SITE_URL = (process.env.SITE_URL || "https://pasifyy.vercel.app").replace(
+// `SITE_URL` se puede fijar en Vercel Dashboard → Settings → Environment
+// Variables; si falta, vale el dominio definitivo (pasify.es).
+const SITE_URL = (process.env.SITE_URL || "https://pasify.es").replace(
   /\/$/,
   ""
 );

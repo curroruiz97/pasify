@@ -42,7 +42,7 @@ const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
 /** Correo real de soporte. Es el mismo que publica /soporte, la URL que
  *  Apple abre desde la ficha de App Store. */
-const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+const SUPPORT_EMAIL = "info@pasify.es";
 
 const MIN_PASSWORD_LENGTH = 8;
 

@@ -29,7 +29,7 @@ import { safeErrorResponse } from "../_shared/internal-auth.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 
 /** El mismo correo de soporte que publica /soporte. */
-const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+const SUPPORT_EMAIL = "info@pasify.es";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Filas por página (PostgREST corta en 1000) y máximo por tabla. */

@@ -25,7 +25,7 @@ import { Capacitor } from "@capacitor/core";
 export const WEB_BASE =
   import.meta.env.VITE_PUBLIC_WEB_URL ||
   import.meta.env.VITE_APP_BASE_URL ||
-  "https://pasifyy.vercel.app";
+  "https://pasify.es";
 
 /** Construye una URL absoluta para una ruta de la SPA. */
 export const buildAppUrl = (path: string): string => {

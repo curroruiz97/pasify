@@ -4,8 +4,7 @@ Ticketing y gestión de ocio nocturno en España: los locales publican eventos y
 venden entradas, el cliente compra y guarda sus entradas, la puerta las valida
 con QR, y un panel de admin supervisa la plataforma.
 
-- **Web:** https://pasifyy.vercel.app (el dominio `pasify.es` está pendiente
-  del cambio de DNS; ver [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)).
+- **Web:** https://pasify.es (Vercel; ver [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)).
 - **Apps:** Android e iOS con Capacitor (`es.pasify.app`), el mismo bundle web.
 - **Supabase de producción:** `ixkyfwzkknehvsqpopof`.
 

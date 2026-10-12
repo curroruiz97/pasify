@@ -9,7 +9,7 @@
  */
 
 /** Soporte: el mismo correo que publica /soporte. */
-export const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+export const SUPPORT_EMAIL = "info@pasify.es";
 
 /** Mínimo de caracteres de una contraseña nueva (alta, recuperar y Ajustes). */
 export const MIN_PASSWORD_LENGTH = 8;

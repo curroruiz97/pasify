@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, MessageSquare, Trash2, ShieldCheck } from "lucide-react";
 
-const CONTACTO = "comunicacion@avenuemedia.io";
+const CONTACTO = "info@pasify.es";
 
 /**
  * Página pública de soporte. Necesaria para la ficha de App Store Connect:

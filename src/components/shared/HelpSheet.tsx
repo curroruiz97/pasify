@@ -27,7 +27,7 @@ const serif = {
 };
 
 /** Mismo correo que publica la página pública /soporte. */
-const SUPPORT_EMAIL = "comunicacion@avenuemedia.io";
+const SUPPORT_EMAIL = "info@pasify.es";
 const HORARIO = "Te respondemos en horario laboral, de lunes a viernes.";
 
 export type HelpRole = "client" | "partner" | "admin";

@@ -364,7 +364,7 @@ test("una cuenta sin rol ve con quién hablar y puede cerrar sesión", async ({ 
   await page.goto("/#/partner-dashboard");
 
   await expect(page.getByRole("heading", { name: "Tu cuenta no tiene acceso" })).toBeVisible({ timeout: 90_000 });
-  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "info@pasify.es" })).toBeVisible();
 
   // La raíz tampoco se queda en negro.
   await page.goto("/#/");
@@ -1017,7 +1017,7 @@ test("una cuenta de local cerrada ve «cuenta cerrada» (sin Reintentar) y puede
 
   await page.goto("/#/partner-dashboard");
   await expect(page.getByRole("heading", { name: "Esta cuenta de local está cerrada" })).toBeVisible({ timeout: 90_000 });
-  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "info@pasify.es" })).toBeVisible();
   // Reintentar no arregla una cuenta cerrada, y no es un fallo de activación.
   await expect(page.getByRole("button", { name: "Reintentar" })).toHaveCount(0);
   await expect(page.getByText("No pudimos preparar tu cuenta de local")).toHaveCount(0);
@@ -1045,7 +1045,7 @@ test("un plan en pausa no se reactiva solo: avisa, no llama al servidor y deja v
 
   await page.goto("/#/partner-dashboard");
   await expect(page.getByRole("heading", { name: "Tu plan está en pausa" })).toBeVisible({ timeout: 90_000 });
-  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "info@pasify.es" })).toBeVisible();
   await page.waitForTimeout(1_500);
   expect(llamadas).toEqual([]);
 
@@ -1070,7 +1070,7 @@ test("si tras la llamada el plan sigue sin dar acceso, no se dice que está acti
   await page.goto("/#/partner-dashboard");
   await expect(page.getByText("No hemos podido confirmar tu plan gratuito.")).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText(/se ha activado/)).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "comunicacion@avenuemedia.io" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "info@pasify.es" })).toBeVisible();
   expect(llamadas).toBe(1);
 
   await page.getByRole("button", { name: "Reintentar" }).click();

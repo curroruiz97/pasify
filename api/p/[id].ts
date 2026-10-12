@@ -1,4 +1,4 @@
-// Enlace público de la ficha de un local:  https://pasifyy.vercel.app/p/<partner-id>
+// Enlace público de la ficha de un local:  https://pasify.es/p/<partner-id>
 // (publicPartnerUrl / sharePartnerLink en src/lib/eventLinks.ts).
 //
 // Mismo patrón que api/e/[id].ts: los rastreadores de vista previa (WhatsApp,
@@ -26,7 +26,7 @@ const SUPABASE_ANON =
   process.env.SUPABASE_ANON_KEY ||
   "";
 // Igual que en api/e/[id].ts: `SITE_URL` en Vercel → Environment Variables.
-const SITE_URL = (process.env.SITE_URL || "https://pasifyy.vercel.app").replace(
+const SITE_URL = (process.env.SITE_URL || "https://pasify.es").replace(
   /\/$/,
   ""
 );

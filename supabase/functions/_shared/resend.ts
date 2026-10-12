@@ -10,8 +10,8 @@ import { logger } from "./logger.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Pasify <noreply@pasify.es>";
-const EMAIL_REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "hola@pasify.es";
-const SUPPORT_EMAIL = Deno.env.get("SUPPORT_EMAIL") ?? "hola@pasify.es";
+const EMAIL_REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "info@pasify.es";
+const SUPPORT_EMAIL = Deno.env.get("SUPPORT_EMAIL") ?? "info@pasify.es";
 
 export interface SendEmailOptions {
   to: string | string[];
