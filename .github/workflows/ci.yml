@@ -42,6 +42,14 @@ jobs:
       # de vite.config.ts). Usa los valores públicos de .env.production.
       - name: Build (vite build)
         run: npm run build
+      # Cada <script> en línea de dist/ (index.html, 404.html, public/landing/**)
+      # entra en el script-src de la CSP de vercel.json por su hash. Si se toca
+      # uno y no se actualiza el hash, la política deja de reconocerlo: hoy solo
+      # es un aviso en la consola, pero el día que se pase a bloquear el script
+      # no se ejecutaría. Falla si falta algún hash; el propio script imprime
+      # cuál (FALTA) y cuál sobra (SOBRA). Ver DEPLOY_VERCEL.md, sección 1.1.
+      - name: CSP · hashes de los scripts en línea
+        run: node scripts/csp-hashes.mjs --check
       # Toda visita descarga el chunk principal antes de pintar nada: esto para
       # un import estático pesado que se cuele en el arranque (una librería
       # entera, una pantalla sin lazy()). Hay otros index-*.js pequeños
