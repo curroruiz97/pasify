@@ -1061,6 +1061,9 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
           controls={false}
           disablePictureInPicture
           disableRemotePlayback
+          // Sin cámara abierta el <video> está vacío y Android pinta encima su ▶ nativo:
+          // solo se ve cuando hay imagen.
+          style={{ opacity: isLive ? 1 : 0 }}
         />
 
         <div
