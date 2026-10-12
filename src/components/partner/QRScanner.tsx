@@ -88,6 +88,8 @@ const OK_AUTO_CLOSE_MS = 1_500;
 const INVALID_AUTO_CLOSE_MS = 2_000;
 /** Tras cerrar un resultado, el mismo QR delante de la cámara se ignora este rato. */
 const SAME_CODE_COOLDOWN_MS = 2_500;
+/** El servidor deja validar desde 6 h antes del inicio del evento (scan_ticket). */
+const DOOR_OPENS_BEFORE_MS = 6 * 60 * 60_000;
 /** already_used tan reciente que puede ser el propio reintento tras un corte. */
 const RECENT_USE_MS = 2 * 60_000;
 
@@ -1046,13 +1048,19 @@ const QRScanner = ({ events, eventsState = "ready", doorMode = false }: QRScanne
             "0 1px 0 rgba(255,255,255,0.05) inset, 0 22px 50px -22px rgba(232,84,42,0.30)",
         }}
       >
+        {/* El vídeo se congela entre lecturas (video.pause()); en Android/WebView
+            eso hace aparecer el botón ▶ nativo gigante sobre el visor. Se oculta
+            todo el chrome nativo del <video>: aquí nunca debe haber controles. */}
+        <style>{`.pasify-qr-video::-webkit-media-controls,.pasify-qr-video::-webkit-media-controls-panel,.pasify-qr-video::-webkit-media-controls-overlay-play-button,.pasify-qr-video::-webkit-media-controls-start-playback-button,.pasify-qr-video::-webkit-media-controls-enclosure{display:none!important;opacity:0!important;pointer-events:none!important;-webkit-appearance:none!important}`}</style>
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="pasify-qr-video absolute inset-0 h-full w-full object-cover"
           playsInline
           muted
           autoPlay
           controls={false}
+          disablePictureInPicture
+          disableRemotePlayback
         />
 
         <div
@@ -1378,20 +1386,29 @@ const describeOutcome = (outcome: Outcome, selectedEvent: ScannerEvent | null): 
         canForce: !forceRejected,
         canRetry: false,
       };
-    case "outside_window":
+    case "outside_window": {
+      // El servidor deja validar desde 6 h antes del inicio del evento hasta 2 h
+      // después de su final. Aquí solo llega la fecha de inicio: si aún falta
+      // para que se abra la puerta se dice cuándo; si no, se dice que ya pasó.
+      const startMs = row.event_date_start ? new Date(row.event_date_start).getTime() : NaN;
+      const opensMs = startMs - DOOR_OPENS_BEFORE_MS;
+      const early = Number.isFinite(opensMs) && Date.now() < opensMs;
       return {
         tone: "bad",
-        title: "Fuera de horario",
+        title: early ? "Todavía no se puede validar" : "Fuera de horario",
         tier,
         person,
         lines: [
           realEvent ? `Esta entrada es para ${realEvent}.` : null,
-          "Ahora no está dentro del horario de su evento.",
-          forceRejected ? forceRejectedLine : null,
+          early
+            ? `La puerta se abre 6 h antes del evento: podrás validarla a partir del ${eventDateLabel(new Date(opensMs).toISOString())}.`
+            : "El horario de entrada de este evento ya ha terminado.",
+          forceRejected ? forceRejectedLine : "Si tienes que dejarla pasar igualmente, quien gestiona el evento puede hacerlo indicando un motivo.",
         ].filter((l): l is string => !!l),
         canForce: !forceRejected,
         canRetry: false,
       };
+    }
     case "event_cancelled":
       return {
         tone: "bad",
