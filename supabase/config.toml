@@ -129,3 +129,30 @@ verify_jwt = false
 # x-pasify-internal (migración 20260928160000).
 [functions.retake-stale-refunds]
 verify_jwt = false
+
+# -------- IA y mantenimiento (migración 20261012000000) --------
+
+# Detector de anomalías de la IA: pg_cron cada día con la cabecera
+# x-pasify-internal, o un admin de plataforma.
+[functions.ai-anomaly-detector]
+verify_jwt = false
+
+# Borrador de respuesta de soporte con OpenAI: solo admins de plataforma.
+# Sin OPENAI_API_KEY responde 503.
+[functions.ai-concierge-reply]
+verify_jwt = false
+
+# Agregados anónimos (k-anonimato) del sector: pg_cron cada día con la cabecera
+# x-pasify-internal, o un admin de plataforma.
+[functions.industry-benchmarks-recompute]
+verify_jwt = false
+
+# Moderación de texto con OpenAI: sesión de usuario (30/min) o servicio. 502/503
+# significan «no se pudo comprobar»: el cliente deja pasar el contenido.
+[functions.moderate-content]
+verify_jwt = false
+
+# Limpieza de huérfanos en Storage: pg_cron semanal con la cabecera
+# x-pasify-internal (EN MODO PRUEBA hasta que se pase a dry_run false), o un admin.
+[functions.cleanup-media]
+verify_jwt = false

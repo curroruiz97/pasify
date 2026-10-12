@@ -137,6 +137,11 @@ jobs:
             resend-tickets-email
             reconcile-pending-orders
             retake-stale-refunds
+            ai-anomaly-detector
+            ai-concierge-reply
+            industry-benchmarks-recompute
+            moderate-content
+            cleanup-media
           )
           failed=0
           for fn in "${fns[@]}"; do

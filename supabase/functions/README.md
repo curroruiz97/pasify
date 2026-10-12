@@ -1,6 +1,6 @@
 # Pasify · Edge functions
 
-30 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
+35 funciones en Deno, una por carpeta (`supabase/functions/<nombre>/index.ts`).
 `_shared/` es código común: no es una función y no se despliega sola.
 
 - **Despliegue:** solo por `.github/workflows/deploy-production.yml`, después de
@@ -72,6 +72,20 @@ admin de plataforma (`requireAdmin` o `isPlatformAdmin`); **servicio** =
 | `notify-admin-message` | servicio | Email a los admins cuando un usuario abre una conversación sin leer (trigger de `support_messages` con `pg_net`) |
 | `retake-stale-refunds` | servicio | Retoma los reembolsos atascados en `processing` y los aprobados sin lanzar (lotes de 10). `pg_cron` + `pg_net` cada 10 min |
 
+### IA y mantenimiento
+
+Las cinco responden 401 sin sesión (las vigila `smoke.yml`). Las de OpenAI
+(`ai-concierge-reply`, `moderate-content`) responden **503 `ai_unavailable`**
+sin `OPENAI_API_KEY` o sin cuota. Ninguna tiene llamador en `src/` hoy.
+
+| Función | Autorización | Qué hace |
+|---|---|---|
+| `ai-anomaly-detector` | servicio o admin | Mira `ai_audit_log` (24 h) frente a los objetivos de `ai_capabilities`: tasa de errores (>3× high, >10× critical; mínimo 20 ejecuciones y 3 fallos) y latencia mediana (>2× medium, >5× high). Abre `ai_anomalies` sin duplicar las abiertas, salta capacidades paradas y avisa a los admins (categoría `system`, nunca `critical`: manda SMS). `{"dry_run": true}` para probar. `pg_cron` cada día a las 06:30 |
+| `ai-concierge-reply` | admin | Borrador de respuesta a una conversación de soporte (`client_admin` o `partner_admin`): `POST {conversation_id}` → `{reply, confidence, escalate, category, reason}`. No envía nada. Solo conoce la ayuda de la app; oculta emails, teléfonos, tarjetas, IBAN y documentos antes de llamar a OpenAI; fuerza `escalate` con temas de alto riesgo (legal, contracargos, fraude, RGPD, acoso). Kill switch `concierge`; 20/min por admin; cada ejecución en `ai_audit_log` sin el texto |
+| `moderate-content` | sesión (30/min) o servicio | Clasifica un texto con `omni-moderation` y devuelve `{approved, flagged, categories, scores}`. **502/503 = «no se pudo comprobar»: el cliente deja pasar el contenido y no muestra error.** Con `record` (solo servicio o admin) deja una marca abierta en `moderation_flags`, sin el texto. Kill switch `moderation` |
+| `industry-benchmarks-recompute` | servicio o admin | Agregados anónimos por segmento (categoría del local) y región en `industry_benchmarks_snapshots`, solo con datos reales: precios de entrada (p25/mediana/p75), aforo y venta sobre aforo. k-anonimato de 15 organizaciones por grupo y por métrica, regla de dominancia y redondeo; sin muestra no escribe nada. Idempotente por día. Kill switch `benchmarks`. `pg_cron` cada día a las 03:30 |
+| `cleanup-media` | servicio o admin | Borra de `avatars`, `event-images`, `partner-branding` y `partner-galleries` los ficheros que ninguna columna de la base de datos referencia y llevan 30+ días sin tocarse (RPC `cleanup_media_candidates`). **Sin `"dry_run": false` solo registra** (log y `audit_logs`, acción `storage_cleanup_dry_run`). Tope de 200 por bucket y ejecución, fail-closed. `pg_cron` domingos a las 05:30, en modo prueba |
+
 ### Salud
 
 | Función | Autorización | Qué hace |
@@ -98,6 +112,7 @@ estar a la espera de su pantalla.
 | `email-templates.ts` · `resend.ts` | Plantillas y envío de email con Resend |
 | `gmail.ts` | Shim antiguo sobre `resend.ts` (lo usa `notify-new-registration`) |
 | `firebase.ts` · `twilio.ts` | Push por FCM (HTTP v1) y SMS por Twilio |
+| `openai.ts` | Cliente mínimo de OpenAI (chat en JSON y moderación) con tiempo máximo, un reintento y errores estables 503 `ai_unavailable` / 502 `ai_upstream_error`; no escribe lo que se envía en los logs |
 | `urls.ts` | Orígenes permitidos para las URL de vuelta de Stripe |
 
 ## Secretos
@@ -113,7 +128,7 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 | `STRIPE_CONNECT_CLIENT_ID` | `_shared/stripe.ts` (opcional) |
 | `PASIFY_ENV` | `"production"` en producción; si falta, se deduce de `SUPABASE_URL` |
 | `PASIFY_ALLOW_TEST_PAYMENTS` | `"true"` solo mientras se prueba con tarjetas de test en producción; quitarlo al acabar |
-| `PASIFY_INTERNAL_SECRET` | Cabecera `x-pasify-internal` (32+ caracteres). El mismo valor va en Vault como `pasify_internal_secret` para el cron de `reconcile-pending-orders` |
+| `PASIFY_INTERNAL_SECRET` | Cabecera `x-pasify-internal` (32+ caracteres). El mismo valor va en Vault como `pasify_internal_secret` para todos los crons que llaman a una función (`reconcile-pending-orders`, `dispatch-notification`, `health-check`, `retake-stale-refunds`, `ai-anomaly-detector`, `industry-benchmarks-recompute`, `cleanup-media`) |
 | `APP_BASE_URL` | URL de la web en emails y enlaces |
 | `ALLOWED_RETURN_ORIGINS` | Orígenes extra para las URL de vuelta de Stripe, separados por comas (opcional) |
 | `RESEND_API_KEY` · `EMAIL_FROM` · `EMAIL_REPLY_TO` · `SUPPORT_EMAIL` | Email transaccional |
@@ -122,6 +137,8 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 | `FIREBASE_ADMIN_SERVICE_ACCOUNT` | Push de `notify-new-registration` |
 | `TWILIO_ACCOUNT_SID` · `TWILIO_AUTH_TOKEN` · `TWILIO_FROM_NUMBER` | SMS |
 | `TURNSTILE_SECRET_KEY` | `verify-captcha` |
+| `OPENAI_API_KEY` | `ai-concierge-reply` y `moderate-content` (`_shared/openai.ts`). Sin ella responden 503 |
+| `OPENAI_MODEL_DEFAULT` · `OPENAI_MODERATION_MODEL` | Modelo de chat (por defecto `gpt-4o-mini`) y de moderación (`omni-moderation-latest`); opcionales |
 
 ## Despliegue
 
@@ -162,6 +179,9 @@ Se cargan con `supabase secrets set NOMBRE=valor` (o
 | `pasify-dispatch-notifications` | cada minuto | `POST` a `dispatch-notification` (lotes) con `pg_net`; mismo requisito (`SELECT public.schedule_dispatch_notifications();`) |
 | `pasify-health-check` | cada 15 min | `POST` a `health-check` (completo) con `pg_net`; mismo requisito (`SELECT public.schedule_health_check();`) |
 | `pasify-retake-stale-refunds` | cada 10 min | `POST` a `retake-stale-refunds` con `pg_net`; mismo requisito (`SELECT public.schedule_retake_stale_refunds();`) |
+| `pasify-industry-benchmarks` | 03:30 | `POST` a `industry-benchmarks-recompute`; mismo requisito (los tres siguientes con `SELECT public.schedule_ia_functions();`) |
+| `pasify-ai-anomaly-detector` | 06:30 | `POST` a `ai-anomaly-detector` |
+| `pasify-cleanup-media` | domingos 05:30 | `POST` a `cleanup-media` con `{"dry_run": true}`: **solo registra**. Cuando los candidatos del log (o de `audit_logs`, acción `storage_cleanup_dry_run`) sean de verdad huérfanos, `SELECT public.schedule_cleanup_media(false);` lo pasa a borrar |
 
 Horas en UTC (las de `pg_cron`).
 
