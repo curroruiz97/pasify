@@ -36,6 +36,14 @@ export function chatModel(): string {
   return (Deno.env.get("OPENAI_MODEL_DEFAULT") ?? "").trim() || "gpt-4o-mini";
 }
 
+/**
+ * Los modelos de razonamiento (serie o, gpt-5…) solo admiten la temperatura por
+ * defecto y rechazan cualquier otro valor con un 400. Con gpt-4o / gpt-4.1 vale.
+ */
+export function supportsTemperature(model: string): boolean {
+  return /^gpt-4/i.test(model);
+}
+
 export function moderationModel(): string {
   return (Deno.env.get("OPENAI_MODERATION_MODEL") ?? "").trim() || "omni-moderation-latest";
 }
@@ -160,7 +168,7 @@ export async function chatJson(opts: ChatJsonOptions): Promise<ChatJsonResult> {
     messages: opts.messages,
     response_format: { type: "json_object" },
     max_completion_tokens: opts.maxTokens,
-    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+    ...(opts.temperature !== undefined && supportsTemperature(model) ? { temperature: opts.temperature } : {}),
   }, { timeoutMs: opts.timeoutMs ?? 20_000, attempts: 2 }) as ChatCompletionResponse;
 
   const choice = json.choices?.[0];

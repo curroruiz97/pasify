@@ -61,7 +61,8 @@ ON CONFLICT (capability_code) DO NOTHING;
 -- al menos _min_age_days días.
 --
 -- Qué es «referenciado»: su ruta «<uuid>/…» aparece en CUALQUIER columna text,
--- varchar, citext, text[], json o jsonb de las tablas de public, o en los
+-- varchar, citext, text[], json o jsonb de las tablas de public (o dominios sobre
+-- esos tipos), o en los
 -- metadatos de auth.users. No importa en cuál: vale una URL pública completa, una
 -- URL firmada o la ruta sola. Se compara sin distinguir mayúsculas y sin los
 -- signos finales (.-_/) que pueda arrastrar un texto («…/a.jpg.»). Tomar por
@@ -103,19 +104,26 @@ BEGIN
 
   PERFORM pg_catalog.set_config('row_security', 'off', true);
 
-  -- Una consulta por columna candidata a llevar URLs; todas en un UNION ALL.
+  -- Una consulta por columna candidata a llevar URLs; todas en un UNION ALL. Se
+  -- enumeran con pg_catalog (no con information_schema, que oculta lo que el
+  -- rol no puede leer): una tabla ilegible hace fallar el SELECT, no se salta.
+  -- Dominios sobre texto incluidos; las particiones cuentan por su tabla madre.
   SELECT pg_catalog.string_agg(
-           pg_catalog.format('SELECT %I::pg_catalog.text AS v FROM %I.%I', c.column_name, c.table_schema, c.table_name),
+           pg_catalog.format('SELECT %I::pg_catalog.text AS v FROM %I.%I', a.attname, n.nspname, c.relname),
            E'\n UNION ALL '
          )
     INTO v_sources
-    FROM information_schema.columns c
-    JOIN information_schema.tables t
-      ON t.table_schema = c.table_schema
-     AND t.table_name = c.table_name
-     AND t.table_type = 'BASE TABLE'
-   WHERE c.table_schema = 'public'
-     AND c.udt_name IN ('text', 'varchar', 'bpchar', 'citext', 'json', 'jsonb', '_text', '_varchar', '_bpchar', '_citext');
+    FROM pg_catalog.pg_attribute a
+    JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
+    JOIN pg_catalog.pg_type bt ON bt.oid = CASE WHEN t.typtype = 'd' THEN t.typbasetype ELSE t.oid END
+   WHERE n.nspname = 'public'
+     AND c.relkind IN ('r', 'p')
+     AND NOT c.relispartition
+     AND a.attnum > 0
+     AND NOT a.attisdropped
+     AND bt.typname IN ('text', 'varchar', 'bpchar', 'citext', 'json', 'jsonb', '_text', '_varchar', '_bpchar', '_citext');
 
   IF v_sources IS NULL THEN
     RAISE EXCEPTION 'cleanup_media_candidates: no se encontraron columnas que revisar';
