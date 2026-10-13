@@ -182,6 +182,14 @@ for (const tam of TAMANOS) {
 
     test("selector de entradas: centrado y dentro de la pantalla; cambia de tipo y de cantidad y pide ese pago", async ({ page }) => {
       const compra = await prepararCompra(page);
+      // «Stripe» es la propia app (/#/calendar): el navegador sale de la página del evento sin llegar a ningún Stripe.
+      compra.checkout = () => ({
+        json: {
+          url: `${new URL(page.url()).origin}/#/calendar`,
+          order_id: "c0b0e000-0000-4000-8000-0000000000b9",
+          session_id: "cs_test_e2e",
+        },
+      });
       vigilarErrores(page);
       await page.goto(`/#/e/${EVENTO}`);
       await expect(page.getByRole("heading", { level: 1, name: "Concierto E2E" })).toBeVisible({ timeout: 90_000 });
@@ -235,7 +243,7 @@ for (const tam of TAMANOS) {
     test("confirmación: entradas y pedido a dos columnas en escritorio, una columna en tablet y móvil", async ({ page }) => {
       vigilarErrores(page);
       await prepararCompra(page);
-      await page.goto(`/#/ticket/success?order_id=${T.pedidoDos}&free=1`);
+      await page.goto(`/#/ticket/success?order_id=${T.pedidoGratis}&free=1`);
       await expect(page.getByRole("heading", { name: /Tus entradas están listas/ })).toBeVisible({ timeout: 90_000 });
       const qr = page.getByRole("img", { name: /Código QR de la entrada/ });
       await expect(qr).toHaveCount(2);
@@ -276,7 +284,7 @@ for (const tam of TAMANOS) {
     test("confirmación con una sola entrada: centrada en su columna, no pegada a la izquierda", async ({ page }) => {
       vigilarErrores(page);
       await prepararCompra(page);
-      await page.goto(`/#/ticket/success?order_id=${T.pedidoUna}`);
+      await page.goto(`/#/ticket/success?order_id=${T.pedidoPagado}`);
       await expect(page.getByRole("heading", { name: /Tu entrada está lista/ })).toBeVisible({ timeout: 90_000 });
       await expect(page.getByRole("img", { name: /Código QR de la entrada/ })).toHaveCount(1);
       await sinDesbordeHorizontal(page, "en la confirmación de una entrada");
