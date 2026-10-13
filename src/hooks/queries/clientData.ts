@@ -184,6 +184,7 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
     status: string | null;
     city: string | null;
     venue_name: string | null;
+    address: string | null;
     image_url: string | null;
     partner_id: string | null;
   };
@@ -193,7 +194,7 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
     // (events_ticket_holder_read).
     const { data: evData, error: evErr } = await supabase
       .from("events")
-      .select("id, title, date_start, date_end, status, city, venue_name, image_url, partner_id")
+      .select("id, title, date_start, date_end, status, city, venue_name, address, image_url, partner_id")
       .in("id", eventIds);
     if (evErr) console.warn("[mis entradas] events query failed", evErr);
     else evs = (evData ?? []) as WalletEventRow[];
@@ -231,6 +232,7 @@ async function leerMisEntradas(userId: string): Promise<WalletTicketRow[]> {
       status: e.status ?? null,
       city: e.city ?? "",
       venue_name: e.venue_name ?? null,
+      address: e.address ?? null,
       image_url: e.image_url ?? null,
       partner_name: (e.partner_id && partnerNames.get(e.partner_id)) || undefined,
     });
