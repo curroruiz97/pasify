@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   Ticket as TicketIcon,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import {
   allowanceHint,
@@ -32,7 +34,9 @@ import {
 /**
  * Pasify · selector de entradas.
  *
- * Bottom sheet que abre `useTicketCheckout` antes de mandar al usuario a
+ * Hoja desde abajo (móvil y tablet) o diálogo centrado a dos columnas (escritorio,
+ * ≥ 1024 px: los tipos a la izquierda, cantidad, total y pago a la derecha) que
+ * abre `useTicketCheckout` antes de mandar al usuario a
  * Stripe: lista los tipos activos del evento (nombre, descripción, precio,
  * estado de venta y condiciones de devolución y transferencia), deja elegir
  * cantidad dentro de los límites del tipo y enseña el total que se va a
@@ -198,6 +202,319 @@ export const TierPickerSheet = ({
     onOpenChange(next);
   };
 
+  const isDesktop = useIsDesktop();
+  const Title = isDesktop ? DialogTitle : SheetTitle;
+  const Description = isDesktop ? DialogDescription : SheetDescription;
+
+  const cabecera = (
+    <div className="shrink-0 px-5 pb-4 pt-2 sm:px-6 lg:px-8 lg:pb-5 lg:pr-14 lg:pt-7">
+      <div
+        className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
+        style={{ ...mono, letterSpacing: "0.22em" }}
+      >
+        <span className="inline-block h-px w-5 bg-orange-500/70" />
+        Entradas
+      </div>
+      <Title className="text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
+        {eventTitle || "Elige tus entradas"}
+      </Title>
+      <Description className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+        {subtitle || "Elige el tipo de entrada y la cantidad."}
+      </Description>
+    </div>
+  );
+
+  const tipos = (
+    <div
+      role="radiogroup"
+      aria-label="Tipo de entrada"
+      className={cn(
+        "space-y-2.5 px-5 pb-4 sm:px-6",
+        // Escritorio: la columna de la izquierda, con su propio scroll.
+        isDesktop ? "min-h-0 overflow-y-auto px-8 py-6" : "min-h-0 flex-1 overflow-y-auto"
+      )}
+    >
+      {options.map(({ tier, availability }) => {
+        const available = availability.kind === "available";
+        const isSelected = available && tier.id === selectedId;
+        const statusLabel = availabilityLabel(availability);
+        const lowStock = availability.kind === "available" && availability.lowStock;
+        return (
+          <button
+            key={tier.id}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            aria-disabled={!available}
+            disabled={!available || submitting}
+            onClick={() => available && setSelectedId(tier.id)}
+            className={cn(
+              "w-full rounded-2xl border p-4 text-left transition",
+              isSelected
+                ? "border-orange-500/70 bg-orange-500/[0.08]"
+                : "border-border bg-card hover:border-orange-500/40",
+              !available && "cursor-not-allowed opacity-60 hover:border-border"
+            )}
+            style={
+              isSelected
+                ? { boxShadow: "0 12px 30px -16px rgba(232,84,42,0.6)" }
+                : undefined
+            }
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                    isSelected ? "border-orange-500" : "border-muted-foreground/40"
+                  )}
+                >
+                  {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />}
+                </span>
+                <div className="min-w-0">
+                  <div className="font-semibold leading-tight text-foreground">
+                    {tier.name}
+                  </div>
+                  {tier.description && (
+                    <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+                      {tier.description}
+                    </p>
+                  )}
+                  {statusLabel && (
+                    <span
+                      className={cn(
+                        "mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        lowStock
+                          ? "border-orange-500/50 text-orange-500"
+                          : "border-border text-muted-foreground"
+                      )}
+                      style={{ ...mono, letterSpacing: "0.14em" }}
+                    >
+                      {statusLabel}
+                    </span>
+                  )}
+                  <TierConditions tier={tier} className="mt-2 text-muted-foreground" />
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "shrink-0 text-right text-base font-bold",
+                  available ? "text-foreground" : "text-muted-foreground"
+                )}
+                style={mono}
+              >
+                {isFreeTier(tier) ? "Gratis" : formatPriceCents(tier.price_cents, tier.currency)}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  // Cantidad + total + CTA. Debajo de los tipos en la hoja; en su propia
+  // columna, a la derecha, en escritorio.
+  const resumen = (
+    <div
+      className={cn(
+        "shrink-0 px-5 pb-5 pt-4 sm:px-6",
+        isDesktop ? "flex flex-col justify-between gap-6 p-8" : "border-t border-border bg-card/60"
+      )}
+    >
+      <div>
+        {isDesktop && (
+          <div
+            className="mb-4 text-[10px] uppercase text-muted-foreground"
+            style={{ ...mono, letterSpacing: "0.18em" }}
+          >
+            Tu selección
+          </div>
+        )}
+        {limitReached && allowance && (
+          <div
+            role="status"
+            data-testid="limite-entradas"
+            className="mb-4 flex items-start gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-3 py-2.5 text-[13px] leading-snug"
+          >
+            <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">
+                Has alcanzado el máximo de {allowance.limit} entradas por persona en este evento.
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Ya tienes {allowance.held}
+                {eventId ? (
+                  <>
+                    {" "}
+                    · míralas en{" "}
+                    <Link
+                      to={`/client-dashboard?wallet=${encodeURIComponent(eventId)}`}
+                      onClick={() => onOpenChange(false)}
+                      className="text-orange-500 underline underline-offset-4"
+                    >
+                      Mis entradas
+                    </Link>
+                  </>
+                ) : null}
+                .
+              </p>
+            </div>
+          </div>
+        )}
+
+        {selected && maxQty > 0 && (
+          <div className={cn("flex items-center justify-between gap-3", isDesktop ? "mb-2" : "mb-4")}>
+            <div className="min-w-0">
+              <div
+                className="text-[10px] uppercase text-muted-foreground"
+                style={{ ...mono, letterSpacing: "0.18em" }}
+              >
+                Cantidad
+              </div>
+              {qtyHint && (
+                <div className="mt-0.5 text-[12px] text-muted-foreground">{qtyHint}</div>
+              )}
+            </div>
+            <div
+              className="inline-flex items-center rounded-full border border-border bg-card"
+              aria-label="Cantidad de entradas"
+            >
+              <button
+                type="button"
+                onClick={() => setQty(Math.max(1, effectiveQty - 1))}
+                disabled={effectiveQty <= 1 || submitting}
+                className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                aria-label="Quitar una entrada"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span
+                className="min-w-[28px] text-center text-base font-semibold text-foreground"
+                style={mono}
+                aria-live="polite"
+              >
+                {effectiveQty}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQty(Math.min(maxQty, effectiveQty + 1))}
+                disabled={effectiveQty >= maxQty || submitting}
+                className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                aria-label="Añadir una entrada"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div
+              className="text-[10px] uppercase text-muted-foreground"
+              style={{ ...mono, letterSpacing: "0.18em" }}
+            >
+              Total
+            </div>
+            {selected && effectiveQty > 0 && (
+              <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                {effectiveQty} × {selected.tier.name}
+              </div>
+            )}
+          </div>
+          <div
+            className="text-2xl font-bold leading-none tracking-tight text-foreground"
+            style={mono}
+          >
+            {limitReached ? "—" : free ? "Gratis" : formatPriceCents(total, currency)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={!canConfirm}
+          onClick={() => {
+            if (!selected || !canConfirm) return;
+            onConfirm(selected.tier, effectiveQty);
+          }}
+          className="group/btn inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
+          style={{
+            background: canConfirm || submitting
+              ? "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)"
+              : "#3a3a3a",
+            boxShadow: canConfirm
+              ? "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 12px 30px -10px rgba(232,84,42,0.55)"
+              : "none",
+            letterSpacing: "-0.005em",
+          }}
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {free ? "Reservando tus entradas…" : "Preparando el pago…"}
+            </>
+          ) : refreshing ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Actualizando disponibilidad…
+            </>
+          ) : !firstAvailableId ? (
+            "No hay entradas disponibles"
+          ) : limitReached ? (
+            "Límite de entradas alcanzado"
+          ) : free ? (
+            <>
+              <Gift className="h-5 w-5" />
+              Conseguir gratis
+            </>
+          ) : (
+            <>
+              <TicketIcon className="h-5 w-5" />
+              Continuar al pago
+              <span
+                aria-hidden="true"
+                className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
+              >
+                →
+              </span>
+            </>
+          )}
+        </button>
+
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] leading-snug text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+          {free
+            ? "Sin pago. Tus entradas con código QR aparecerán en Mis entradas."
+            : "Pago seguro con Stripe. Tus entradas con código QR aparecerán en Mis entradas."}
+        </p>
+      </div>
+    </div>
+  );
+
+  // Escritorio: un diálogo centrado a dos columnas. Móvil y tablet: la hoja
+  // desde abajo de siempre (centrada y de 672 px como mucho en tablet).
+  if (isDesktop) {
+    return (
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent
+          className="flex max-h-[92dvh] max-w-4xl flex-col gap-0 overflow-hidden rounded-3xl border-border bg-background p-0 text-foreground sm:rounded-3xl"
+          style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        >
+          {cabecera}
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,22rem)] border-t border-border">
+            {tipos}
+            <div data-testid="resumen-compra" className="flex min-h-0 flex-col overflow-y-auto border-l border-border bg-card/60">
+              {resumen}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
@@ -205,267 +522,9 @@ export const TierPickerSheet = ({
         className="border-border bg-background text-foreground"
         style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
       >
-        {/* Cabecera */}
-        <div className="shrink-0 px-5 pb-4 pt-2 sm:px-6">
-          <div
-            className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase text-orange-500"
-            style={{ ...mono, letterSpacing: "0.22em" }}
-          >
-            <span className="inline-block h-px w-5 bg-orange-500/70" />
-            Entradas
-          </div>
-          <SheetTitle className="text-xl font-semibold leading-tight tracking-tight md:text-2xl">
-            {eventTitle || "Elige tus entradas"}
-          </SheetTitle>
-          <SheetDescription className="mt-1 text-[13px] leading-relaxed">
-            {subtitle || "Elige el tipo de entrada y la cantidad."}
-          </SheetDescription>
-        </div>
-
-        {/* Tipos de entrada */}
-        <div
-          role="radiogroup"
-          aria-label="Tipo de entrada"
-          className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-5 pb-4 sm:px-6"
-        >
-          {options.map(({ tier, availability }) => {
-            const available = availability.kind === "available";
-            const isSelected = available && tier.id === selectedId;
-            const statusLabel = availabilityLabel(availability);
-            const lowStock = availability.kind === "available" && availability.lowStock;
-            return (
-              <button
-                key={tier.id}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                aria-disabled={!available}
-                disabled={!available || submitting}
-                onClick={() => available && setSelectedId(tier.id)}
-                className={cn(
-                  "w-full rounded-2xl border p-4 text-left transition",
-                  isSelected
-                    ? "border-orange-500/70 bg-orange-500/[0.08]"
-                    : "border-border bg-card hover:border-orange-500/40",
-                  !available && "cursor-not-allowed opacity-60 hover:border-border"
-                )}
-                style={
-                  isSelected
-                    ? { boxShadow: "0 12px 30px -16px rgba(232,84,42,0.6)" }
-                    : undefined
-                }
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
-                        isSelected ? "border-orange-500" : "border-muted-foreground/40"
-                      )}
-                    >
-                      {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-semibold leading-tight text-foreground">
-                        {tier.name}
-                      </div>
-                      {tier.description && (
-                        <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-                          {tier.description}
-                        </p>
-                      )}
-                      {statusLabel && (
-                        <span
-                          className={cn(
-                            "mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
-                            lowStock
-                              ? "border-orange-500/50 text-orange-500"
-                              : "border-border text-muted-foreground"
-                          )}
-                          style={{ ...mono, letterSpacing: "0.14em" }}
-                        >
-                          {statusLabel}
-                        </span>
-                      )}
-                      <TierConditions tier={tier} className="mt-2 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <div
-                    className={cn(
-                      "shrink-0 text-right text-base font-bold",
-                      available ? "text-foreground" : "text-muted-foreground"
-                    )}
-                    style={mono}
-                  >
-                    {isFreeTier(tier) ? "Gratis" : formatPriceCents(tier.price_cents, tier.currency)}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Cantidad + total + CTA */}
-        <div className="shrink-0 border-t border-border bg-card/60 px-5 pb-5 pt-4 sm:px-6">
-          {limitReached && allowance && (
-            <div
-              role="status"
-              data-testid="limite-entradas"
-              className="mb-4 flex items-start gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-3 py-2.5 text-[13px] leading-snug"
-            >
-              <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">
-                  Has alcanzado el máximo de {allowance.limit} entradas por persona en este evento.
-                </p>
-                <p className="mt-0.5 text-muted-foreground">
-                  Ya tienes {allowance.held}
-                  {eventId ? (
-                    <>
-                      {" "}
-                      · míralas en{" "}
-                      <Link
-                        to={`/client-dashboard?wallet=${encodeURIComponent(eventId)}`}
-                        onClick={() => onOpenChange(false)}
-                        className="text-orange-500 underline underline-offset-4"
-                      >
-                        Mis entradas
-                      </Link>
-                    </>
-                  ) : null}
-                  .
-                </p>
-              </div>
-            </div>
-          )}
-
-          {selected && maxQty > 0 && (
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div
-                  className="text-[10px] uppercase text-muted-foreground"
-                  style={{ ...mono, letterSpacing: "0.18em" }}
-                >
-                  Cantidad
-                </div>
-                {qtyHint && (
-                  <div className="mt-0.5 text-[12px] text-muted-foreground">{qtyHint}</div>
-                )}
-              </div>
-              <div
-                className="inline-flex items-center rounded-full border border-border bg-card"
-                aria-label="Cantidad de entradas"
-              >
-                <button
-                  type="button"
-                  onClick={() => setQty(Math.max(1, effectiveQty - 1))}
-                  disabled={effectiveQty <= 1 || submitting}
-                  className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
-                  aria-label="Quitar una entrada"
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <span
-                  className="min-w-[28px] text-center text-base font-semibold text-foreground"
-                  style={mono}
-                  aria-live="polite"
-                >
-                  {effectiveQty}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setQty(Math.min(maxQty, effectiveQty + 1))}
-                  disabled={effectiveQty >= maxQty || submitting}
-                  className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground transition hover:text-foreground disabled:opacity-40"
-                  aria-label="Añadir una entrada"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div
-                className="text-[10px] uppercase text-muted-foreground"
-                style={{ ...mono, letterSpacing: "0.18em" }}
-              >
-                Total
-              </div>
-              {selected && effectiveQty > 0 && (
-                <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
-                  {effectiveQty} × {selected.tier.name}
-                </div>
-              )}
-            </div>
-            <div
-              className="text-2xl font-bold leading-none tracking-tight text-foreground"
-              style={mono}
-            >
-              {limitReached ? "—" : free ? "Gratis" : formatPriceCents(total, currency)}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={!canConfirm}
-            onClick={() => {
-              if (!selected || !canConfirm) return;
-              onConfirm(selected.tier, effectiveQty);
-            }}
-            className="group/btn inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
-            style={{
-              background: canConfirm || submitting
-                ? "linear-gradient(180deg, #FF7A4D 0%, #E8542A 55%, #B8381A 100%)"
-                : "#3a3a3a",
-              boxShadow: canConfirm
-                ? "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(80,20,5,0.22), 0 12px 30px -10px rgba(232,84,42,0.55)"
-                : "none",
-              letterSpacing: "-0.005em",
-            }}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                {free ? "Reservando tus entradas…" : "Preparando el pago…"}
-              </>
-            ) : refreshing ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Actualizando disponibilidad…
-              </>
-            ) : !firstAvailableId ? (
-              "No hay entradas disponibles"
-            ) : limitReached ? (
-              "Límite de entradas alcanzado"
-            ) : free ? (
-              <>
-                <Gift className="h-5 w-5" />
-                Conseguir gratis
-              </>
-            ) : (
-              <>
-                <TicketIcon className="h-5 w-5" />
-                Continuar al pago
-                <span
-                  aria-hidden="true"
-                  className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
-                >
-                  →
-                </span>
-              </>
-            )}
-          </button>
-
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] leading-snug text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-            {free
-              ? "Sin pago. Tus entradas con código QR aparecerán en Mis entradas."
-              : "Pago seguro con Stripe. Tus entradas con código QR aparecerán en Mis entradas."}
-          </p>
-        </div>
+        {cabecera}
+        {tipos}
+        {resumen}
       </SheetContent>
     </Sheet>
   );

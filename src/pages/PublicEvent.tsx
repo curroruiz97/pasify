@@ -204,20 +204,27 @@ const PublicEvent = () => {
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <header
-        className="flex items-center gap-3 border-b border-white/10 px-4 py-3"
+        className="border-b border-white/10"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
-        {/* 44 px pulsables sin cambiar la altura de la cabecera: el margen
-            negativo se come lo que crece sobre el logo (26 px). */}
-        <Link to="/calendar" aria-label="Ver más eventos" className="-my-[9px] inline-flex min-h-[44px] items-center">
-          <Wordmark height={26} />
-        </Link>
-        <span className="text-[10px] uppercase text-[#E8542A]" style={{ ...mono, letterSpacing: "0.22em" }}>
-          · Evento
-        </span>
+        {/* Misma anchura que el contenido de debajo. */}
+        <div className="mx-auto flex w-full max-w-md items-center gap-3 px-4 pb-3 md:max-w-2xl lg:max-w-6xl lg:px-8">
+          {/* 44 px pulsables sin cambiar la altura de la cabecera: el margen
+              negativo se come lo que crece sobre el logo (26 px). */}
+          <Link to="/calendar" aria-label="Ver más eventos" className="-my-[9px] inline-flex min-h-[44px] items-center">
+            <Wordmark height={26} />
+          </Link>
+          <span className="text-[10px] uppercase text-[#E8542A]" style={{ ...mono, letterSpacing: "0.22em" }}>
+            · Evento
+          </span>
+        </div>
       </header>
 
-      <main className="mx-auto w-full max-w-md px-4 pb-28 pt-6">
+      {/* Móvil: una columna de 448 px y el botón de compra fijo abajo. Tablet:
+          la columna a 672 px. Escritorio: el evento a la izquierda y, a la
+          derecha, una tarjeta con las entradas y el botón de compra que se
+          queda a la vista al bajar. */}
+      <main className="mx-auto w-full max-w-md px-4 pb-28 pt-6 md:max-w-2xl lg:max-w-6xl lg:px-8 lg:pb-16 lg:pt-10">
         {state.kind === "loading" && (
           <div className="flex flex-col items-center py-24 text-center" role="status">
             <Loader2 className="h-8 w-8 animate-spin text-[#FF7A4D]" />
@@ -349,10 +356,24 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
   const allFree = onSaleRows.length > 0 && onSaleRows.every((r) => isFreeTier(r.tier));
 
   return (
-    <>
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-10 xl:grid-cols-[minmax(0,1fr)_28rem] xl:gap-12">
       <article className="overflow-hidden rounded-3xl border border-white/10 bg-[#161616]">
         {event.image_url ? (
-          <img src={event.image_url} alt="" className="aspect-[4/5] w-full object-cover" />
+          // Con el cartel entero (object-contain) sobre su propio fondo
+          // desenfocado en pantallas anchas; recortado a 4:5 en el móvil.
+          <div className="relative aspect-[4/5] w-full overflow-hidden bg-black md:aspect-[4/3]">
+            <img
+              src={event.image_url}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 hidden h-full w-full scale-110 object-cover opacity-50 blur-2xl md:block"
+            />
+            <img
+              src={event.image_url}
+              alt=""
+              className="relative h-full w-full object-cover md:object-contain"
+            />
+          </div>
         ) : (
           <div
             aria-hidden="true"
@@ -361,8 +382,8 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
           />
         )}
 
-        <div className="space-y-4 px-5 pb-6 pt-5">
-          <h1 className="text-2xl font-bold leading-tight tracking-tight">{event.title}</h1>
+        <div className="space-y-4 px-5 pb-6 pt-5 lg:space-y-5 lg:px-8 lg:pb-8 lg:pt-7">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight lg:text-4xl">{event.title}</h1>
           {partner?.business_name && (
             <Link to={`/p/${partner.id}`} className="block text-sm text-[#FFC9B0] underline-offset-4 hover:underline">
               {partner.business_name}
@@ -411,97 +432,105 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
         </div>
       </article>
 
-      <section className="mt-6">
-        <h2 className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
-          Entradas
-        </h2>
-        {!isPast && tierRows.length > 0 && (
-          <p className="-mt-1 mb-3 text-xs text-white/45">
-            Máximo {MAX_TICKETS_PER_BUYER_EVENT} entradas por persona y evento.
-          </p>
-        )}
-        {isPast ? (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
-            Este evento ya ha terminado.
-          </p>
-        ) : tierRows.length === 0 ? (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
-            La venta de entradas aún no está abierta.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {tierRows.map(({ tier, availability }) => {
-              const label = availabilityLabel(availability);
-              const lowStock = availability.kind === "available" && availability.lowStock;
-              return (
-                <li
-                  key={tier.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{tier.name}</div>
-                    {tier.description && <div className="truncate text-xs text-white/50">{tier.description}</div>}
-                    {label && (
-                      <div className={lowStock ? "mt-0.5 text-xs font-semibold text-[#FF7A4D]" : "mt-0.5 text-xs text-[#FFC9B0]"}>
-                        {label}
-                      </div>
-                    )}
-                    <TierConditions tier={tier} className="mt-1.5 text-white/50" />
-                  </div>
-                  <div className="shrink-0 text-sm font-semibold" style={mono}>
-                    {isFreeTier(tier) ? "Gratis" : formatPriceCents(tier.price_cents, tier.currency)}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      {series && series.dates.length > 1 && <SeriesDates currentId={event.id} series={series} tz={tz} />}
-
+      {/* Las entradas y el botón de compra: debajo del evento en móvil y tablet; en escritorio, una tarjeta a la derecha que se queda a la vista al bajar. */}
       <div
-        className="fixed inset-x-0 bottom-0 border-t border-white/10 bg-[#0F0F0F]/95 px-4 py-3 backdrop-blur"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+        data-testid="compra-evento"
+        className="mt-6 lg:sticky lg:top-6 lg:mt-0 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:rounded-3xl lg:border lg:border-white/10 lg:bg-[#161616] lg:p-6"
       >
-        <div className="mx-auto flex w-full max-w-md items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void shareEventLink(event.id, event.title)}
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 text-white/80"
-            aria-label="Compartir evento"
-          >
-            <Share2 className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            disabled={!onSale || buying}
-            onClick={onBuy}
-            className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ background: gradient }}
-          >
-            {buying ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : onSale && allFree ? (
-              <Gift className="h-4 w-4" />
-            ) : (
-              <TicketIcon className="h-4 w-4" />
-            )}
-            {onSale
-              ? allFree
-                ? "Conseguir gratis"
-                : minPrice != null && minPrice > 0
-                ? `Comprar · desde ${formatPriceCents(minPrice)}`
-                : "Conseguir entradas"
-              : isPast
-              ? "Evento terminado"
-              : tierRows.length > 0 && tierRows.every((r) => r.availability.kind === "sold_out")
-              ? "Agotado"
-              : "Entradas no disponibles"}
-          </button>
+        <section aria-labelledby="entradas-del-evento">
+          <h2 id="entradas-del-evento" className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
+            Entradas
+          </h2>
+          {!isPast && tierRows.length > 0 && (
+            <p className="-mt-1 mb-3 text-xs text-white/45">
+              Máximo {MAX_TICKETS_PER_BUYER_EVENT} entradas por persona y evento.
+            </p>
+          )}
+          {isPast ? (
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
+              Este evento ya ha terminado.
+            </p>
+          ) : tierRows.length === 0 ? (
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
+              La venta de entradas aún no está abierta.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {tierRows.map(({ tier, availability }) => {
+                const label = availabilityLabel(availability);
+                const lowStock = availability.kind === "available" && availability.lowStock;
+                return (
+                  <li
+                    key={tier.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{tier.name}</div>
+                      {tier.description && <div className="truncate text-xs text-white/50">{tier.description}</div>}
+                      {label && (
+                        <div className={lowStock ? "mt-0.5 text-xs font-semibold text-[#FF7A4D]" : "mt-0.5 text-xs text-[#FFC9B0]"}>
+                          {label}
+                        </div>
+                      )}
+                      <TierConditions tier={tier} className="mt-1.5 text-white/50" />
+                    </div>
+                    <div className="shrink-0 text-sm font-semibold" style={mono}>
+                      {isFreeTier(tier) ? "Gratis" : formatPriceCents(tier.price_cents, tier.currency)}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* Móvil y tablet: barra fija abajo. Escritorio: el mismo botón, a la vista
+            en la tarjeta de entradas, debajo de los tipos. */}
+        <div
+          className="fixed inset-x-0 bottom-0 border-t border-white/10 bg-[#0F0F0F]/95 px-4 py-3 backdrop-blur lg:static lg:mt-5 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+        >
+          <div className="mx-auto flex w-full max-w-md items-center gap-2 md:max-w-2xl lg:max-w-none">
+            <button
+              type="button"
+              onClick={() => void shareEventLink(event.id, event.title)}
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 text-white/80"
+              aria-label="Compartir evento"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              disabled={!onSale || buying}
+              onClick={onBuy}
+              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: gradient }}
+            >
+              {buying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : onSale && allFree ? (
+                <Gift className="h-4 w-4" />
+              ) : (
+                <TicketIcon className="h-4 w-4" />
+              )}
+              {onSale
+                ? allFree
+                  ? "Conseguir gratis"
+                  : minPrice != null && minPrice > 0
+                  ? `Comprar · desde ${formatPriceCents(minPrice)}`
+                  : "Conseguir entradas"
+                : isPast
+                ? "Evento terminado"
+                : tierRows.length > 0 && tierRows.every((r) => r.availability.kind === "sold_out")
+                ? "Agotado"
+                : "Entradas no disponibles"}
+            </button>
+          </div>
         </div>
+
+        {series && series.dates.length > 1 && <SeriesDates currentId={event.id} series={series} tz={tz} />}
       </div>
-    </>
+    </div>
   );
 };
 

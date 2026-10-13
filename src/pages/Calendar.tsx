@@ -439,12 +439,13 @@ const Calendar = () => {
         </div>
       </header>
 
-      {/* Unified poster grid: 2-col on mobile, 3-col centered on tablet+.
-          Container max-w-5xl keeps the desktop cards generous without
-          stretching them edge-to-edge. */}
-      <main className="mx-auto w-full max-w-5xl px-3 pb-24 sm:px-6 lg:px-8">
+      {/* Rejilla de carteles: 2 columnas en móvil, 3 en tablet y 4 en escritorio
+          ancho. Mismo contenedor (max-w-7xl) y mismos márgenes que el título de
+          arriba: antes la rejilla (max-w-5xl) quedaba más estrecha y desalineada
+          con él, y dejaba vacío un tercio del ancho en una pantalla de 1440 px. */}
+      <main className="mx-auto w-full max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
@@ -479,7 +480,7 @@ const Calendar = () => {
         ) : view === "calendar" ? (
           <MonthCalendarView events={eventosVisibles} renderEvent={(ev) => renderPosterCard(ev)} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
             {tarjetas.map((t) => (t.kind === "series" ? renderPosterCard(t.event, t.sessions) : renderPosterCard(t.event)))}
           </div>
         )}

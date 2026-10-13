@@ -36,6 +36,7 @@ export default defineConfig({
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
+    "**/rediseno-desktop.spec.ts",
     "**/recurrencia.spec.ts",
     "**/series-editor.spec.ts",
     "**/series-gestion.spec.ts",
