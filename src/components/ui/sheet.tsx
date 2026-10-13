@@ -38,8 +38,13 @@ const sheetVariants = cva(
         top: "inset-x-0 top-0 border-b p-6 data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         // Bottom sheet: stile standardizzato + supporto swipe-down (vedi SheetContent).
         // Non aggiungiamo p-6 qui: il padding lo gestiscono le pagine (pt-2 dopo l'handle, ecc.)
+        // Centrada en pantallas anchas con `mx-auto` (inset-x-0 + max-w): NO con
+        // `left-1/2 -translate-x-1/2`. El contenido es un motion.div con `style={{ y }}`
+        // y framer-motion escribe `transform` en línea, que se lleva por delante el
+        // translate de Tailwind: la hoja arrancaba en el centro y se salía por la
+        // derecha en tablet y escritorio.
         bottom:
-          "inset-x-0 bottom-0 border-t rounded-t-3xl shadow-2xl max-h-[90vh] sm:max-w-2xl sm:left-1/2 sm:-translate-x-1/2 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-0 border-t rounded-t-3xl shadow-2xl max-h-[90dvh] sm:mx-auto sm:max-w-2xl data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-full w-3/4 border-r p-6 data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-3/4 border-l p-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",

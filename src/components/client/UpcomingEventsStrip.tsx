@@ -1,4 +1,5 @@
-import { CalendarDays, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCalendarEvents, type CalendarEvent } from "@/hooks/useEvents";
 import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
 
@@ -54,15 +55,74 @@ export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
         </button>
       </header>
 
-      <div
-        className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
+      <Carrusel>
         {eventos.map((e) => (
           <EventoCard key={e.id} evento={e} onClick={() => onOpen(e.id)} />
         ))}
-      </div>
+      </Carrusel>
     </section>
+  );
+};
+
+/**
+ * Fila de tarjetas con scroll horizontal. En el móvil se desliza con el dedo; en
+ * escritorio (ratón) salen dos flechas a los lados cuando hay más tarjetas de las
+ * que caben, porque deslizar con el ratón obliga a usar Mayús + rueda.
+ */
+const Carrusel = ({ children }: { children: React.ReactNode }) => {
+  const pista = useRef<HTMLDivElement>(null);
+  const [puede, setPuede] = useState({ izquierda: false, derecha: false });
+
+  const medir = useCallback(() => {
+    const el = pista.current;
+    if (!el) return;
+    setPuede({
+      izquierda: el.scrollLeft > 4,
+      derecha: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = pista.current;
+    if (!el) return;
+    medir();
+    el.addEventListener("scroll", medir, { passive: true });
+    const observador = typeof ResizeObserver === "function" ? new ResizeObserver(medir) : null;
+    observador?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", medir);
+      observador?.disconnect();
+    };
+  }, [medir, children]);
+
+  const mover = (sentido: -1 | 1) => {
+    const el = pista.current;
+    if (!el) return;
+    el.scrollBy({ left: sentido * Math.max(240, el.clientWidth * 0.8), behavior: "smooth" });
+  };
+
+  const flecha = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-border bg-background/90 text-foreground shadow-lg backdrop-blur transition hover:border-orange-500/60 hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 lg:grid";
+
+  return (
+    <div className="relative">
+      <div
+        ref={pista}
+        className="flex gap-3 overflow-x-auto pb-2 lg:gap-4 [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        {children}
+      </div>
+      {puede.izquierda && (
+        <button type="button" aria-label="Eventos anteriores" onClick={() => mover(-1)} className={`${flecha} -left-3`}>
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      {puede.derecha && (
+        <button type="button" aria-label="Más eventos" onClick={() => mover(1)} className={`${flecha} -right-3`}>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+    </div>
   );
 };
 
@@ -78,7 +138,7 @@ const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () =>
     <button
       type="button"
       onClick={onClick}
-      className="group/card relative w-56 shrink-0 overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-orange-500/50"
+      className="group/card relative w-56 shrink-0 overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-orange-500/50 lg:w-60"
       style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 14px -6px rgba(0,0,0,0.4)" }}
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">

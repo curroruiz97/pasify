@@ -36,6 +36,7 @@ export default defineConfig({
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
+    "**/rediseno-desktop.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

@@ -218,7 +218,7 @@ const MonthCalendarView = ({ events, renderEvent }: MonthCalendarViewProps) => {
           <h3 className="mb-3 text-lg font-bold capitalize tracking-tight sm:text-xl">
             {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
           </h3>
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
             {selectedEvents.map((ev) => (
               <Fragment key={ev.id}>{renderEvent(ev)}</Fragment>
             ))}
