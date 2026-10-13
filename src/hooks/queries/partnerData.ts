@@ -34,6 +34,8 @@ export type PartnerEventRow = {
   capacity: number | null;
   tickets_sold: number;
   image_url: string | null;
+  /** Categoría del evento (bar, discoteca, festival); null en los anteriores a tenerla. Falta en una lista guardada antes de pedirla. */
+  category?: string | null;
   /**
    * Local del evento: su zona horaria es la de la fecha que se enseña. Puede
    * faltar en una lista guardada en el dispositivo antes de pedirlo.
@@ -117,7 +119,7 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
     supabase
       .from("events")
       .select(
-        "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id"
+        "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id, category"
       )
       .or(filter)
       .order("date_start", { ascending: false }),

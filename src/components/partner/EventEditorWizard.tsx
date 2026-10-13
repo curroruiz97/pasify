@@ -3,8 +3,10 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Beer,
   Calendar as CalendarIcon,
   CheckCircle2,
+  Disc3,
   Eye,
   EyeOff,
   Image as ImageIcon,
@@ -12,6 +14,7 @@ import {
   Lock,
   MapPin,
   Send,
+  Tent,
   Ticket as TicketIcon,
   Upload,
   X as XIcon,
@@ -47,6 +50,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/imageUtils";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import { esLocalSinCompletar, placeFromVenue, venueOptionLabel } from "@/lib/eventPlace";
+import {
+  EVENT_CATEGORIES,
+  eventCategoryFromVenue,
+  eventCategoryLabel,
+  isEventCategory,
+  type EventCategory,
+} from "@/lib/eventCategories";
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTiersBuilder,
@@ -211,6 +221,8 @@ interface BorradorEvento {
   imageUrl: string;
   willPublish: boolean;
   venueId: string | null;
+  /** Categoría del evento («bar», «discoteca», «festival»). Falta en los borradores anteriores a tenerla. */
+  category?: string;
   /**
    * Zona con la que se escribieron el día y las horas. Se usa si el local ya
    * no está en la lista; si está, manda la suya. Falta en los borradores
@@ -257,6 +269,8 @@ export interface EditorVenue {
   capacity?: number | null;
   /** Zona horaria del local (IANA): el día y las horas del evento son los suyos. */
   timezone?: string | null;
+  /** Categoría del local (discoteca, club, bar…): si coincide con una de evento, se propone al crear. */
+  business_category?: string | null;
 }
 
 /** Zona horaria de un local (sin local o sin zona: la del dispositivo). */
@@ -374,6 +388,9 @@ export const EventEditorWizard = ({
   ]);
   const [imageUrl, setImageUrl] = useState("");
   const [willPublish, setWillPublish] = useState(true);
+  // Categoría del evento ("" = sin elegir). Obligatoria al crear; en un evento
+  // anterior sin clasificar se puede dejar como está.
+  const [category, setCategory] = useState<EventCategory | "">("");
   const [venueId, setVenueId] = useState<string | null>(defaultVenueId);
   // Zona horaria con la que se leen el día y las horas del formulario: la del
   // local del evento. Se fija al cargar (con la que se descompuso la fecha) y
@@ -456,6 +473,8 @@ export const EventEditorWizard = ({
         : { city: defaultCity, venueName: defaultVenueName, address: "" }
     );
     setVenueId(defaultVenue?.id ?? null);
+    // Un local de discoteca propone «Discoteca»; sala, rooftop… no proponen nada.
+    setCategory(eventCategoryFromVenue(defaultVenue?.business_category) ?? "");
     setTimeZone(zonaDe(defaultVenue));
     setOriginalStatus(null);
     setTiers([tierPorDefecto(defaultVenue)]);
@@ -509,11 +528,14 @@ export const EventEditorWizard = ({
     const [primero] = tiers;
     // El cupo que viene del aforo del local no cuenta como "tocado".
     const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
+    // Lo mismo con la categoría que propone el local: no cuenta como tocada.
+    const categoriaPorDefecto = eventCategoryFromVenue(venues.find((v) => v.id === venueId)?.business_category) ?? "";
     const tocado =
       !!title.trim() ||
       !!description.trim() ||
       !!dateTime.date ||
       !!imageUrl ||
+      category !== categoriaPorDefecto ||
       tiers.length !== 1 ||
       primero?.name !== porDefecto.name ||
       primero?.description !== porDefecto.description ||
@@ -526,7 +548,7 @@ export const EventEditorWizard = ({
     pendienteRef.current = {
       clave: claveBorrador,
       borrador: tocado
-        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, timeZone }
+        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, category, timeZone }
         : null,
       editadoEn: Date.now(),
     };
@@ -546,6 +568,7 @@ export const EventEditorWizard = ({
     imageUrl,
     willPublish,
     venueId,
+    category,
     venues,
     timeZone,
   ]);
@@ -604,6 +627,11 @@ export const EventEditorWizard = ({
           b.tiers.length > 0 ? b.tiers.map((t) => normalizarTipo(t)) : [tierPorDefecto(venueDelBorrador)]
         );
         setImageUrl(b.imageUrl ?? "");
+        // Un borrador anterior a las categorías (o sin elegir) recibe la que
+        // propone su local, como un formulario nuevo.
+        setCategory(
+          isEventCategory(b.category) ? b.category : eventCategoryFromVenue(venueDelBorrador?.business_category) ?? ""
+        );
         setWillPublish((b.willPublish ?? true) && !publishBlockedReason);
         setTierSalesMap({});
         setEventHasSales(false);
@@ -630,7 +658,7 @@ export const EventEditorWizard = ({
       const { data: evt, error: evtErr } = await supabase
         .from("events")
         .select(
-          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id"
+          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id, category"
         )
         .eq("id", eid)
         .maybeSingle();
@@ -725,6 +753,8 @@ export const EventEditorWizard = ({
         m === "edit" ? { dateTime: dt, location: lugar, venueId: evt.venue_id ?? defaultVenueId ?? null } : null
       );
       setImageUrl(evt.image_url ?? "");
+      // Un evento anterior a las categorías sigue sin ella (no se inventa).
+      setCategory(isEventCategory(evt.category) ? evt.category : "");
       // Una copia nace como borrador; en edit el estado no se toca al guardar.
       setWillPublish(false);
       setOriginalStatus(m === "edit" ? evt.status ?? null : null);
@@ -796,6 +826,7 @@ export const EventEditorWizard = ({
       minPriceEur: minPrice,
       totalCapacity: totalCap,
       imageUrl: imageUrl || null,
+      categoryLabel: eventCategoryLabel(category),
       willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
       timeZoneLabel: etiquetaHora,
       // Lo que verá quien compre: las políticas de los tipos a la venta.
@@ -805,7 +836,7 @@ export const EventEditorWizard = ({
         transferAllowed: t.transferAllowed,
       })),
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone, etiquetaHora]);
+  }, [title, location, dateTime, tiers, imageUrl, category, willPublish, mode, originalStatus, timeZone, etiquetaHora]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -814,6 +845,9 @@ export const EventEditorWizard = ({
     (idx: number): string | null => {
       if (idx === 0) {
         if (!title.trim()) return "El evento necesita un título";
+        // Al crear (o duplicar) hay que clasificarlo; un evento anterior sin
+        // categoría se puede seguir editando sin ella.
+        if (mode !== "edit" && !category) return "Elige la categoría del evento";
       }
       if (idx === 1) {
         const dtErr = validateDateTime(dateTime, timeZone);
@@ -853,7 +887,7 @@ export const EventEditorWizard = ({
       }
       return null;
     },
-    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone]
+    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone, mode, category]
   );
 
   const goNext = () => {
@@ -1045,6 +1079,7 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         // Con venue_id el trigger rellena brand_id y org_id.
         venue_id: venueId,
         status,
@@ -1098,6 +1133,7 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         ...(venueId ? { venue_id: venueId } : {}),
         ...(status ? { status } : {}),
       })
@@ -1381,6 +1417,9 @@ export const EventEditorWizard = ({
                       onTitleChange={setTitle}
                       description={description}
                       onDescriptionChange={setDescription}
+                      category={category}
+                      onCategoryChange={setCategory}
+                      categoryRequired={mode !== "edit"}
                       disabled={submitting}
                     />
                   )}
@@ -1409,6 +1448,14 @@ export const EventEditorWizard = ({
                           // El día y las horas pasan a ser los del reloj del
                           // nuevo local.
                           setTimeZone(zonaDe(v));
+                          // Evento nuevo: si la categoría era la que proponía el local
+                          // anterior (no la ha tocado), pasa a ser la del nuevo.
+                          if (mode === "create") {
+                            const propuestaAnterior = eventCategoryFromVenue(anterior?.business_category) ?? "";
+                            setCategory((prev) =>
+                              prev === propuestaAnterior ? eventCategoryFromVenue(v.business_category) ?? "" : prev
+                            );
+                          }
                           // Evento nuevo: el cupo que venía del aforo del local
                           // anterior (o vacío) pasa a ser el del nuevo local. Un
                           // cupo escrito a mano no se toca.
@@ -1615,17 +1662,26 @@ export const EventEditorWizard = ({
 // Sub-componentes (steps)
 // =================================================================
 
+const ICONO_CATEGORIA: Record<EventCategory, typeof Beer> = { bar: Beer, discoteca: Disc3, festival: Tent };
+
 const StepInfo = ({
   title,
   onTitleChange,
   description,
   onDescriptionChange,
+  category,
+  onCategoryChange,
+  categoryRequired,
   disabled,
 }: {
   title: string;
   onTitleChange: (v: string) => void;
   description: string;
   onDescriptionChange: (v: string) => void;
+  category: EventCategory | "";
+  onCategoryChange: (v: EventCategory) => void;
+  /** Al crear es obligatoria; al editar un evento anterior sin categoría, no. */
+  categoryRequired: boolean;
   disabled?: boolean;
 }) => (
   <StepShell
@@ -1646,6 +1702,44 @@ const StepInfo = ({
           disabled={disabled}
           className="mt-1.5 h-11"
         />
+      </div>
+      <div>
+        <span id="evt-cat-label" className="text-xs font-medium leading-none">
+          Categoría{categoryRequired ? " *" : ""}
+        </span>
+        <div role="radiogroup" aria-labelledby="evt-cat-label" className="mt-1.5 grid grid-cols-3 gap-2">
+          {EVENT_CATEGORIES.map((c) => {
+            const Icono = ICONO_CATEGORIA[c.value];
+            const activa = category === c.value;
+            return (
+              <label
+                key={c.value}
+                className={`flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition focus-within:ring-2 focus-within:ring-ring ${
+                  activa
+                    ? "border-orange-500 bg-orange-500/10 text-orange-500"
+                    : "border-border bg-card text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+                } ${disabled ? "pointer-events-none opacity-60" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="evt-category"
+                  value={c.value}
+                  checked={activa}
+                  onChange={() => onCategoryChange(c.value)}
+                  disabled={disabled}
+                  className="sr-only"
+                />
+                <Icono aria-hidden="true" className="h-4 w-4" />
+                {c.label}
+              </label>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {category || categoryRequired
+            ? "Así se clasifica tu evento en el calendario y en los filtros de búsqueda. Puedes cambiarla cuando quieras."
+            : "Este evento aún no tiene categoría: elige una para que salga en los filtros por categoría del calendario."}
+        </p>
       </div>
       <div>
         <Label htmlFor="evt-desc" className="text-xs">

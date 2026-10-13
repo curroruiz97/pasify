@@ -92,6 +92,7 @@ export default defineConfig({
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
+    "**/categoria-evento.spec.ts",
     "**/limite-entradas.spec.ts",
     "**/ubicacion-evento.spec.ts",
   ],

@@ -94,6 +94,7 @@ import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { RotateCcw } from "lucide-react";
 import { formatEventPlace } from "@/lib/eventPlace";
+import { isEventCategory } from "@/lib/eventCategories";
 
 type View = "home" | "support" | "wallet" | "favorites" | "loyalty" | "live" | "concierge";
 
@@ -550,6 +551,8 @@ const ClientDashboard = () => {
   ];
 
   const hayFiltros = !!search.trim() || activeCat !== "all";
+  // Bar, Discoteca y Festival son también categorías de evento (lib/eventCategories).
+  const categoriaDeEvento = isEventCategory(activeCat) ? activeCat : null;
   const abrirFavorito = (e: FavEvent) => navigate(`/e/${e.id}`);
 
   return (
@@ -677,13 +680,17 @@ const ClientDashboard = () => {
               </div>
             </div>
 
-            {/* Próximos eventos de verdad (calendario público) de la ciudad, sin filtros activos. */}
-            {!hayFiltros && !cargandoCiudad && (
+            {/* Próximos eventos de verdad (calendario público) de la ciudad: sin filtros
+                o filtrados por una categoría de evento (bar, discoteca, festival),
+                que también filtra los eventos y no solo los locales. Con texto de
+                búsqueda no se enseñan. */}
+            {(!hayFiltros || (!search.trim() && !!categoriaDeEvento)) && !cargandoCiudad && (
               <div className="mt-8">
                 <UpcomingEventsStrip
                   city={ciudad}
+                  category={categoriaDeEvento}
                   onOpen={(id) => navigate(`/e/${id}`)}
-                  onSeeAll={() => navigate("/calendar")}
+                  onSeeAll={() => navigate(categoriaDeEvento ? `/calendar?cat=${categoriaDeEvento}` : "/calendar")}
                 />
               </div>
             )}
