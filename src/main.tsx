@@ -121,15 +121,26 @@ const handleRecoveryTokens = () => {
     } catch {
       /* sin sessionStorage: UpdatePassword pedirá un enlace nuevo */
     }
-    // Clean URL and redirect to update-password route
-    window.location.replace(window.location.origin + '/#/update-password');
+    // Se quitan de la URL EN EL SITIO (replaceState es síncrono) y se sigue
+    // arrancando con #/update-password. Recargar con location.replace no vale
+    // cuando los tokens vienen en la query: cambia de documento, la navegación
+    // es asíncrona y hasta que llega el documento viejo sigue vivo con los
+    // tokens en su URL; auth-js (detectSessionInUrl) los lee y abre sesión
+    // (GET /auth/v1/user) antes de que nadie pulse «Continuar». Pasaba cuando
+    // la recarga tardaba más que el arranque de auth-js (la CI, redes lentas).
+    const destino = window.location.origin + '/#/update-password';
+    try {
+      window.history.replaceState(null, '', destino);
+    } catch {
+      window.location.replace(destino);
+    }
     return true; // Tokens were handled
   }
 
   return false; // No tokens found
 };
 
-// Run token handler - if tokens were found, the page will reload
+// Run token handler - si había tokens de recuperación, ya no están en la URL
 if (!redirigirErroresDeAuth() && !llevarTokenHashAUpdatePassword()) handleRecoveryTokens();
 
 // Pulisci cache vecchie del Service Worker (post fantasma da DB precedente)
