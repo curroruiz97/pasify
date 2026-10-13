@@ -17,10 +17,12 @@ import { Wordmark } from "@/components/Wordmark";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { shareEventLink } from "@/lib/eventLinks";
+import { formatEventPlace } from "@/lib/eventPlace";
 import { withTimeout } from "@/lib/withTimeout";
 import { TierConditions } from "@/components/tickets/TierPickerSheet";
 import { fetchEventTiers } from "@/components/tickets/tierData";
 import {
+  MAX_TICKETS_PER_BUYER_EVENT,
   formatEventDate,
   formatEventTime,
   formatPriceCents,
@@ -244,12 +246,12 @@ const PublicEvent = () => {
             data={state.data}
             buying={pendingId === state.data.event.id}
             onBuy={() => {
-              const { event, venueName, city } = state.data;
+              const { event, venueName, address, city, partner } = state.data;
               void checkout({
                 id: event.id,
                 title: event.title,
                 dateStart: event.date_start,
-                place: venueName || city,
+                place: formatEventPlace({ venue_name: venueName, address, city }, partner?.business_name).short || null,
               });
             }}
           />
@@ -313,8 +315,12 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
   const { event, timezone: tz, venueName, address, city, partner, tiers } = data;
   const date = formatEventDate(event.date_start, tz);
   const time = formatEventTime(event.date_start, tz);
-  const place = [venueName, address, city].filter(Boolean).join(" · ");
-  const mapsQuery = [venueName, address, city].filter(Boolean).join(", ");
+  // Un solo formato para el lugar (lib/eventPlace): sin «Madrid · Madrid» ni el
+  // nombre de relleno «Principal» de las cuentas nuevas.
+  const { long: place, maps: mapsQuery } = formatEventPlace(
+    { venue_name: venueName, address, city },
+    partner?.business_name,
+  );
   // Misma regla que el servidor al vender (`create_ticket_order`): hasta
   // `date_end` o, sin hora de fin, 12 h después de empezar. Antes se cerraba
   // 2 h después del inicio: un evento de las 23:00 salía "terminado" a la 1:01.
@@ -391,6 +397,11 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
         <h2 className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
           Entradas
         </h2>
+        {!isPast && tierRows.length > 0 && (
+          <p className="-mt-1 mb-3 text-xs text-white/45">
+            Máximo {MAX_TICKETS_PER_BUYER_EVENT} entradas por persona y evento.
+          </p>
+        )}
         {isPast ? (
           <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
             Este evento ya ha terminado.

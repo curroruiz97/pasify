@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowLeftRight,
   Gift,
+  Info,
   Loader2,
   Minus,
   Plus,
@@ -12,6 +14,8 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
+  allowanceHint,
+  capByAllowance,
   formatEventDateShort,
   formatEventDateTime,
   formatEventTime,
@@ -20,6 +24,7 @@ import {
   tierAvailability,
   tierRefundLabel,
   tierTransferLabel,
+  type TicketAllowance,
   type TierAvailability,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
@@ -50,7 +55,15 @@ export interface TierPickerSheetProps {
   eventTitle?: string | null;
   eventDateStart?: string | null;
   eventPlace?: string | null;
+  /** Para llevar a «Mis entradas» de este evento cuando se alcanza el límite. */
+  eventId?: string | null;
   tiers: TierOption[];
+  /**
+   * Cuántas entradas de este evento lleva ya quien compra (máximo 10 por
+   * persona y evento, entre todos los tipos). Sin dato (null), manda el
+   * servidor, que rechaza lo que pase del límite.
+   */
+  allowance?: TicketAllowance | null;
   /** Cantidad sugerida al abrir. Se ajusta a los límites del tipo elegido. */
   initialQty?: number;
   /** Creando la sesión de Stripe: bloquea el sheet. */
@@ -104,7 +117,9 @@ export const TierPickerSheet = ({
   eventTitle,
   eventDateStart,
   eventPlace,
+  eventId = null,
   tiers,
+  allowance = null,
   initialQty = 1,
   submitting = false,
   refreshing = false,
@@ -144,7 +159,12 @@ export const TierPickerSheet = ({
   const selected = options.find((o) => o.tier.id === selectedId) ?? null;
   const selectedAvailability =
     selected && selected.availability.kind === "available" ? selected.availability : null;
-  const maxQty = selectedAvailability?.maxQty ?? 0;
+  const tierMaxQty = selectedAvailability?.maxQty ?? 0;
+  // Lo que deja el tipo y lo que deja el límite por persona y evento (10 entre
+  // todos los tipos, contando lo que ya tiene).
+  const maxQty = capByAllowance(tierMaxQty, allowance);
+  // Ya tiene el máximo del evento: ningún tipo se puede comprar.
+  const limitReached = !!allowance && allowance.remaining <= 0;
   const effectiveQty = maxQty > 0 ? Math.min(Math.max(1, qty), maxQty) : 0;
   const currency = selected?.tier.currency ?? tiers[0]?.currency ?? "EUR";
   const total = selected ? selected.tier.price_cents * effectiveQty : 0;
@@ -156,7 +176,15 @@ export const TierPickerSheet = ({
   const qtyHint = (() => {
     if (!selected || !selectedAvailability) return null;
     const { remaining, lowStock } = selectedAvailability;
-    if (lowStock || (remaining != null && remaining <= maxQty)) return "Últimas entradas";
+    const stockLimits = lowStock || (remaining != null && remaining <= maxQty);
+    const eventLimits = !!allowance && allowance.remaining < tierMaxQty;
+    // Ya tiene entradas de este evento y el límite por evento es lo que manda
+    // (o el stock no): «Ya tienes 4 · puedes añadir hasta 6 más».
+    if (allowance && allowance.held > 0 && (eventLimits || !stockLimits)) return allowanceHint(allowance, tierMaxQty);
+    if (stockLimits) return "Últimas entradas";
+    // Sin entradas previas: el tope por evento solo se nombra si es el que manda.
+    const porEvento = allowanceHint(allowance, tierMaxQty);
+    if (porEvento) return porEvento;
     if (selected.tier.per_user_max === maxQty) return `Máx. ${maxQty} por persona`;
     return `Máx. ${maxQty} por compra`;
   })();
@@ -280,6 +308,38 @@ export const TierPickerSheet = ({
 
         {/* Cantidad + total + CTA */}
         <div className="shrink-0 border-t border-border bg-card/60 px-5 pb-5 pt-4 sm:px-6">
+          {limitReached && allowance && (
+            <div
+              role="status"
+              data-testid="limite-entradas"
+              className="mb-4 flex items-start gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-3 py-2.5 text-[13px] leading-snug"
+            >
+              <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">
+                  Has alcanzado el máximo de {allowance.limit} entradas por persona en este evento.
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  Ya tienes {allowance.held}
+                  {eventId ? (
+                    <>
+                      {" "}
+                      · míralas en{" "}
+                      <Link
+                        to={`/client-dashboard?wallet=${encodeURIComponent(eventId)}`}
+                        onClick={() => onOpenChange(false)}
+                        className="text-orange-500 underline underline-offset-4"
+                      >
+                        Mis entradas
+                      </Link>
+                    </>
+                  ) : null}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
+
           {selected && maxQty > 0 && (
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -344,7 +404,7 @@ export const TierPickerSheet = ({
               className="text-2xl font-bold leading-none tracking-tight text-foreground"
               style={mono}
             >
-              {free ? "Gratis" : formatPriceCents(total, currency)}
+              {limitReached ? "—" : free ? "Gratis" : formatPriceCents(total, currency)}
             </div>
           </div>
 
@@ -378,6 +438,8 @@ export const TierPickerSheet = ({
               </>
             ) : !firstAvailableId ? (
               "No hay entradas disponibles"
+            ) : limitReached ? (
+              "Límite de entradas alcanzado"
             ) : free ? (
               <>
                 <Gift className="h-5 w-5" />

@@ -88,6 +88,12 @@ type Log = ReturnType<typeof logger.child>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_QTY = 10;
+/**
+ * Máximo de entradas por persona y evento (todos los tipos, sumando lo que ya
+ * tiene). Lo hace cumplir la BD (`max_tickets_per_buyer_event`, migración
+ * 20261013110000); aquí solo se usa para el texto del error.
+ */
+const MAX_PER_BUYER_EVENT = 10;
 /** Importe mínimo que Stripe acepta en EUR (0,50 €). */
 const STRIPE_MIN_AMOUNT_CENTS = 50;
 /**
@@ -116,12 +122,34 @@ const ORDER_ERRORS: Record<string, { status: number; message: string }> = {
   tier_not_free: { status: 409, message: "El precio de esta entrada ha cambiado. Vuelve a intentarlo." },
   invalid_qty: { status: 400, message: "La cantidad de entradas no es válida." },
   qty_exceeds_per_user_max: { status: 400, message: "Has superado el máximo de entradas por persona para este tipo de entrada." },
+  qty_exceeds_event_limit: {
+    status: 409,
+    message: `Has alcanzado el máximo de ${MAX_PER_BUYER_EVENT} entradas por persona en este evento.`,
+  },
   buyer_email_required: { status: 400, message: "Necesitamos un email válido para enviarte las entradas." },
   buyer_user_required: { status: 401, message: "Inicia sesión para comprar tus entradas." },
 };
 
 function fail(status: number, code: string, message: string): Response {
   return jsonResponse({ error: code, message }, { status });
+}
+
+/**
+ * Respuesta a un error de negocio de las RPC de pedido. En el del límite por
+ * evento, la RPC dice en el HINT cuántas entradas puede añadir aún: el texto
+ * se lo cuenta y la respuesta lo lleva (`remaining`, `limit`) para que el
+ * selector se ajuste sin adivinar.
+ */
+function orderRejection(code: string, hint: string | null | undefined): Response {
+  const base = ORDER_ERRORS[code];
+  if (code !== "qty_exceeds_event_limit") return fail(base.status, code, base.message);
+  const remaining = Number.parseInt(hint ?? "", 10);
+  if (!Number.isFinite(remaining) || remaining < 0) return fail(base.status, code, base.message);
+  const message =
+    remaining === 0
+      ? `Ya tienes ${MAX_PER_BUYER_EVENT} entradas para este evento, el máximo por persona.`
+      : `Solo puedes añadir ${remaining} ${remaining === 1 ? "entrada más" : "entradas más"} a este evento: el máximo es ${MAX_PER_BUYER_EVENT} por persona.`;
+  return jsonResponse({ error: code, message, limit: MAX_PER_BUYER_EVENT, remaining }, { status: base.status });
 }
 
 /** Busca el código de negocio dentro del mensaje de error de PostgREST. */
@@ -292,7 +320,7 @@ Deno.serve(async (req) => {
         const code = matchOrderError(rpcErr.message);
         if (code) {
           log.info("free_order_rejected", { code, event_id: eventId, tier_id: tierId, qty });
-          return fail(ORDER_ERRORS[code].status, code, ORDER_ERRORS[code].message);
+          return orderRejection(code, rpcErr.hint);
         }
         log.error("free_order_create_failed", { error: rpcErr.message, code: rpcErr.code, event_id: eventId });
         return fail(500, "order_create_failed", "No hemos podido reservar tus entradas. Inténtalo de nuevo.");
@@ -354,7 +382,7 @@ Deno.serve(async (req) => {
       const code = matchOrderError(rpcErr.message);
       if (code) {
         log.info("order_rejected", { code, event_id: eventId, tier_id: tierId, qty });
-        return fail(ORDER_ERRORS[code].status, code, ORDER_ERRORS[code].message);
+        return orderRejection(code, rpcErr.hint);
       }
       log.error("order_create_failed", { error: rpcErr.message, code: rpcErr.code, event_id: eventId });
       return fail(500, "order_create_failed", "No hemos podido reservar tus entradas. Inténtalo de nuevo.");

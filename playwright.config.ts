@@ -92,6 +92,8 @@ export default defineConfig({
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
+    "**/limite-entradas.spec.ts",
+    "**/ubicacion-evento.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
