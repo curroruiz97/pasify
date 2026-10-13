@@ -1,5 +1,6 @@
 import { Building2, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { cityOptions, samePlace, type EventPlace } from "@/lib/eventPlace";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -33,6 +34,11 @@ interface Props {
   onChange: (next: LocationValue) => void;
   cities: Array<{ id: string; name: string; slug: string }>;
   disabled?: boolean;
+  /**
+   * Lugar del local elegido. Si el de arriba no coincide, se avisa y se ofrece
+   * volver a los datos del local (el evento guarda su propia copia del lugar).
+   */
+  venuePlace?: EventPlace | null;
 }
 
 /** Validación humana — devuelve mensaje de error o null si OK. */
@@ -47,7 +53,12 @@ export const EventLocationSection = ({
   onChange,
   cities,
   disabled,
+  venuePlace = null,
 }: Props) => {
+  // Las de la lista y, si no está, la que hay guardada: el selector enseña
+  // siempre lo que tiene el evento y nunca un texto de ejemplo.
+  const ciudades = cityOptions(cities, value.city).filter(Boolean);
+  const distinto = venuePlace !== null && !samePlace(value, venuePlace);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
@@ -61,12 +72,12 @@ export const EventLocationSection = ({
           disabled={disabled}
         >
           <SelectTrigger id="evt-city" className="mt-1.5">
-            <SelectValue placeholder="Madrid" />
+            <SelectValue placeholder="Elige la ciudad" />
           </SelectTrigger>
           <SelectContent>
-            {cities.map((c) => (
-              <SelectItem key={c.id} value={c.name}>
-                {c.name}
+            {ciudades.map((name) => (
+              <SelectItem key={name} value={name}>
+                {name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -95,7 +106,7 @@ export const EventLocationSection = ({
           id="evt-addr"
           value={value.address}
           onChange={(e) => onChange({ ...value, address: e.target.value })}
-          placeholder="C. de Atocha, 125, 28012 Madrid"
+          placeholder="Calle, número y código postal"
           disabled={disabled}
           className="mt-1.5"
         />
@@ -104,6 +115,32 @@ export const EventLocationSection = ({
           mapa de cómo llegar.
         </p>
       </div>
+      {distinto && venuePlace && (
+        <div
+          role="note"
+          data-testid="lugar-distinto-del-local"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground sm:col-span-2"
+        >
+          <span className="min-w-0 flex-1">
+            Estos datos no son los de tu local
+            {venuePlace.venueName || venuePlace.city ? (
+              <>
+                {" "}
+                (<span className="text-foreground">{[venuePlace.venueName, venuePlace.city].filter(Boolean).join(" · ")}</span>)
+              </>
+            ) : null}
+            . Si no es intencionado, vuelve a los del local.
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange({ ...venuePlace })}
+            disabled={disabled}
+            className="shrink-0 rounded-md border border-orange-500/40 px-2.5 py-1 text-[12px] font-medium text-orange-500 transition hover:bg-orange-500/10 disabled:opacity-50"
+          >
+            Usar los datos del local
+          </button>
+        </div>
+      )}
     </div>
   );
 };
