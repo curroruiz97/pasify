@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/withTimeout";
 import {
   MAX_TICKETS_PER_ORDER,
+  type TicketAllowance,
   type TierLiveAvailability,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
@@ -32,6 +33,11 @@ type RpcResult = { data: unknown; error: { message: string; code?: string } | nu
 /** `event_availability` aún no está en los types generados. */
 type AvailabilityRpc = {
   rpc: (fn: "event_availability", args: { _event_id: string }) => PromiseLike<RpcResult>;
+};
+
+/** `event_ticket_allowance` tampoco está en los types generados. */
+type AllowanceRpc = {
+  rpc: (fn: "event_ticket_allowance", args: { _event_id: string }) => PromiseLike<RpcResult>;
 };
 
 /** Fila de `ticket_tiers` con TIER_COLUMNS. */
@@ -89,6 +95,34 @@ export async function fetchEventAvailability(
     return byTier;
   } catch (err) {
     console.warn("[tiers] event_availability sin respuesta; se estima con capacity - sold", err);
+    return null;
+  }
+}
+
+/**
+ * Cuántas entradas de este evento lleva ya quien pregunta y cuántas puede
+ * añadir (`event_ticket_allowance`, tope de 10 por persona y evento). null si
+ * la RPC falla, tarda o no existe aún (BD vieja): el selector sigue sin ese
+ * dato y es el servidor quien rechaza lo que pase del límite.
+ */
+export async function fetchEventAllowance(eventId: string): Promise<TicketAllowance | null> {
+  try {
+    const { data, error } = await withTimeout(
+      (supabase as unknown as AllowanceRpc).rpc("event_ticket_allowance", { _event_id: eventId }),
+      AVAILABILITY_TIMEOUT_MS,
+      "rpc event_ticket_allowance"
+    );
+    if (error) {
+      console.warn("[tiers] event_ticket_allowance no disponible; manda el servidor", error.message);
+      return null;
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined;
+    const limit = toCount(row?.max_per_buyer);
+    const held = toCount(row?.held);
+    if (typeof limit !== "number" || typeof held !== "number" || limit < 1) return null;
+    return { limit, held, remaining: Math.max(0, limit - held) };
+  } catch (err) {
+    console.warn("[tiers] event_ticket_allowance sin respuesta; manda el servidor", err);
     return null;
   }
 }

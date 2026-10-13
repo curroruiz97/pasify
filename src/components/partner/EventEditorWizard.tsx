@@ -1765,7 +1765,7 @@ const StepTickets = ({
   <StepShell
     eyebrow="Paso 03"
     title={<>Tipos de <span style={serif} className="text-orange-500">entrada</span>.</>}
-    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente."
+    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente. Además, cada persona puede tener como máximo 10 entradas por evento, sumando todos los tipos."
   >
     <div className="mx-auto max-w-3xl">
       <TicketTiersBuilder

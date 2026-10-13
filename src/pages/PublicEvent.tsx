@@ -21,6 +21,7 @@ import { withTimeout } from "@/lib/withTimeout";
 import { TierConditions } from "@/components/tickets/TierPickerSheet";
 import { fetchEventTiers } from "@/components/tickets/tierData";
 import {
+  MAX_TICKETS_PER_BUYER_EVENT,
   formatEventDate,
   formatEventTime,
   formatPriceCents,
@@ -391,6 +392,11 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
         <h2 className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
           Entradas
         </h2>
+        {!isPast && tierRows.length > 0 && (
+          <p className="-mt-1 mb-3 text-xs text-white/45">
+            Máximo {MAX_TICKETS_PER_BUYER_EVENT} entradas por persona y evento.
+          </p>
+        )}
         {isPast ? (
           <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
             Este evento ya ha terminado.
