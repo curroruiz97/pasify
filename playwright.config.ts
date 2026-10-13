@@ -92,6 +92,8 @@ export default defineConfig({
     "**/transferencia.spec.ts",
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
+    "**/recurrencia.spec.ts",
+    "**/series-editor.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
