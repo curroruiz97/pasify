@@ -510,11 +510,15 @@ export const PartnerOnboardingWizard = ({
         const targetId =
           v.id && existingIds.has(v.id) ? v.id : !v.id ? emptyPlaceholders.shift() ?? null : null;
         const cap = v.capacity ? parseInt(v.capacity, 10) : null;
+        // Sin ciudad no se guarda el local (antes se ponía «Madrid» en silencio
+        // y sus eventos salían en Madrid). La validación del paso ya la pide.
+        const venueCity = v.city.trim() || data.orgCity.trim();
+        if (!venueCity) throw new Error(`Local ${i + 1}: selecciona la ciudad`);
         const payload = {
           name: v.name.trim(),
           business_category: v.category || null,
           address: v.address.trim() || null,
-          city: v.city.trim() || data.orgCity.trim() || "Madrid",
+          city: venueCity,
           country: data.orgCountry,
           timezone: data.opTimezone,
           capacity: cap && cap > 0 ? cap : null,

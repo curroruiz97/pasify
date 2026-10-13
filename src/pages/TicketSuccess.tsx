@@ -35,6 +35,7 @@ import {
   ticketDoorCode,
   ticketHolderName,
 } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
 
 /**
  * TicketSuccess — confirmación de una compra en WEB y de una reserva gratis.
@@ -81,6 +82,7 @@ type EventRow = {
   title: string;
   date_start: string;
   venue_name: string | null;
+  address: string | null;
   city: string;
   image_url: string | null;
 };
@@ -320,7 +322,7 @@ const TicketSuccess = () => {
         const [{ data: ev }, tickets] = await Promise.all([
           supabase
             .from("events")
-            .select("id, title, date_start, venue_name, city, image_url")
+            .select("id, title, date_start, venue_name, address, city, image_url")
             .eq("id", order.event_id)
             .maybeSingle(),
           loadOrderTickets(order.id),
@@ -736,7 +738,7 @@ const TicketSuccess = () => {
                       {formatEventDateTime(ready.event.date_start)}
                     </SummaryItem>
                     <SummaryItem icon={<MapPin className="h-4 w-4" />} label="Dónde">
-                      {ready.event.venue_name ?? ready.event.city}
+                      {formatEventPlace(ready.event).long || ready.event.city}
                     </SummaryItem>
                     {ticketsSummary && (
                       <SummaryItem icon={<TicketIcon className="h-4 w-4" />} label="Entradas">

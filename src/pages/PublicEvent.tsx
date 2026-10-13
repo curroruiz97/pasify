@@ -8,6 +8,7 @@ import {
   Gift,
   Loader2,
   MapPin,
+  Repeat,
   RotateCcw,
   Share2,
   Ticket as TicketIcon,
@@ -17,10 +18,14 @@ import { Wordmark } from "@/components/Wordmark";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { shareEventLink } from "@/lib/eventLinks";
+import { formatEventPlace } from "@/lib/eventPlace";
 import { withTimeout } from "@/lib/withTimeout";
+import { leerConSeries, countLabel } from "@/lib/eventSeries";
+import { loadPublicSeries, type PublicSeries } from "@/lib/eventSeriesApi";
 import { TierConditions } from "@/components/tickets/TierPickerSheet";
 import { fetchEventTiers } from "@/components/tickets/tierData";
 import {
+  MAX_TICKETS_PER_BUYER_EVENT,
   formatEventDate,
   formatEventTime,
   formatPriceCents,
@@ -72,6 +77,8 @@ interface EventRow {
   status: string;
   venue_id: string | null;
   partner_id: string | null;
+  /** Serie de la que es una fecha (evento de varios días o recurrente); falta si el servidor no la tiene. */
+  series_id?: string | null;
 }
 
 interface PageData {
@@ -82,6 +89,8 @@ interface PageData {
   city: string | null;
   partner: { id: string; business_name: string | null } | null;
   tiers: TierOption[];
+  /** Las demás fechas de su serie (null: no es de una serie o no se pudo leer). */
+  series: PublicSeries | null;
 }
 
 type State =
@@ -112,14 +121,14 @@ const PublicEvent = () => {
       if (!silent) setState({ kind: "loading" });
       try {
         const { data: event, error } = await withTimeout(
-          supabase
-            .from("events")
-            .select("id, title, description, image_url, date_start, date_end, city, venue_name, address, status, venue_id, partner_id")
-            .eq("id", eventId)
-            .maybeSingle(),
+          // Con la serie, si el servidor la conoce (leerConSeries repite sin ella si no).
+          leerConSeries(
+            "id, title, description, image_url, date_start, date_end, city, venue_name, address, status, venue_id, partner_id",
+            (select) => supabase.from("events").select(select).eq("id", eventId).maybeSingle(),
+          ),
           LOAD_TIMEOUT_MS,
           "events"
-        );
+        ) as unknown as { data: EventRow | null; error: unknown };
         if (requestId !== requestRef.current) return;
         if (error) throw error;
         if (!event) {
@@ -135,7 +144,7 @@ const PublicEvent = () => {
           return;
         }
 
-        const [venueRes, partnerRes, tiers] = await withTimeout(
+        const [venueRes, partnerRes, tiers, series] = await withTimeout(
           Promise.all([
             event.venue_id
               ? supabase.from("venues").select("name, address, city, timezone").eq("id", event.venue_id).maybeSingle()
@@ -144,6 +153,7 @@ const PublicEvent = () => {
               ? supabase.from("public_partners").select("id, business_name").eq("id", event.partner_id).maybeSingle()
               : Promise.resolve({ data: null, error: null }),
             fetchEventTiers(event.id),
+            event.series_id ? loadPublicSeries(event.series_id) : Promise.resolve(null),
           ]),
           LOAD_TIMEOUT_MS,
           "event details"
@@ -161,6 +171,7 @@ const PublicEvent = () => {
             city: event.city || venue?.city || null,
             partner: (partnerRes.data as PageData["partner"]) ?? null,
             tiers,
+            series,
           },
         });
       } catch (err) {
@@ -251,12 +262,12 @@ const PublicEvent = () => {
             data={state.data}
             buying={pendingId === state.data.event.id}
             onBuy={() => {
-              const { event, venueName, city } = state.data;
+              const { event, venueName, address, city, partner } = state.data;
               void checkout({
                 id: event.id,
                 title: event.title,
                 dateStart: event.date_start,
-                place: venueName || city,
+                place: formatEventPlace({ venue_name: venueName, address, city }, partner?.business_name).short || null,
               });
             }}
           />
@@ -317,11 +328,15 @@ const Unavailable = ({
 );
 
 const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; onBuy: () => void }) => {
-  const { event, timezone: tz, venueName, address, city, partner, tiers } = data;
+  const { event, timezone: tz, venueName, address, city, partner, tiers, series } = data;
   const date = formatEventDate(event.date_start, tz);
   const time = formatEventTime(event.date_start, tz);
-  const place = [venueName, address, city].filter(Boolean).join(" · ");
-  const mapsQuery = [venueName, address, city].filter(Boolean).join(", ");
+  // Un solo formato para el lugar (lib/eventPlace): sin «Madrid · Madrid» ni el
+  // nombre de relleno «Principal» de las cuentas nuevas.
+  const { long: place, maps: mapsQuery } = formatEventPlace(
+    { venue_name: venueName, address, city },
+    partner?.business_name,
+  );
   // Misma regla que el servidor al vender (`create_ticket_order`): hasta
   // `date_end` o, sin hora de fin, 12 h después de empezar. Antes se cerraba
   // 2 h después del inicio: un evento de las 23:00 salía "terminado" a la 1:01.
@@ -385,6 +400,15 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
               </span>
             </div>
           )}
+          {series && series.dates.length > 1 && (
+            <div className="flex items-start gap-3 text-sm text-white/70" data-testid="serie-patron">
+              <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-[#FF7A4D]" />
+              <span>
+                {series.pattern ? `${series.pattern} · ` : "Evento con varias fechas · "}
+                {countLabel(series.dates.length)}
+              </span>
+            </div>
+          )}
           {place && (
             <div className="flex items-start gap-3 text-sm">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FF7A4D]" />
@@ -417,6 +441,11 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
           <h2 id="entradas-del-evento" className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
             Entradas
           </h2>
+          {!isPast && tierRows.length > 0 && (
+            <p className="-mt-1 mb-3 text-xs text-white/45">
+              Máximo {MAX_TICKETS_PER_BUYER_EVENT} entradas por persona y evento.
+            </p>
+          )}
           {isPast ? (
             <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
               Este evento ya ha terminado.
@@ -498,8 +527,83 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
             </button>
           </div>
         </div>
+
+        {series && series.dates.length > 1 && <SeriesDates currentId={event.id} series={series} tz={tz} />}
       </div>
     </div>
+  );
+};
+
+/** Fechas que se enseñan antes de «Ver las N fechas». */
+const FECHAS_VISIBLES = 6;
+
+/**
+ * Las demás fechas de un evento de varios días o recurrente: cada una es un
+ * evento con su propia página, sus entradas y su aforo; esta se marca y las
+ * agotadas lo dicen.
+ */
+const SeriesDates = ({ currentId, series, tz }: { currentId: string; series: PublicSeries; tz: string | null }) => {
+  const [todas, setTodas] = useState(false);
+  const fechas = series.dates;
+  // La que se está mirando siempre sale, aunque caiga más allá de las primeras.
+  const posicion = fechas.findIndex((f) => f.id === currentId);
+  const visibles = todas || fechas.length <= FECHAS_VISIBLES ? fechas : fechas.filter((_, i) => i < FECHAS_VISIBLES || i === posicion);
+  return (
+    <section className="mt-6" aria-label="Fechas" data-testid="otras-fechas">
+      <h2 className="mb-3 text-[11px] uppercase text-white/50" style={{ ...mono, letterSpacing: "0.18em" }}>
+        Fechas · {countLabel(fechas.length)}
+      </h2>
+      <ul className="space-y-2">
+        {visibles.map((f) => {
+          const actual = f.id === currentId;
+          const contenido = (
+            <>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{formatEventDate(f.date_start, tz)}</div>
+                <div className="text-xs text-white/50" style={mono}>
+                  {formatEventTime(f.date_start, tz)}h
+                </div>
+              </div>
+              <span
+                className={`shrink-0 text-xs font-semibold ${
+                  actual ? "text-[#FF7A4D]" : f.soldOut ? "text-white/40" : "text-[#FFC9B0]"
+                }`}
+              >
+                {actual ? "Estás aquí" : f.soldOut ? "Agotado" : "Ver"}
+              </span>
+            </>
+          );
+          const base = "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3";
+          return (
+            <li key={f.id}>
+              {actual ? (
+                <div aria-current="page" className={`${base} border-[#E8542A]/50 bg-[#E8542A]/10`} data-testid={`fecha-${f.id}`}>
+                  {contenido}
+                </div>
+              ) : (
+                <Link
+                  to={`/e/${f.id}`}
+                  className={`${base} border-white/10 bg-white/[0.03] transition hover:border-white/25`}
+                  data-testid={`fecha-${f.id}`}
+                >
+                  {contenido}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {fechas.length > FECHAS_VISIBLES && (
+        <button
+          type="button"
+          onClick={() => setTodas((v) => !v)}
+          className="mt-3 min-h-[44px] text-sm text-[#FF7A4D] underline underline-offset-4"
+          data-testid="otras-fechas-todas"
+        >
+          {todas ? "Ver menos" : `Ver las ${countLabel(fechas.length)}`}
+        </button>
+      )}
+    </section>
   );
 };
 
