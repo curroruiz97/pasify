@@ -1,6 +1,7 @@
 import { CalendarDays, ChevronRight } from "lucide-react";
 import { useCalendarEvents, type CalendarEvent } from "@/hooks/useEvents";
 import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -70,7 +71,7 @@ const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () =>
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const fecha = eventDayMonth(evento.date_start);
   const hora = formatEventTime(evento.date_start);
-  const lugar = evento.profiles?.business_name || evento.venue_name || evento.city;
+  const lugar = formatEventPlace(evento, evento.profiles?.business_name).short;
   const precio = eventPriceLabel(evento.price_cents);
   const inicial = (evento.title?.[0] ?? "?").toUpperCase();
 

@@ -17,6 +17,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { shareEventLink } from "@/lib/eventLinks";
+import { formatEventPlace } from "@/lib/eventPlace";
 import { withTimeout } from "@/lib/withTimeout";
 import { TierConditions } from "@/components/tickets/TierPickerSheet";
 import { fetchEventTiers } from "@/components/tickets/tierData";
@@ -244,12 +245,12 @@ const PublicEvent = () => {
             data={state.data}
             buying={pendingId === state.data.event.id}
             onBuy={() => {
-              const { event, venueName, city } = state.data;
+              const { event, venueName, address, city, partner } = state.data;
               void checkout({
                 id: event.id,
                 title: event.title,
                 dateStart: event.date_start,
-                place: venueName || city,
+                place: formatEventPlace({ venue_name: venueName, address, city }, partner?.business_name).short || null,
               });
             }}
           />
@@ -313,8 +314,12 @@ const EventView = ({ data, buying, onBuy }: { data: PageData; buying: boolean; o
   const { event, timezone: tz, venueName, address, city, partner, tiers } = data;
   const date = formatEventDate(event.date_start, tz);
   const time = formatEventTime(event.date_start, tz);
-  const place = [venueName, address, city].filter(Boolean).join(" · ");
-  const mapsQuery = [venueName, address, city].filter(Boolean).join(", ");
+  // Un solo formato para el lugar (lib/eventPlace): sin «Madrid · Madrid» ni el
+  // nombre de relleno «Principal» de las cuentas nuevas.
+  const { long: place, maps: mapsQuery } = formatEventPlace(
+    { venue_name: venueName, address, city },
+    partner?.business_name,
+  );
   // Misma regla que el servidor al vender (`create_ticket_order`): hasta
   // `date_end` o, sin hora de fin, 12 h después de empezar. Antes se cerraba
   // 2 h después del inicio: un evento de las 23:00 salía "terminado" a la 1:01.
