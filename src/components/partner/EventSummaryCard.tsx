@@ -45,6 +45,8 @@ export interface EventSummary {
   willPublish: boolean;
   /** Con qué hora se leen el día y las horas: «Hora de Santa Cruz de Tenerife». */
   timeZoneLabel?: string;
+  /** Una serie de fechas: «Todos los viernes · 8 fechas». null = una sola fecha. */
+  seriesLabel?: string | null;
   /** Devoluciones y transferencia de los tipos activos. */
   policies?: TierPolicySummary[];
 }
@@ -174,8 +176,13 @@ export const EventSummaryCard = ({ summary, defaultCollapsed = true }: Props) =>
 
         {/* Body */}
         <div className="space-y-3 p-4">
-          <Row icon={<CalendarDays className="h-4 w-4" />} label="Cuándo">
+          <Row icon={<CalendarDays className="h-4 w-4" />} label={summary.seriesLabel ? "Primera fecha" : "Cuándo"}>
             <span className="capitalize">{formatHumanDate(summary.date)}</span>
+            {summary.seriesLabel && (
+              <span className="block text-[12px] text-orange-500" data-testid="summary-series">
+                {summary.seriesLabel}
+              </span>
+            )}
           </Row>
           <Row icon={<Clock className="h-4 w-4" />} label="Horario">
             {formatTimeRange(summary.startTime, summary.endTime, summary.crossesMidnight)}
