@@ -122,6 +122,7 @@ const borradorSerie = (opts: {
   publicar?: boolean;
   inicio?: string;
   fin?: string;
+  categoria?: string;
 }) => ({
   v: 1,
   step: opts.paso ?? 5,
@@ -146,6 +147,7 @@ const borradorSerie = (opts: {
   imageUrl: "",
   willPublish: opts.publicar ?? true,
   venueId: IDS.local,
+  ...(opts.categoria ? { category: opts.categoria } : {}),
   timeZone: "Europe/Madrid",
   schedule: opts.programacion,
 });
@@ -471,6 +473,23 @@ test.describe("crear la serie", () => {
     // El borrador del dispositivo ya no hace falta.
     await page.waitForTimeout(700);
     expect(await page.evaluate((k) => window.localStorage.getItem(k), CLAVE_BORRADOR)).toBeNull();
+  });
+
+  test("la serie lleva la categoría del evento a todas sus fechas", async ({ page }) => {
+    await sembrarBorrador(
+      page,
+      borradorSerie({ fecha: FECHA, programacion: { kind: "recurring", rule: SEMANAL }, categoria: "festival" }),
+    );
+    let llamadas!: Fila[];
+    await abrirPanel(page, async () => {
+      llamadas = await simularCreacionDeSerie(page);
+    });
+    const editor = await abrirNuevoEvento(page);
+    await expect(paso(editor, 6)).toBeVisible();
+    await editor.getByRole("button", { name: "Publicar evento" }).click();
+    await expect(page.getByText("Serie publicada · 4 fechas")).toBeVisible();
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]._event).toMatchObject({ title: "Noche de series", category: "festival" });
   });
 
   test("un envío repetido (se cortó la red) usa la misma clave; si cambia algo, es otro intento", async ({ page }) => {
