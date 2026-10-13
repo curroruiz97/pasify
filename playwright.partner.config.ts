@@ -39,6 +39,7 @@ export default defineConfig({
     "**/recurrencia.spec.ts",
     "**/series-editor.spec.ts",
     "**/series-gestion.spec.ts",
+    "**/series-publico.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

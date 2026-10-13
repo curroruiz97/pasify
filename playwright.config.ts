@@ -95,6 +95,7 @@ export default defineConfig({
     "**/recurrencia.spec.ts",
     "**/series-editor.spec.ts",
     "**/series-gestion.spec.ts",
+    "**/series-publico.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },

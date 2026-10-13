@@ -262,3 +262,53 @@ export async function loadSeriesContext(eventId: string, now = Date.now()): Prom
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Las fechas de la serie, para la página pública del evento
+// ---------------------------------------------------------------------------
+
+/** Una fecha de la serie tal como la enseña la página del evento. */
+export interface PublicSeriesDate {
+  id: string;
+  date_start: string;
+  date_end: string | null;
+  /** Agotada: el aforo de la fecha está cubierto por las entradas vendidas. */
+  soldOut: boolean;
+}
+
+export interface PublicSeries {
+  /** Cómo se repite («Todos los viernes»), si la regla guardada se entiende. */
+  pattern: string | null;
+  /** Las fechas a la venta que aún no han terminado, de la más próxima a la más lejana. */
+  dates: PublicSeriesDate[];
+}
+
+/**
+ * Las demás fechas de la serie de un evento (lectura pública: la RLS solo deja
+ * ver las publicadas). Cualquier fallo —sin conexión, un servidor sin la
+ * migración— devuelve null y la página sigue sin esa sección: es un extra.
+ */
+export async function loadPublicSeries(seriesId: string, now = Date.now()): Promise<PublicSeries | null> {
+  const db = supabase as unknown as SinTipos;
+  try {
+    const [sesiones, serie] = await Promise.all([
+      db.from("events").select("id, status, date_start, date_end, capacity, tickets_sold").eq("series_id", seriesId),
+      db.from("event_series").select("kind, rule").eq("id", seriesId).maybeSingle(),
+    ]);
+    if (sesiones.error) return null;
+    const dates = (sesiones.data ?? [])
+      .filter((s) => s.status === "published" && typeof s.id === "string" && typeof s.date_start === "string")
+      .filter((s) => isOpenSession({ status: "published", date_start: String(s.date_start), date_end: (s.date_end as string | null) ?? null }, now))
+      .map((s) => ({
+        id: String(s.id),
+        date_start: String(s.date_start),
+        date_end: (s.date_end as string | null) ?? null,
+        soldOut: typeof s.capacity === "number" && s.capacity > 0 && Number(s.tickets_sold ?? 0) >= s.capacity,
+      }))
+      .sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start));
+    const parsed = serie.data ? parseStoredRule({ ...(serie.data.rule as object), kind: serie.data.kind }) : null;
+    return { pattern: parsed ? describePattern(parsed.startsOn, parsed.rule) : null, dates };
+  } catch {
+    return null;
+  }
+}

@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCalendarEvents, useInvalidateEvents, type CalendarEvent } from "@/hooks/useEvents";
 import EventPosterCard from "@/components/calendar/EventPosterCard";
 import MonthCalendarView from "@/components/calendar/MonthCalendarView";
+import SeriesDatesDialog from "@/components/calendar/SeriesDatesDialog";
+import { groupBySeries } from "@/lib/eventSeries";
 import CitySelector from "@/components/shared/CitySelector";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -98,6 +100,12 @@ const Calendar = () => {
     return foco ? [...lista, foco].sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start)) : lista;
   }, [eventsData, todosLosEventos, focusEventId]);
   const { invalidateAll } = useInvalidateEvents();
+  // Una tarjeta por serie (eventos de varios días y recurrentes) en la vista de
+  // carteles: la fecha más próxima, o la que se buscaba con ?event=, y «N
+  // fechas» para ver las demás. La vista de mes enseña cada fecha en su día.
+  const tarjetas = useMemo(() => groupBySeries(events, { focusId: focusEventId }), [events, focusEventId]);
+  // Las fechas de la serie abierta en el diálogo (null = cerrado).
+  const [fechasAbiertas, setFechasAbiertas] = useState<CalendarEvent[] | null>(null);
   // Ids de los eventos visibles, como texto estable: cambiar de ciudad puede
   // dejar el mismo número de eventos pero otros distintos.
   const idsVisibles = useMemo(() => events.map((e) => e.id).join(","), [events]);
@@ -228,15 +236,17 @@ const Calendar = () => {
 
   // Misma tarjeta en la cuadrícula de pósters y en la lista del día elegido
   // en la vista de calendario.
-  const renderPosterCard = (ev: CalendarEvent) => (
+  const renderPosterCard = (ev: CalendarEvent, serie?: CalendarEvent[]) => (
     <EventPosterCard
       key={ev.id}
       event={ev}
       isParticipant={participantIds.has(ev.id)}
       participating={participatingIds.has(ev.id) || buyingId === ev.id}
-      highlighted={highlightedId === ev.id}
+      highlighted={highlightedId === ev.id || (!!serie && !!highlightedId && serie.some((s) => s.id === highlightedId))}
       onBuy={handleBuy}
       onViewTicket={handleViewTicket}
+      serie={serie}
+      onSeeDates={setFechasAbiertas}
     />
   );
 
@@ -397,10 +407,10 @@ const Calendar = () => {
             )}
           </div>
         ) : view === "calendar" ? (
-          <MonthCalendarView events={events} renderEvent={renderPosterCard} />
+          <MonthCalendarView events={events} renderEvent={(ev) => renderPosterCard(ev)} />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-            {events.map(renderPosterCard)}
+            {tarjetas.map((t) => (t.kind === "series" ? renderPosterCard(t.event, t.sessions) : renderPosterCard(t.event)))}
           </div>
         )}
       </main>
@@ -410,6 +420,19 @@ const Calendar = () => {
         onOpenChange={setCitySelectorOpen}
         selectedCity={selectedCity}
         onCityChange={handleCityChange}
+      />
+
+      {/* Las fechas de una serie: cada una se compra por separado */}
+      <SeriesDatesDialog
+        title={fechasAbiertas?.[0]?.title ?? ""}
+        sessions={fechasAbiertas}
+        onOpenChange={(abierto) => !abierto && setFechasAbiertas(null)}
+        onBuy={(ev) => {
+          setFechasAbiertas(null);
+          void handleBuy(ev);
+        }}
+        buyingId={buyingId}
+        heldIds={participantIds}
       />
 
       {/* Selector de entradas del hook de compra */}

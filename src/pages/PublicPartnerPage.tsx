@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { EventListCard } from "@/components/event/EventListCard";
 import { MonthGrid } from "@/components/event/MonthGrid";
+import SeriesDatesDialog from "@/components/calendar/SeriesDatesDialog";
 import { isEventOver } from "@/components/tickets/ticketUtils";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { useFavoritePartners } from "@/hooks/useFavoritePartners";
@@ -26,6 +27,7 @@ import type { PublicPartner } from "@/hooks/queries/clientData";
 import { qk } from "@/lib/cache/keys";
 import { useCurrentUserId } from "@/lib/cache/session";
 import { loginPathWithNext, sharePartnerLink } from "@/lib/eventLinks";
+import { groupBySeries, leerConSeries } from "@/lib/eventSeries";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -60,6 +62,8 @@ type EventRow = {
   tickets_sold: number;
   image_url: string | null;
   status: string;
+  /** Serie de la que es una fecha (varios días o recurrente); falta si el servidor aún no la tiene. */
+  series_id?: string | null;
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -81,6 +85,9 @@ const EVENT_COLUMNS =
   "id, title, description, date_start, date_end, city, price_cents, capacity, tickets_sold, image_url, status";
 
 const monoFont = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+
+/** La ficha pública no sabe qué entradas tiene ya el visitante. */
+const SIN_ENTRADAS: ReadonlySet<string> = new Set();
 
 /**
  * Gris cálido de la pestaña inactiva. Era #8A8275: el número de eventos
@@ -107,14 +114,18 @@ async function leerLocal(id: string): Promise<Partner | null> {
 }
 
 async function leerEventosDelLocal(id: string): Promise<EventRow[]> {
-  const { data, error } = await supabase
-    .from("events")
-    .select(EVENT_COLUMNS)
-    .eq("partner_id", id)
-    .eq("status", "published")
-    .order("date_start", { ascending: true });
+  // Con la serie de cada fecha, si el servidor la conoce (leerConSeries repite
+  // sin ella si no).
+  const { data, error } = await leerConSeries(EVENT_COLUMNS, (select) =>
+    supabase
+      .from("events")
+      .select(select)
+      .eq("partner_id", id)
+      .eq("status", "published")
+      .order("date_start", { ascending: true }),
+  );
   if (error) throw error;
-  return (data ?? []) as EventRow[];
+  return (data ?? []) as unknown as EventRow[];
 }
 
 const PublicPartnerPage = () => {
@@ -179,6 +190,12 @@ const PublicPartnerPage = () => {
     const ahora = Date.now();
     return (events ?? []).filter((e) => !isEventOver(e, ahora));
   }, [events]);
+
+  // Una tarjeta por serie (varios días o recurrente): su próxima fecha, con
+  // cuántas son. El calendario de al lado enseña cada fecha en su día.
+  const tarjetas = useMemo(() => groupBySeries(upcomingEvents), [upcomingEvents]);
+  // Las fechas de la serie abierta en el diálogo (null = cerrado).
+  const [fechasAbiertas, setFechasAbiertas] = useState<EventRow[] | null>(null);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, EventRow[]>();
@@ -443,7 +460,7 @@ const PublicPartnerPage = () => {
                     color: tab === "list" ? "#FF7A4D" : GRIS_INACTIVO,
                   }}
                 >
-                  {upcomingEvents.length.toString().padStart(2, "0")}
+                  {tarjetas.length.toString().padStart(2, "0")}
                 </span>
               )}
               <span
@@ -503,14 +520,19 @@ const PublicPartnerPage = () => {
                 </CardContent>
               </Card>
             ) : (
-              upcomingEvents.map((e) => (
+              tarjetas.map((t) => (
                 <EventListCard
-                  key={e.id}
-                  event={e}
+                  key={t.event.id}
+                  event={t.event}
                   partnerId={id}
                   partnerName={partner.business_name ?? undefined}
-                  onBuyTicket={() => buyEvent(e)}
-                  pending={pendingId === e.id}
+                  onBuyTicket={() => buyEvent(t.event)}
+                  pending={pendingId === t.event.id}
+                  serie={
+                    t.kind === "series"
+                      ? { count: t.sessions.length, onSeeDates: () => setFechasAbiertas(t.sessions) }
+                      : undefined
+                  }
                 />
               ))
             )}
@@ -568,6 +590,19 @@ const PublicPartnerPage = () => {
           </div>
         )}
       </div>
+
+      {/* Las fechas de una serie: cada una se compra por separado */}
+      <SeriesDatesDialog
+        title={fechasAbiertas?.[0]?.title ?? ""}
+        sessions={fechasAbiertas}
+        onOpenChange={(abierto) => !abierto && setFechasAbiertas(null)}
+        onBuy={(ev) => {
+          setFechasAbiertas(null);
+          void buyEvent(ev);
+        }}
+        buyingId={pendingId}
+        heldIds={SIN_ENTRADAS}
+      />
 
       {/* Selector de entradas del hook de compra */}
       {checkoutSheet}
