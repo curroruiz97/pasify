@@ -65,6 +65,8 @@ import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { PartnerEventList } from "@/components/partner/PartnerEventList";
 import type { EventActions } from "@/components/partner/EventActionsMenu";
+import type { SeriesActions } from "@/components/partner/SeriesActionsMenu";
+import { countLabel, isOpenSession, summarizeSessions } from "@/lib/eventSeries";
 import { EventQrDialog } from "@/components/partner/EventQrDialog";
 import { CancelEventDialog, type CancelTarget } from "@/components/partner/CancelEventDialog";
 import { formatInTimeZone } from "@/components/partner/zonedTime";
@@ -481,6 +483,82 @@ const PartnerDashboard = () => {
     onCancel: () => setCancelTarget(e),
     onDelete: () => setDeleteTarget(e),
   });
+
+  /**
+   * Acciones de la cabecera de una serie en Mis eventos. `sesiones` son todas
+   * las fechas de la serie que conoce el panel.
+   */
+  const accionesDeSerie = (sesiones: EventRow[]): SeriesActions => ({
+    onPublishAll: () => void publishSeriesDrafts(sesiones),
+    // Se abre el diálogo de cancelar en la próxima fecha, con «toda la serie» marcado.
+    onCancelAll: () => {
+      const abiertas = sesiones.filter((x) => isOpenSession(x));
+      if (abiertas.length === 0) return;
+      setCancelTarget({ ...summarizeSessions(abiertas).next, initialScope: "all" });
+    },
+  });
+
+  /**
+   * Publica de una vez las fechas de una serie que siguen en borrador, con la
+   * misma regla que publicar una suelta: cada una necesita al menos un tipo de
+   * entrada activo (las que no, se quedan en borrador y se dice). Es una sola
+   * escritura: o cambian todas las listas o ninguna.
+   */
+  const publishSeriesDrafts = async (sesiones: EventRow[]) => {
+    if (!userId) return;
+    if (bloqueoPublicar) {
+      toast({ title: "No se ha publicado", description: bloqueoPublicar, variant: "destructive" });
+      return;
+    }
+    const borradores = sesiones.filter((x) => x.status === "draft" && isOpenSession(x));
+    if (borradores.length === 0) return;
+    setChangingStatus(true);
+    try {
+      const { data: tipos, error: tierErr, status: tierStatus } = await supabase
+        .from("ticket_tiers")
+        .select("event_id")
+        .in("event_id", borradores.map((x) => x.id))
+        .eq("status", "active");
+      if (tierErr) throw toWriteError(tierErr, tierStatus);
+      const conTipo = new Set((tipos ?? []).map((r) => r.event_id));
+      const listas = borradores.filter((x) => conTipo.has(x.id));
+      const sinTipo = borradores.length - listas.length;
+      if (listas.length === 0) {
+        toast({
+          title: "Falta un tipo de entrada",
+          description: "Ninguna de las fechas en borrador tiene un tipo de entrada activo. Añádelo antes de publicar.",
+          variant: "destructive",
+        });
+        return;
+      }
+      expectRows(
+        await supabase.from("events").update({ status: "published" }).in("id", listas.map((x) => x.id)).select("id"),
+        listas.length,
+      );
+      toast({
+        title: `${countLabel(listas.length)} publicadas`,
+        description:
+          sinTipo > 0
+            ? `${sinTipo === 1 ? "Una fecha sin tipo de entrada activo sigue" : `${sinTipo} fechas sin tipo de entrada activo siguen`} en borrador.`
+            : "Ya están a la venta.",
+      });
+      await reloadEvents();
+    } catch (err) {
+      console.error("[PartnerDashboard] publishSeriesDrafts:", err);
+      toast({
+        title: "No se han publicado las fechas",
+        description: describeWriteError(err, {
+          network:
+            "No hay conexión con el servidor y no se ha podido confirmar el cambio. Revisa tu conexión y comprueba la lista.",
+          noRows:
+            "El servidor no ha cambiado todas las fechas: puede que alguna ya no exista o que tu cuenta no tenga permiso sobre ella. Recarga la lista.",
+        }),
+        variant: "destructive",
+      });
+    } finally {
+      setChangingStatus(false);
+    }
+  };
 
   // Cambios de estado explícitos: editar un evento ya no los hace (el
   // editor guarda sin tocar el estado).
@@ -1055,6 +1133,7 @@ const PartnerDashboard = () => {
                   events={events}
                   timeZoneFor={timeZoneFor}
                   actionsFor={accionesDe}
+                  seriesActionsFor={accionesDeSerie}
                   onCreate={() => setEditor({ mode: "create" })}
                   changingStatus={changingStatus}
                   publishBlockedReason={bloqueoPublicar}
@@ -1384,6 +1463,7 @@ const PartnerDashboard = () => {
       <EventQrDialog event={qrTarget} onOpenChange={(open) => !open && setQrTarget(null)} />
       <CancelEventDialog
         target={cancelTarget}
+        seriesSessions={cancelTarget?.series_id ? events.filter((x) => x.series_id === cancelTarget.series_id) : undefined}
         onOpenChange={(open) => !open && setCancelTarget(null)}
         onDone={reloadEvents}
       />

@@ -1,8 +1,10 @@
-import { CalendarDays, ChevronRight } from "lucide-react";
+import { useMemo } from "react";
+import { CalendarDays, ChevronRight, Repeat } from "lucide-react";
 import { useCalendarEvents, type CalendarEvent } from "@/hooks/useEvents";
 import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
 import { formatEventPlace } from "@/lib/eventPlace";
 import { EVENT_CATEGORIES, effectiveEventCategory, type EventCategory } from "@/lib/eventCategories";
+import { countLabel, groupBySeries } from "@/lib/eventSeries";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -29,9 +31,17 @@ interface Props {
  */
 export const UpcomingEventsStrip = ({ city, category = null, onOpen, onSeeAll }: Props) => {
   const { data, isLoading } = useCalendarEvents(city);
-  const eventos = (data ?? [])
-    .filter((e) => !category || effectiveEventCategory(e.category, e.profiles?.business_category) === category)
-    .slice(0, MAX_EVENTOS);
+  // Una tarjeta por serie (eventos de varios días y recurrentes): su fecha más
+  // próxima, con cuántas son. Si no, un festival de 30 noches se comería la tira.
+  const eventos = useMemo(
+    () =>
+      groupBySeries(
+        (data ?? []).filter(
+          (e) => !category || effectiveEventCategory(e.category, e.profiles?.business_category) === category,
+        ),
+      ).slice(0, MAX_EVENTOS),
+    [data, category],
+  );
   const etiqueta = EVENT_CATEGORIES.find((c) => c.value === category);
   if (eventos.length === 0) {
     // Con una categoría elegida, que no salga nada parece que el filtro no
@@ -82,14 +92,19 @@ export const UpcomingEventsStrip = ({ city, category = null, onOpen, onSeeAll }:
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {eventos.map((e) => (
-          <EventoCard key={e.id} evento={e} onClick={() => onOpen(e.id)} />
+          <EventoCard
+            key={e.event.id}
+            evento={e.event}
+            fechas={e.kind === "series" ? e.sessions.length : 0}
+            onClick={() => onOpen(e.event.id)}
+          />
         ))}
       </div>
     </section>
   );
 };
 
-const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () => void }) => {
+const EventoCard = ({ evento, fechas, onClick }: { evento: CalendarEvent; fechas: number; onClick: () => void }) => {
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const fecha = eventDayMonth(evento.date_start);
   const hora = formatEventTime(evento.date_start);
@@ -145,6 +160,16 @@ const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () =>
             <span className="mt-0.5 text-base font-bold leading-none" style={mono}>
               {fecha.day}
             </span>
+          </div>
+        )}
+
+        {fechas > 1 && (
+          <div
+            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur"
+            data-testid={`tira-fechas-${evento.id}`}
+          >
+            <Repeat className="h-3 w-3" />
+            {countLabel(fechas)}
           </div>
         )}
 

@@ -1,4 +1,4 @@
-import { Calendar, Share2, Loader2, Plus, Ticket } from "lucide-react";
+import { Calendar, Share2, Loader2, Plus, Repeat, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { shareEventLink } from "@/lib/eventLinks";
 import { Button } from "@/components/ui/button";
 import { eventPriceLabel, isEventOver } from "@/components/tickets/ticketUtils";
 import { effectiveEventCategory, eventCategoryLabel } from "@/lib/eventCategories";
+import { countLabel } from "@/lib/eventSeries";
 import type { CalendarEvent } from "@/hooks/useEvents";
 
 interface EventPosterCardProps {
@@ -20,6 +21,14 @@ interface EventPosterCardProps {
   onBuy?: (event: CalendarEvent) => void;
   /** Abre la entrada de este evento en la cartera. */
   onViewTicket?: (event: CalendarEvent) => void;
+  /**
+   * Las fechas por celebrar de la serie a la que pertenece (evento de varios
+   * días o recurrente), esta incluida: el cartel enseña la próxima y dice
+   * cuántas son. Sin ella, un evento suelto.
+   */
+  serie?: CalendarEvent[];
+  /** Abre la lista de fechas de la serie. */
+  onSeeDates?: (sessions: CalendarEvent[]) => void;
 }
 
 /**
@@ -49,6 +58,8 @@ const EventPosterCard = ({
   highlighted,
   onBuy,
   onViewTicket,
+  serie,
+  onSeeDates,
 }: EventPosterCardProps) => {
   const { t } = useTranslation();
 
@@ -151,6 +162,18 @@ const EventPosterCard = ({
             {timeRange}
           </span>
         </div>
+
+        {serie && serie.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onSeeDates?.(serie)}
+            data-testid={`serie-ver-fechas-${event.id}`}
+            className="-mt-1 inline-flex min-h-[32px] items-center gap-1.5 self-start rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <Repeat className="h-3 w-3" />
+            {countLabel(serie.length)} · ver todas
+          </button>
+        )}
 
         {priceLabel && (
           <p className="text-sm font-semibold text-foreground">{priceLabel}</p>
