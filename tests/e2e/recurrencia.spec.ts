@@ -5,14 +5,26 @@ import {
   buildSessions,
   daysBetween,
   defaultRule,
+  describePattern,
   describeRule,
   expandRule,
   formatDayShort,
   isDate,
+  parseStoredRule,
+  planSeries,
+  toStoredRule,
   validateRule,
   weekdayOf,
   type RecurrenceRule,
 } from "../../src/lib/recurrence";
+import {
+  esErrorDeColumnaDeSerie,
+  groupBySeries,
+  isOpenSession,
+  leerConSeries,
+  olvidarColumnasAusentes,
+  summarizeSessions,
+} from "../../src/lib/eventSeries";
 
 /**
  * Motor de fechas de las series (eventos de varios días y recurrentes):
@@ -248,5 +260,237 @@ test.describe("describeRule", () => {
       "El día 15 de cada 2 meses · 3 sesiones hasta el 15 feb 2027",
     );
     expect(describeRule("", regla({ frequency: "custom", customDates: ["2026-10-16", "2026-11-20"] }))).toBe("Fechas elegidas · 2 sesiones");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// planSeries, regla guardada, agrupar por serie y lectura tolerante
+// ---------------------------------------------------------------------------
+
+test.describe("planSeries", () => {
+  const SEMANAL = regla({ frequency: "weekly", weekdays: [5], endMode: "count", count: 4 });
+
+  test("las sesiones con su hora de reloj, también al cruzar el cambio de hora", () => {
+    const plan = planSeries({ startsOn: "2026-10-16", rule: SEMANAL, startTime: "23:30", endTime: "06:00", timeZone: "Europe/Madrid", now: Date.UTC(2026, 0, 1) });
+    expect(plan.error).toBeNull();
+    expect(plan.dates).toEqual(["2026-10-16", "2026-10-23", "2026-10-30", "2026-11-06"]);
+    expect(plan.sessions.map((s) => s.startIso)).toEqual([
+      "2026-10-16T21:30:00.000Z", // CEST (+2)
+      "2026-10-23T21:30:00.000Z",
+      "2026-10-30T22:30:00.000Z", // CET (+1) tras el cambio del 25
+      "2026-11-06T22:30:00.000Z",
+    ]);
+    expect(plan.sessions.every((s) => s.crossesMidnight)).toBe(true);
+    expect(plan.pastDates).toEqual([]);
+  });
+
+  test("al publicar se dejan fuera las ya terminadas; en borrador, no", () => {
+    const rule = regla({ frequency: "custom", customDates: ["2026-03-01", "2026-12-04", "2026-12-11"] });
+    const base = { startsOn: "2026-03-01", rule, startTime: "23:30", endTime: "06:00", timeZone: "Europe/Madrid", now: Date.UTC(2026, 9, 13) };
+    const publicar = planSeries({ ...base, dropPast: true });
+    expect(publicar.dates).toEqual(["2026-12-04", "2026-12-11"]);
+    expect(publicar.pastDates).toEqual(["2026-03-01"]);
+    const borrador = planSeries({ ...base, dropPast: false });
+    expect(borrador.dates).toHaveLength(3);
+    expect(borrador.pastDates).toEqual([]);
+  });
+
+  test("una sesión que empieza hoy y sigue en curso no es pasada; sin hora de fin vale 12 h", () => {
+    const base = { startsOn: "2026-10-13", rule: regla({ frequency: "daily", endMode: "count", count: 1 }), timeZone: "Europe/Madrid", dropPast: true };
+    // 23:30 → 06:00 del 14: a las 02:00 del 14 sigue en curso.
+    const enCurso = planSeries({ ...base, startTime: "23:30", endTime: "06:00", now: Date.UTC(2026, 9, 14, 0, 0) });
+    expect(enCurso.error).toBeNull();
+    // Sin hora de fin: 12 h después de empezar (21:30 UTC + 12 h).
+    const sinFin = planSeries({ ...base, startTime: "23:30", endTime: "", now: Date.UTC(2026, 9, 14, 9, 0) });
+    expect(sinFin.error).toBeNull();
+    const terminada = planSeries({ ...base, startTime: "23:30", endTime: "", now: Date.UTC(2026, 9, 14, 10, 0) });
+    expect(terminada.error).toContain("Todas las fechas ya han pasado");
+  });
+
+  test("los errores de la regla salen tal cual, sin sesiones", () => {
+    const mal = planSeries({ startsOn: "2026-10-16", rule: regla({ interval: 0 }), startTime: "23:30", endTime: "06:00" });
+    expect(mal.error).toContain("entre 1 y 52");
+    expect(mal.sessions).toEqual([]);
+    const sinHora = planSeries({ startsOn: "2026-10-16", rule: SEMANAL, startTime: "", endTime: "" });
+    expect(sinHora.error).not.toBeNull();
+  });
+});
+
+test.describe("regla guardada", () => {
+  test("describePattern: cómo se repite, sin contar sesiones", () => {
+    expect(describePattern("2026-10-16", regla({ frequency: "weekly", weekdays: [5, 6] }))).toBe("Todos los viernes y sábados");
+    expect(describePattern("2026-10-16", regla({ frequency: "weekly" }))).toBe("Todos los viernes");
+    expect(describePattern("2026-10-16", regla({ frequency: "weekly", interval: 2, weekdays: [1] }))).toBe("Cada 2 semanas, los lunes");
+    expect(describePattern("2026-10-16", regla({ frequency: "daily" }))).toBe("Todos los días");
+    expect(describePattern("2026-10-16", regla({ frequency: "monthly", monthlyMode: "nth_weekday" }))).toBe("El tercer viernes de cada mes");
+    expect(describePattern("2026-10-15", regla({ frequency: "monthly" }))).toBe("El día 15 de cada mes");
+    expect(describePattern("", regla({ frequency: "custom" }))).toBe("Fechas elegidas");
+    expect(describePattern("2026-10-16", { ...defaultRule("multi_day") })).toBe("Varios días seguidos");
+  });
+
+  test("parseStoredRule: lo que escribió un cliente se lee con desconfianza", () => {
+    const buena = toStoredRule("2026-10-16", regla({ frequency: "weekly", weekdays: [5], count: 4 }));
+    const leida = parseStoredRule(JSON.parse(JSON.stringify(buena)));
+    expect(leida?.startsOn).toBe("2026-10-16");
+    expect(leida?.rule).toMatchObject({ kind: "recurring", frequency: "weekly", weekdays: [5], count: 4 });
+    // Vuelve a dar la misma frase.
+    expect(describePattern(leida!.startsOn, leida!.rule)).toBe("Todos los viernes");
+
+    for (const mala of [null, undefined, 3, "x", [], {}, { kind: "otro", frequency: "weekly" }, { kind: "recurring", frequency: "cada-rato" }]) {
+      expect(parseStoredRule(mala), JSON.stringify(mala)).toBeNull();
+    }
+    // Campos sueltos estropeados: se arreglan en vez de romper.
+    const rara = parseStoredRule({ kind: "recurring", frequency: "weekly", interval: "mucho", weekdays: [0, 5, 9, "x"], customDates: ["2026-02-30", "2026-10-16"], startsOn: "no" });
+    expect(rara?.rule.interval).toBe(1);
+    expect(rara?.rule.weekdays).toEqual([5]);
+    expect(rara?.rule.customDates).toEqual(["2026-10-16"]);
+    expect(rara?.startsOn).toBe("");
+  });
+});
+
+test.describe("series en las listas", () => {
+  const sesion = (id: string, serie: string | null, dia: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    series_id: serie,
+    date_start: `${dia}T21:30:00.000Z`,
+    date_end: null,
+    status: "published",
+    ...extra,
+  });
+
+  test("groupBySeries: una tarjeta por serie en el puesto de su primera sesión, los sueltos tal cual", () => {
+    const lista = [
+      sesion("a1", "A", "2026-10-16"),
+      sesion("suelto1", null, "2026-10-17"),
+      sesion("a2", "A", "2026-10-23"),
+      sesion("b1", "B", "2026-10-24"),
+      sesion("a3", "A", "2026-10-30"),
+    ];
+    const items = groupBySeries(lista);
+    expect(items.map((i) => (i.kind === "series" ? `serie:${i.seriesId}:${i.sessions.map((s) => s.id).join("+")}` : i.event.id))).toEqual([
+      "serie:A:a1+a2+a3",
+      "suelto1",
+      "b1", // una serie con una sola sesión en la lista es un evento más
+    ]);
+    const a = items[0];
+    expect(a.kind === "series" && a.event.id).toBe("a1");
+  });
+
+  test("groupBySeries: respeta el orden de la lista (Pasados, de la más reciente) y la sesión de foco da la cara", () => {
+    const pasados = [sesion("a3", "A", "2026-10-30"), sesion("x", null, "2026-10-28"), sesion("a1", "A", "2026-10-16")];
+    const items = groupBySeries(pasados);
+    expect(items.map((i) => (i.kind === "series" ? "serie" : i.event.id))).toEqual(["serie", "x"]);
+    // Dentro de la serie, de la más próxima a la más lejana.
+    expect(items[0].kind === "series" && items[0].sessions.map((s) => s.id)).toEqual(["a1", "a3"]);
+    const foco = groupBySeries([sesion("a1", "A", "2026-10-16"), sesion("a2", "A", "2026-10-23")], { focusId: "a2" })[0];
+    expect(foco.kind === "series" && foco.event.id).toBe("a2");
+    // Un foco que no es de la serie no cambia nada.
+    const sinFoco = groupBySeries([sesion("a1", "A", "2026-10-16"), sesion("a2", "A", "2026-10-23")], { focusId: "zzz" })[0];
+    expect(sinFoco.kind === "series" && sinFoco.event.id).toBe("a1");
+    expect(groupBySeries([])).toEqual([]);
+  });
+
+  test("summarizeSessions: cifras de la serie, canceladas y pasadas aparte", () => {
+    const ahora = Date.parse("2026-10-20T12:00:00Z");
+    const f = (id: string, dia: string, status: string, extra: Record<string, unknown> = {}) => ({
+      ...sesion(id, "A", dia, { status }),
+      tickets_sold: 0,
+      capacity: 100,
+      price_cents: 1500,
+      ...extra,
+    });
+    const s = summarizeSessions(
+      [
+        f("a4", "2026-11-06", "draft", { price_cents: 1000 }),
+        f("a1", "2026-10-16", "published", { tickets_sold: 12 }),
+        f("a2", "2026-10-23", "published", { tickets_sold: 30 }),
+        f("a3", "2026-10-30", "cancelled", { tickets_sold: 5 }),
+      ],
+      ahora,
+    );
+    expect(s.count).toBe(4);
+    expect(s.sold).toBe(47);
+    expect(s.capacity).toBe(300); // las canceladas no suman aforo
+    expect(s.minPriceCents).toBe(1000);
+    expect(s.published).toBe(2);
+    expect(s.drafts).toBe(1);
+    expect(s.cancelled).toBe(1);
+    expect(s.open).toBe(2); // a2 (por venir) y a4 (borrador); a1 ya pasó, a3 está cancelada
+    expect(s.openDrafts).toBe(1);
+    expect(s.next.id).toBe("a2");
+    expect(s.first.id).toBe("a1");
+    expect(s.last.id).toBe("a4");
+    // Sin ninguna por celebrar, «next» es la última.
+    const fin = summarizeSessions([f("a1", "2026-10-16", "published")], ahora);
+    expect(fin.open).toBe(0);
+    expect(fin.next.id).toBe("a1");
+    // Un aforo sin límite en alguna fecha deja sin límite al total.
+    expect(summarizeSessions([f("a1", "2026-10-30", "published", { capacity: null }), f("a2", "2026-11-06", "published")], ahora).capacity).toBeNull();
+  });
+
+  test("isOpenSession: por celebrar y no cancelada; sin hora de fin vale 12 h", () => {
+    const ahora = Date.parse("2026-10-20T12:00:00Z");
+    expect(isOpenSession({ status: "published", date_start: "2026-10-21T21:00:00Z" }, ahora)).toBe(true);
+    expect(isOpenSession({ status: "draft", date_start: "2026-10-21T21:00:00Z" }, ahora)).toBe(true);
+    expect(isOpenSession({ status: "cancelled", date_start: "2026-10-21T21:00:00Z" }, ahora)).toBe(false);
+    expect(isOpenSession({ status: "past", date_start: "2026-10-21T21:00:00Z" }, ahora)).toBe(false);
+    expect(isOpenSession({ status: "published", date_start: "2026-10-19T21:00:00Z", date_end: "2026-10-20T13:00:00Z" }, ahora)).toBe(true);
+    expect(isOpenSession({ status: "published", date_start: "2026-10-19T21:00:00Z" }, ahora)).toBe(false);
+    expect(isOpenSession({ status: "published", date_start: "no-es-una-fecha" }, ahora)).toBe(false);
+  });
+});
+
+test.describe("lectura tolerante de las columnas de serie", () => {
+  const SELECT = "id, title";
+
+  test("detecta el error de una columna que el servidor no tiene", () => {
+    expect(esErrorDeColumnaDeSerie({ code: "42703", message: "column events.series_id does not exist" })).toBe(true);
+    expect(esErrorDeColumnaDeSerie({ code: "PGRST204", message: "Could not find the 'series_date' column of 'events' in the schema cache" })).toBe(true);
+    expect(esErrorDeColumnaDeSerie({ message: "column events.series_exception does not exist" })).toBe(true);
+    // Otros errores (red, RLS, otra columna) no se confunden con él.
+    expect(esErrorDeColumnaDeSerie({ code: "42703", message: "column events.nope does not exist" })).toBe(false);
+    expect(esErrorDeColumnaDeSerie({ code: "42501", message: "permission denied for table events" })).toBe(false);
+    expect(esErrorDeColumnaDeSerie(null)).toBe(false);
+  });
+
+  test("un servidor con la migración: una sola consulta, con las columnas", async () => {
+    olvidarColumnasAusentes();
+    const pedidas: string[] = [];
+    const res = await leerConSeries(SELECT, async (select) => {
+      pedidas.push(select);
+      return { data: [{ id: "1" }], error: null };
+    });
+    expect(pedidas).toEqual(["id, title, series_id, series_date"]);
+    expect(res.data).toEqual([{ id: "1" }]);
+  });
+
+  test("un servidor sin la migración: repite sin las columnas y lo recuerda", async () => {
+    olvidarColumnasAusentes();
+    const pedidas: string[] = [];
+    const consulta = async (select: string) => {
+      pedidas.push(select);
+      return select.includes("series_id")
+        ? { data: null, error: { code: "42703", message: "column events.series_id does not exist" } }
+        : { data: [{ id: "1" }], error: null };
+    };
+    const primera = await leerConSeries(SELECT, consulta);
+    expect(primera.data).toEqual([{ id: "1" }]);
+    expect(pedidas).toEqual(["id, title, series_id, series_date", "id, title"]);
+    // La segunda vez ya no lo intenta.
+    pedidas.length = 0;
+    await leerConSeries(SELECT, consulta);
+    expect(pedidas).toEqual(["id, title"]);
+    olvidarColumnasAusentes();
+  });
+
+  test("otro error se devuelve tal cual, sin repetir", async () => {
+    olvidarColumnasAusentes();
+    let llamadas = 0;
+    const res = await leerConSeries(SELECT, async () => {
+      llamadas += 1;
+      return { data: null, error: { code: "42501", message: "permission denied" } };
+    });
+    expect(llamadas).toBe(1);
+    expect(res.error?.code).toBe("42501");
   });
 });

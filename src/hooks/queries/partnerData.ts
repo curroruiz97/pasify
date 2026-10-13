@@ -1,5 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { leerConSeries } from "@/lib/eventSeries";
 import { withTimeout, TimeoutError } from "@/lib/withTimeout";
 import { qk } from "@/lib/cache/keys";
 import { useRealtimeInvalidate } from "@/lib/cache/useRealtimeInvalidate";
@@ -39,6 +40,13 @@ export type PartnerEventRow = {
    * faltar en una lista guardada en el dispositivo antes de pedirlo.
    */
   venue_id?: string | null;
+  /**
+   * Serie de la que es una sesión (eventos de varios días y recurrentes) y el
+   * día de la serie que le toca. null en un evento suelto; faltan si el
+   * servidor aún no tiene la migración de series.
+   */
+  series_id?: string | null;
+  series_date?: string | null;
 };
 
 export type PartnerProfile = {
@@ -113,18 +121,18 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
   const orgIds = await orgIdsDelLocal(uid);
   const filter = filtroEventosDelLocal(uid, orgIds);
 
-  const { data, error } = await timed(
-    supabase
-      .from("events")
-      .select(
-        "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id"
-      )
-      .or(filter)
-      .order("date_start", { ascending: false }),
-    "events",
+  // Con las columnas de serie; un servidor sin la migración no las tiene y se
+  // repite la consulta sin ellas (leerConSeries).
+  const { data, error } = await leerConSeries(
+    "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id",
+    (select) =>
+      timed(
+        supabase.from("events").select(select).or(filter).order("date_start", { ascending: false }),
+        "events",
+      ),
   );
   if (error) throw error;
-  return (data ?? []) as PartnerEventRow[];
+  return (data ?? []) as unknown as PartnerEventRow[];
 }
 
 export function usePartnerEvents(uid: string | null) {

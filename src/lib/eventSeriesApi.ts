@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { describeWriteError, toWriteError } from "@/components/partner/writeErrors";
+import { isOpenSession } from "@/lib/eventSeries";
+import { describePattern, parseStoredRule } from "@/lib/recurrence";
 
 /**
  * Pasify · llamadas del cliente a las funciones de series de eventos
@@ -195,4 +197,68 @@ export function cancelEventSeries(args: {
   reason: string;
 }): Promise<{ cancelled: number; needs_refunds: string[] }> {
   return llamar("cancel_event_series", { _series_id: args.seriesId, _from: args.from, _reason: args.reason });
+}
+
+// ---------------------------------------------------------------------------
+// Contexto de una fecha que pertenece a una serie (para editarla)
+// ---------------------------------------------------------------------------
+
+/** Lo que el editor necesita saber de la serie de la fecha que se edita. */
+export interface SeriesContext {
+  seriesId: string;
+  /** Esta fecha se editó por separado: las ediciones de toda la serie la respetan. */
+  exception: boolean;
+  /** Cómo se repite («Todos los viernes»), si la regla guardada se entiende. */
+  pattern: string | null;
+  /** Fechas por celebrar y no canceladas de la serie, incluida esta. */
+  open: number;
+  /** De las demás por celebrar, las posteriores a esta. */
+  following: number;
+  /** De las demás por celebrar, las editadas por separado. */
+  exceptions: number;
+  /** De las posteriores, las editadas por separado. */
+  exceptionsFollowing: number;
+}
+
+type Fila = Record<string, unknown>;
+interface Consulta extends PromiseLike<{ data: Fila[] | null; error: RpcError | null }> {
+  maybeSingle: () => PromiseLike<{ data: Fila | null; error: RpcError | null }>;
+}
+interface SinTipos {
+  from: (tabla: string) => { select: (columnas: string) => { eq: (columna: string, valor: string) => Consulta } };
+}
+
+/**
+ * La serie de una fecha, o null si no es de ninguna (o si el servidor aún no
+ * tiene la migración de series: entonces el editor funciona como siempre).
+ * Una lectura que falla se trata como «sin serie»: editar la fecha sigue
+ * siendo posible, solo que sin ofrecer cambios para las demás.
+ */
+export async function loadSeriesContext(eventId: string, now = Date.now()): Promise<SeriesContext | null> {
+  const db = supabase as unknown as SinTipos;
+  try {
+    const { data: ev, error } = await db.from("events").select("series_id, series_exception, date_start").eq("id", eventId).maybeSingle();
+    const seriesId = typeof ev?.series_id === "string" ? ev.series_id : null;
+    if (error || !seriesId) return null;
+    const esta = Date.parse(String(ev?.date_start ?? ""));
+    const [sesiones, serie] = await Promise.all([
+      db.from("events").select("id, status, date_start, date_end, series_exception").eq("series_id", seriesId),
+      db.from("event_series").select("kind, rule").eq("id", seriesId).maybeSingle(),
+    ]);
+    if (sesiones.error) return null;
+    const otras = (sesiones.data ?? []).filter((s) => s.id !== eventId && isOpenSession({ status: String(s.status), date_start: String(s.date_start), date_end: (s.date_end as string | null) ?? null }, now));
+    const posteriores = otras.filter((s) => Date.parse(String(s.date_start)) > esta);
+    const parsed = serie.data ? parseStoredRule({ ...(serie.data.rule as object), kind: serie.data.kind }) : null;
+    return {
+      seriesId,
+      exception: ev?.series_exception === true,
+      pattern: parsed ? describePattern(parsed.startsOn, parsed.rule) : null,
+      open: otras.length + 1,
+      following: posteriores.length,
+      exceptions: otras.filter((s) => s.series_exception === true).length,
+      exceptionsFollowing: posteriores.filter((s) => s.series_exception === true).length,
+    };
+  } catch {
+    return null;
+  }
 }

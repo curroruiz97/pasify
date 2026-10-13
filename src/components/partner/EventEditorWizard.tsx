@@ -11,11 +11,13 @@ import {
   Loader2,
   Lock,
   MapPin,
+  Repeat,
   Send,
   Ticket as TicketIcon,
   Upload,
   X as XIcon,
 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,10 +81,15 @@ import {
 import { describePattern, planSeries, toStoredRule } from "@/lib/recurrence";
 import { countLabel } from "@/lib/eventSeries";
 import {
+  applyEventTiersToSeries,
   createEventSeries,
   describeSeriesError,
+  loadSeriesContext,
+  updateEventSeries,
+  type SeriesContext,
   type SeriesEventInput,
   type TierInput,
+  type UpdateSeriesPatch,
 } from "@/lib/eventSeriesApi";
 import {
   composeIsoStartEnd,
@@ -296,6 +303,37 @@ const tierPorDefecto = (venue: EditorVenue | null | undefined): TierDraft => ({
 const estadoDelTipo = (active: boolean): "active" | "hidden" => (active ? "active" : "hidden");
 
 /** ["el día", "la hora", "el lugar"] → "el día, la hora y el lugar". */
+/** A cuántas fechas de la serie se aplica un cambio. */
+type Alcance = "one" | "following" | "all";
+
+/** Lo que se ha decidido al guardar un cambio en una fecha de una serie. */
+interface DecisionSerie {
+  datos: Alcance;
+  tipos: Alcance;
+  incluirExcepciones: boolean;
+}
+
+/** Lo común de la fecha tal como se abrió: para saber qué se ha tocado. */
+interface ComunOriginal {
+  title: string;
+  description: string;
+  imageUrl: string;
+  venueId: string | null;
+  city: string;
+  venueName: string;
+  address: string;
+  startTime: string;
+  endTime: string;
+  /** date_start al abrir (ISO): desde cuándo valen «esta y las siguientes». */
+  startIso: string;
+}
+
+/** Los tipos de entrada, en una cadena comparable (sin ids ni claves). */
+const clavesDeTipos = (tipos: TierDraft[]): string =>
+  JSON.stringify(
+    tipos.map((t) => [t.name.trim(), t.description.trim(), t.priceEur, t.capacity, t.perUserMax, t.active, t.refundMode, t.refundHours, t.transferAllowed])
+  );
+
 const unirLista = (cosas: string[]): string =>
   cosas.length > 1 ? `${cosas.slice(0, -1).join(", ")} y ${cosas[cosas.length - 1]}` : cosas[0] ?? "";
 
@@ -438,6 +476,20 @@ export const EventEditorWizard = ({
   const avisadoSinEspacioRef = useRef(false);
 
   const esSerie = mode !== "edit" && isSeriesSchedule(schedule);
+
+  // Editar una fecha que pertenece a una serie: de qué serie es, cómo estaba al
+  // abrirla (para saber qué se ha tocado) y, al guardar, a qué fechas se aplica.
+  const [serie, setSerie] = useState<SeriesContext | null>(null);
+  const [comunOriginal, setComunOriginal] = useState<ComunOriginal | null>(null);
+  const [tiposOriginales, setTiposOriginales] = useState<string | null>(null);
+  const [pideAlcance, setPideAlcance] = useState<{
+    status: "draft" | "published" | "keep";
+    campos: string[];
+    hayTipos: boolean;
+  } | null>(null);
+  const [alcanceForm, setAlcanceForm] = useState<DecisionSerie>({ datos: "one", tipos: "one", incluirExcepciones: false });
+  // Lo decidido en el diálogo, para el guardado que sigue (también tras la confirmación de «publicar con fecha pasada»).
+  const decisionRef = useRef<DecisionSerie | null>(null);
 
   // Local del evento y rótulo de su hora («Hora de Santa Cruz de Tenerife»).
   const venueActual = venues.find((v) => v.id === venueId) ?? null;
@@ -607,11 +659,18 @@ export const EventEditorWizard = ({
   useEffect(() => {
     if (!open) {
       setFormListo(false);
+      setPideAlcance(null);
+      decisionRef.current = null;
       return;
     }
     if (!contextReady) return;
     setStep(0);
     setRemovedTierDbIds(new Set());
+    setSerie(null);
+    setComunOriginal(null);
+    setTiposOriginales(null);
+    setPideAlcance(null);
+    decisionRef.current = null;
 
     if (mode === "create") {
       // Apertura nueva: su borrador vuelve a escribirse y el aviso a poder salir.
@@ -777,7 +836,33 @@ export const EventEditorWizard = ({
           transferAllowed: row.transfer_allowed ?? true,
         };
       });
-      setTiers(draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)]);
+      const tiposCargados = draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)];
+      setTiers(tiposCargados);
+
+      // Una fecha de una serie: su contexto y cómo estaba lo común al abrir.
+      decisionRef.current = null;
+      setSerie(null);
+      setComunOriginal(null);
+      setTiposOriginales(null);
+      if (m === "edit") {
+        const contexto = await loadSeriesContext(eid);
+        if (contexto) {
+          setSerie(contexto);
+          setComunOriginal({
+            title: baseTitle,
+            description: evt.description ?? "",
+            imageUrl: evt.image_url ?? "",
+            venueId: evt.venue_id ?? defaultVenueId ?? null,
+            city: lugar.city,
+            venueName: lugar.venueName,
+            address: lugar.address,
+            startTime: dt.startTime,
+            endTime: dt.endTime,
+            startIso: evt.date_start,
+          });
+          setTiposOriginales(clavesDeTipos(tiposCargados));
+        }
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error cargando evento";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -991,6 +1076,90 @@ export const EventEditorWizard = ({
    * `confirmarPasado`); no se vuelve a preguntar.
    */
   /**
+   * Qué se ha tocado de una fecha de una serie respecto a como se abrió: lo
+   * común (que puede valer para las demás fechas) y los tipos de entrada. La
+   * fecha y la hora de ESTA fecha no cuentan para el día: cada fecha tiene el
+   * suyo. `parche` es lo que mandaría update_event_series.
+   */
+  const cambiosDeSerie = (): { parche: UpdateSeriesPatch; campos: string[]; tipos: boolean } | null => {
+    const o = comunOriginal;
+    if (!serie || !o) return null;
+    const parche: UpdateSeriesPatch = {};
+    const campos: string[] = [];
+    if (title.trim() !== o.title.trim()) {
+      parche.title = title.trim();
+      campos.push("el título");
+    }
+    if (description.trim() !== o.description.trim()) {
+      parche.description = description.trim() || null;
+      campos.push("la descripción");
+    }
+    if ((imageUrl || "") !== (o.imageUrl || "")) {
+      parche.image_url = imageUrl || null;
+      campos.push("la imagen");
+    }
+    if (
+      venueId !== o.venueId ||
+      location.city.trim() !== o.city.trim() ||
+      location.venueName.trim() !== o.venueName.trim() ||
+      location.address.trim() !== o.address.trim()
+    ) {
+      if (venueId) parche.venue_id = venueId;
+      parche.city = location.city.trim();
+      parche.venue_name = location.venueName.trim() || null;
+      parche.address = location.address.trim() || null;
+      campos.push("el lugar");
+    }
+    if (dateTime.startTime !== o.startTime || dateTime.endTime !== o.endTime) {
+      if (dateTime.startTime !== o.startTime) parche.start_time = dateTime.startTime;
+      if (dateTime.endTime !== o.endTime) parche.end_time = dateTime.endTime;
+      campos.push("la hora");
+    }
+    const tipos = tiposOriginales !== null && (clavesDeTipos(tiers) !== tiposOriginales || removedTierDbIds.size > 0);
+    return { parche, campos, tipos };
+  };
+
+  /**
+   * Aplica a las demás fechas de la serie lo decidido, DESPUÉS de guardar esta:
+   * los cambios comunes (update_event_series) y/o los tipos de entrada
+   * (apply_event_tiers_to_series, que salta las fechas con entradas o reservas).
+   * Devuelve el resumen para el aviso.
+   */
+  const aplicarASerie = async (d: DecisionSerie, parche: UpdateSeriesPatch, desde: string): Promise<string[]> => {
+    if (!serie || !eventId) return [];
+    const avisos: string[] = [];
+    if (d.datos !== "one" && Object.keys(parche).length > 0) {
+      const r = await updateEventSeries({
+        seriesId: serie.seriesId,
+        from: d.datos === "following" ? desde : null,
+        patch: parche,
+        includeExceptions: d.incluirExcepciones,
+      });
+      const otras = Math.max(0, r.updated - 1);
+      avisos.push(
+        otras === 0
+          ? "No había más fechas a las que aplicar los cambios."
+          : `Cambios aplicados a ${countLabel(otras)} más.` +
+              (r.skipped_exceptions > 0
+                ? ` ${r.skipped_exceptions} editada${r.skipped_exceptions === 1 ? "" : "s"} por separado se ha${r.skipped_exceptions === 1 ? "" : "n"} respetado.`
+                : "")
+      );
+    }
+    if (d.tipos !== "one") {
+      const r = await applyEventTiersToSeries({ eventId, scope: d.tipos });
+      avisos.push(
+        r.applied === 0 && r.skipped_with_sales === 0
+          ? "No había más fechas a las que copiar los tipos de entrada."
+          : `Tipos de entrada copiados a ${countLabel(r.applied)}.` +
+              (r.skipped_with_sales > 0
+                ? ` ${r.skipped_with_sales} con entradas o reservas se ha${r.skipped_with_sales === 1 ? "" : "n"} dejado como estaba${r.skipped_with_sales === 1 ? "" : "n"}.`
+                : "")
+      );
+    }
+    return avisos;
+  };
+
+  /**
    * Crea una serie (varios días o recurrente): todas sus fechas y los tipos de
    * entrada de cada una en una sola llamada y una sola transacción. Si falla,
    * no queda nada a medias; si no llegó respuesta (sin conexión), repetir el
@@ -1106,6 +1275,14 @@ export const EventEditorWizard = ({
       return;
     }
 
+    // Una fecha de una serie con cambios: se pregunta a qué fechas se aplican.
+    const cambiosSerie = mode === "edit" && serie && serie.open > 1 ? cambiosDeSerie() : null;
+    if (cambiosSerie && (cambiosSerie.campos.length > 0 || cambiosSerie.tipos) && !decisionRef.current) {
+      setAlcanceForm({ datos: "one", tipos: "one", incluirExcepciones: false });
+      setPideAlcance({ status, campos: cambiosSerie.campos, hayTipos: cambiosSerie.tipos });
+      return;
+    }
+
     const { startIso, endIso } = composeIsoStartEnd(dateTime, timeZone);
     if (!startIso) {
       toast({ title: "Fecha/hora inválida", variant: "destructive" });
@@ -1133,12 +1310,37 @@ export const EventEditorWizard = ({
       }
     }
 
+    let avisosSerie: string[] = [];
     setSubmitting(true);
     try {
       const tierPriceCents = tiers.filter((t) => t.active).map((t) => priceCentsForDb(t.priceEur));
       const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
       if (mode === "edit" && eventId) {
-        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents);
+        // «Solo esta fecha» con cambios comunes: queda marcada como editada por
+        // separado y las ediciones de toda la serie la respetan.
+        const marcarExcepcion =
+          !!cambiosSerie && cambiosSerie.campos.length > 0 && (decisionRef.current?.datos ?? "one") === "one";
+        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents, marcarExcepcion);
+        if (cambiosSerie && decisionRef.current) {
+          try {
+            // Desde la fecha más temprana entre la de antes y la de ahora: así «esta y las siguientes» incluye a esta aunque se haya movido.
+            const antes = comunOriginal?.startIso ?? startIso;
+            const desde = Date.parse(antes) < Date.parse(startIso) ? antes : startIso;
+            avisosSerie = await aplicarASerie(decisionRef.current, cambiosSerie.parche, desde);
+          } catch (errSerie) {
+            console.error("[EventEditorWizard] aplicar a la serie:", errSerie);
+            toast({
+              title: "Esta fecha se ha guardado, pero no las demás",
+              description: describeSeriesError(
+                errSerie,
+                "No hay conexión con el servidor y no sabemos si los cambios han llegado al resto de la serie. Vuelve a guardar para repetirlo: lo que ya se aplicó no se estropea."
+              ),
+              variant: "destructive",
+            });
+            decisionRef.current = null;
+            return;
+          }
+        }
       } else {
         await persistCreate(effective, startIso, endIso, minPriceCents);
       }
@@ -1152,13 +1354,13 @@ export const EventEditorWizard = ({
             ? "Evento publicado"
             : "Borrador guardado",
         description:
-          status === "keep"
+          (status === "keep"
             ? originalStatus === "published"
               ? "El evento sigue publicado con los cambios."
               : "Lo encontrarás en Mis eventos."
             : effective === "published"
             ? "Ya aparece en el calendario público y se puede comprar."
-            : "Lo encontrarás en Mis eventos.",
+            : "Lo encontrarás en Mis eventos.") + (avisosSerie.length > 0 ? ` ${avisosSerie.join(" ")}` : ""),
       });
       // Guardado: el borrador ya no hace falta, ni el que estaba por escribirse.
       if (mode === "create" && claveBorrador) removeDraft(claveBorrador);
@@ -1189,6 +1391,7 @@ export const EventEditorWizard = ({
         variant: "destructive",
       });
     } finally {
+      decisionRef.current = null;
       setSubmitting(false);
     }
   };
@@ -1250,7 +1453,9 @@ export const EventEditorWizard = ({
     status: "draft" | "published" | null,
     startIso: string,
     endIso: string | null,
-    minPriceCents: number
+    minPriceCents: number,
+    /** Fecha de una serie editada «solo ella»: las ediciones de toda la serie la respetarán. */
+    marcarExcepcion = false
   ) => {
     // 1) UPDATE del evento: campos seguros + críticos. Sin capacity: el aforo
     //    lo mantiene la BD con los cupos de los tipos (paso 3). Tiene que
@@ -1269,6 +1474,8 @@ export const EventEditorWizard = ({
         image_url: imageUrl || null,
         ...(venueId ? { venue_id: venueId } : {}),
         ...(status ? { status } : {}),
+        // La columna aún no está en los tipos generados (se regeneran tras la migración).
+        ...(marcarExcepcion ? ({ series_exception: true } as object) : {}),
       })
       .eq("id", eid)
       .select("id");
@@ -1462,6 +1669,21 @@ export const EventEditorWizard = ({
                   >
                     <Lock className="h-3 w-3" />
                     Con ventas · edición limitada
+                  </div>
+                )}
+                {mode === "edit" && serie && (
+                  <div
+                    className="mt-2 flex items-start gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-[12px] leading-relaxed text-orange-200"
+                    data-testid="serie-banner"
+                  >
+                    <Repeat className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    <span>
+                      Esta fecha forma parte de una serie
+                      {serie.pattern ? ` (${serie.pattern.charAt(0).toLowerCase()}${serie.pattern.slice(1)})` : ""}
+                      {serie.open > 1 ? `, con ${countLabel(serie.open)} por celebrar` : ""}.
+                      {serie.exception ? " Está editada por separado." : ""}
+                      {serie.open > 1 ? " Al guardar elegirás si los cambios son solo para esta fecha o también para otras." : ""}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1748,6 +1970,125 @@ export const EventEditorWizard = ({
         </div>
       </DialogContent>
 
+      {/* Fecha de una serie con cambios: a qué fechas se aplican. */}
+      <AlertDialog
+        open={pideAlcance !== null}
+        onOpenChange={(o) => {
+          if (!o) setPideAlcance(null);
+        }}
+      >
+        <AlertDialogContent data-testid="serie-alcance">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Esta fecha es de una serie</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pideAlcance && pideAlcance.campos.length > 0
+                ? `Has cambiado ${unirLista(pideAlcance.campos)}. `
+                : ""}
+              {pideAlcance?.hayTipos ? "Has cambiado los tipos de entrada. " : ""}
+              ¿A qué fechas se aplica? Lo que ya se haya vendido no se toca.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {serie && pideAlcance && (
+            <div className="space-y-4">
+              {pideAlcance.campos.length > 0 && (
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-medium">Cambios en {unirLista(pideAlcance.campos)}</legend>
+                  <RadioGroup
+                    value={alcanceForm.datos}
+                    onValueChange={(v) => setAlcanceForm((f) => ({ ...f, datos: v as Alcance }))}
+                    data-testid="alcance-datos"
+                  >
+                    {(
+                      [
+                        ["one", "Solo esta fecha", null],
+                        ["following", "Esta y las siguientes", serie.following + 1],
+                        ["all", "Todas las fechas por celebrar", serie.open],
+                      ] as const
+                    )
+                      .filter(([valor]) => valor !== "following" || serie.following > 0)
+                      .map(([valor, texto, n]) => (
+                        <label
+                          key={valor}
+                          htmlFor={`alcance-datos-${valor}`}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5 text-sm has-[:checked]:border-orange-500/60 has-[:checked]:bg-orange-500/5"
+                        >
+                          <RadioGroupItem value={valor} id={`alcance-datos-${valor}`} data-testid={`alcance-datos-${valor}`} />
+                          <span>{texto}</span>
+                          {n !== null && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{countLabel(n)}</span>}
+                        </label>
+                      ))}
+                  </RadioGroup>
+                  {alcanceForm.datos !== "one" && serie.exceptions > 0 && (
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={alcanceForm.incluirExcepciones}
+                        onChange={(e) => setAlcanceForm((f) => ({ ...f, incluirExcepciones: e.target.checked }))}
+                        data-testid="alcance-excepciones"
+                      />
+                      <span>
+                        Incluir también {serie.exceptions === 1 ? "la fecha editada" : `las ${serie.exceptions} fechas editadas`} por separado
+                        (si no, se respetan como están).
+                      </span>
+                    </label>
+                  )}
+                </fieldset>
+              )}
+              {pideAlcance.hayTipos && (
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-medium">Tipos de entrada</legend>
+                  <RadioGroup
+                    value={alcanceForm.tipos}
+                    onValueChange={(v) => setAlcanceForm((f) => ({ ...f, tipos: v as Alcance }))}
+                    data-testid="alcance-tipos"
+                  >
+                    {(
+                      [
+                        ["one", "Solo esta fecha"],
+                        ["following", "Copiarlos a las siguientes sin entradas vendidas"],
+                        ["all", "Copiarlos a todas las demás sin entradas vendidas"],
+                      ] as const
+                    )
+                      .filter(([valor]) => valor !== "following" || serie.following > 0)
+                      .map(([valor, texto]) => (
+                        <label
+                          key={valor}
+                          htmlFor={`alcance-tipos-${valor}`}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5 text-sm has-[:checked]:border-orange-500/60 has-[:checked]:bg-orange-500/5"
+                        >
+                          <RadioGroupItem value={valor} id={`alcance-tipos-${valor}`} data-testid={`alcance-tipos-${valor}`} />
+                          <span>{texto}</span>
+                        </label>
+                      ))}
+                  </RadioGroup>
+                  {alcanceForm.tipos !== "one" && (
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Las fechas con entradas vendidas o reservas conservan sus tipos tal como están.
+                    </p>
+                  )}
+                </fieldset>
+              )}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="alcance-guardar"
+              onClick={() => {
+                const q = pideAlcance;
+                if (!q) return;
+                decisionRef.current = alcanceForm;
+                setPideAlcance(null);
+                void submit(q.status);
+              }}
+            >
+              Guardar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Publicar con el inicio ya pasado: se pide confirmación. */}
       <AlertDialog
         open={confirmarPasado !== null}
@@ -1767,7 +2108,14 @@ export const EventEditorWizard = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setStep(1)}>Revisar la fecha</AlertDialogCancel>
+            <AlertDialogCancel
+              onClick={() => {
+                decisionRef.current = null;
+                setStep(1);
+              }}
+            >
+              Revisar la fecha
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirmarPasado(null);
