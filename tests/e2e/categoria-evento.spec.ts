@@ -623,7 +623,8 @@ test.describe("home del cliente: las categorías filtran también los eventos", 
 
   test("Discotecas, Bares y Festivales filtran la tira de eventos con la misma regla que el calendario", async ({ page }) => {
     await abrirHome(page);
-    await expect(tira(page).getByRole("button")).toHaveCount(5 + 1); // 5 eventos + «Ver calendario»
+    // 5 eventos + «Ver calendario». Sin las flechas de la fila (botones con aria-label), que solo salen si no caben todos.
+    await expect(tira(page).locator("button:not([aria-label])")).toHaveCount(5 + 1);
 
     await chipHome(page, "Discotecas").click();
     await expect(tira(page).getByRole("heading", { name: "Discotecas en Madrid" })).toBeVisible();
