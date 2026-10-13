@@ -3,6 +3,7 @@ import { Music } from "lucide-react";
 import { StatusBadge } from "@/components/partner/StatusBadge";
 import { SoldBar } from "@/components/partner/SoldBar";
 import { formatInTimeZone } from "@/components/partner/zonedTime";
+import { eventCategoryLabel } from "@/lib/eventCategories";
 
 /**
  * EventRowCard — versión móvil del row de la tabla de eventos del partner.
@@ -32,6 +33,8 @@ export type EventRowCardEvent = {
   capacity: number | null;
   tickets_sold: number;
   image_url?: string | null;
+  /** Categoría del evento (bar, discoteca, festival). */
+  category?: string | null;
   /** Indica si el evento es un festival multi-día (eyebrow opcional). */
   is_festival?: boolean | null;
 };
@@ -130,7 +133,7 @@ export const EventRowCard = ({ event, timeZone, menu }: EventRowCardProps) => {
 
       {/* Micro-grid 3 col */}
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <Stat label="Ciudad" value={event.city || "—"} />
+        <Stat label="Ciudad" value={[event.city, eventCategoryLabel(event.category)].filter(Boolean).join(" · ") || "—"} />
         <Stat label="Fecha" value={formatInTimeZone(event.date_start, FECHA_CORTA, timeZone)} />
         <Stat label="Precio" value={`${(event.price_cents / 100).toFixed(2)} €`} />
       </div>
