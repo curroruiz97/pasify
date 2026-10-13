@@ -62,7 +62,9 @@ GRANT EXECUTE ON FUNCTION public.ticket_buyer_event_held(UUID, UUID) TO service_
 -- ============================================================================
 -- 2) Lo que ve el selector de entradas
 -- ============================================================================
--- Solo habla de quien pregunta (auth.uid()): sin sesión, el tope y 0 entradas.
+-- Solo habla de quien pregunta (auth.uid()) y solo para quien tiene sesión: el
+-- selector no se abre sin ella, y una función SECURITY DEFINER que ejecuta anon
+-- es superficie que no hace falta (tests/db/o0_servidor.sql la vigila).
 -- No enseña nada de otras personas ni del evento.
 CREATE OR REPLACE FUNCTION public.event_ticket_allowance(_event_id UUID)
 RETURNS TABLE (max_per_buyer INT, held INT, remaining INT)
@@ -80,8 +82,8 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.event_ticket_allowance(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.event_ticket_allowance(UUID) TO anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.event_ticket_allowance(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.event_ticket_allowance(UUID) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.event_ticket_allowance(UUID) IS
   'Tope de entradas por persona y evento (10), las que ya lleva quien pregunta y las que aún puede añadir.';

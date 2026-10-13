@@ -217,12 +217,18 @@ BEGIN
   RESET ROLE;
   PERFORM pg_temp.exige(v_row.max_per_buyer = 10 AND v_row.held = 5 AND v_row.remaining = 5, format('8: comprador con 5 (%s)', v_row));
 
-  -- Sin sesión: el tope y nada más; un evento que no existe, igual.
+  -- Sin sesión no se llega a ella: el selector solo se abre con sesión y anon
+  -- no ejecuta funciones SECURITY DEFINER que no necesita.
   PERFORM pg_temp.como(NULL);
   SET LOCAL ROLE anon;
-  SELECT * INTO v_row FROM public.event_ticket_allowance(v_ev);
-  RESET ROLE;
-  PERFORM pg_temp.exige(v_row.max_per_buyer = 10 AND v_row.held = 0 AND v_row.remaining = 10, format('8: anónimo (%s)', v_row));
+  BEGIN
+    PERFORM public.event_ticket_allowance(v_ev);
+    RESET ROLE;
+    RAISE EXCEPTION 'FAIL 8: anon no debería poder llamar a event_ticket_allowance';
+  EXCEPTION WHEN insufficient_privilege THEN
+    RESET ROLE;
+  END;
+  -- Un evento que no existe: nada que enseñar.
   PERFORM pg_temp.como(v_b4);
   SET LOCAL ROLE authenticated;
   SELECT * INTO v_row FROM public.event_ticket_allowance(gen_random_uuid());
@@ -242,8 +248,8 @@ BEGIN
     '9: max_tickets_per_buyer_event no es de la API');
   PERFORM pg_temp.exige(
     has_function_privilege('authenticated', 'public.event_ticket_allowance(uuid)', 'EXECUTE')
-    AND has_function_privilege('anon', 'public.event_ticket_allowance(uuid)', 'EXECUTE'),
-    '9: event_ticket_allowance sí es de la API');
+    AND NOT has_function_privilege('anon', 'public.event_ticket_allowance(uuid)', 'EXECUTE'),
+    '9: event_ticket_allowance es de la API solo con sesión');
   PERFORM pg_temp.exige(
     NOT has_function_privilege('authenticated', 'public.create_ticket_order(uuid, uuid, int, uuid, text, text, text, text, numeric, int)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.create_free_ticket_order(uuid, uuid, int, uuid, text, text, text, text)', 'EXECUTE'),
