@@ -93,6 +93,8 @@ export default defineConfig({
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
     "**/categoria-evento.spec.ts",
+    "**/limite-entradas.spec.ts",
+    "**/ubicacion-evento.spec.ts",
   ],
   timeout: 30 * 1000,
   expect: { timeout: 5000 },

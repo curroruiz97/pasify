@@ -37,6 +37,8 @@ export default defineConfig({
     "**/a11y.spec.ts",
     "**/admin-reembolsos.spec.ts",
     "**/categoria-evento.spec.ts",
+    "**/limite-entradas.spec.ts",
+    "**/ubicacion-evento.spec.ts",
   ],
   outputDir: "test-results/partner-shell",
   timeout: 180_000,

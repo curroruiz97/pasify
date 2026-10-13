@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { TODA_ESPANA, useCiudadElegida } from "@/hooks/queries/clientData";
 import { loginPathWithNext } from "@/lib/eventLinks";
+import { formatEventPlace } from "@/lib/eventPlace";
 import { EVENT_CATEGORIES, effectiveEventCategory, isEventCategory, type EventCategory } from "@/lib/eventCategories";
 
 // Stable empty array — usado como fallback cuando react-query aún no tiene
@@ -250,7 +251,9 @@ const Calendar = () => {
         id: event.id,
         title: event.title,
         dateStart: event.start_date,
-        place: event.location_name ?? event.profiles?.business_name ?? event.city ?? null,
+        place:
+          formatEventPlace({ venue_name: event.location_name, city: event.city }, event.profiles?.business_name).short ||
+          null,
       });
     } finally {
       setParticipatingIds((prev) => {

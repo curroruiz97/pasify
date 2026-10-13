@@ -18,6 +18,48 @@ export const DEFAULT_EVENT_TIMEZONE = "Europe/Madrid";
 export const MAX_TICKETS_PER_ORDER = 10;
 
 /**
+ * Máximo de entradas por persona y evento, entre todos los tipos y sumando lo
+ * que ya tiene (pagadas, usadas y reservas en curso). Lo hace cumplir la BD
+ * (`max_tickets_per_buyer_event`, en create_ticket_order y
+ * create_free_ticket_order): esto es solo lo que se enseña y lo que limita el
+ * selector. La cifra buena es la de `event_ticket_allowance`.
+ */
+export const MAX_TICKETS_PER_BUYER_EVENT = 10;
+
+/** Cuántas entradas de un evento lleva quien compra y cuántas puede añadir (`event_ticket_allowance`). */
+export interface TicketAllowance {
+  /** Tope por persona y evento. */
+  limit: number;
+  /** Las que ya tiene. */
+  held: number;
+  /** Las que aún puede añadir: limit − held, nunca negativo. */
+  remaining: number;
+}
+
+/**
+ * Cantidad máxima que se puede pedir ahora: lo que deja el tipo (stock,
+ * máximo por tipo, tope por pedido) y lo que deja el límite por evento. Sin
+ * dato del límite (la RPC no ha contestado, o la BD aún no la tiene), manda
+ * el tipo; el servidor sigue rechazando lo que pase de 10.
+ */
+export function capByAllowance(tierMaxQty: number, allowance: TicketAllowance | null | undefined): number {
+  const tope = Math.max(0, Math.floor(tierMaxQty));
+  if (!allowance) return tope;
+  return Math.max(0, Math.min(tope, Math.floor(allowance.remaining)));
+}
+
+/** «Ya tienes 4 · puedes añadir hasta 6 más» / «Máx. 10 por persona y evento». */
+export function allowanceHint(allowance: TicketAllowance | null | undefined, tierMaxQty: number): string | null {
+  const limit = allowance?.limit ?? MAX_TICKETS_PER_BUYER_EVENT;
+  if (!allowance || allowance.held <= 0) {
+    // Sin entradas previas, el tope por evento solo se nombra si es lo que limita.
+    return tierMaxQty >= limit ? `Máx. ${limit} por persona y evento` : null;
+  }
+  if (allowance.remaining <= 0) return `Ya tienes ${allowance.held}: el máximo por persona y evento`;
+  return `Ya tienes ${allowance.held} · puedes añadir hasta ${Math.min(allowance.remaining, Math.max(1, tierMaxQty))} más`;
+}
+
+/**
  * Código de puerta: los 8 primeros caracteres del `qr_token` en mayúsculas.
  * Es lo que teclea el portero (`scan_ticket_by_code`) si el QR no se lee, y
  * cambia con el QR cuando la entrada se transfiere. Mismo cálculo que

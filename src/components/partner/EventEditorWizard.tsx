@@ -49,6 +49,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/imageUtils";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
+import { esLocalSinCompletar, placeFromVenue, venueOptionLabel } from "@/lib/eventPlace";
 import {
   EVENT_CATEGORIES,
   eventCategoryFromVenue,
@@ -466,11 +467,11 @@ export const EventEditorWizard = ({
     setTitle("");
     setDescription("");
     setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
-    setLocation({
-      city: defaultVenue?.city || defaultCity,
-      venueName: defaultVenue?.name || defaultVenueName,
-      address: defaultVenue?.address ?? "",
-    });
+    setLocation(
+      defaultVenue
+        ? placeFromVenue(defaultVenue)
+        : { city: defaultCity, venueName: defaultVenueName, address: "" }
+    );
     setVenueId(defaultVenue?.id ?? null);
     // Un local de discoteca propone «Discoteca»; sala, rooftop… no proponen nada.
     setCategory(eventCategoryFromVenue(defaultVenue?.business_category) ?? "");
@@ -733,9 +734,15 @@ export const EventEditorWizard = ({
         return { date, startTime: inicio.time, endTime: fin?.time ?? "" };
       })();
 
+      // El lugar que tiene guardado el evento, tal cual. Antes, lo que le
+      // faltaba (el nombre de la sala, por ejemplo) se rellenaba con el del
+      // local por defecto de la cuenta o el del perfil («Principal · Madrid») y
+      // al guardar se escribía en el evento sin que nadie lo pidiera. Si falta
+      // algo se ve vacío y «Usar los datos del local» lo rellena con los de
+      // SU local.
       const lugar: LocationValue = {
-        city: evt.city ?? defaultCity,
-        venueName: evt.venue_name ?? defaultVenueName,
+        city: evt.city ?? "",
+        venueName: evt.venue_name ?? "",
         address: evt.address ?? "",
       };
       setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
@@ -1428,16 +1435,16 @@ export const EventEditorWizard = ({
                       venueId={venueId}
                       timeZone={timeZone}
                       placeName={venueActual?.city ?? null}
+                      venue={venueActual}
                       onVenueChange={(id) => {
                         const v = venues.find((x) => x.id === id);
                         const anterior = venues.find((x) => x.id === venueId);
                         setVenueId(id);
                         if (v) {
-                          setLocation((prev) => ({
-                            city: v.city || prev.city,
-                            venueName: v.name,
-                            address: v.address || prev.address,
-                          }));
+                          // El lugar pasa a ser el del local nuevo, entero: lo
+                          // que le falte (la dirección, por ejemplo) queda vacío
+                          // y se pide, no se conserva el del local anterior.
+                          setLocation(placeFromVenue(v));
                           // El día y las horas pasan a ser los del reloj del
                           // nuevo local.
                           setTimeZone(zonaDe(v));
@@ -1766,6 +1773,7 @@ const StepWhenWhere = ({
   venueId,
   timeZone,
   placeName,
+  venue,
   onVenueChange,
   disabled,
 }: {
@@ -1782,6 +1790,8 @@ const StepWhenWhere = ({
   timeZone?: string;
   /** Ciudad del local elegido («Hora de <ciudad>»). */
   placeName?: string | null;
+  /** Local elegido: su lugar es el de partida y con el que se compara. */
+  venue?: EditorVenue | null;
   onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
@@ -1823,8 +1833,7 @@ const StepWhenWhere = ({
               <SelectContent>
                 {venues.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                    {v.city ? ` · ${v.city}` : ""}
+                    {venueOptionLabel(v, venues)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1832,6 +1841,16 @@ const StepWhenWhere = ({
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Las ventas, el equipo y los informes de este evento van a este local.
             </p>
+            {esLocalSinCompletar(venue) && (
+              <p
+                role="note"
+                data-testid="local-sin-completar"
+                className="mt-1.5 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground"
+              >
+                Este local aún tiene el nombre de relleno de la cuenta («Principal») y no tiene dirección. Ponle su
+                nombre y su dirección reales en Configuración → Locales, y tus eventos saldrán con ellos.
+              </p>
+            )}
           </div>
         )}
         <EventLocationSection
@@ -1839,6 +1858,10 @@ const StepWhenWhere = ({
           onChange={onLocationChange}
           cities={cities}
           disabled={disabled}
+          // Un local aún sin completar («Principal», sin dirección) no es
+          // referencia de nada: se avisa de eso arriba, no de que el lugar
+          // difiera. (Quien organiza eventos fuera de su local, también.)
+          venuePlace={venue && !esLocalSinCompletar(venue) ? placeFromVenue(venue) : null}
         />
       </section>
     </div>
@@ -1859,7 +1882,7 @@ const StepTickets = ({
   <StepShell
     eyebrow="Paso 03"
     title={<>Tipos de <span style={serif} className="text-orange-500">entrada</span>.</>}
-    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente."
+    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente. Además, cada persona puede tener como máximo 10 entradas por evento, sumando todos los tipos."
   >
     <div className="mx-auto max-w-3xl">
       <TicketTiersBuilder
