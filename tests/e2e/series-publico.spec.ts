@@ -406,8 +406,8 @@ test.describe("home del cliente", () => {
     await abrir(page, "/#/client-dashboard");
     const tira = page.getByRole("region", { name: "Próximos eventos" });
     await expect(tira).toBeVisible({ timeout: 90_000 });
-    // Serie de los viernes, suelto y festival (+ «Ver calendario»).
-    await expect(tira.getByRole("button")).toHaveCount(3 + 1);
+    // Serie de los viernes, suelto y festival (+ «Ver calendario»); sin las flechas de la fila (botones con aria-label).
+    await expect(tira.locator("button:not([aria-label])")).toHaveCount(3 + 1);
     await expect(tira.getByTestId(`tira-fechas-${IDS.viernes[0]}`)).toContainText("4 fechas");
     await expect(tira.getByTestId(`tira-fechas-${IDS.festival[0]}`)).toContainText("3 fechas");
     await expect(tira.getByText("Concierto suelto")).toBeVisible();
