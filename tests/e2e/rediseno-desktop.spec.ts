@@ -394,6 +394,20 @@ test.describe("home del cliente: tira de próximos eventos", () => {
 test.describe("hoja desde abajo (Sheet) en tablet", () => {
   test.use({ viewport: { width: 820, height: 1180 } });
 
+  test("otras hojas de la app, como el selector de ciudad, también quedan centradas", async ({ page }) => {
+    await conEventosPublicos(page, 3);
+    await page.goto("/#/calendar");
+    await expect(page.getByRole("heading", { name: "Próximos eventos" })).toBeVisible({ timeout: 90_000 });
+    await page.getByRole("button", { name: /^Ciudad: .*Cambiar$/ }).click();
+    const hoja = page.getByRole("dialog", { name: "Elige tu ciudad" });
+    await expect(hoja).toBeVisible();
+    const c = await cajaEstable(hoja);
+    expect(c.x, "no se sale por la izquierda").toBeGreaterThanOrEqual(-0.5);
+    expect(derecha(c), "no se sale por la derecha").toBeLessThanOrEqual(820.5);
+    expect(Math.abs(c.x + c.width / 2 - 410), "centrada en horizontal").toBeLessThanOrEqual(1.5);
+    expect(c.width).toBeLessThanOrEqual(673);
+  });
+
   test("el selector arranca en el centro y no se sale por la derecha (framer-motion pisaba el translate)", async ({ page }) => {
     vigilarErrores(page);
     await prepararCompra(page);
