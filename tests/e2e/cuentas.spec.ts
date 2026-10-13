@@ -446,8 +446,7 @@ test("el enlace nuevo de recuperación (token_hash) pide confirmar y no abre ses
 // El enlace antiguo: GoTrue pone los tokens en el hash (con la ruta delante o
 // sin ella; en el segundo caso los aparta main.tsx antes de que HashRouter
 // pise el hash) y, según la configuración, también pueden llegar en la query
-// (main.tsx los aparta y quita la query sin recargar, antes de que auth-js lea
-// la URL: si la leyera con los tokens, pediría el usuario y guardaría la sesión).
+// (main.tsx los aparta y quita la query en el sitio, sin recargar).
 const ENLACES_ANTIGUOS: Array<[string, (accessToken: string) => string]> = [
   [
     "con la ruta delante",
@@ -502,6 +501,40 @@ for (const [formato, enlace] of ENLACES_ANTIGUOS) {
     expect(fallos).toEqual([]);
   });
 }
+
+// Con tokens en la query, main.tsx los aparta y quita la query en el sitio
+// (history.replaceState). Si en vez de eso recargase la página
+// (location.replace), hasta que llegase la navegación el documento viejo
+// seguiría vivo con los tokens en su URL: auth-js los lee y los usa
+// (GET /auth/v1/user) antes de que nadie pulse «Continuar». Pasaba en la CI,
+// donde la recarga tarda más que el arranque de auth-js; aquí la retrasamos a
+// propósito para que no dependa de la máquina.
+test("el enlace antiguo en la query no llega a auth-js aunque una recarga tardase", async ({ page }) => {
+  const fallos = errores(page);
+  await instalarSupabaseFalso(page, { sembrarSesion: "nunca" });
+  const auth = espiarAuth(page);
+  let documentos = 0;
+  await page.route(
+    (url) => url.pathname === "/",
+    async (route) => {
+      if (route.request().resourceType() !== "document") return route.fallback();
+      documentos += 1;
+      if (documentos > 1) await new Promise((resolver) => setTimeout(resolver, 8_000));
+      return route.fallback();
+    },
+  );
+  await page.goto(
+    `/?access_token=${jwtDeEnlace("local@e2e.pasify.test")}&expires_in=86400&refresh_token=e2e-refresh-token&token_type=bearer&type=recovery`,
+  );
+
+  await page.waitForTimeout(1_500);
+  expect(auth).toEqual([]);
+  await expect(tarjetaDeRecuperacion(page)).toBeVisible({ timeout: 5_000 });
+  await expect(page).toHaveURL(/#\/update-password$/);
+  expect(documentos).toBe(1); // sin recarga
+  expect(await sesionGuardada(page)).toBeNull();
+  expect(fallos).toEqual([]);
+});
 
 test("«No soy yo» cierra la sesión del enlace y va al login sin cambiar nada", async ({ page }) => {
   const fallos = errores(page);

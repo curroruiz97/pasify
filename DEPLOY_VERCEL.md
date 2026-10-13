@@ -78,7 +78,10 @@ Qué mantener a mano:
 - Los scripts en línea entran por su hash. Si cambias uno (`index.html`,
   `404.html`, `public/landing/**`), tras `npm run build` ejecuta
   `node scripts/csp-hashes.mjs`: lista los hashes y `--check` falla si alguno
-  falta en el `script-src` de `vercel.json`.
+  falta en el `script-src` de `vercel.json`. El CI ejecuta ese `--check` justo
+  después del build, así que un hash olvidado deja el PR en rojo. Los hashes
+  que sobran (`SOBRA`) solo se listan, no hacen fallar nada: al sustituir el
+  viejo por el nuevo, quita el viejo.
 
 Para pasar a bloquear: primero recoger informes de usuarios reales durante unos
 días (Sentry da un endpoint en el proyecto → Settings → Security Headers; se

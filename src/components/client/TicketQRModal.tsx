@@ -17,6 +17,7 @@ import {
   ticketDoorCode,
   ticketHolderName,
 } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
 
 /**
  * Pasify · QR de una entrada de la cartera.
@@ -62,6 +63,8 @@ export type TicketEventInfo = {
   status?: string | null;
   city: string;
   venue_name: string | null;
+  /** Dirección exacta del evento (para «Cómo llegar»). */
+  address?: string | null;
   image_url: string | null;
   partner_name?: string;
 };
@@ -134,7 +137,7 @@ export const TicketQRModal = ({ open, onClose, ticket, event }: Props) => {
   const holder = ticketHolderName(ticket);
   const title = event?.title ?? "Evento";
   const when = event ? formatEventDateTime(event.date_start) : "";
-  const place = event ? event.venue_name ?? event.city : "";
+  const place = event ? formatEventPlace(event, event.partner_name).short : "";
   const usedAt = isUsed && ticket.used_at ? formatMomentLong(ticket.used_at) : "";
 
   return (

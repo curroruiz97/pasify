@@ -15,11 +15,13 @@ import {
   rememberWebCheckout,
 } from "@/hooks/usePendingCheckoutResume";
 import { TierPickerSheet } from "@/components/tickets/TierPickerSheet";
-import { fetchEventTiers } from "@/components/tickets/tierData";
+import { fetchEventAllowance, fetchEventTiers } from "@/components/tickets/tierData";
 import {
+  MAX_TICKETS_PER_BUYER_EVENT,
   MAX_TICKETS_PER_ORDER,
   isFreeTier,
   parseEdgeError,
+  type TicketAllowance,
   type TierOption,
 } from "@/components/tickets/ticketUtils";
 
@@ -195,6 +197,14 @@ const CHECKOUT_ERRORS: Record<string, CheckoutErrorCopy> = {
     description: "Has superado el máximo de entradas por persona para este tipo.",
     after: "refresh",
   },
+  // 409: ya tiene entradas de este evento y esta compra pasaría de 10 (entre
+  // todos los tipos). El servidor manda en `message` cuántas puede añadir; al
+  // recargar, el selector ajusta la cantidad.
+  qty_exceeds_event_limit: {
+    title: "Límite de entradas por evento",
+    description: `Has alcanzado el máximo de ${MAX_TICKETS_PER_BUYER_EVENT} entradas por persona en este evento.`,
+    after: "refresh",
+  },
   invalid_payload: {
     title: "No se pudo completar la compra",
     description: "Revisa tu selección e inténtalo de nuevo.",
@@ -300,7 +310,12 @@ function describeCheckoutError(httpStatus: number, body: unknown, free: boolean)
 
 // ---------------------------------------------------------------- hook
 
-type PickerState = { event: TicketCheckoutInput; tiers: TierOption[] };
+type PickerState = {
+  event: TicketCheckoutInput;
+  tiers: TierOption[];
+  /** Cuántas entradas del evento lleva ya quien compra (null = no se ha podido saber). */
+  allowance: TicketAllowance | null;
+};
 
 /** Respuesta 200 de `stripe-create-checkout`: pago en Stripe o reserva gratis. */
 type CheckoutResponse = {
@@ -450,8 +465,13 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
           return;
         }
 
-        // 2) Tipos de entrada activos del evento, con la disponibilidad real
-        const tiers = await withTimeout(fetchEventTiers(input.id), CHECKOUT_PREP_TIMEOUT_MS, "fetchEventTiers");
+        // 2) Tipos de entrada activos del evento, con la disponibilidad real, y
+        //    cuántas entradas del evento lleva ya quien compra (tope de 10).
+        const [tiers, allowance] = await withTimeout(
+          Promise.all([fetchEventTiers(input.id), fetchEventAllowance(input.id)]),
+          CHECKOUT_PREP_TIMEOUT_MS,
+          "fetchEventTiers",
+        );
         if (tiers.length === 0) {
           toast.error("Venta no disponible", {
             description:
@@ -461,7 +481,7 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
         }
 
         // 3) Selector: el usuario confirma tipo, cantidad, total y condiciones.
-        setPicker({ event: input, tiers });
+        setPicker({ event: input, tiers, allowance });
         setPickerOpen(true);
       } catch (e) {
         console.error("[useTicketCheckout] no se pudieron cargar los tipos de entrada", e);
@@ -479,8 +499,8 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
   const refreshTiers = useCallback(async (eventId: string) => {
     setRefreshing(true);
     try {
-      const tiers = await fetchEventTiers(eventId);
-      setPicker((prev) => (prev && prev.event.id === eventId ? { ...prev, tiers } : prev));
+      const [tiers, allowance] = await Promise.all([fetchEventTiers(eventId), fetchEventAllowance(eventId)]);
+      setPicker((prev) => (prev && prev.event.id === eventId ? { ...prev, tiers, allowance } : prev));
       if (tiers.length === 0) {
         // Ya no queda nada a la venta (evento retirado, local suspendido…).
         setPickerOpen(false);
@@ -663,7 +683,9 @@ export const useTicketCheckout = (options: UseTicketCheckoutOptions = {}) => {
     eventTitle: picker?.event.title ?? null,
     eventDateStart: picker?.event.dateStart ?? null,
     eventPlace: picker?.event.place ?? null,
+    eventId: picker?.event.id ?? null,
     tiers: picker?.tiers ?? NO_TIERS,
+    allowance: picker?.allowance ?? null,
     initialQty: picker?.event.qty ?? 1,
     submitting,
     refreshing,
