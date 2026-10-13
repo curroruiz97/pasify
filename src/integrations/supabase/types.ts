@@ -6416,6 +6416,14 @@ export type Database = {
         Returns: undefined
       }
       event_has_sales: { Args: { _event_id: string }; Returns: boolean }
+      event_ticket_allowance: {
+        Args: { _event_id: string }
+        Returns: {
+          held: number
+          max_per_buyer: number
+          remaining: number
+        }[]
+      }
       expire_ticket_order: { Args: { _session_id: string }; Returns: string }
       get_app_setting_bool: { Args: { _key: string }; Returns: boolean }
       get_app_setting_int: { Args: { _key: string }; Returns: number }
@@ -6560,6 +6568,7 @@ export type Database = {
         }
         Returns: string
       }
+      max_tickets_per_buyer_event: { Args: never; Returns: number }
       open_conversation: {
         Args: {
           _event_id?: string
@@ -6848,6 +6857,10 @@ export type Database = {
           venue_id: string
           venue_name: string
         }[]
+      }
+      ticket_buyer_event_held: {
+        Args: { _buyer_user_id: string; _event_id: string }
+        Returns: number
       }
       ticket_seats_held: {
         Args: { _buyer_user_id?: string; _event_id: string; _tier_id?: string }
