@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { useSessionState } from "@/lib/useSessionState";
 import { EventRowCard } from "@/components/partner/EventRowCard";
+import { eventCategoryLabel } from "@/lib/eventCategories";
 import { EventActionsMenu, type EventActions } from "@/components/partner/EventActionsMenu";
 import { SoldBar } from "@/components/partner/SoldBar";
 import { StatusBadge } from "@/components/partner/StatusBadge";
@@ -289,7 +290,11 @@ export const PartnerEventList = ({
                         <TableRow key={e.id} data-serie-hija={hija ? "" : undefined}>
                           <TableCell className={hija ? "pl-12" : undefined}>
                             <div className="font-medium text-foreground">{e.title}</div>
-                            {e.city && <div className="text-[12px] text-muted-foreground">{e.city}</div>}
+                            {(e.city || eventCategoryLabel(e.category)) && (
+                              <div className="text-[12px] text-muted-foreground">
+                                {[e.city, eventCategoryLabel(e.category)].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-muted-foreground">
                             {formatInTimeZone(e.date_start, FECHA, timeZoneFor(e.venue_id))}
@@ -332,7 +337,11 @@ export const PartnerEventList = ({
                                       {countLabel(stats.count)}
                                     </Badge>
                                   </div>
-                                  {stats.next.city && <div className="text-[12px] text-muted-foreground">{stats.next.city}</div>}
+                                  {(stats.next.city || eventCategoryLabel(stats.next.category)) && (
+                                    <div className="text-[12px] text-muted-foreground">
+                                      {[stats.next.city, eventCategoryLabel(stats.next.category)].filter(Boolean).join(" · ")}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </TableCell>

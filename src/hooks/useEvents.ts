@@ -32,6 +32,8 @@ const IDS_POR_CONSULTA = 60;
 type Profile = {
   id: string;
   business_name: string | null;
+  /** Categoría del local (discoteca, club, bar…): clasifica sus eventos sin categoría (lib/eventCategories). */
+  business_category?: string | null;
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
@@ -78,6 +80,7 @@ const decorate = (e: EventRow, p: Profile | null) => ({
     ? {
         id: p.id,
         business_name: p.business_name,
+        business_category: p.business_category ?? null,
         first_name: p.first_name,
         last_name: p.last_name,
         profile_image_url: p.avatar_url, // legacy alias
@@ -115,7 +118,9 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
   const tandas: string[][] = [];
   for (let i = 0; i < partnerIds.length; i += IDS_POR_CONSULTA) tandas.push(partnerIds.slice(i, i + IDS_POR_CONSULTA));
   const respuestas = await Promise.all(
-    tandas.map((ids) => supabase.from("public_partners").select("id, business_name, avatar_url").in("id", ids)),
+    tandas.map((ids) =>
+      supabase.from("public_partners").select("id, business_name, business_category, avatar_url").in("id", ids),
+    ),
   );
   respuestas.forEach(({ data: partnersData, error: partnersError }) => {
     if (partnersError) {
@@ -126,6 +131,7 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
       profilesMap.set(p.id, {
         id: p.id,
         business_name: p.business_name,
+        business_category: p.business_category,
         first_name: null,
         last_name: null,
         avatar_url: p.avatar_url,

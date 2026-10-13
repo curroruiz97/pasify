@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useTicketCheckout } from "@/hooks/useTicketCheckout";
 import { TODA_ESPANA, useCiudadElegida } from "@/hooks/queries/clientData";
 import { loginPathWithNext } from "@/lib/eventLinks";
+import { formatEventPlace } from "@/lib/eventPlace";
+import { EVENT_CATEGORIES, effectiveEventCategory, isEventCategory, type EventCategory } from "@/lib/eventCategories";
 
 // Stable empty array — usado como fallback cuando react-query aún no tiene
 // data, así el useEffect que depende de `events` no se re-dispara por un
@@ -42,7 +44,7 @@ const Calendar = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   usePageTitle(t("calendar.title", "Calendario"));
   // «Reducir movimiento» del sistema: los saltos a la lista y a la tarjeta,
   // sin desplazamiento suave.
@@ -54,6 +56,22 @@ const Calendar = () => {
   // evento, que no depende de la ciudad elegida.
   const focusEventId = searchParams.get("event");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  // Filtro por categoría (?cat=bar|discoteca|festival): en la URL, para que se
+  // pueda compartir y sobreviva a recargar. Con ?event= (vuelta del login) no
+  // se aplica: esa tarjeta tiene que verse.
+  const catParam = searchParams.get("cat");
+  const categoria: EventCategory | null = !focusEventId && isEventCategory(catParam) ? catParam : null;
+  const elegirCategoria = (c: EventCategory | null) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (c) next.set("cat", c);
+        else next.delete("cat");
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // Una sola ciudad para toda la app (B2-10): la del perfil del cliente o,
   // sin sesión, la del dispositivo. null = «Toda España». Cambiarla aquí
@@ -99,11 +117,32 @@ const Calendar = () => {
     const foco = todosLosEventos?.find((e) => e.id === focusEventId);
     return foco ? [...lista, foco].sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start)) : lista;
   }, [eventsData, todosLosEventos, focusEventId]);
+  // Cuántos eventos hay de cada categoría (con la ciudad ya aplicada) y la
+  // lista que se enseña con el filtro. La categoría de un evento es la suya y,
+  // si no la tiene, la de su local cuando coincide (lib/eventCategories).
+  const conteoPorCategoria = useMemo(() => {
+    const conteo: Record<EventCategory, number> = { bar: 0, discoteca: 0, festival: 0 };
+    for (const e of events) {
+      const c = effectiveEventCategory(e.category, e.profiles?.business_category);
+      if (c) conteo[c] += 1;
+    }
+    return conteo;
+  }, [events]);
+  const eventosVisibles = useMemo(
+    () =>
+      categoria
+        ? events.filter((e) => effectiveEventCategory(e.category, e.profiles?.business_category) === categoria)
+        : events,
+    [events, categoria],
+  );
   const { invalidateAll } = useInvalidateEvents();
   // Una tarjeta por serie (eventos de varios días y recurrentes) en la vista de
   // carteles: la fecha más próxima, o la que se buscaba con ?event=, y «N
   // fechas» para ver las demás. La vista de mes enseña cada fecha en su día.
-  const tarjetas = useMemo(() => groupBySeries(events, { focusId: focusEventId }), [events, focusEventId]);
+  const tarjetas = useMemo(
+    () => groupBySeries(eventosVisibles, { focusId: focusEventId }),
+    [eventosVisibles, focusEventId],
+  );
   // Las fechas de la serie abierta en el diálogo (null = cerrado).
   const [fechasAbiertas, setFechasAbiertas] = useState<CalendarEvent[] | null>(null);
   // Ids de los eventos visibles, como texto estable: cambiar de ciudad puede
@@ -223,7 +262,9 @@ const Calendar = () => {
         id: event.id,
         title: event.title,
         dateStart: event.start_date,
-        place: event.location_name ?? event.profiles?.business_name ?? event.city ?? null,
+        place:
+          formatEventPlace({ venue_name: event.location_name, city: event.city }, event.profiles?.business_name).short ||
+          null,
       });
     } finally {
       setParticipatingIds((prev) => {
@@ -378,6 +419,24 @@ const Calendar = () => {
             </button>
           </div>
         </div>
+
+        {/* Filtro por categoría: Todos / Bar / Discoteca / Festival, con cuántos
+            eventos hay de cada una en la ciudad elegida. */}
+        <div role="group" aria-label="Filtrar por categoría" className="mt-5 flex flex-wrap gap-2">
+          <CategoriaChip activa={categoria === null} onClick={() => elegirCategoria(null)} cuenta={events.length}>
+            Todos
+          </CategoriaChip>
+          {EVENT_CATEGORIES.map((c) => (
+            <CategoriaChip
+              key={c.value}
+              activa={categoria === c.value}
+              onClick={() => elegirCategoria(c.value)}
+              cuenta={conteoPorCategoria[c.value]}
+            >
+              {c.label}
+            </CategoriaChip>
+          ))}
+        </div>
       </header>
 
       {/* Unified poster grid: 2-col on mobile, 3-col centered on tablet+.
@@ -406,8 +465,19 @@ const Calendar = () => {
               </Button>
             )}
           </div>
+        ) : eventosVisibles.length === 0 ? (
+          <div className="py-16 text-center" data-testid="sin-eventos-de-categoria">
+            <p className="text-sm text-muted-foreground">
+              {`No hay eventos de ${EVENT_CATEGORIES.find((c) => c.value === categoria)?.label ?? "esa categoría"} ${
+                selectedCity ? `en ${selectedCity}` : "ahora mismo"
+              }.`}
+            </p>
+            <Button variant="outline" className="mt-4 min-h-[44px] rounded-full" onClick={() => elegirCategoria(null)}>
+              Ver todos los eventos
+            </Button>
+          </div>
         ) : view === "calendar" ? (
-          <MonthCalendarView events={events} renderEvent={(ev) => renderPosterCard(ev)} />
+          <MonthCalendarView events={eventosVisibles} renderEvent={(ev) => renderPosterCard(ev)} />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
             {tarjetas.map((t) => (t.kind === "series" ? renderPosterCard(t.event, t.sessions) : renderPosterCard(t.event)))}
@@ -440,6 +510,33 @@ const Calendar = () => {
     </div>
   );
 };
+
+/** Chip del filtro por categoría: «Discoteca 3». */
+const CategoriaChip = ({
+  activa,
+  onClick,
+  cuenta,
+  children,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  cuenta: number;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={activa}
+    className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      activa
+        ? "border-primary bg-primary text-primary-foreground"
+        : "border-border/60 bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+    }`}
+  >
+    {children}
+    <span className={`text-xs tabular-nums ${activa ? "text-primary-foreground/80" : "text-muted-foreground/70"}`}>{cuenta}</span>
+  </button>
+);
 
 /**
  * La portada (marquesina de carteles en bucle y textos que entran

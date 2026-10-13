@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { CalendarDays, ChevronRight, Repeat } from "lucide-react";
 import { useCalendarEvents, type CalendarEvent } from "@/hooks/useEvents";
 import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
+import { EVENT_CATEGORIES, effectiveEventCategory, type EventCategory } from "@/lib/eventCategories";
 import { countLabel, groupBySeries } from "@/lib/eventSeries";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -12,6 +14,8 @@ const MAX_EVENTOS = 10;
 interface Props {
   /** Ciudad elegida (useCiudadElegida); null = «Toda España». */
   city: string | null;
+  /** Solo los eventos de esta categoría (su categoría o, si no tiene, la de su local). null = todos. */
+  category?: EventCategory | null;
   onOpen: (eventId: string) => void;
   onSeeAll: () => void;
 }
@@ -25,12 +29,33 @@ interface Props {
  * Es un extra: mientras carga, si falla o si no hay eventos no pinta nada (la
  * lista de locales de debajo tiene su propio estado de error).
  */
-export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
-  const { data } = useCalendarEvents(city);
+export const UpcomingEventsStrip = ({ city, category = null, onOpen, onSeeAll }: Props) => {
+  const { data, isLoading } = useCalendarEvents(city);
   // Una tarjeta por serie (eventos de varios días y recurrentes): su fecha más
   // próxima, con cuántas son. Si no, un festival de 30 noches se comería la tira.
-  const eventos = useMemo(() => groupBySeries(data ?? []).slice(0, MAX_EVENTOS), [data]);
-  if (eventos.length === 0) return null;
+  const eventos = useMemo(
+    () =>
+      groupBySeries(
+        (data ?? []).filter(
+          (e) => !category || effectiveEventCategory(e.category, e.profiles?.business_category) === category,
+        ),
+      ).slice(0, MAX_EVENTOS),
+    [data, category],
+  );
+  const etiqueta = EVENT_CATEGORIES.find((c) => c.value === category);
+  if (eventos.length === 0) {
+    // Con una categoría elegida, que no salga nada parece que el filtro no
+    // hace nada: se dice que no hay.
+    if (!category || isLoading) return null;
+    return (
+      <p data-testid="sin-eventos-de-categoria" className="text-sm text-muted-foreground">
+        No hay eventos de {etiqueta?.label ?? "esa categoría"} {city ? `en ${city}` : "próximamente"}.{" "}
+        <button type="button" onClick={onSeeAll} className="text-orange-500 underline underline-offset-4">
+          Ver el calendario
+        </button>
+      </p>
+    );
+  }
 
   return (
     <section aria-label="Próximos eventos">
@@ -44,7 +69,11 @@ export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
             Próximos eventos
           </div>
           <h2 className="truncate text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
-            {city ? `Qué hay en ${city}` : "Qué hay estos días"}
+            {etiqueta
+              ? `${etiqueta.plural} ${city ? `en ${city}` : "estos días"}`
+              : city
+              ? `Qué hay en ${city}`
+              : "Qué hay estos días"}
           </h2>
         </div>
         <button
@@ -79,7 +108,7 @@ const EventoCard = ({ evento, fechas, onClick }: { evento: CalendarEvent; fechas
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const fecha = eventDayMonth(evento.date_start);
   const hora = formatEventTime(evento.date_start);
-  const lugar = evento.profiles?.business_name || evento.venue_name || evento.city;
+  const lugar = formatEventPlace(evento, evento.profiles?.business_name).short;
   const precio = eventPriceLabel(evento.price_cents);
   const inicial = (evento.title?.[0] ?? "?").toUpperCase();
 

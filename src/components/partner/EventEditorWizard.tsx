@@ -3,8 +3,10 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Beer,
   Calendar as CalendarIcon,
   CheckCircle2,
+  Disc3,
   Eye,
   EyeOff,
   Image as ImageIcon,
@@ -13,6 +15,7 @@ import {
   MapPin,
   Repeat,
   Send,
+  Tent,
   Ticket as TicketIcon,
   Upload,
   X as XIcon,
@@ -48,6 +51,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/imageUtils";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
+import { esLocalSinCompletar, placeFromVenue, venueOptionLabel } from "@/lib/eventPlace";
+import {
+  EVENT_CATEGORIES,
+  eventCategoryFromVenue,
+  eventCategoryLabel,
+  isEventCategory,
+  type EventCategory,
+} from "@/lib/eventCategories";
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTiersBuilder,
@@ -233,6 +244,8 @@ interface BorradorEvento {
   imageUrl: string;
   willPublish: boolean;
   venueId: string | null;
+  /** Categoría del evento («bar», «discoteca», «festival»). Falta en los borradores anteriores a tenerla. */
+  category?: string;
   /**
    * Zona con la que se escribieron el día y las horas. Se usa si el local ya
    * no está en la lista; si está, manda la suya. Falta en los borradores
@@ -284,6 +297,8 @@ export interface EditorVenue {
   capacity?: number | null;
   /** Zona horaria del local (IANA): el día y las horas del evento son los suyos. */
   timezone?: string | null;
+  /** Categoría del local (discoteca, club, bar…): si coincide con una de evento, se propone al crear. */
+  business_category?: string | null;
 }
 
 /** Zona horaria de un local (sin local o sin zona: la del dispositivo). */
@@ -432,6 +447,9 @@ export const EventEditorWizard = ({
   ]);
   const [imageUrl, setImageUrl] = useState("");
   const [willPublish, setWillPublish] = useState(true);
+  // Categoría del evento ("" = sin elegir). Obligatoria al crear; en un evento
+  // anterior sin clasificar se puede dejar como está.
+  const [category, setCategory] = useState<EventCategory | "">("");
   // Cuándo: una fecha, varios días seguidos o una serie (solo al crear o duplicar).
   const [schedule, setSchedule] = useState<ScheduleValue>(SINGLE_SCHEDULE);
   // Clave de idempotencia del intento de crear una serie: el mismo envío repetido
@@ -531,12 +549,14 @@ export const EventEditorWizard = ({
     setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
     setSchedule(SINGLE_SCHEDULE);
     intentoSerieRef.current = null;
-    setLocation({
-      city: defaultVenue?.city || defaultCity,
-      venueName: defaultVenue?.name || defaultVenueName,
-      address: defaultVenue?.address ?? "",
-    });
+    setLocation(
+      defaultVenue
+        ? placeFromVenue(defaultVenue)
+        : { city: defaultCity, venueName: defaultVenueName, address: "" }
+    );
     setVenueId(defaultVenue?.id ?? null);
+    // Un local de discoteca propone «Discoteca»; sala, rooftop… no proponen nada.
+    setCategory(eventCategoryFromVenue(defaultVenue?.business_category) ?? "");
     setTimeZone(zonaDe(defaultVenue));
     setOriginalStatus(null);
     setTiers([tierPorDefecto(defaultVenue)]);
@@ -590,12 +610,15 @@ export const EventEditorWizard = ({
     const [primero] = tiers;
     // El cupo que viene del aforo del local no cuenta como "tocado".
     const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
+    // Lo mismo con la categoría que propone el local: no cuenta como tocada.
+    const categoriaPorDefecto = eventCategoryFromVenue(venues.find((v) => v.id === venueId)?.business_category) ?? "";
     const tocado =
       !!title.trim() ||
       !!description.trim() ||
       !!dateTime.date ||
       isSeriesSchedule(schedule) ||
       !!imageUrl ||
+      category !== categoriaPorDefecto ||
       tiers.length !== 1 ||
       primero?.name !== porDefecto.name ||
       primero?.description !== porDefecto.description ||
@@ -608,7 +631,7 @@ export const EventEditorWizard = ({
     pendienteRef.current = {
       clave: claveBorrador,
       borrador: tocado
-        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, timeZone, schedule }
+        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, category, timeZone, schedule }
         : null,
       editadoEn: Date.now(),
     };
@@ -629,6 +652,7 @@ export const EventEditorWizard = ({
     imageUrl,
     willPublish,
     venueId,
+    category,
     venues,
     timeZone,
   ]);
@@ -695,6 +719,11 @@ export const EventEditorWizard = ({
           b.tiers.length > 0 ? b.tiers.map((t) => normalizarTipo(t)) : [tierPorDefecto(venueDelBorrador)]
         );
         setImageUrl(b.imageUrl ?? "");
+        // Un borrador anterior a las categorías (o sin elegir) recibe la que
+        // propone su local, como un formulario nuevo.
+        setCategory(
+          isEventCategory(b.category) ? b.category : eventCategoryFromVenue(venueDelBorrador?.business_category) ?? ""
+        );
         setWillPublish((b.willPublish ?? true) && !publishBlockedReason);
         setTierSalesMap({});
         setEventHasSales(false);
@@ -721,7 +750,7 @@ export const EventEditorWizard = ({
       const { data: evt, error: evtErr } = await supabase
         .from("events")
         .select(
-          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id"
+          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id, category"
         )
         .eq("id", eid)
         .maybeSingle();
@@ -797,9 +826,15 @@ export const EventEditorWizard = ({
         return { date, startTime: inicio.time, endTime: fin?.time ?? "" };
       })();
 
+      // El lugar que tiene guardado el evento, tal cual. Antes, lo que le
+      // faltaba (el nombre de la sala, por ejemplo) se rellenaba con el del
+      // local por defecto de la cuenta o el del perfil («Principal · Madrid») y
+      // al guardar se escribía en el evento sin que nadie lo pidiera. Si falta
+      // algo se ve vacío y «Usar los datos del local» lo rellena con los de
+      // SU local.
       const lugar: LocationValue = {
-        city: evt.city ?? defaultCity,
-        venueName: evt.venue_name ?? defaultVenueName,
+        city: evt.city ?? "",
+        venueName: evt.venue_name ?? "",
         address: evt.address ?? "",
       };
       setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
@@ -811,6 +846,8 @@ export const EventEditorWizard = ({
         m === "edit" ? { dateTime: dt, location: lugar, venueId: evt.venue_id ?? defaultVenueId ?? null } : null
       );
       setImageUrl(evt.image_url ?? "");
+      // Un evento anterior a las categorías sigue sin ella (no se inventa).
+      setCategory(isEventCategory(evt.category) ? evt.category : "");
       // Una copia nace como borrador; en edit el estado no se toca al guardar.
       setWillPublish(false);
       setOriginalStatus(m === "edit" ? evt.status ?? null : null);
@@ -927,6 +964,7 @@ export const EventEditorWizard = ({
       minPriceEur: minPrice,
       totalCapacity: totalCap,
       imageUrl: imageUrl || null,
+      categoryLabel: eventCategoryLabel(category),
       willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
       timeZoneLabel: etiquetaHora,
       seriesLabel,
@@ -937,7 +975,7 @@ export const EventEditorWizard = ({
         transferAllowed: t.transferAllowed,
       })),
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone, etiquetaHora, esSerie, schedule]);
+  }, [title, location, dateTime, tiers, imageUrl, category, willPublish, mode, originalStatus, timeZone, etiquetaHora, esSerie, schedule]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -946,6 +984,9 @@ export const EventEditorWizard = ({
     (idx: number): string | null => {
       if (idx === 0) {
         if (!title.trim()) return "El evento necesita un título";
+        // Al crear (o duplicar) hay que clasificarlo; un evento anterior sin
+        // categoría se puede seguir editando sin ella.
+        if (mode !== "edit" && !category) return "Elige la categoría del evento";
       }
       if (idx === 1) {
         if (esSerie) {
@@ -1006,7 +1047,7 @@ export const EventEditorWizard = ({
       }
       return null;
     },
-    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone, esSerie, schedule]
+    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone, mode, category, esSerie, schedule]
   );
 
   const goNext = () => {
@@ -1188,6 +1229,7 @@ export const EventEditorWizard = ({
       venue_name: location.venueName.trim() || null,
       address: location.address.trim() || null,
       image_url: imageUrl || null,
+      category: category || null,
       venue_id: venueId,
       status: effective,
     };
@@ -1417,6 +1459,7 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         // Con venue_id el trigger rellena brand_id y org_id.
         venue_id: venueId,
         status,
@@ -1472,6 +1515,7 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         ...(venueId ? { venue_id: venueId } : {}),
         ...(status ? { status } : {}),
         // La columna aún no está en los tipos generados (se regeneran tras la migración).
@@ -1772,6 +1816,9 @@ export const EventEditorWizard = ({
                       onTitleChange={setTitle}
                       description={description}
                       onDescriptionChange={setDescription}
+                      category={category}
+                      onCategoryChange={setCategory}
+                      categoryRequired={mode !== "edit"}
                       disabled={submitting}
                     />
                   )}
@@ -1790,19 +1837,27 @@ export const EventEditorWizard = ({
                       venueId={venueId}
                       timeZone={timeZone}
                       placeName={venueActual?.city ?? null}
+                      venue={venueActual}
                       onVenueChange={(id) => {
                         const v = venues.find((x) => x.id === id);
                         const anterior = venues.find((x) => x.id === venueId);
                         setVenueId(id);
                         if (v) {
-                          setLocation((prev) => ({
-                            city: v.city || prev.city,
-                            venueName: v.name,
-                            address: v.address || prev.address,
-                          }));
+                          // El lugar pasa a ser el del local nuevo, entero: lo
+                          // que le falte (la dirección, por ejemplo) queda vacío
+                          // y se pide, no se conserva el del local anterior.
+                          setLocation(placeFromVenue(v));
                           // El día y las horas pasan a ser los del reloj del
                           // nuevo local.
                           setTimeZone(zonaDe(v));
+                          // Evento nuevo: si la categoría era la que proponía el local
+                          // anterior (no la ha tocado), pasa a ser la del nuevo.
+                          if (mode === "create") {
+                            const propuestaAnterior = eventCategoryFromVenue(anterior?.business_category) ?? "";
+                            setCategory((prev) =>
+                              prev === propuestaAnterior ? eventCategoryFromVenue(v.business_category) ?? "" : prev
+                            );
+                          }
                           // Evento nuevo: el cupo que venía del aforo del local
                           // anterior (o vacío) pasa a ser el del nuevo local. Un
                           // cupo escrito a mano no se toca.
@@ -2135,17 +2190,26 @@ export const EventEditorWizard = ({
 // Sub-componentes (steps)
 // =================================================================
 
+const ICONO_CATEGORIA: Record<EventCategory, typeof Beer> = { bar: Beer, discoteca: Disc3, festival: Tent };
+
 const StepInfo = ({
   title,
   onTitleChange,
   description,
   onDescriptionChange,
+  category,
+  onCategoryChange,
+  categoryRequired,
   disabled,
 }: {
   title: string;
   onTitleChange: (v: string) => void;
   description: string;
   onDescriptionChange: (v: string) => void;
+  category: EventCategory | "";
+  onCategoryChange: (v: EventCategory) => void;
+  /** Al crear es obligatoria; al editar un evento anterior sin categoría, no. */
+  categoryRequired: boolean;
   disabled?: boolean;
 }) => (
   <StepShell
@@ -2166,6 +2230,44 @@ const StepInfo = ({
           disabled={disabled}
           className="mt-1.5 h-11"
         />
+      </div>
+      <div>
+        <span id="evt-cat-label" className="text-xs font-medium leading-none">
+          Categoría{categoryRequired ? " *" : ""}
+        </span>
+        <div role="radiogroup" aria-labelledby="evt-cat-label" className="mt-1.5 grid grid-cols-3 gap-2">
+          {EVENT_CATEGORIES.map((c) => {
+            const Icono = ICONO_CATEGORIA[c.value];
+            const activa = category === c.value;
+            return (
+              <label
+                key={c.value}
+                className={`flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition focus-within:ring-2 focus-within:ring-ring ${
+                  activa
+                    ? "border-orange-500 bg-orange-500/10 text-orange-500"
+                    : "border-border bg-card text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+                } ${disabled ? "pointer-events-none opacity-60" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="evt-category"
+                  value={c.value}
+                  checked={activa}
+                  onChange={() => onCategoryChange(c.value)}
+                  disabled={disabled}
+                  className="sr-only"
+                />
+                <Icono aria-hidden="true" className="h-4 w-4" />
+                {c.label}
+              </label>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {category || categoryRequired
+            ? "Así se clasifica tu evento en el calendario y en los filtros de búsqueda. Puedes cambiarla cuando quieras."
+            : "Este evento aún no tiene categoría: elige una para que salga en los filtros por categoría del calendario."}
+        </p>
       </div>
       <div>
         <Label htmlFor="evt-desc" className="text-xs">
@@ -2202,6 +2304,7 @@ const StepWhenWhere = ({
   venueId,
   timeZone,
   placeName,
+  venue,
   onVenueChange,
   disabled,
 }: {
@@ -2223,6 +2326,8 @@ const StepWhenWhere = ({
   timeZone?: string;
   /** Ciudad del local elegido («Hora de <ciudad>»). */
   placeName?: string | null;
+  /** Local elegido: su lugar es el de partida y con el que se compara. */
+  venue?: EditorVenue | null;
   onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
@@ -2277,8 +2382,7 @@ const StepWhenWhere = ({
               <SelectContent>
                 {venues.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                    {v.city ? ` · ${v.city}` : ""}
+                    {venueOptionLabel(v, venues)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2286,6 +2390,16 @@ const StepWhenWhere = ({
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Las ventas, el equipo y los informes de este evento van a este local.
             </p>
+            {esLocalSinCompletar(venue) && (
+              <p
+                role="note"
+                data-testid="local-sin-completar"
+                className="mt-1.5 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground"
+              >
+                Este local aún tiene el nombre de relleno de la cuenta («Principal») y no tiene dirección. Ponle su
+                nombre y su dirección reales en Configuración → Locales, y tus eventos saldrán con ellos.
+              </p>
+            )}
           </div>
         )}
         <EventLocationSection
@@ -2293,6 +2407,10 @@ const StepWhenWhere = ({
           onChange={onLocationChange}
           cities={cities}
           disabled={disabled}
+          // Un local aún sin completar («Principal», sin dirección) no es
+          // referencia de nada: se avisa de eso arriba, no de que el lugar
+          // difiera. (Quien organiza eventos fuera de su local, también.)
+          venuePlace={venue && !esLocalSinCompletar(venue) ? placeFromVenue(venue) : null}
         />
       </section>
     </div>
@@ -2313,7 +2431,7 @@ const StepTickets = ({
   <StepShell
     eyebrow="Paso 03"
     title={<>Tipos de <span style={serif} className="text-orange-500">entrada</span>.</>}
-    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente."
+    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente. Además, cada persona puede tener como máximo 10 entradas por evento, sumando todos los tipos."
   >
     <div className="mx-auto max-w-3xl">
       <TicketTiersBuilder

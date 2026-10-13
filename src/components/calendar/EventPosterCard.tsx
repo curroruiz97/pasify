@@ -6,6 +6,7 @@ import { optimizedImage } from "@/lib/image";
 import { shareEventLink } from "@/lib/eventLinks";
 import { Button } from "@/components/ui/button";
 import { eventPriceLabel, isEventOver } from "@/components/tickets/ticketUtils";
+import { effectiveEventCategory, eventCategoryLabel } from "@/lib/eventCategories";
 import { countLabel } from "@/lib/eventSeries";
 import type { CalendarEvent } from "@/hooks/useEvents";
 
@@ -70,6 +71,8 @@ const EventPosterCard = ({
     event.price != null ? eventPriceLabel(Math.round(Number(event.price) * 100)) : null;
   // Misma regla que el servidor para dejar de vender (ver isEventOver).
   const over = isEventOver(event);
+  // Su categoría y, si no la tiene, la de su local (lib/eventCategories).
+  const categoria = eventCategoryLabel(effectiveEventCategory(event.category, event.profiles?.business_category));
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -147,6 +150,14 @@ const EventPosterCard = ({
             <Calendar className="h-3 w-3" />
             {dateChip}
           </span>
+          {categoria && (
+            <span
+              data-testid="categoria-evento"
+              className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            >
+              {categoria}
+            </span>
+          )}
           <span className="text-xs tabular-nums text-muted-foreground">
             {timeRange}
           </span>

@@ -35,6 +35,8 @@ export type PartnerEventRow = {
   capacity: number | null;
   tickets_sold: number;
   image_url: string | null;
+  /** Categoría del evento (bar, discoteca, festival); null en los anteriores a tenerla. Falta en una lista guardada antes de pedirla. */
+  category?: string | null;
   /**
    * Local del evento: su zona horaria es la de la fecha que se enseña. Puede
    * faltar en una lista guardada en el dispositivo antes de pedirlo.
@@ -124,7 +126,7 @@ async function leerEventosDelLocal(uid: string): Promise<PartnerEventRow[]> {
   // Con las columnas de serie; un servidor sin la migración no las tiene y se
   // repite la consulta sin ellas (leerConSeries).
   const { data, error } = await leerConSeries(
-    "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id",
+    "id, title, description, city, date_start, date_end, status, price_cents, capacity, tickets_sold, image_url, venue_id, category",
     (select) =>
       timed(
         supabase.from("events").select(select).or(filter).order("date_start", { ascending: false }),
