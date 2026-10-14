@@ -130,7 +130,7 @@ verify_jwt = false
 [functions.retake-stale-refunds]
 verify_jwt = false
 
-# -------- IA y mantenimiento (migración 20261012000000) --------
+# -------- IA y mantenimiento (migración 20261013140000) --------
 
 # Detector de anomalías de la IA: pg_cron cada día con la cabecera
 # x-pasify-internal, o un admin de plataforma.

@@ -1,4 +1,4 @@
--- Pasify · IA y mantenimiento (migración 20261012000000_ia_functions_cron):
+-- Pasify · IA y mantenimiento (migración 20261013140000_ia_functions_cron):
 -- capacidad «moderation», cleanup_media_candidates (qué ficheros de Storage no
 -- usa nadie) y los trabajos de pg_cron de ai-anomaly-detector,
 -- industry-benchmarks-recompute y cleanup-media.
