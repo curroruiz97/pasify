@@ -6342,6 +6342,14 @@ export type Database = {
           out_subscription_id: string
         }[]
       }
+      cleanup_media_candidates: {
+        Args: {
+          _bucket: string
+          _max_candidates?: number
+          _min_age_days?: number
+        }
+        Returns: Json
+      }
       complete_partner_onboarding: {
         Args: { _data?: Json; _org_id?: string; _venue_id?: string }
         Returns: {
@@ -6905,8 +6913,12 @@ export type Database = {
           tier_name: string
         }[]
       }
+      schedule_ai_anomaly_detector: { Args: never; Returns: string }
+      schedule_cleanup_media: { Args: { _dry_run?: boolean }; Returns: string }
       schedule_dispatch_notifications: { Args: never; Returns: string }
       schedule_health_check: { Args: never; Returns: string }
+      schedule_ia_functions: { Args: never; Returns: string }
+      schedule_industry_benchmarks: { Args: never; Returns: string }
       schedule_reconcile_pending_orders: { Args: never; Returns: string }
       schedule_retake_stale_refunds: { Args: never; Returns: string }
       set_admin_by_email: { Args: { _email: string }; Returns: string }
