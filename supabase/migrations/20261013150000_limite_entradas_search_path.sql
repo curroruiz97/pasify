@@ -1,0 +1,11 @@
+-- Pasify · max_tickets_per_buyer_event con search_path fijo
+--
+-- El asesor de seguridad de Supabase (function_search_path_mutable) avisaba de
+-- que max_tickets_per_buyer_event, creada en 20261013110000, no fija el
+-- search_path. No lee ninguna tabla (devuelve la constante 10), así que no había
+-- riesgo, pero así queda como el resto de funciones del repo y el aviso
+-- desaparece.
+--
+-- ALTER FUNCTION cambia solo la configuración: ni el cuerpo ni los permisos
+-- (REVOKE a PUBLIC, anon y authenticated; GRANT a service_role) se tocan.
+ALTER FUNCTION public.max_tickets_per_buyer_event() SET search_path = public;
