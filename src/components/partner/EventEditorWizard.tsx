@@ -3,19 +3,24 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Beer,
   Calendar as CalendarIcon,
   CheckCircle2,
+  Disc3,
   Eye,
   EyeOff,
   Image as ImageIcon,
   Loader2,
   Lock,
   MapPin,
+  Repeat,
   Send,
+  Tent,
   Ticket as TicketIcon,
   Upload,
   X as XIcon,
 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +51,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/imageUtils";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
+import { esLocalSinCompletar, placeFromVenue, venueOptionLabel } from "@/lib/eventPlace";
+import {
+  EVENT_CATEGORIES,
+  eventCategoryFromVenue,
+  eventCategoryLabel,
+  isEventCategory,
+  type EventCategory,
+} from "@/lib/eventCategories";
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTiersBuilder,
@@ -68,6 +81,27 @@ import {
   summarizePolicies,
 } from "@/components/partner/tierPolicy";
 import { EventDateTimeSection } from "@/components/partner/EventDateTimeSection";
+import { EventScheduleSection } from "@/components/partner/EventScheduleSection";
+import {
+  SINGLE_SCHEDULE,
+  isSeriesSchedule,
+  normalizeSchedule,
+  ruleOf,
+  type ScheduleValue,
+} from "@/components/partner/eventScheduleValue";
+import { describePattern, planSeries, toStoredRule } from "@/lib/recurrence";
+import { countLabel } from "@/lib/eventSeries";
+import {
+  applyEventTiersToSeries,
+  createEventSeries,
+  describeSeriesError,
+  loadSeriesContext,
+  updateEventSeries,
+  type SeriesContext,
+  type SeriesEventInput,
+  type TierInput,
+  type UpdateSeriesPatch,
+} from "@/lib/eventSeriesApi";
 import {
   composeIsoStartEnd,
   validateDateTime,
@@ -210,12 +244,19 @@ interface BorradorEvento {
   imageUrl: string;
   willPublish: boolean;
   venueId: string | null;
+  /** Categoría del evento («bar», «discoteca», «festival»). Falta en los borradores anteriores a tenerla. */
+  category?: string;
   /**
    * Zona con la que se escribieron el día y las horas. Se usa si el local ya
    * no está en la lista; si está, manda la suya. Falta en los borradores
    * anteriores a guardarla.
    */
   timeZone?: string;
+  /**
+   * Una fecha, varios días o una serie. Falta en los borradores anteriores a
+   * las series (valen como «una fecha»).
+   */
+  schedule?: ScheduleValue;
 }
 
 const esBorradorValido = (b: unknown): b is BorradorEvento => {
@@ -256,6 +297,8 @@ export interface EditorVenue {
   capacity?: number | null;
   /** Zona horaria del local (IANA): el día y las horas del evento son los suyos. */
   timezone?: string | null;
+  /** Categoría del local (discoteca, club, bar…): si coincide con una de evento, se propone al crear. */
+  business_category?: string | null;
 }
 
 /** Zona horaria de un local (sin local o sin zona: la del dispositivo). */
@@ -275,6 +318,37 @@ const tierPorDefecto = (venue: EditorVenue | null | undefined): TierDraft => ({
 const estadoDelTipo = (active: boolean): "active" | "hidden" => (active ? "active" : "hidden");
 
 /** ["el día", "la hora", "el lugar"] → "el día, la hora y el lugar". */
+/** A cuántas fechas de la serie se aplica un cambio. */
+type Alcance = "one" | "following" | "all";
+
+/** Lo que se ha decidido al guardar un cambio en una fecha de una serie. */
+interface DecisionSerie {
+  datos: Alcance;
+  tipos: Alcance;
+  incluirExcepciones: boolean;
+}
+
+/** Lo común de la fecha tal como se abrió: para saber qué se ha tocado. */
+interface ComunOriginal {
+  title: string;
+  description: string;
+  imageUrl: string;
+  venueId: string | null;
+  city: string;
+  venueName: string;
+  address: string;
+  startTime: string;
+  endTime: string;
+  /** date_start al abrir (ISO): desde cuándo valen «esta y las siguientes». */
+  startIso: string;
+}
+
+/** Los tipos de entrada, en una cadena comparable (sin ids ni claves). */
+const clavesDeTipos = (tipos: TierDraft[]): string =>
+  JSON.stringify(
+    tipos.map((t) => [t.name.trim(), t.description.trim(), t.priceEur, t.capacity, t.perUserMax, t.active, t.refundMode, t.refundHours, t.transferAllowed])
+  );
+
 const unirLista = (cosas: string[]): string =>
   cosas.length > 1 ? `${cosas.slice(0, -1).join(", ")} y ${cosas[cosas.length - 1]}` : cosas[0] ?? "";
 
@@ -373,6 +447,14 @@ export const EventEditorWizard = ({
   ]);
   const [imageUrl, setImageUrl] = useState("");
   const [willPublish, setWillPublish] = useState(true);
+  // Categoría del evento ("" = sin elegir). Obligatoria al crear; en un evento
+  // anterior sin clasificar se puede dejar como está.
+  const [category, setCategory] = useState<EventCategory | "">("");
+  // Cuándo: una fecha, varios días seguidos o una serie (solo al crear o duplicar).
+  const [schedule, setSchedule] = useState<ScheduleValue>(SINGLE_SCHEDULE);
+  // Clave de idempotencia del intento de crear una serie: el mismo envío repetido
+  // (doble clic, reintento tras un corte) no crea dos series.
+  const intentoSerieRef = useRef<{ huella: string; id: string } | null>(null);
   const [venueId, setVenueId] = useState<string | null>(defaultVenueId);
   // Zona horaria con la que se leen el día y las horas del formulario: la del
   // local del evento. Se fija al cargar (con la que se descompuso la fecha) y
@@ -410,6 +492,22 @@ export const EventEditorWizard = ({
   const borradorHechoRef = useRef(false);
   // El aviso de «no se puede guardar el borrador» sale una sola vez.
   const avisadoSinEspacioRef = useRef(false);
+
+  const esSerie = mode !== "edit" && isSeriesSchedule(schedule);
+
+  // Editar una fecha que pertenece a una serie: de qué serie es, cómo estaba al
+  // abrirla (para saber qué se ha tocado) y, al guardar, a qué fechas se aplica.
+  const [serie, setSerie] = useState<SeriesContext | null>(null);
+  const [comunOriginal, setComunOriginal] = useState<ComunOriginal | null>(null);
+  const [tiposOriginales, setTiposOriginales] = useState<string | null>(null);
+  const [pideAlcance, setPideAlcance] = useState<{
+    status: "draft" | "published" | "keep";
+    campos: string[];
+    hayTipos: boolean;
+  } | null>(null);
+  const [alcanceForm, setAlcanceForm] = useState<DecisionSerie>({ datos: "one", tipos: "one", incluirExcepciones: false });
+  // Lo decidido en el diálogo, para el guardado que sigue (también tras la confirmación de «publicar con fecha pasada»).
+  const decisionRef = useRef<DecisionSerie | null>(null);
 
   // Local del evento y rótulo de su hora («Hora de Santa Cruz de Tenerife»).
   const venueActual = venues.find((v) => v.id === venueId) ?? null;
@@ -449,12 +547,16 @@ export const EventEditorWizard = ({
     setTitle("");
     setDescription("");
     setDateTime({ date: "", startTime: "23:30", endTime: "06:00" });
-    setLocation({
-      city: defaultVenue?.city || defaultCity,
-      venueName: defaultVenue?.name || defaultVenueName,
-      address: defaultVenue?.address ?? "",
-    });
+    setSchedule(SINGLE_SCHEDULE);
+    intentoSerieRef.current = null;
+    setLocation(
+      defaultVenue
+        ? placeFromVenue(defaultVenue)
+        : { city: defaultCity, venueName: defaultVenueName, address: "" }
+    );
     setVenueId(defaultVenue?.id ?? null);
+    // Un local de discoteca propone «Discoteca»; sala, rooftop… no proponen nada.
+    setCategory(eventCategoryFromVenue(defaultVenue?.business_category) ?? "");
     setTimeZone(zonaDe(defaultVenue));
     setOriginalStatus(null);
     setTiers([tierPorDefecto(defaultVenue)]);
@@ -508,11 +610,15 @@ export const EventEditorWizard = ({
     const [primero] = tiers;
     // El cupo que viene del aforo del local no cuenta como "tocado".
     const porDefecto = tierPorDefecto(venues.find((v) => v.id === venueId));
+    // Lo mismo con la categoría que propone el local: no cuenta como tocada.
+    const categoriaPorDefecto = eventCategoryFromVenue(venues.find((v) => v.id === venueId)?.business_category) ?? "";
     const tocado =
       !!title.trim() ||
       !!description.trim() ||
       !!dateTime.date ||
+      isSeriesSchedule(schedule) ||
       !!imageUrl ||
+      category !== categoriaPorDefecto ||
       tiers.length !== 1 ||
       primero?.name !== porDefecto.name ||
       primero?.description !== porDefecto.description ||
@@ -525,7 +631,7 @@ export const EventEditorWizard = ({
     pendienteRef.current = {
       clave: claveBorrador,
       borrador: tocado
-        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, timeZone }
+        ? { v: 1, step, title, description, dateTime, location, tiers, imageUrl, willPublish, venueId, category, timeZone, schedule }
         : null,
       editadoEn: Date.now(),
     };
@@ -540,11 +646,13 @@ export const EventEditorWizard = ({
     title,
     description,
     dateTime,
+    schedule,
     location,
     tiers,
     imageUrl,
     willPublish,
     venueId,
+    category,
     venues,
     timeZone,
   ]);
@@ -575,11 +683,18 @@ export const EventEditorWizard = ({
   useEffect(() => {
     if (!open) {
       setFormListo(false);
+      setPideAlcance(null);
+      decisionRef.current = null;
       return;
     }
     if (!contextReady) return;
     setStep(0);
     setRemovedTierDbIds(new Set());
+    setSerie(null);
+    setComunOriginal(null);
+    setTiposOriginales(null);
+    setPideAlcance(null);
+    decisionRef.current = null;
 
     if (mode === "create") {
       // Apertura nueva: su borrador vuelve a escribirse y el aviso a poder salir.
@@ -593,6 +708,7 @@ export const EventEditorWizard = ({
         setTitle(b.title);
         setDescription(b.description);
         setDateTime(b.dateTime);
+        setSchedule(normalizeSchedule(b.schedule));
         setLocation(b.location);
         setVenueId(b.venueId ?? null);
         // La hora se escribió como hora del local: con la zona del local (o,
@@ -603,6 +719,11 @@ export const EventEditorWizard = ({
           b.tiers.length > 0 ? b.tiers.map((t) => normalizarTipo(t)) : [tierPorDefecto(venueDelBorrador)]
         );
         setImageUrl(b.imageUrl ?? "");
+        // Un borrador anterior a las categorías (o sin elegir) recibe la que
+        // propone su local, como un formulario nuevo.
+        setCategory(
+          isEventCategory(b.category) ? b.category : eventCategoryFromVenue(venueDelBorrador?.business_category) ?? ""
+        );
         setWillPublish((b.willPublish ?? true) && !publishBlockedReason);
         setTierSalesMap({});
         setEventHasSales(false);
@@ -629,7 +750,7 @@ export const EventEditorWizard = ({
       const { data: evt, error: evtErr } = await supabase
         .from("events")
         .select(
-          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id"
+          "id, title, description, city, venue_name, address, date_start, date_end, image_url, status, capacity, price_cents, venue_id, category"
         )
         .eq("id", eid)
         .maybeSingle();
@@ -705,19 +826,28 @@ export const EventEditorWizard = ({
         return { date, startTime: inicio.time, endTime: fin?.time ?? "" };
       })();
 
+      // El lugar que tiene guardado el evento, tal cual. Antes, lo que le
+      // faltaba (el nombre de la sala, por ejemplo) se rellenaba con el del
+      // local por defecto de la cuenta o el del perfil («Principal · Madrid») y
+      // al guardar se escribía en el evento sin que nadie lo pidiera. Si falta
+      // algo se ve vacío y «Usar los datos del local» lo rellena con los de
+      // SU local.
       const lugar: LocationValue = {
-        city: evt.city ?? defaultCity,
-        venueName: evt.venue_name ?? defaultVenueName,
+        city: evt.city ?? "",
+        venueName: evt.venue_name ?? "",
         address: evt.address ?? "",
       };
       setTitle(m === "duplicate" ? `${baseTitle} (copia)` : baseTitle);
       setDescription(evt.description ?? "");
       setDateTime(dt);
+      setSchedule(SINGLE_SCHEDULE);
       setLocation(lugar);
       setCuandoOriginal(
         m === "edit" ? { dateTime: dt, location: lugar, venueId: evt.venue_id ?? defaultVenueId ?? null } : null
       );
       setImageUrl(evt.image_url ?? "");
+      // Un evento anterior a las categorías sigue sin ella (no se inventa).
+      setCategory(isEventCategory(evt.category) ? evt.category : "");
       // Una copia nace como borrador; en edit el estado no se toca al guardar.
       setWillPublish(false);
       setOriginalStatus(m === "edit" ? evt.status ?? null : null);
@@ -743,7 +873,33 @@ export const EventEditorWizard = ({
           transferAllowed: row.transfer_allowed ?? true,
         };
       });
-      setTiers(draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)]);
+      const tiposCargados = draftTiers.length > 0 ? draftTiers : [tierPorDefecto(venueDelEvento)];
+      setTiers(tiposCargados);
+
+      // Una fecha de una serie: su contexto y cómo estaba lo común al abrir.
+      decisionRef.current = null;
+      setSerie(null);
+      setComunOriginal(null);
+      setTiposOriginales(null);
+      if (m === "edit") {
+        const contexto = await loadSeriesContext(eid);
+        if (contexto) {
+          setSerie(contexto);
+          setComunOriginal({
+            title: baseTitle,
+            description: evt.description ?? "",
+            imageUrl: evt.image_url ?? "",
+            venueId: evt.venue_id ?? defaultVenueId ?? null,
+            city: lugar.city,
+            venueName: lugar.venueName,
+            address: lugar.address,
+            startTime: dt.startTime,
+            endTime: dt.endTime,
+            startIso: evt.date_start,
+          });
+          setTiposOriginales(clavesDeTipos(tiposCargados));
+        }
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error cargando evento";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -776,12 +932,31 @@ export const EventEditorWizard = ({
 
     const { crossesMidnight } = composeIsoStartEnd(dateTime, timeZone);
 
+    // Una serie: cómo se repite, cuántas fechas se crearán y la primera de verdad
+    // (la fecha «Empieza el» puede no ser un día de los elegidos).
+    let seriesLabel: string | null = null;
+    let primeraFecha = dateTime.date;
+    if (esSerie) {
+      const regla = ruleOf(schedule);
+      const plan = planSeries({
+        startsOn: dateTime.date,
+        rule: regla,
+        startTime: dateTime.startTime,
+        endTime: dateTime.endTime,
+        timeZone,
+      });
+      if (!plan.error) {
+        seriesLabel = `${describePattern(dateTime.date, regla)} · ${countLabel(plan.dates.length)}`;
+        primeraFecha = plan.dates[0] ?? dateTime.date;
+      }
+    }
+
     return {
       title,
       city: location.city,
       venueName: location.venueName,
       address: location.address,
-      date: dateTime.date,
+      date: primeraFecha,
       startTime: dateTime.startTime,
       endTime: dateTime.endTime,
       crossesMidnight,
@@ -789,8 +964,10 @@ export const EventEditorWizard = ({
       minPriceEur: minPrice,
       totalCapacity: totalCap,
       imageUrl: imageUrl || null,
+      categoryLabel: eventCategoryLabel(category),
       willPublish: mode === "edit" ? originalStatus === "published" : willPublish,
       timeZoneLabel: etiquetaHora,
+      seriesLabel,
       // Lo que verá quien compre: las políticas de los tipos a la venta.
       policies: activeTiers.map((t) => ({
         name: t.name,
@@ -798,7 +975,7 @@ export const EventEditorWizard = ({
         transferAllowed: t.transferAllowed,
       })),
     };
-  }, [title, location, dateTime, tiers, imageUrl, willPublish, mode, originalStatus, timeZone, etiquetaHora]);
+  }, [title, location, dateTime, tiers, imageUrl, category, willPublish, mode, originalStatus, timeZone, etiquetaHora, esSerie, schedule]);
 
   // -----------------------------------------------------------------
   // Validators per-step
@@ -807,10 +984,34 @@ export const EventEditorWizard = ({
     (idx: number): string | null => {
       if (idx === 0) {
         if (!title.trim()) return "El evento necesita un título";
+        // Al crear (o duplicar) hay que clasificarlo; un evento anterior sin
+        // categoría se puede seguir editando sin ella.
+        if (mode !== "edit" && !category) return "Elige la categoría del evento";
       }
       if (idx === 1) {
-        const dtErr = validateDateTime(dateTime, timeZone);
-        if (dtErr) return dtErr;
+        if (esSerie) {
+          if (!dateTime.date) {
+            return schedule.kind === "multi_day"
+              ? "Elige el primer día"
+              : schedule.rule.frequency === "custom"
+              ? "Elige al menos una fecha en el calendario"
+              : "Elige la primera fecha";
+          }
+          const horasErr = validateDateTime(dateTime, timeZone);
+          if (horasErr) return horasErr;
+          // Las fechas ya pasadas no se miran aquí (depende de si se publica o se guarda borrador): lo hace el envío.
+          const plan = planSeries({
+            startsOn: dateTime.date,
+            rule: ruleOf(schedule),
+            startTime: dateTime.startTime,
+            endTime: dateTime.endTime,
+            timeZone,
+          });
+          if (plan.error) return plan.error;
+        } else {
+          const dtErr = validateDateTime(dateTime, timeZone);
+          if (dtErr) return dtErr;
+        }
         const locErr = validateLocation(location);
         if (locErr) return locErr;
         if (venues.length > 0 && !venueId) return "Elige el local del evento";
@@ -846,7 +1047,7 @@ export const EventEditorWizard = ({
       }
       return null;
     },
-    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone]
+    [title, dateTime, location, tiers, tierSalesMap, venues.length, venueId, timeZone, mode, category, esSerie, schedule]
   );
 
   const goNext = () => {
@@ -915,6 +1116,187 @@ export const EventEditorWizard = ({
    * `confirmado`: ya se aceptó publicar un evento cuyo inicio ha pasado (ver
    * `confirmarPasado`); no se vuelve a preguntar.
    */
+  /**
+   * Qué se ha tocado de una fecha de una serie respecto a como se abrió: lo
+   * común (que puede valer para las demás fechas) y los tipos de entrada. La
+   * fecha y la hora de ESTA fecha no cuentan para el día: cada fecha tiene el
+   * suyo. `parche` es lo que mandaría update_event_series.
+   */
+  const cambiosDeSerie = (): { parche: UpdateSeriesPatch; campos: string[]; tipos: boolean } | null => {
+    const o = comunOriginal;
+    if (!serie || !o) return null;
+    const parche: UpdateSeriesPatch = {};
+    const campos: string[] = [];
+    if (title.trim() !== o.title.trim()) {
+      parche.title = title.trim();
+      campos.push("el título");
+    }
+    if (description.trim() !== o.description.trim()) {
+      parche.description = description.trim() || null;
+      campos.push("la descripción");
+    }
+    if ((imageUrl || "") !== (o.imageUrl || "")) {
+      parche.image_url = imageUrl || null;
+      campos.push("la imagen");
+    }
+    if (
+      venueId !== o.venueId ||
+      location.city.trim() !== o.city.trim() ||
+      location.venueName.trim() !== o.venueName.trim() ||
+      location.address.trim() !== o.address.trim()
+    ) {
+      if (venueId) parche.venue_id = venueId;
+      parche.city = location.city.trim();
+      parche.venue_name = location.venueName.trim() || null;
+      parche.address = location.address.trim() || null;
+      campos.push("el lugar");
+    }
+    if (dateTime.startTime !== o.startTime || dateTime.endTime !== o.endTime) {
+      if (dateTime.startTime !== o.startTime) parche.start_time = dateTime.startTime;
+      if (dateTime.endTime !== o.endTime) parche.end_time = dateTime.endTime;
+      campos.push("la hora");
+    }
+    const tipos = tiposOriginales !== null && (clavesDeTipos(tiers) !== tiposOriginales || removedTierDbIds.size > 0);
+    return { parche, campos, tipos };
+  };
+
+  /**
+   * Aplica a las demás fechas de la serie lo decidido, DESPUÉS de guardar esta:
+   * los cambios comunes (update_event_series) y/o los tipos de entrada
+   * (apply_event_tiers_to_series, que salta las fechas con entradas o reservas).
+   * Devuelve el resumen para el aviso.
+   */
+  const aplicarASerie = async (d: DecisionSerie, parche: UpdateSeriesPatch, desde: string): Promise<string[]> => {
+    if (!serie || !eventId) return [];
+    const avisos: string[] = [];
+    if (d.datos !== "one" && Object.keys(parche).length > 0) {
+      const r = await updateEventSeries({
+        seriesId: serie.seriesId,
+        from: d.datos === "following" ? desde : null,
+        patch: parche,
+        includeExceptions: d.incluirExcepciones,
+      });
+      const otras = Math.max(0, r.updated - 1);
+      avisos.push(
+        otras === 0
+          ? "No había más fechas a las que aplicar los cambios."
+          : `Cambios aplicados a ${countLabel(otras)} más.` +
+              (r.skipped_exceptions > 0
+                ? ` ${r.skipped_exceptions} editada${r.skipped_exceptions === 1 ? "" : "s"} por separado se ha${r.skipped_exceptions === 1 ? "" : "n"} respetado.`
+                : "")
+      );
+    }
+    if (d.tipos !== "one") {
+      const r = await applyEventTiersToSeries({ eventId, scope: d.tipos });
+      avisos.push(
+        r.applied === 0 && r.skipped_with_sales === 0
+          ? "No había más fechas a las que copiar los tipos de entrada."
+          : `Tipos de entrada copiados a ${countLabel(r.applied)}.` +
+              (r.skipped_with_sales > 0
+                ? ` ${r.skipped_with_sales} con entradas o reservas se ha${r.skipped_with_sales === 1 ? "" : "n"} dejado como estaba${r.skipped_with_sales === 1 ? "" : "n"}.`
+                : "")
+      );
+    }
+    return avisos;
+  };
+
+  /**
+   * Crea una serie (varios días o recurrente): todas sus fechas y los tipos de
+   * entrada de cada una en una sola llamada y una sola transacción. Si falla,
+   * no queda nada a medias; si no llegó respuesta (sin conexión), repetir el
+   * envío con lo mismo no crea otra serie (clave de idempotencia).
+   */
+  const submitSeries = async (effective: "draft" | "published") => {
+    const regla = ruleOf(schedule);
+    const plan = planSeries({
+      startsOn: dateTime.date,
+      rule: regla,
+      startTime: dateTime.startTime,
+      endTime: dateTime.endTime,
+      timeZone,
+      // Al publicar, las fechas que ya han terminado no se crean (el servidor las rechazaría).
+      dropPast: effective === "published",
+    });
+    if (plan.error) {
+      toast({ title: "Revisa las fechas", description: plan.error, variant: "destructive" });
+      return;
+    }
+    const zona = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Madrid";
+    const evento: SeriesEventInput = {
+      title: title.trim(),
+      description: description.trim() || null,
+      city: location.city.trim(),
+      venue_name: location.venueName.trim() || null,
+      address: location.address.trim() || null,
+      image_url: imageUrl || null,
+      category: category || null,
+      venue_id: venueId,
+      status: effective,
+    };
+    const tipos: TierInput[] = tiers.map((t, idx) => ({
+      name: t.name.trim(),
+      description: t.description.trim() || null,
+      price_cents: priceCentsForDb(t.priceEur),
+      currency: "EUR",
+      capacity: capacityForDb(t.capacity),
+      per_user_max: perUserMaxForDb(t.perUserMax),
+      status: estadoDelTipo(t.active),
+      sort_order: idx,
+      refundable_until_hours_before: refundHoursForDb(t.refundMode, t.refundHours),
+      transfer_allowed: t.transferAllowed,
+    }));
+    const sesiones = plan.sessions.map((x) => ({ date: x.date, start: x.startIso, end: x.endIso }));
+    const kind = regla.kind;
+    const reglaGuardada = toStoredRule(dateTime.date, regla) as unknown as Record<string, unknown>;
+
+    // Mismo envío (mismos datos) = mismo intento = misma clave.
+    const huella = JSON.stringify([kind, reglaGuardada, zona, evento, tipos, sesiones]);
+    if (intentoSerieRef.current?.huella !== huella) {
+      intentoSerieRef.current = { huella, id: crypto.randomUUID() };
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await createEventSeries({
+        requestId: intentoSerieRef.current.id,
+        kind,
+        rule: reglaGuardada,
+        timeZone: zona,
+        event: evento,
+        tiers: tipos,
+        sessions: sesiones,
+      });
+      const n = res.event_ids.length || plan.sessions.length;
+      toast({
+        title: effective === "published" ? `Serie publicada · ${countLabel(n)}` : `Borrador guardado · ${countLabel(n)}`,
+        description:
+          effective === "published"
+            ? plan.pastDates.length > 0
+              ? `Ya aparecen en el calendario público. ${plan.pastDates.length === 1 ? "Una fecha que ya había pasado no se ha creado." : `${plan.pastDates.length} fechas que ya habían pasado no se han creado.`}`
+              : "Ya aparecen en el calendario público y se pueden comprar."
+            : "Las fechas están en Mis eventos, en borrador.",
+      });
+      if (claveBorrador) removeDraft(claveBorrador);
+      pendienteRef.current = null;
+      borradorHechoRef.current = true;
+      setBorradorDe(null);
+      await onSaved();
+      onOpenChange(false);
+    } catch (e: unknown) {
+      console.error("[EventEditorWizard] guardar serie:", e);
+      toast({
+        title: "No se ha guardado la serie",
+        description: describeSeriesError(
+          e,
+          "No hay conexión con el servidor y no sabemos si la serie se ha creado. Revisa tu conexión y mira Mis eventos antes de volver a intentarlo: si vuelves a guardar lo mismo, no se crea dos veces."
+        ),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submit = async (status: "draft" | "published" | "keep", confirmado = false) => {
     const effective: "draft" | "published" =
       status === "keep" ? (originalStatus === "published" ? "published" : "draft") : status;
@@ -927,6 +1309,19 @@ export const EventEditorWizard = ({
     const err = validateAll(effective);
     if (err) {
       toast({ title: "Faltan datos", description: err, variant: "destructive" });
+      return;
+    }
+
+    if (esSerie) {
+      await submitSeries(effective);
+      return;
+    }
+
+    // Una fecha de una serie con cambios: se pregunta a qué fechas se aplican.
+    const cambiosSerie = mode === "edit" && serie && serie.open > 1 ? cambiosDeSerie() : null;
+    if (cambiosSerie && (cambiosSerie.campos.length > 0 || cambiosSerie.tipos) && !decisionRef.current) {
+      setAlcanceForm({ datos: "one", tipos: "one", incluirExcepciones: false });
+      setPideAlcance({ status, campos: cambiosSerie.campos, hayTipos: cambiosSerie.tipos });
       return;
     }
 
@@ -957,12 +1352,37 @@ export const EventEditorWizard = ({
       }
     }
 
+    let avisosSerie: string[] = [];
     setSubmitting(true);
     try {
       const tierPriceCents = tiers.filter((t) => t.active).map((t) => priceCentsForDb(t.priceEur));
       const minPriceCents = tierPriceCents.length > 0 ? Math.min(...tierPriceCents) : 0;
       if (mode === "edit" && eventId) {
-        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents);
+        // «Solo esta fecha» con cambios comunes: queda marcada como editada por
+        // separado y las ediciones de toda la serie la respetan.
+        const marcarExcepcion =
+          !!cambiosSerie && cambiosSerie.campos.length > 0 && (decisionRef.current?.datos ?? "one") === "one";
+        await persistEdit(eventId, status === "keep" ? null : status, startIso, endIso, minPriceCents, marcarExcepcion);
+        if (cambiosSerie && decisionRef.current) {
+          try {
+            // Desde la fecha más temprana entre la de antes y la de ahora: así «esta y las siguientes» incluye a esta aunque se haya movido.
+            const antes = comunOriginal?.startIso ?? startIso;
+            const desde = Date.parse(antes) < Date.parse(startIso) ? antes : startIso;
+            avisosSerie = await aplicarASerie(decisionRef.current, cambiosSerie.parche, desde);
+          } catch (errSerie) {
+            console.error("[EventEditorWizard] aplicar a la serie:", errSerie);
+            toast({
+              title: "Esta fecha se ha guardado, pero no las demás",
+              description: describeSeriesError(
+                errSerie,
+                "No hay conexión con el servidor y no sabemos si los cambios han llegado al resto de la serie. Vuelve a guardar para repetirlo: lo que ya se aplicó no se estropea."
+              ),
+              variant: "destructive",
+            });
+            decisionRef.current = null;
+            return;
+          }
+        }
       } else {
         await persistCreate(effective, startIso, endIso, minPriceCents);
       }
@@ -976,13 +1396,13 @@ export const EventEditorWizard = ({
             ? "Evento publicado"
             : "Borrador guardado",
         description:
-          status === "keep"
+          (status === "keep"
             ? originalStatus === "published"
               ? "El evento sigue publicado con los cambios."
               : "Lo encontrarás en Mis eventos."
             : effective === "published"
             ? "Ya aparece en el calendario público y se puede comprar."
-            : "Lo encontrarás en Mis eventos.",
+            : "Lo encontrarás en Mis eventos.") + (avisosSerie.length > 0 ? ` ${avisosSerie.join(" ")}` : ""),
       });
       // Guardado: el borrador ya no hace falta, ni el que estaba por escribirse.
       if (mode === "create" && claveBorrador) removeDraft(claveBorrador);
@@ -1013,6 +1433,7 @@ export const EventEditorWizard = ({
         variant: "destructive",
       });
     } finally {
+      decisionRef.current = null;
       setSubmitting(false);
     }
   };
@@ -1038,6 +1459,7 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         // Con venue_id el trigger rellena brand_id y org_id.
         venue_id: venueId,
         status,
@@ -1074,7 +1496,9 @@ export const EventEditorWizard = ({
     status: "draft" | "published" | null,
     startIso: string,
     endIso: string | null,
-    minPriceCents: number
+    minPriceCents: number,
+    /** Fecha de una serie editada «solo ella»: las ediciones de toda la serie la respetarán. */
+    marcarExcepcion = false
   ) => {
     // 1) UPDATE del evento: campos seguros + críticos. Sin capacity: el aforo
     //    lo mantiene la BD con los cupos de los tipos (paso 3). Tiene que
@@ -1091,8 +1515,11 @@ export const EventEditorWizard = ({
         date_end: endIso,
         price_cents: minPriceCents,
         image_url: imageUrl || null,
+        category: category || null,
         ...(venueId ? { venue_id: venueId } : {}),
         ...(status ? { status } : {}),
+        // La columna aún no está en los tipos generados (se regeneran tras la migración).
+        ...(marcarExcepcion ? ({ series_exception: true } as object) : {}),
       })
       .eq("id", eid)
       .select("id");
@@ -1288,6 +1715,21 @@ export const EventEditorWizard = ({
                     Con ventas · edición limitada
                   </div>
                 )}
+                {mode === "edit" && serie && (
+                  <div
+                    className="mt-2 flex items-start gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-[12px] leading-relaxed text-orange-200"
+                    data-testid="serie-banner"
+                  >
+                    <Repeat className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    <span>
+                      Esta fecha forma parte de una serie
+                      {serie.pattern ? ` (${serie.pattern.charAt(0).toLowerCase()}${serie.pattern.slice(1)})` : ""}
+                      {serie.open > 1 ? `, con ${countLabel(serie.open)} por celebrar` : ""}.
+                      {serie.exception ? " Está editada por separado." : ""}
+                      {serie.open > 1 ? " Al guardar elegirás si los cambios son solo para esta fecha o también para otras." : ""}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Step pill — sólo desktop */}
@@ -1374,6 +1816,9 @@ export const EventEditorWizard = ({
                       onTitleChange={setTitle}
                       description={description}
                       onDescriptionChange={setDescription}
+                      category={category}
+                      onCategoryChange={setCategory}
+                      categoryRequired={mode !== "edit"}
                       disabled={submitting}
                     />
                   )}
@@ -1382,6 +1827,9 @@ export const EventEditorWizard = ({
                       aviso={avisoCambio}
                       dateTime={dateTime}
                       onDateTimeChange={setDateTime}
+                      schedule={mode === "edit" ? null : schedule}
+                      onScheduleChange={setSchedule}
+                      publishing={willPublish}
                       location={location}
                       onLocationChange={setLocation}
                       cities={cities}
@@ -1389,19 +1837,27 @@ export const EventEditorWizard = ({
                       venueId={venueId}
                       timeZone={timeZone}
                       placeName={venueActual?.city ?? null}
+                      venue={venueActual}
                       onVenueChange={(id) => {
                         const v = venues.find((x) => x.id === id);
                         const anterior = venues.find((x) => x.id === venueId);
                         setVenueId(id);
                         if (v) {
-                          setLocation((prev) => ({
-                            city: v.city || prev.city,
-                            venueName: v.name,
-                            address: v.address || prev.address,
-                          }));
+                          // El lugar pasa a ser el del local nuevo, entero: lo
+                          // que le falte (la dirección, por ejemplo) queda vacío
+                          // y se pide, no se conserva el del local anterior.
+                          setLocation(placeFromVenue(v));
                           // El día y las horas pasan a ser los del reloj del
                           // nuevo local.
                           setTimeZone(zonaDe(v));
+                          // Evento nuevo: si la categoría era la que proponía el local
+                          // anterior (no la ha tocado), pasa a ser la del nuevo.
+                          if (mode === "create") {
+                            const propuestaAnterior = eventCategoryFromVenue(anterior?.business_category) ?? "";
+                            setCategory((prev) =>
+                              prev === propuestaAnterior ? eventCategoryFromVenue(v.business_category) ?? "" : prev
+                            );
+                          }
                           // Evento nuevo: el cupo que venía del aforo del local
                           // anterior (o vacío) pasa a ser el del nuevo local. Un
                           // cupo escrito a mano no se toca.
@@ -1569,6 +2025,125 @@ export const EventEditorWizard = ({
         </div>
       </DialogContent>
 
+      {/* Fecha de una serie con cambios: a qué fechas se aplican. */}
+      <AlertDialog
+        open={pideAlcance !== null}
+        onOpenChange={(o) => {
+          if (!o) setPideAlcance(null);
+        }}
+      >
+        <AlertDialogContent data-testid="serie-alcance">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Esta fecha es de una serie</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pideAlcance && pideAlcance.campos.length > 0
+                ? `Has cambiado ${unirLista(pideAlcance.campos)}. `
+                : ""}
+              {pideAlcance?.hayTipos ? "Has cambiado los tipos de entrada. " : ""}
+              ¿A qué fechas se aplica? Lo que ya se haya vendido no se toca.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {serie && pideAlcance && (
+            <div className="space-y-4">
+              {pideAlcance.campos.length > 0 && (
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-medium">Cambios en {unirLista(pideAlcance.campos)}</legend>
+                  <RadioGroup
+                    value={alcanceForm.datos}
+                    onValueChange={(v) => setAlcanceForm((f) => ({ ...f, datos: v as Alcance }))}
+                    data-testid="alcance-datos"
+                  >
+                    {(
+                      [
+                        ["one", "Solo esta fecha", null],
+                        ["following", "Esta y las siguientes", serie.following + 1],
+                        ["all", "Todas las fechas por celebrar", serie.open],
+                      ] as const
+                    )
+                      .filter(([valor]) => valor !== "following" || serie.following > 0)
+                      .map(([valor, texto, n]) => (
+                        <label
+                          key={valor}
+                          htmlFor={`alcance-datos-${valor}`}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5 text-sm has-[:checked]:border-orange-500/60 has-[:checked]:bg-orange-500/5"
+                        >
+                          <RadioGroupItem value={valor} id={`alcance-datos-${valor}`} data-testid={`alcance-datos-${valor}`} />
+                          <span>{texto}</span>
+                          {n !== null && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{countLabel(n)}</span>}
+                        </label>
+                      ))}
+                  </RadioGroup>
+                  {alcanceForm.datos !== "one" && serie.exceptions > 0 && (
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={alcanceForm.incluirExcepciones}
+                        onChange={(e) => setAlcanceForm((f) => ({ ...f, incluirExcepciones: e.target.checked }))}
+                        data-testid="alcance-excepciones"
+                      />
+                      <span>
+                        Incluir también {serie.exceptions === 1 ? "la fecha editada" : `las ${serie.exceptions} fechas editadas`} por separado
+                        (si no, se respetan como están).
+                      </span>
+                    </label>
+                  )}
+                </fieldset>
+              )}
+              {pideAlcance.hayTipos && (
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-medium">Tipos de entrada</legend>
+                  <RadioGroup
+                    value={alcanceForm.tipos}
+                    onValueChange={(v) => setAlcanceForm((f) => ({ ...f, tipos: v as Alcance }))}
+                    data-testid="alcance-tipos"
+                  >
+                    {(
+                      [
+                        ["one", "Solo esta fecha"],
+                        ["following", "Copiarlos a las siguientes sin entradas vendidas"],
+                        ["all", "Copiarlos a todas las demás sin entradas vendidas"],
+                      ] as const
+                    )
+                      .filter(([valor]) => valor !== "following" || serie.following > 0)
+                      .map(([valor, texto]) => (
+                        <label
+                          key={valor}
+                          htmlFor={`alcance-tipos-${valor}`}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5 text-sm has-[:checked]:border-orange-500/60 has-[:checked]:bg-orange-500/5"
+                        >
+                          <RadioGroupItem value={valor} id={`alcance-tipos-${valor}`} data-testid={`alcance-tipos-${valor}`} />
+                          <span>{texto}</span>
+                        </label>
+                      ))}
+                  </RadioGroup>
+                  {alcanceForm.tipos !== "one" && (
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Las fechas con entradas vendidas o reservas conservan sus tipos tal como están.
+                    </p>
+                  )}
+                </fieldset>
+              )}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="alcance-guardar"
+              onClick={() => {
+                const q = pideAlcance;
+                if (!q) return;
+                decisionRef.current = alcanceForm;
+                setPideAlcance(null);
+                void submit(q.status);
+              }}
+            >
+              Guardar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Publicar con el inicio ya pasado: se pide confirmación. */}
       <AlertDialog
         open={confirmarPasado !== null}
@@ -1588,7 +2163,14 @@ export const EventEditorWizard = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setStep(1)}>Revisar la fecha</AlertDialogCancel>
+            <AlertDialogCancel
+              onClick={() => {
+                decisionRef.current = null;
+                setStep(1);
+              }}
+            >
+              Revisar la fecha
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirmarPasado(null);
@@ -1608,17 +2190,26 @@ export const EventEditorWizard = ({
 // Sub-componentes (steps)
 // =================================================================
 
+const ICONO_CATEGORIA: Record<EventCategory, typeof Beer> = { bar: Beer, discoteca: Disc3, festival: Tent };
+
 const StepInfo = ({
   title,
   onTitleChange,
   description,
   onDescriptionChange,
+  category,
+  onCategoryChange,
+  categoryRequired,
   disabled,
 }: {
   title: string;
   onTitleChange: (v: string) => void;
   description: string;
   onDescriptionChange: (v: string) => void;
+  category: EventCategory | "";
+  onCategoryChange: (v: EventCategory) => void;
+  /** Al crear es obligatoria; al editar un evento anterior sin categoría, no. */
+  categoryRequired: boolean;
   disabled?: boolean;
 }) => (
   <StepShell
@@ -1639,6 +2230,44 @@ const StepInfo = ({
           disabled={disabled}
           className="mt-1.5 h-11"
         />
+      </div>
+      <div>
+        <span id="evt-cat-label" className="text-xs font-medium leading-none">
+          Categoría{categoryRequired ? " *" : ""}
+        </span>
+        <div role="radiogroup" aria-labelledby="evt-cat-label" className="mt-1.5 grid grid-cols-3 gap-2">
+          {EVENT_CATEGORIES.map((c) => {
+            const Icono = ICONO_CATEGORIA[c.value];
+            const activa = category === c.value;
+            return (
+              <label
+                key={c.value}
+                className={`flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition focus-within:ring-2 focus-within:ring-ring ${
+                  activa
+                    ? "border-orange-500 bg-orange-500/10 text-orange-500"
+                    : "border-border bg-card text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+                } ${disabled ? "pointer-events-none opacity-60" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="evt-category"
+                  value={c.value}
+                  checked={activa}
+                  onChange={() => onCategoryChange(c.value)}
+                  disabled={disabled}
+                  className="sr-only"
+                />
+                <Icono aria-hidden="true" className="h-4 w-4" />
+                {c.label}
+              </label>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {category || categoryRequired
+            ? "Así se clasifica tu evento en el calendario y en los filtros de búsqueda. Puedes cambiarla cuando quieras."
+            : "Este evento aún no tiene categoría: elige una para que salga en los filtros por categoría del calendario."}
+        </p>
       </div>
       <div>
         <Label htmlFor="evt-desc" className="text-xs">
@@ -1665,6 +2294,9 @@ const StepWhenWhere = ({
   aviso,
   dateTime,
   onDateTimeChange,
+  schedule,
+  onScheduleChange,
+  publishing,
   location,
   onLocationChange,
   cities,
@@ -1672,6 +2304,7 @@ const StepWhenWhere = ({
   venueId,
   timeZone,
   placeName,
+  venue,
   onVenueChange,
   disabled,
 }: {
@@ -1679,6 +2312,11 @@ const StepWhenWhere = ({
   aviso?: string | null;
   dateTime: DateTimeValue;
   onDateTimeChange: (v: DateTimeValue) => void;
+  /** Una fecha, varios días o una serie. null = editar un evento: solo su fecha. */
+  schedule: ScheduleValue | null;
+  onScheduleChange: (v: ScheduleValue) => void;
+  /** Se va a publicar: en una serie, las fechas ya pasadas no se crean. */
+  publishing: boolean;
   location: LocationValue;
   onLocationChange: (v: LocationValue) => void;
   cities: City[];
@@ -1688,6 +2326,8 @@ const StepWhenWhere = ({
   timeZone?: string;
   /** Ciudad del local elegido («Hora de <ciudad>»). */
   placeName?: string | null;
+  /** Local elegido: su lugar es el de partida y con el que se compara. */
+  venue?: EditorVenue | null;
   onVenueChange: (id: string) => void;
   disabled?: boolean;
 }) => (
@@ -1703,13 +2343,26 @@ const StepWhenWhere = ({
           <CalendarIcon className="h-4 w-4 text-orange-500" />
           Fecha y horario
         </h3>
-        <EventDateTimeSection
-          value={dateTime}
-          onChange={onDateTimeChange}
-          disabled={disabled}
-          timeZone={timeZone}
-          placeName={placeName}
-        />
+        {schedule ? (
+          <EventScheduleSection
+            schedule={schedule}
+            onScheduleChange={onScheduleChange}
+            dateTime={dateTime}
+            onDateTimeChange={onDateTimeChange}
+            disabled={disabled}
+            timeZone={timeZone}
+            placeName={placeName}
+            publishing={publishing}
+          />
+        ) : (
+          <EventDateTimeSection
+            value={dateTime}
+            onChange={onDateTimeChange}
+            disabled={disabled}
+            timeZone={timeZone}
+            placeName={placeName}
+          />
+        )}
       </section>
       <section>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
@@ -1729,8 +2382,7 @@ const StepWhenWhere = ({
               <SelectContent>
                 {venues.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                    {v.city ? ` · ${v.city}` : ""}
+                    {venueOptionLabel(v, venues)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1738,6 +2390,16 @@ const StepWhenWhere = ({
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Las ventas, el equipo y los informes de este evento van a este local.
             </p>
+            {esLocalSinCompletar(venue) && (
+              <p
+                role="note"
+                data-testid="local-sin-completar"
+                className="mt-1.5 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground"
+              >
+                Este local aún tiene el nombre de relleno de la cuenta («Principal») y no tiene dirección. Ponle su
+                nombre y su dirección reales en Configuración → Locales, y tus eventos saldrán con ellos.
+              </p>
+            )}
           </div>
         )}
         <EventLocationSection
@@ -1745,6 +2407,10 @@ const StepWhenWhere = ({
           onChange={onLocationChange}
           cities={cities}
           disabled={disabled}
+          // Un local aún sin completar («Principal», sin dirección) no es
+          // referencia de nada: se avisa de eso arriba, no de que el lugar
+          // difiera. (Quien organiza eventos fuera de su local, también.)
+          venuePlace={venue && !esLocalSinCompletar(venue) ? placeFromVenue(venue) : null}
         />
       </section>
     </div>
@@ -1765,7 +2431,7 @@ const StepTickets = ({
   <StepShell
     eyebrow="Paso 03"
     title={<>Tipos de <span style={serif} className="text-orange-500">entrada</span>.</>}
-    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente."
+    subtitle="Define Early Bird, General, VIP, Backstage, Invitación… Cada tipo controla su precio, su cupo, sus devoluciones y si se puede transferir. Lo que ya se ha vendido queda protegido automáticamente. Además, cada persona puede tener como máximo 10 entradas por evento, sumando todos los tipos."
   >
     <div className="mx-auto max-w-3xl">
       <TicketTiersBuilder
@@ -2024,7 +2690,7 @@ const StepReview = ({
           {avisoCambio && <AvisoCambioConVentas texto={avisoCambio} />}
           <ReviewRow label="Título" value={summary.title || "—"} />
           <ReviewRow
-            label="Fecha"
+            label={summary.seriesLabel ? "Primera fecha" : "Fecha"}
             value={
               summary.date
                 ? new Date(`${summary.date}T${summary.startTime || "00:00"}:00`).toLocaleDateString(
@@ -2034,6 +2700,7 @@ const StepReview = ({
                 : "—"
             }
           />
+          {summary.seriesLabel && <ReviewRow label="Se repite" value={summary.seriesLabel} />}
           <ReviewRow
             label="Horario"
             value={

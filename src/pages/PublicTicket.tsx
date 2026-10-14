@@ -21,6 +21,7 @@ import {
   parseEdgeError,
   ticketDoorCode,
 } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
 
 /**
  * Pasify · entrada pública — `/#/entrada/:ticketId?k=<access_url_token>`.
@@ -343,8 +344,7 @@ const TicketView = ({
   const tz = event.timezone;
   const date = formatEventDate(event.date_start, tz);
   const time = formatEventTime(event.date_start, tz);
-  const place = [event.venue_name, event.address, event.city].filter(Boolean).join(" · ");
-  const mapsQuery = [event.venue_name, event.address, event.city].filter(Boolean).join(", ");
+  const { long: place, maps: mapsQuery } = formatEventPlace(event);
 
   const status = ticket.status;
   const eventCancelled = event.status === "cancelled";

@@ -93,6 +93,8 @@ import { MobileTopBar } from "@/components/shared/MobileTopBar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { RotateCcw } from "lucide-react";
+import { formatEventPlace } from "@/lib/eventPlace";
+import { isEventCategory } from "@/lib/eventCategories";
 
 type View = "home" | "support" | "wallet" | "favorites" | "loyalty" | "live" | "concierge";
 
@@ -549,6 +551,8 @@ const ClientDashboard = () => {
   ];
 
   const hayFiltros = !!search.trim() || activeCat !== "all";
+  // Bar, Discoteca y Festival son también categorías de evento (lib/eventCategories).
+  const categoriaDeEvento = isEventCategory(activeCat) ? activeCat : null;
   const abrirFavorito = (e: FavEvent) => navigate(`/e/${e.id}`);
 
   return (
@@ -676,13 +680,17 @@ const ClientDashboard = () => {
               </div>
             </div>
 
-            {/* Próximos eventos de verdad (calendario público) de la ciudad, sin filtros activos. */}
-            {!hayFiltros && !cargandoCiudad && (
+            {/* Próximos eventos de verdad (calendario público) de la ciudad: sin filtros
+                o filtrados por una categoría de evento (bar, discoteca, festival),
+                que también filtra los eventos y no solo los locales. Con texto de
+                búsqueda no se enseñan. */}
+            {(!hayFiltros || (!search.trim() && !!categoriaDeEvento)) && !cargandoCiudad && (
               <div className="mt-8">
                 <UpcomingEventsStrip
                   city={ciudad}
+                  category={categoriaDeEvento}
                   onOpen={(id) => navigate(`/e/${id}`)}
-                  onSeeAll={() => navigate("/calendar")}
+                  onSeeAll={() => navigate(categoriaDeEvento ? `/calendar?cat=${categoriaDeEvento}` : "/calendar")}
                 />
               </div>
             )}
@@ -1804,6 +1812,10 @@ const TicketCard = ({
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const dayMonth = event ? eventDayMonth(event.date_start) : null;
   const time = event ? formatEventTime(event.date_start) : "";
+  // Dónde es: sala y ciudad en la tarjeta; con la dirección, en «Cómo llegar»
+  // y en el calendario (antes solo el nombre de la sala: con «Principal»,
+  // Maps buscaba «Principal»).
+  const sitio = formatEventPlace(event ?? {}, event?.partner_name);
   const countdown = useCountdown(event);
   const { toast } = useToast();
   // Evento cancelado por el local: sin QR ni código, el importe se devuelve
@@ -1854,7 +1866,7 @@ const TicketCard = ({
         description: event.partner_name
           ? `Pasify · ${event.partner_name}`
           : "Tu entrada en Pasify",
-        location: event.venue_name ?? event.partner_name ?? undefined,
+        location: formatEventPlace(event, event.partner_name).long || undefined,
         start: event.date_start,
         end: event.date_end ?? undefined,
         url: publicEventUrl(ticket.event_id),
@@ -1873,8 +1885,8 @@ const TicketCard = ({
 
   const handleMaps = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const q = encodeURIComponent(event?.venue_name ?? event?.partner_name ?? "");
-    if (!q) return;
+    const q = encodeURIComponent(sitio.maps);
+    if (!sitio.maps) return;
     window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank", "noopener");
   };
 
@@ -1969,12 +1981,8 @@ const TicketCard = ({
             style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
           >
             {time && <span>{time}H</span>}
-            {time && (event?.venue_name || event?.partner_name) && (
-              <span className="opacity-50">·</span>
-            )}
-            {(event?.venue_name || event?.partner_name) && (
-              <span className="truncate">{event?.venue_name ?? event?.partner_name}</span>
-            )}
+            {time && sitio.short && <span className="opacity-50">·</span>}
+            {sitio.short && <span className="truncate">{sitio.short}</span>}
           </div>
         </div>
       </div>
@@ -2088,7 +2096,7 @@ const TicketCard = ({
                 <button
                   type="button"
                   onClick={handleMaps}
-                  disabled={!event?.venue_name && !event?.partner_name}
+                  disabled={!sitio.maps}
                   className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ ...ticketCardMono, letterSpacing: "0.08em" }}
                 >

@@ -451,11 +451,15 @@ export const PartnerSettingsBlock = ({
       for (let i = 0; i < venueForms.length; i++) {
         const v = venueForms[i];
         const cap = v.capacity ? parseInt(v.capacity, 10) : null;
+        // Sin ciudad no se guarda el local (antes se ponía «Madrid» en silencio
+        // y sus eventos salían en Madrid). La validación ya la pide.
+        const venueCity = v.city.trim() || orgForm.city.trim();
+        if (!venueCity) throw new Error(`Local ${i + 1}: selecciona la ciudad`);
         const payload = {
           name: v.name.trim(),
           business_category: v.category || null,
           address: v.address.trim() || null,
-          city: v.city.trim() || orgForm.city.trim() || "Madrid",
+          city: venueCity,
           country: org.country,
           timezone: v.timezone || "Europe/Madrid",
           capacity: cap && cap > 0 ? cap : null,

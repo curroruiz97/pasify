@@ -1,6 +1,10 @@
-import { CalendarDays, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import { useCalendarEvents, type CalendarEvent } from "@/hooks/useEvents";
 import { eventDayMonth, eventPriceLabel, formatEventTime } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
+import { EVENT_CATEGORIES, effectiveEventCategory, type EventCategory } from "@/lib/eventCategories";
+import { countLabel, groupBySeries } from "@/lib/eventSeries";
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -10,6 +14,8 @@ const MAX_EVENTOS = 10;
 interface Props {
   /** Ciudad elegida (useCiudadElegida); null = «Toda España». */
   city: string | null;
+  /** Solo los eventos de esta categoría (su categoría o, si no tiene, la de su local). null = todos. */
+  category?: EventCategory | null;
   onOpen: (eventId: string) => void;
   onSeeAll: () => void;
 }
@@ -23,10 +29,33 @@ interface Props {
  * Es un extra: mientras carga, si falla o si no hay eventos no pinta nada (la
  * lista de locales de debajo tiene su propio estado de error).
  */
-export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
-  const { data } = useCalendarEvents(city);
-  const eventos = (data ?? []).slice(0, MAX_EVENTOS);
-  if (eventos.length === 0) return null;
+export const UpcomingEventsStrip = ({ city, category = null, onOpen, onSeeAll }: Props) => {
+  const { data, isLoading } = useCalendarEvents(city);
+  // Una tarjeta por serie (eventos de varios días y recurrentes): su fecha más
+  // próxima, con cuántas son. Si no, un festival de 30 noches se comería la tira.
+  const eventos = useMemo(
+    () =>
+      groupBySeries(
+        (data ?? []).filter(
+          (e) => !category || effectiveEventCategory(e.category, e.profiles?.business_category) === category,
+        ),
+      ).slice(0, MAX_EVENTOS),
+    [data, category],
+  );
+  const etiqueta = EVENT_CATEGORIES.find((c) => c.value === category);
+  if (eventos.length === 0) {
+    // Con una categoría elegida, que no salga nada parece que el filtro no
+    // hace nada: se dice que no hay.
+    if (!category || isLoading) return null;
+    return (
+      <p data-testid="sin-eventos-de-categoria" className="text-sm text-muted-foreground">
+        No hay eventos de {etiqueta?.label ?? "esa categoría"} {city ? `en ${city}` : "próximamente"}.{" "}
+        <button type="button" onClick={onSeeAll} className="text-orange-500 underline underline-offset-4">
+          Ver el calendario
+        </button>
+      </p>
+    );
+  }
 
   return (
     <section aria-label="Próximos eventos">
@@ -40,7 +69,11 @@ export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
             Próximos eventos
           </div>
           <h2 className="truncate text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
-            {city ? `Qué hay en ${city}` : "Qué hay estos días"}
+            {etiqueta
+              ? `${etiqueta.plural} ${city ? `en ${city}` : "estos días"}`
+              : city
+              ? `Qué hay en ${city}`
+              : "Qué hay estos días"}
           </h2>
         </div>
         <button
@@ -54,23 +87,87 @@ export const UpcomingEventsStrip = ({ city, onOpen, onSeeAll }: Props) => {
         </button>
       </header>
 
-      <div
-        className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
+      <Carrusel>
         {eventos.map((e) => (
-          <EventoCard key={e.id} evento={e} onClick={() => onOpen(e.id)} />
+          <EventoCard
+            key={e.event.id}
+            evento={e.event}
+            fechas={e.kind === "series" ? e.sessions.length : 0}
+            onClick={() => onOpen(e.event.id)}
+          />
         ))}
-      </div>
+      </Carrusel>
     </section>
   );
 };
 
-const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () => void }) => {
+/**
+ * Fila de tarjetas con scroll horizontal. En el móvil se desliza con el dedo; en
+ * escritorio (ratón) salen dos flechas a los lados cuando hay más tarjetas de las
+ * que caben, porque deslizar con el ratón obliga a usar Mayús + rueda.
+ */
+const Carrusel = ({ children }: { children: React.ReactNode }) => {
+  const pista = useRef<HTMLDivElement>(null);
+  const [puede, setPuede] = useState({ izquierda: false, derecha: false });
+
+  const medir = useCallback(() => {
+    const el = pista.current;
+    if (!el) return;
+    setPuede({
+      izquierda: el.scrollLeft > 4,
+      derecha: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = pista.current;
+    if (!el) return;
+    medir();
+    el.addEventListener("scroll", medir, { passive: true });
+    const observador = typeof ResizeObserver === "function" ? new ResizeObserver(medir) : null;
+    observador?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", medir);
+      observador?.disconnect();
+    };
+  }, [medir, children]);
+
+  const mover = (sentido: -1 | 1) => {
+    const el = pista.current;
+    if (!el) return;
+    el.scrollBy({ left: sentido * Math.max(240, el.clientWidth * 0.8), behavior: "smooth" });
+  };
+
+  const flecha = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-border bg-background/90 text-foreground shadow-lg backdrop-blur transition hover:border-orange-500/60 hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 lg:grid";
+
+  return (
+    <div className="relative">
+      <div
+        ref={pista}
+        className="flex gap-3 overflow-x-auto pb-2 lg:gap-4 [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        {children}
+      </div>
+      {puede.izquierda && (
+        <button type="button" aria-label="Eventos anteriores" onClick={() => mover(-1)} className={`${flecha} -left-3`}>
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      {puede.derecha && (
+        <button type="button" aria-label="Más eventos" onClick={() => mover(1)} className={`${flecha} -right-3`}>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+const EventoCard = ({ evento, fechas, onClick }: { evento: CalendarEvent; fechas: number; onClick: () => void }) => {
   // Día, mes y hora en la hora del evento (Europe/Madrid), no la del móvil.
   const fecha = eventDayMonth(evento.date_start);
   const hora = formatEventTime(evento.date_start);
-  const lugar = evento.profiles?.business_name || evento.venue_name || evento.city;
+  const lugar = formatEventPlace(evento, evento.profiles?.business_name).short;
   const precio = eventPriceLabel(evento.price_cents);
   const inicial = (evento.title?.[0] ?? "?").toUpperCase();
 
@@ -78,7 +175,7 @@ const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () =>
     <button
       type="button"
       onClick={onClick}
-      className="group/card relative w-56 shrink-0 overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-orange-500/50"
+      className="group/card relative w-56 shrink-0 overflow-hidden rounded-2xl border border-border bg-card text-left transition hover:-translate-y-0.5 hover:border-orange-500/50 lg:w-60"
       style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 4px 14px -6px rgba(0,0,0,0.4)" }}
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
@@ -122,6 +219,16 @@ const EventoCard = ({ evento, onClick }: { evento: CalendarEvent; onClick: () =>
             <span className="mt-0.5 text-base font-bold leading-none" style={mono}>
               {fecha.day}
             </span>
+          </div>
+        )}
+
+        {fechas > 1 && (
+          <div
+            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur"
+            data-testid={`tira-fechas-${evento.id}`}
+          >
+            <Repeat className="h-3 w-3" />
+            {countLabel(fechas)}
           </div>
         )}
 

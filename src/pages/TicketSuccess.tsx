@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/Wordmark";
 import {
   TEST_PAYMENT_MESSAGE,
@@ -34,6 +35,7 @@ import {
   ticketDoorCode,
   ticketHolderName,
 } from "@/components/tickets/ticketUtils";
+import { formatEventPlace } from "@/lib/eventPlace";
 
 /**
  * TicketSuccess — confirmación de una compra en WEB y de una reserva gratis.
@@ -80,6 +82,7 @@ type EventRow = {
   title: string;
   date_start: string;
   venue_name: string | null;
+  address: string | null;
   city: string;
   image_url: string | null;
 };
@@ -319,7 +322,7 @@ const TicketSuccess = () => {
         const [{ data: ev }, tickets] = await Promise.all([
           supabase
             .from("events")
-            .select("id, title, date_start, venue_name, city, image_url")
+            .select("id, title, date_start, venue_name, address, city, image_url")
             .eq("id", order.event_id)
             .maybeSingle(),
           loadOrderTickets(order.id),
@@ -487,6 +490,9 @@ const TicketSuccess = () => {
     }
   })();
 
+  // Escritorio con las entradas emitidas: dos columnas (entradas | pedido y botones).
+  const twoColumns = !!ready && ticketCount > 0;
+
   const ticketsSummary = (() => {
     if (!ready || ticketCount === 0) return null;
     const names = Array.from(new Set(ready.tickets.map((t) => t.tier_name || "Entrada")));
@@ -500,19 +506,29 @@ const TicketSuccess = () => {
     >
       {/* Top bar */}
       <header
-        className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:px-6"
+        className="sticky top-0 z-10 border-b border-border bg-card"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
-        <Wordmark height={28} />
-        <span
-          className="text-[10px] uppercase text-orange-500"
-          style={{ ...mono, letterSpacing: "0.22em" }}
-        >
-          · Confirmación
-        </span>
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 pb-3 md:px-6 lg:px-8">
+          <Wordmark height={28} />
+          <span
+            className="text-[10px] uppercase text-orange-500"
+            style={{ ...mono, letterSpacing: "0.22em" }}
+          >
+            · Confirmación
+          </span>
+        </div>
       </header>
 
-      <main className="mx-auto flex max-w-2xl flex-col items-center px-4 py-10 md:py-16">
+      {/* Móvil y tablet: una columna de 672 px. Escritorio con las entradas ya
+          emitidas: las entradas a la izquierda y, a la derecha, el pedido y los
+          botones, que se quedan a la vista al bajar. */}
+      <main
+        className={cn(
+          "mx-auto flex flex-col items-center px-4 py-10 md:py-16",
+          twoColumns ? "max-w-2xl lg:max-w-6xl lg:px-8 lg:py-14" : "max-w-2xl"
+        )}
+      >
         {/* Icono de estado con halo */}
         <div className="relative mb-8 flex h-28 w-28 items-center justify-center">
           <div
@@ -587,210 +603,224 @@ const TicketSuccess = () => {
           {subtitle}
         </p>
 
-        {/* Tus entradas — QR de cada entrada del pedido */}
-        {isPaid && details.kind === "loading" && (
-          <div className="mb-8 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Cargando tus entradas…
-          </div>
-        )}
-
-        {ready && ticketCount > 0 && (
-          <section className="mb-8 w-full" aria-label="Tus entradas">
-            <div
-              className="mb-3 inline-flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
-              style={{ ...mono, letterSpacing: "0.18em" }}
-            >
-              Tus entradas · {ticketCount.toString().padStart(2, "0")}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {ready.tickets.map((t, i) => (
-                <article
-                  key={t.id}
-                  className="overflow-hidden rounded-2xl border border-border bg-card"
-                  style={{ boxShadow: "0 22px 50px -18px rgba(232,84,42,0.18)" }}
-                >
-                  <div
-                    className="flex items-center justify-between gap-2 px-4 py-3 text-white"
-                    style={{ background: "linear-gradient(160deg, #E8542A 0%, #B8381A 100%)" }}
-                  >
-                    <span className="truncate text-sm font-semibold">{t.tier_name || "Entrada"}</span>
-                    <span
-                      className="shrink-0 text-[10px] uppercase text-white/80"
-                      style={{ ...mono, letterSpacing: "0.16em" }}
-                    >
-                      {i + 1} de {ticketCount}
-                    </span>
-                  </div>
-                  <div
-                    className="flex flex-col items-center px-4 py-5"
-                    style={{ background: "#F4EEE2", color: "#0F0F0F" }}
-                  >
-                    {t.qrDataUrl ? (
-                      <img
-                        src={t.qrDataUrl}
-                        alt={`Código QR de la entrada ${i + 1}`}
-                        className="aspect-square w-full max-w-[220px] rounded-xl"
-                        draggable={false}
-                      />
-                    ) : (
-                      <div className="aspect-square w-full max-w-[220px] animate-pulse rounded-xl bg-black/10" />
-                    )}
-                    {t.holder && <p className="mt-3 text-sm font-semibold">{t.holder}</p>}
-                    {/* Código de puerta: el mismo del email y de la cartera, por
-                        si el QR no se lee. */}
-                    {t.doorCode ? (
-                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider opacity-60">
-                        Código <span className="text-sm font-semibold opacity-100">{t.doorCode}</span>
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider opacity-50">
-                        Ref. {t.id.slice(0, 8)}
-                      </p>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-            <p className="mt-3 text-center text-[12px] text-muted-foreground">
-              Muéstralas en la puerta desde aquí o desde Mis entradas en la app.
-            </p>
-          </section>
-        )}
-
-        {ready && ticketCount === 0 && (
-          <p className="mb-8 max-w-md text-center text-sm text-muted-foreground">
-            Tus entradas estarán en Mis entradas en unos segundos.
-          </p>
-        )}
-
-        {/* Resumen del pedido */}
-        {ready && ready.event && (
-          <article
-            className="mb-8 w-full overflow-hidden rounded-2xl border border-border bg-card"
-            style={{
-              boxShadow:
-                "0 1px 0 rgba(255,255,255,0.02) inset, 0 22px 50px -18px rgba(232,84,42,0.18)",
-            }}
-          >
-            {ready.event.image_url && (
-              <div className="relative aspect-[16/7] w-full overflow-hidden">
-                <img
-                  src={ready.event.image_url}
-                  alt={ready.event.title}
-                  className="h-full w-full object-cover"
-                  loading="eager"
-                />
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(10,10,10,0.0) 0%, rgba(10,10,10,0.65) 100%)",
-                  }}
-                />
+        <div
+          className={cn(
+            "w-full",
+            twoColumns && "lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-10 xl:grid-cols-[minmax(0,1fr)_26rem]"
+          )}
+        >
+          <div className="flex min-w-0 flex-col items-center">
+            {/* Tus entradas — QR de cada entrada del pedido */}
+            {isPaid && details.kind === "loading" && (
+              <div className="mb-8 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando tus entradas…
               </div>
             )}
 
-            <div className="space-y-5 p-5 md:p-6">
-              <div>
+            {ready && ticketCount > 0 && (
+              <section className="mb-8 w-full" aria-label="Tus entradas">
                 <div
-                  className="mb-1 text-[10px] uppercase text-muted-foreground"
+                  className="mb-3 inline-flex items-center gap-2 text-[10px] uppercase text-muted-foreground"
                   style={{ ...mono, letterSpacing: "0.18em" }}
                 >
-                  Evento
+                  Tus entradas · {ticketCount.toString().padStart(2, "0")}
                 </div>
-                <h2 className="text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
-                  {ready.event.title}
-                </h2>
-              </div>
+                {/* Una entrada por fila en el móvil y dos desde tablet, centradas: con
+                    una sola (o con una suelta en la última fila) no se quedan pegadas
+                    a la izquierda de una columna ancha. */}
+                <div className="flex flex-wrap justify-center gap-4">
+                  {ready.tickets.map((t, i) => (
+                    <article
+                      key={t.id}
+                      className="w-full overflow-hidden rounded-2xl border border-border bg-card sm:w-[calc(50%-0.5rem)] sm:max-w-[22rem]"
+                      style={{ boxShadow: "0 22px 50px -18px rgba(232,84,42,0.18)" }}
+                    >
+                      <div
+                        className="flex items-center justify-between gap-2 px-4 py-3 text-white"
+                        style={{ background: "linear-gradient(160deg, #E8542A 0%, #B8381A 100%)" }}
+                      >
+                        <span className="truncate text-sm font-semibold">{t.tier_name || "Entrada"}</span>
+                        <span
+                          className="shrink-0 text-[10px] uppercase text-white/80"
+                          style={{ ...mono, letterSpacing: "0.16em" }}
+                        >
+                          {i + 1} de {ticketCount}
+                        </span>
+                      </div>
+                      <div
+                        className="flex flex-col items-center px-4 py-5"
+                        style={{ background: "#F4EEE2", color: "#0F0F0F" }}
+                      >
+                        {t.qrDataUrl ? (
+                          <img
+                            src={t.qrDataUrl}
+                            alt={`Código QR de la entrada ${i + 1}`}
+                            className="aspect-square w-full max-w-[220px] rounded-xl"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div className="aspect-square w-full max-w-[220px] animate-pulse rounded-xl bg-black/10" />
+                        )}
+                        {t.holder && <p className="mt-3 text-sm font-semibold">{t.holder}</p>}
+                        {/* Código de puerta: el mismo del email y de la cartera, por
+                            si el QR no se lee. */}
+                        {t.doorCode ? (
+                          <p className="mt-1 font-mono text-[11px] uppercase tracking-wider opacity-60">
+                            Código <span className="text-sm font-semibold opacity-100">{t.doorCode}</span>
+                          </p>
+                        ) : (
+                          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider opacity-50">
+                            Ref. {t.id.slice(0, 8)}
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <p className="mt-3 text-center text-[12px] text-muted-foreground">
+                  Muéstralas en la puerta desde aquí o desde Mis entradas en la app.
+                </p>
+              </section>
+            )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <SummaryItem icon={<CalendarDays className="h-4 w-4" />} label="Cuándo">
-                  {formatEventDateTime(ready.event.date_start)}
-                </SummaryItem>
-                <SummaryItem icon={<MapPin className="h-4 w-4" />} label="Dónde">
-                  {ready.event.venue_name ?? ready.event.city}
-                </SummaryItem>
-                {ticketsSummary && (
-                  <SummaryItem icon={<TicketIcon className="h-4 w-4" />} label="Entradas">
-                    {ticketsSummary}
-                  </SummaryItem>
+            {ready && ticketCount === 0 && (
+              <p className="mb-8 max-w-md text-center text-sm text-muted-foreground">
+                Tus entradas estarán en Mis entradas en unos segundos.
+              </p>
+            )}
+          </div>
+
+          <div className={cn("flex min-w-0 flex-col items-center", twoColumns && "lg:sticky lg:top-24")}>
+            {/* Resumen del pedido */}
+            {ready && ready.event && (
+              <article
+                className="mb-8 w-full overflow-hidden rounded-2xl border border-border bg-card"
+                style={{
+                  boxShadow:
+                    "0 1px 0 rgba(255,255,255,0.02) inset, 0 22px 50px -18px rgba(232,84,42,0.18)",
+                }}
+              >
+                {ready.event.image_url && (
+                  <div className="relative aspect-[16/7] w-full overflow-hidden">
+                    <img
+                      src={ready.event.image_url}
+                      alt={ready.event.title}
+                      className="h-full w-full object-cover"
+                      loading="eager"
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, rgba(10,10,10,0.0) 0%, rgba(10,10,10,0.65) 100%)",
+                      }}
+                    />
+                  </div>
                 )}
-                <SummaryItem icon={<Receipt className="h-4 w-4" />} label="Total">
-                  <span style={mono}>
-                    {ready.order.total_cents > 0
-                      ? formatPriceCents(ready.order.total_cents, ready.order.currency)
-                      : "Gratis"}
+
+                <div className="space-y-5 p-5 md:p-6">
+                  <div>
+                    <div
+                      className="mb-1 text-[10px] uppercase text-muted-foreground"
+                      style={{ ...mono, letterSpacing: "0.18em" }}
+                    >
+                      Evento
+                    </div>
+                    <h2 className="text-xl font-semibold leading-tight tracking-tight text-foreground md:text-2xl">
+                      {ready.event.title}
+                    </h2>
+                  </div>
+
+                  <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2", twoColumns && "lg:grid-cols-1")}>
+                    <SummaryItem icon={<CalendarDays className="h-4 w-4" />} label="Cuándo">
+                      {formatEventDateTime(ready.event.date_start)}
+                    </SummaryItem>
+                    <SummaryItem icon={<MapPin className="h-4 w-4" />} label="Dónde">
+                      {formatEventPlace(ready.event).long || ready.event.city}
+                    </SummaryItem>
+                    {ticketsSummary && (
+                      <SummaryItem icon={<TicketIcon className="h-4 w-4" />} label="Entradas">
+                        {ticketsSummary}
+                      </SummaryItem>
+                    )}
+                    <SummaryItem icon={<Receipt className="h-4 w-4" />} label="Total">
+                      <span style={mono}>
+                        {ready.order.total_cents > 0
+                          ? formatPriceCents(ready.order.total_cents, ready.order.currency)
+                          : "Gratis"}
+                      </span>
+                    </SummaryItem>
+                  </div>
+
+                  <div
+                    className="border-t border-border pt-4 text-[10px] uppercase text-muted-foreground"
+                    style={{ ...mono, letterSpacing: "0.18em" }}
+                  >
+                    Pedido · {orderReference(ready.order.id)}
+                  </div>
+                </div>
+              </article>
+            )}
+
+            {/* CTAs */}
+            <div className={cn("flex w-full max-w-md flex-col gap-3", twoColumns && "lg:max-w-none")}>
+              {isPaid && details.kind !== "no_session" && (
+                <PrimaryButton onClick={() => navigate(walletPath)}>
+                  <TicketIcon className="h-5 w-5" />
+                  Ver en mi cartera
+                  <span
+                    aria-hidden="true"
+                    className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
+                  >
+                    →
                   </span>
-                </SummaryItem>
-              </div>
+                </PrimaryButton>
+              )}
 
-              <div
-                className="border-t border-border pt-4 text-[10px] uppercase text-muted-foreground"
-                style={{ ...mono, letterSpacing: "0.18em" }}
+              {((isPaid && details.kind === "no_session") || state.phase === "unverifiable") && (
+                // Vuelve aquí tras iniciar sesión, con el pedido en la URL.
+                <PrimaryButton onClick={() => navigate(loginPathWithNext())}>
+                  <LogIn className="h-5 w-5" />
+                  Iniciar sesión
+                </PrimaryButton>
+              )}
+
+              {state.phase === "pending" && (
+                <SecondaryButton onClick={retry}>
+                  <RotateCcw className="h-5 w-5" />
+                  Comprobar de nuevo
+                </SecondaryButton>
+              )}
+
+              {state.phase === "error" && (
+                <PrimaryButton onClick={retry}>
+                  <RotateCcw className="h-5 w-5" />
+                  Reintentar
+                </PrimaryButton>
+              )}
+
+              {(state.phase === "expired" ||
+                state.phase === "error" ||
+                state.phase === "idle" ||
+                state.phase === "test_payment") && (
+                <SecondaryButton onClick={() => navigate("/calendar")}>
+                  <CalendarDays className="h-5 w-5" />
+                  Volver al calendario
+                </SecondaryButton>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-transparent text-sm font-medium text-muted-foreground transition hover:border-border/80 hover:text-foreground"
               >
-                Pedido · {orderReference(ready.order.id)}
-              </div>
+                <Home className="h-4 w-4" />
+                Volver al inicio
+              </button>
             </div>
-          </article>
-        )}
-
-        {/* CTAs */}
-        <div className="flex w-full max-w-md flex-col gap-3">
-          {isPaid && details.kind !== "no_session" && (
-            <PrimaryButton onClick={() => navigate(walletPath)}>
-              <TicketIcon className="h-5 w-5" />
-              Ver en mi cartera
-              <span
-                aria-hidden="true"
-                className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1"
-              >
-                →
-              </span>
-            </PrimaryButton>
-          )}
-
-          {((isPaid && details.kind === "no_session") || state.phase === "unverifiable") && (
-            // Vuelve aquí tras iniciar sesión, con el pedido en la URL.
-            <PrimaryButton onClick={() => navigate(loginPathWithNext())}>
-              <LogIn className="h-5 w-5" />
-              Iniciar sesión
-            </PrimaryButton>
-          )}
-
-          {state.phase === "pending" && (
-            <SecondaryButton onClick={retry}>
-              <RotateCcw className="h-5 w-5" />
-              Comprobar de nuevo
-            </SecondaryButton>
-          )}
-
-          {state.phase === "error" && (
-            <PrimaryButton onClick={retry}>
-              <RotateCcw className="h-5 w-5" />
-              Reintentar
-            </PrimaryButton>
-          )}
-
-          {(state.phase === "expired" ||
-            state.phase === "error" ||
-            state.phase === "idle" ||
-            state.phase === "test_payment") && (
-            <SecondaryButton onClick={() => navigate("/calendar")}>
-              <CalendarDays className="h-5 w-5" />
-              Volver al calendario
-            </SecondaryButton>
-          )}
-
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-transparent text-sm font-medium text-muted-foreground transition hover:border-border/80 hover:text-foreground"
-          >
-            <Home className="h-4 w-4" />
-            Volver al inicio
-          </button>
+          </div>
         </div>
 
         {isPaid && ticketCount > 0 && (

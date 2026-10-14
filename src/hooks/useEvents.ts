@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { qk } from "@/lib/cache/keys";
 import { EVENT_OPEN_WITHOUT_END_MS, isEventOver } from "@/components/tickets/ticketUtils";
 import { enCiudad } from "@/hooks/queries/clientData";
+import { leerConSeries } from "@/lib/eventSeries";
 
 /**
  * Pasify · hooks de eventos.
@@ -31,6 +32,8 @@ const IDS_POR_CONSULTA = 60;
 type Profile = {
   id: string;
   business_name: string | null;
+  /** Categoría del local (discoteca, club, bar…): clasifica sus eventos sin categoría (lib/eventCategories). */
+  business_category?: string | null;
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
@@ -53,6 +56,13 @@ type EventRow = {
   image_url: string | null;
   category: string | null;
   status: string;
+  /**
+   * Serie de la que es una sesión (eventos de varios días y recurrentes) y su
+   * día de la serie. null en un evento suelto; faltan si el servidor aún no
+   * tiene la migración de series.
+   */
+  series_id?: string | null;
+  series_date?: string | null;
 };
 
 const decorate = (e: EventRow, p: Profile | null) => ({
@@ -70,6 +80,7 @@ const decorate = (e: EventRow, p: Profile | null) => ({
     ? {
         id: p.id,
         business_name: p.business_name,
+        business_category: p.business_category ?? null,
         first_name: p.first_name,
         last_name: p.last_name,
         profile_image_url: p.avatar_url, // legacy alias
@@ -81,21 +92,19 @@ const decorate = (e: EventRow, p: Profile | null) => ({
 /** Evento del calendario público, tal como lo pintan sus tarjetas. */
 export type CalendarEvent = ReturnType<typeof decorate>;
 
-const eventsQuery = () =>
-  supabase
-    .from("events")
-    .select(
-      "id, partner_id, title, description, date_start, date_end, city, venue_name, address, price_cents, currency, capacity, tickets_sold, image_url, category, status"
-    );
+const EVENT_COLUMNS =
+  "id, partner_id, title, description, date_start, date_end, city, venue_name, address, price_cents, currency, capacity, tickets_sold, image_url, category, status";
+const eventsQuery = (select: string) => supabase.from("events").select(select);
 type EventsQuery = ReturnType<typeof eventsQuery>;
 
 const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQuery) => {
-  // Step 1: events
-  const { data: eventsData, error: eventsError } = await applyFilters(eventsQuery()).order("date_start", {
-    ascending: true,
-  });
+  // Step 1: events, con las columnas de serie (un servidor sin la migración no
+  // las tiene: leerConSeries repite la consulta sin ellas).
+  const { data: eventsData, error: eventsError } = await leerConSeries(EVENT_COLUMNS, (select) =>
+    applyFilters(eventsQuery(select)).order("date_start", { ascending: true }),
+  );
   if (eventsError) throw eventsError;
-  const events = (eventsData ?? []) as EventRow[];
+  const events = (eventsData ?? []) as unknown as EventRow[];
   if (events.length === 0) return [];
 
   // Step 2: nombre y avatar del local desde la vista pública `public_partners`
@@ -109,7 +118,9 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
   const tandas: string[][] = [];
   for (let i = 0; i < partnerIds.length; i += IDS_POR_CONSULTA) tandas.push(partnerIds.slice(i, i + IDS_POR_CONSULTA));
   const respuestas = await Promise.all(
-    tandas.map((ids) => supabase.from("public_partners").select("id, business_name, avatar_url").in("id", ids)),
+    tandas.map((ids) =>
+      supabase.from("public_partners").select("id, business_name, business_category, avatar_url").in("id", ids),
+    ),
   );
   respuestas.forEach(({ data: partnersData, error: partnersError }) => {
     if (partnersError) {
@@ -120,6 +131,7 @@ const fetchEventsWithProfiles = async (applyFilters: (q: EventsQuery) => EventsQ
       profilesMap.set(p.id, {
         id: p.id,
         business_name: p.business_name,
+        business_category: p.business_category,
         first_name: null,
         last_name: null,
         avatar_url: p.avatar_url,

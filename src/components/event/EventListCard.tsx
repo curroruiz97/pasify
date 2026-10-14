@@ -1,8 +1,9 @@
-import { Heart, Loader2, Ticket } from "lucide-react";
+import { Heart, Loader2, Repeat, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useFavorites } from "@/hooks/useFavorites";
 import { formatPriceCents, isEventOver } from "@/components/tickets/ticketUtils";
+import { countLabel } from "@/lib/eventSeries";
 
 export type EventCardData = {
   id: string;
@@ -49,6 +50,11 @@ interface Props {
   onBuyTicket?: (eventId: string) => void;
   /** Si true, muestra spinner en el botón y lo deshabilita (compra en curso). */
   pending?: boolean;
+  /**
+   * Es la fecha más próxima de un evento de varios días o recurrente: dice
+   * cuántas fechas hay y abre la lista para elegir otra.
+   */
+  serie?: { count: number; onSeeDates: () => void };
 }
 
 const mono = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
@@ -60,6 +66,7 @@ export const EventListCard = ({
   showPartner,
   onBuyTicket,
   pending = false,
+  serie,
 }: Props) => {
   const date = new Date(event.date_start);
   // `events.price_cents` es el mínimo de sus tipos de entrada: "Desde X €".
@@ -236,6 +243,18 @@ export const EventListCard = ({
               <div className="mt-1 truncate text-[12px] font-medium text-orange-500">
                 @ {partnerName}
               </div>
+            )}
+
+            {serie && serie.count > 1 && (
+              <button
+                type="button"
+                onClick={serie.onSeeDates}
+                data-testid={`serie-ver-fechas-${event.id}`}
+                className="mt-2 inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-500 transition-colors hover:bg-orange-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50"
+              >
+                <Repeat className="h-3 w-3" />
+                {countLabel(serie.count)} · ver todas
+              </button>
             )}
 
             {event.description && (

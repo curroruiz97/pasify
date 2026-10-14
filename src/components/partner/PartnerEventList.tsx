@@ -1,16 +1,20 @@
-import { useMemo, useState } from "react";
-import { Calendar, Search, X as XIcon } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { Calendar, ChevronDown, Repeat, Search, X as XIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PasifyEmptyState } from "@/components/ui/pasify-empty-state";
 import { useSessionState } from "@/lib/useSessionState";
 import { EventRowCard } from "@/components/partner/EventRowCard";
+import { eventCategoryLabel } from "@/lib/eventCategories";
 import { EventActionsMenu, type EventActions } from "@/components/partner/EventActionsMenu";
 import { SoldBar } from "@/components/partner/SoldBar";
 import { StatusBadge } from "@/components/partner/StatusBadge";
 import { EVENT_TABS, groupEventsByTab, isEventTab, type EventTab } from "@/components/partner/eventTabs";
+import { SeriesActionsMenu, type SeriesActions } from "@/components/partner/SeriesActionsMenu";
 import { formatInTimeZone } from "@/components/partner/zonedTime";
+import { countLabel, groupBySeries, summarizeSessions, type SessionStats } from "@/lib/eventSeries";
 import type { PartnerEventRow } from "@/hooks/queries/partnerData";
 
 /**
@@ -21,6 +25,11 @@ import type { PartnerEventRow } from "@/hooks/queries/partnerData";
  *
  * Las fechas van en la hora del local de cada evento (`timeZoneFor`), la
  * misma que ven los compradores en la web, el email y Stripe.
+ *
+ * Las fechas de un evento de varios días o recurrente (serie) se agrupan en
+ * una fila con el total de la serie —próxima fecha, vendidas, estado— que se
+ * abre para ver cada fecha con su propio menú; el menú de la fila lo es de la
+ * serie entera (publicar los borradores, cancelar las que quedan).
  *
  * Cargando, error de carga (con Reintentar) y "Tu primer evento" los pinta
  * quien la usa: aquí siempre hay al menos un evento.
@@ -60,7 +69,34 @@ interface Props {
   changingStatus: boolean;
   /** Motivo por el que no se puede publicar (organización suspendida). */
   publishBlockedReason: string | null;
+  /** Acciones sobre una serie entera, con todas sus fechas (las de toda la lista). */
+  seriesActionsFor?: (sessions: PartnerEventRow[]) => SeriesActions;
 }
+
+const FECHA_CORTA: Intl.DateTimeFormatOptions = { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" };
+
+const eur = (cents: number | null) => (cents == null ? "—" : `${(cents / 100).toFixed(2)} €`);
+
+/** Estado de una serie en la cabecera: cuántas fechas hay de cada estado. */
+const EstadoDeSerie = ({ stats }: { stats: SessionStats<PartnerEventRow> }) => (
+  <div className="flex flex-wrap gap-1" data-testid="serie-estado">
+    {stats.published > 0 && (
+      <Badge variant="outline" className="border-success/30 bg-success/15 text-success">
+        {stats.published} {stats.published === 1 ? "publicada" : "publicadas"}
+      </Badge>
+    )}
+    {stats.drafts > 0 && (
+      <Badge variant="outline" className="border-border bg-muted text-muted-foreground">
+        {stats.drafts} {stats.drafts === 1 ? "borrador" : "borradores"}
+      </Badge>
+    )}
+    {stats.cancelled > 0 && (
+      <Badge variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive">
+        {stats.cancelled} {stats.cancelled === 1 ? "cancelada" : "canceladas"}
+      </Badge>
+    )}
+  </div>
+);
 
 export const PartnerEventList = ({
   events,
@@ -69,6 +105,7 @@ export const PartnerEventList = ({
   onCreate,
   changingStatus,
   publishBlockedReason,
+  seriesActionsFor,
 }: Props) => {
   const [guardada, setPestana] = useSessionState<EventTab>("partner.eventos.pestana", "proximos");
   const pestana: EventTab = isEventTab(guardada) ? guardada : "proximos";
@@ -79,6 +116,46 @@ export const PartnerEventList = ({
   const grupos = useMemo(() => groupEventsByTab(events, busqueda), [events, busqueda]);
   const lista = grupos[pestana];
   const buscando = busqueda.trim().length > 0;
+
+  // Las fechas de una serie, juntas (con todas las de la serie, esté en la pestaña que esté, para las acciones).
+  const elementos = useMemo(() => groupBySeries(lista), [lista]);
+  const fechasDeSerie = useMemo(() => {
+    const m = new Map<string, PartnerEventRow[]>();
+    for (const e of events) {
+      if (!e.series_id) continue;
+      const g = m.get(e.series_id);
+      if (g) g.push(e);
+      else m.set(e.series_id, [e]);
+    }
+    return m;
+  }, [events]);
+  const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set());
+  const alternar = (id: string) =>
+    setAbiertas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // El menú de la cabecera actúa sobre TODAS las fechas de la serie, estén en la
+  // pestaña que estén: sus cifras también (la cabecera cuenta solo las de la pestaña).
+  const menuDeSerie = (seriesId: string, className?: string) => {
+    if (!seriesActionsFor) return null;
+    const todas = fechasDeSerie.get(seriesId) ?? [];
+    if (todas.length === 0) return null;
+    const stats = summarizeSessions(todas);
+    return (
+      <SeriesActionsMenu
+        actions={seriesActionsFor(todas)}
+        drafts={stats.openDrafts}
+        cancellable={stats.open}
+        changingStatus={changingStatus}
+        publishBlockedReason={publishBlockedReason}
+        triggerClassName={className}
+      />
+    );
+  };
 
   const menu = (e: PartnerEventRow, className?: string) => (
     <EventActionsMenu
@@ -208,25 +285,90 @@ export const PartnerEventList = ({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {lista.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell>
-                          <div className="font-medium text-foreground">{e.title}</div>
-                          {e.city && <div className="text-[12px] text-muted-foreground">{e.city}</div>}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {formatInTimeZone(e.date_start, FECHA, timeZoneFor(e.venue_id))}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{(e.price_cents / 100).toFixed(2)} €</TableCell>
-                        <TableCell>
-                          <SoldBar sold={e.tickets_sold} capacity={e.capacity} />
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={e.status} />
-                        </TableCell>
-                        <TableCell className="p-1 text-right">{menu(e)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {elementos.map((item) => {
+                      const fila = (e: PartnerEventRow, hija = false) => (
+                        <TableRow key={e.id} data-serie-hija={hija ? "" : undefined}>
+                          <TableCell className={hija ? "pl-12" : undefined}>
+                            <div className="font-medium text-foreground">{e.title}</div>
+                            {(e.city || eventCategoryLabel(e.category)) && (
+                              <div className="text-[12px] text-muted-foreground">
+                                {[e.city, eventCategoryLabel(e.category)].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">
+                            {formatInTimeZone(e.date_start, FECHA, timeZoneFor(e.venue_id))}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{(e.price_cents / 100).toFixed(2)} €</TableCell>
+                          <TableCell>
+                            <SoldBar sold={e.tickets_sold} capacity={e.capacity} />
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={e.status} />
+                          </TableCell>
+                          <TableCell className="p-1 text-right">{menu(e)}</TableCell>
+                        </TableRow>
+                      );
+                      if (item.kind === "event") return fila(item.event);
+
+                      const stats = summarizeSessions(item.sessions);
+                      const abierta = abiertas.has(item.seriesId);
+                      const zona = timeZoneFor(stats.next.venue_id);
+                      return (
+                        <Fragment key={`serie-${item.seriesId}`}>
+                          <TableRow className="bg-muted/30" data-testid={`serie-${item.seriesId}`}>
+                            <TableCell>
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => alternar(item.seriesId)}
+                                  aria-expanded={abierta}
+                                  aria-label={`${abierta ? "Ocultar" : "Ver"} las ${countLabel(stats.count)} de «${stats.next.title}»`}
+                                  data-testid={`serie-alternar-${item.seriesId}`}
+                                  className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                >
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${abierta ? "rotate-180" : "-rotate-90"}`} />
+                                </button>
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                                    {stats.next.title}
+                                    <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 text-primary">
+                                      <Repeat className="h-3 w-3" />
+                                      {countLabel(stats.count)}
+                                    </Badge>
+                                  </div>
+                                  {(stats.next.city || eventCategoryLabel(stats.next.category)) && (
+                                    <div className="text-[12px] text-muted-foreground">
+                                      {[stats.next.city, eventCategoryLabel(stats.next.category)].filter(Boolean).join(" · ")}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">
+                              <div>
+                                {stats.open > 0 ? "Próxima: " : "Última: "}
+                                {formatInTimeZone(stats.next.date_start, FECHA_CORTA, zona)}
+                              </div>
+                              {stats.count > 1 && (
+                                <div className="text-[12px]">
+                                  hasta {formatInTimeZone(stats.last.date_start, { day: "2-digit", month: "short", year: "numeric" }, zona)}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{stats.minPriceCents == null ? "—" : `desde ${eur(stats.minPriceCents)}`}</TableCell>
+                            <TableCell>
+                              <SoldBar sold={stats.sold} capacity={stats.capacity} />
+                            </TableCell>
+                            <TableCell>
+                              <EstadoDeSerie stats={stats} />
+                            </TableCell>
+                            <TableCell className="p-1 text-right">{menuDeSerie(item.seriesId)}</TableCell>
+                          </TableRow>
+                          {abierta && item.sessions.map((e) => fila(e, true))}
+                        </Fragment>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -234,14 +376,56 @@ export const PartnerEventList = ({
 
             {/* Móvil: tarjetas, sin scroll horizontal. */}
             <div className="grid gap-3 md:hidden">
-              {lista.map((e) => (
-                <EventRowCard
-                  key={e.id}
-                  event={e}
-                  timeZone={timeZoneFor(e.venue_id)}
-                  menu={menu(e, "h-8 w-8")}
-                />
-              ))}
+              {elementos.map((item) => {
+                const tarjeta = (e: PartnerEventRow) => (
+                  <EventRowCard key={e.id} event={e} timeZone={timeZoneFor(e.venue_id)} menu={menu(e, "h-8 w-8")} />
+                );
+                if (item.kind === "event") return tarjeta(item.event);
+
+                const stats = summarizeSessions(item.sessions);
+                const abierta = abiertas.has(item.seriesId);
+                const zona = timeZoneFor(stats.next.venue_id);
+                return (
+                  <div key={`serie-${item.seriesId}`} className="space-y-2" data-testid={`serie-movil-${item.seriesId}`}>
+                    <article className="rounded-2xl border border-primary/30 bg-card p-4" aria-label={`Serie ${stats.next.title}`}>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-base font-semibold leading-tight tracking-tight text-foreground">
+                            {stats.next.title}
+                          </h3>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 text-primary">
+                              <Repeat className="h-3 w-3" />
+                              {countLabel(stats.count)}
+                            </Badge>
+                            <EstadoDeSerie stats={stats} />
+                          </div>
+                        </div>
+                        {menuDeSerie(item.seriesId, "h-8 w-8")}
+                      </div>
+                      <div className="mt-3 text-[13px] text-muted-foreground">
+                        {stats.open > 0 ? "Próxima: " : "Última: "}
+                        <span className="font-semibold text-foreground">{formatInTimeZone(stats.next.date_start, FECHA_CORTA, zona)}</span>
+                        {stats.minPriceCents != null && <span> · desde {eur(stats.minPriceCents)}</span>}
+                      </div>
+                      <div className="mt-3">
+                        <SoldBar sold={stats.sold} capacity={stats.capacity} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => alternar(item.seriesId)}
+                        aria-expanded={abierta}
+                        data-testid={`serie-alternar-movil-${item.seriesId}`}
+                        className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-primary"
+                      >
+                        <ChevronDown className={`h-4 w-4 transition-transform ${abierta ? "rotate-180" : ""}`} />
+                        {abierta ? "Ocultar las fechas" : `Ver las ${countLabel(stats.count)}`}
+                      </button>
+                    </article>
+                    {abierta && <div className="ml-3 grid gap-3 border-l-2 border-primary/20 pl-3">{item.sessions.map(tarjeta)}</div>}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

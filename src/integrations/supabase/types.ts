@@ -1886,6 +1886,66 @@ export type Database = {
         }
         Relationships: []
       }
+      event_series: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          kind: string
+          org_id: string | null
+          partner_id: string
+          request_id: string | null
+          rule: Json
+          start_time: string
+          status: string
+          time_zone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          kind: string
+          org_id?: string | null
+          partner_id: string
+          request_id?: string | null
+          rule?: Json
+          start_time: string
+          status?: string
+          time_zone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          kind?: string
+          org_id?: string | null
+          partner_id?: string
+          request_id?: string | null
+          rule?: Json
+          start_time?: string
+          status?: string
+          time_zone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_series_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_series_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           address: string | null
@@ -1906,6 +1966,9 @@ export type Database = {
           org_id: string | null
           partner_id: string | null
           price_cents: number
+          series_date: string | null
+          series_exception: boolean
+          series_id: string | null
           status: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id: string | null
           tickets_sold: number
@@ -1933,6 +1996,9 @@ export type Database = {
           org_id?: string | null
           partner_id?: string | null
           price_cents?: number
+          series_date?: string | null
+          series_exception?: boolean
+          series_id?: string | null
           status?: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id?: string | null
           tickets_sold?: number
@@ -1960,6 +2026,9 @@ export type Database = {
           org_id?: string | null
           partner_id?: string | null
           price_cents?: number
+          series_date?: string | null
+          series_exception?: boolean
+          series_id?: string | null
           status?: Database["public"]["Enums"]["event_status_t"]
           stripe_price_id?: string | null
           tickets_sold?: number
@@ -1995,6 +2064,13 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "event_series"
             referencedColumns: ["id"]
           },
           {
@@ -6200,6 +6276,10 @@ export type Database = {
           cities: string[]
         }[]
       }
+      apply_event_tiers_to_series: {
+        Args: { _event_id: string; _scope: string }
+        Returns: Json
+      }
       apply_pricing_proposal: {
         Args: { _proposal_id: string }
         Returns: {
@@ -6213,6 +6293,10 @@ export type Database = {
         Returns: undefined
       }
       auto_approve_if_allowed: { Args: { _role: string }; Returns: boolean }
+      cancel_event_series: {
+        Args: { _from: string; _reason: string; _series_id: string }
+        Returns: Json
+      }
       cancel_ticket_order: { Args: { _order_id: string }; Returns: undefined }
       cancel_ticket_transfer: {
         Args: { _transfer_id: string }
@@ -6292,6 +6376,18 @@ export type Database = {
           _order_id?: string
         }
         Returns: string[]
+      }
+      create_event_series: {
+        Args: {
+          _event: Json
+          _kind: string
+          _request_id: string
+          _rule: Json
+          _sessions: Json
+          _tiers: Json
+          _time_zone: string
+        }
+        Returns: Json
       }
       create_free_ticket_order: {
         Args: {
@@ -6416,6 +6512,14 @@ export type Database = {
         Returns: undefined
       }
       event_has_sales: { Args: { _event_id: string }; Returns: boolean }
+      event_ticket_allowance: {
+        Args: { _event_id: string }
+        Returns: {
+          held: number
+          max_per_buyer: number
+          remaining: number
+        }[]
+      }
       expire_ticket_order: { Args: { _session_id: string }; Returns: string }
       get_app_setting_bool: { Args: { _key: string }; Returns: boolean }
       get_app_setting_int: { Args: { _key: string }; Returns: number }
@@ -6560,6 +6664,7 @@ export type Database = {
         }
         Returns: string
       }
+      max_tickets_per_buyer_event: { Args: never; Returns: number }
       open_conversation: {
         Args: {
           _event_id?: string
@@ -6849,6 +6954,10 @@ export type Database = {
           venue_name: string
         }[]
       }
+      ticket_buyer_event_held: {
+        Args: { _buyer_user_id: string; _event_id: string }
+        Returns: number
+      }
       ticket_seats_held: {
         Args: { _buyer_user_id?: string; _event_id: string; _tier_id?: string }
         Returns: number
@@ -6861,6 +6970,15 @@ export type Database = {
       transfer_ticket: {
         Args: { _message?: string; _ticket_id: string; _to_email: string }
         Returns: string
+      }
+      update_event_series: {
+        Args: {
+          _from: string
+          _include_exceptions?: boolean
+          _patch: Json
+          _series_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {

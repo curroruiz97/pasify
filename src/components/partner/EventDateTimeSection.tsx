@@ -50,9 +50,21 @@ interface Props {
   timeZone?: string;
   /** Ciudad del local, para rotular «Hora de <ciudad>». */
   placeName?: string | null;
+  /** Rótulo del día («Día del evento» por defecto; «Primer día» en una serie). */
+  dateLabel?: string;
+  /** Solo las horas: el día lo pide quien lo usa (una serie de fechas elegidas a mano). */
+  hideDate?: boolean;
 }
 
-export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, placeName }: Props) => {
+export const EventDateTimeSection = ({
+  value,
+  onChange,
+  disabled,
+  timeZone,
+  placeName,
+  dateLabel = "Día del evento",
+  hideDate = false,
+}: Props) => {
   const { crossesMidnight } = composeIsoStartEnd(value, timeZone);
   const label = timeZoneLabel(placeName, timeZone);
   // Solo se avisa si el reloj del local y el del dispositivo marcan ahora
@@ -76,20 +88,22 @@ export const EventDateTimeSection = ({ value, onChange, disabled, timeZone, plac
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <Label htmlFor="evt-date" className="flex items-center gap-2 text-xs">
-            <CalendarDays className="h-3.5 w-3.5 text-orange-500" />
-            Día del evento *
-          </Label>
-          <div className="mt-1.5">
-            <PasifyDateInput
-              id="evt-date"
-              value={value.date}
-              onChange={(d) => onChange({ ...value, date: d })}
-              disabled={disabled}
-            />
+        {!hideDate && (
+          <div className="sm:col-span-2">
+            <Label htmlFor="evt-date" className="flex items-center gap-2 text-xs">
+              <CalendarDays className="h-3.5 w-3.5 text-orange-500" />
+              {dateLabel} *
+            </Label>
+            <div className="mt-1.5">
+              <PasifyDateInput
+                id="evt-date"
+                value={value.date}
+                onChange={(d) => onChange({ ...value, date: d })}
+                disabled={disabled}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div>
           <Label htmlFor="evt-start" className="flex items-center gap-2 text-xs">
             <Clock className="h-3.5 w-3.5 text-orange-500" />
