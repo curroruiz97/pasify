@@ -30,7 +30,7 @@
         <div>
           <span class="label"><span class="pulse"></span>Operación · TPV</span>
           <h1>El <em>TPV</em> que cierra al <span class="underline-word">céntimo</span>, no a las 6 am.</h1>
-          <p class="lede">Caja, barras, reservados y consumiciones desde una sola app. Compatible con tu datáfono actual o con un kit nuevo en 48 horas. Cobra, cuadra y exporta sin tocar Excel.</p>
+          <p class="lede">Caja, barras, reservados y consumiciones desde una sola app. Compatible con tu datáfono actual o con un kit nuevo. Cobra, cuadra y exporta sin tocar Excel.</p>
           <div class="ctas">
             <a href="#" class="btn btn-primary">Pedir kit TPV <span class="arrow">→</span></a>
             <a href="#" class="btn btn-outline">Ver en acción</a>
@@ -44,18 +44,11 @@
       </div>
     </section>
 
-    <section class="stats-bar reveal">
-      <div class="stat"><div class="num">3 <em>toques</em></div><div class="lab">Cobro promedio</div></div>
-      <div class="stat"><div class="num">+15&nbsp;%</div><div class="lab">Ticket medio con bundles</div></div>
-      <div class="stat"><div class="num"><em>Z</em> auto</div><div class="lab">Cierre certificado y firmado</div></div>
-      <div class="stat"><div class="num">12+ <em>marcas</em></div><div class="lab">Hardware compatible</div></div>
-    </section>
-
     <section class="sec">
       <div class="sec-head reveal">
         <div class="left">
           <div class="eyebrow">Cómo funciona</div>
-          <h2 class="h2">El <em>TPV</em> que tu equipo entiende en 3 minutos.</h2>
+          <h2 class="h2">El <em>TPV</em> que tu equipo entiende a la primera.</h2>
         </div>
         <p class="lede-2">Una app, una carta visual, un cierre Z firmado. Sin formación, sin teclear precios, sin papel impreso a las 5 am.</p>
       </div>
@@ -121,7 +114,7 @@
         <div class="copy">
           <div class="num">04 · Cierre Z</div>
           <h3>Cierra al <em>céntimo</em>, sin Excel a las 5 am.</h3>
-          <p>Pasify cuadra ventas, devoluciones, propinas y efectivo declarado. Genera el cierre Z certificado con firma electrónica y lo manda al panel y a tu contabilidad. Tu encargado se va a las 04:30, no a las 06:00.</p>
+          <p>Pasify cuadra ventas, devoluciones, propinas y efectivo declarado. Genera el cierre Z certificado con firma electrónica y lo manda al panel y a tu contabilidad. Tu encargado cierra antes y se va a casa.</p>
           <ul class="checks">
             <li>Cuadre automático al céntimo</li>
             <li>Cierre Z firmado digitalmente</li>
@@ -174,7 +167,7 @@
         <div class="col bad">
           <h5>TPV tradicional</h5>
           <ul>
-            <li>Software de hace 10 años, sin updates</li>
+            <li>Software antiguo, sin updates</li>
             <li>Re-tecleo de precios (con sus errores)</li>
             <li>Anulaciones por código maestro, sin trazabilidad</li>
             <li>Cuadre en Excel a las 5 am</li>
@@ -223,7 +216,7 @@
         <a href="control-acceso.html" class="related-card">
           <span class="lab">02 · Acceso</span>
           <h5>Control de acceso QR</h5>
-          <p>Validación en menos de 200ms con cualquier móvil. Sin colas, sin papel, sin reventas.</p>
+          <p>Validación con cualquier móvil. Sin colas, sin papel, sin reventas.</p>
           <span class="arr">Ver más <span class="arrow">→</span></span>
         </a>
         <a href="recepcion.html" class="related-card">
@@ -259,7 +252,7 @@ document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
   <rect x="32" y="32" width="220" height="256" rx="14" fill="#0F0D0B" stroke="#332C25"/>
   <text x="48" y="58" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">CARTA · BARRA 1</text>
   <text x="48" y="78" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Bebidas</text>
-  ${[['Estrella','5€','#1A1612',0],['Mojito','9€','#1A1612',0],['G&T premium','12€','#3D1F12',1],['Bot. vodka','120€','#1A1612',0]].map((it,i)=>`<g>
+  ${[['Caña','5€','#1A1612',0],['Mojito','9€','#1A1612',0],['G&T premium','12€','#3D1F12',1],['Bot. vodka','120€','#1A1612',0]].map((it,i)=>`<g>
     <rect x="48" y="${94+i*38}" width="188" height="32" rx="6" fill="${it[2]}" stroke="${it[3]?'#E8542A':'#26211C'}" stroke-width="${it[3]?1.4:1}"/>
     <text x="60" y="${115+i*38}" fill="#F4EEE2" font-family="Geist" font-size="11">${it[0]}</text>
     <text x="224" y="${115+i*38}" fill="#E8542A" font-family="Geist" font-size="11" font-weight="600" text-anchor="end">${it[1]}</text>
@@ -269,7 +262,7 @@ document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
   <text x="284" y="58" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">MESA 14 · ABIERTA</text>
   <text x="284" y="80" fill="#F4EEE2" font-family="Instrument Serif" font-style="italic" font-size="18">Pista B</text>
   <line x1="284" y1="92" x2="432" y2="92" stroke="#332C25"/>
-  ${[['1× Bot. Grey Goose','120€'],['4× Tonic Schweppes','24€'],['2× Estrella','10€'],['Service charge','15€']].map((it,i)=>`<g>
+  ${[['1× Bot. vodka premium','120€'],['4× Tónica','24€'],['2× Caña','10€'],['Service charge','15€']].map((it,i)=>`<g>
     <text x="284" y="${112+i*22}" fill="#C9BFA8" font-family="Geist" font-size="10">${it[0]}</text>
     <text x="432" y="${112+i*22}" fill="#F4EEE2" font-family="Geist Mono" font-size="10" text-anchor="end">${it[1]}</text>
   </g>`).join('')}
@@ -289,11 +282,11 @@ document.getElementById('mockup-2').innerHTML = svgWrap(`
   <rect x="32" y="76" width="416" height="80" rx="10" fill="#1A0F08" stroke="#E8542A" stroke-width="1.5"/>
   <text x="48" y="100" fill="#E8542A" font-family="Geist Mono" font-size="9" letter-spacing="1.2">★ BUNDLE ACTIVO · 02:00–05:00</text>
   <text x="48" y="124" fill="#F4EEE2" font-family="Geist" font-size="16" font-weight="600">Botella + 4 copas</text>
-  <text x="48" y="144" fill="#C9BFA8" font-family="Geist" font-size="11">Vodka Grey Goose · Mixers a elegir</text>
+  <text x="48" y="144" fill="#C9BFA8" font-family="Geist" font-size="11">Vodka premium · Mixers a elegir</text>
   <text x="432" y="124" fill="#E8542A" font-family="Geist" font-size="22" font-weight="600" text-anchor="end">140€</text>
   <text x="432" y="144" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end" text-decoration="line-through">160€</text>
   <!-- regular items grid -->
-  ${[['Estrella','5€'],['Heineken','5€'],['Mojito','9€'],['G&T','12€'],['Whisky','14€'],['Ron','13€']].map((it,i)=>{const x=32+(i%3)*140;const y=176+Math.floor(i/3)*52;return `<g>
+  ${[['Caña','5€'],['Tercio','5€'],['Mojito','9€'],['G&T','12€'],['Whisky','14€'],['Ron','13€']].map((it,i)=>{const x=32+(i%3)*140;const y=176+Math.floor(i/3)*52;return `<g>
     <rect x="${x}" y="${y}" width="124" height="44" rx="8" fill="#1A1612" stroke="#26211C"/>
     <text x="${x+12}" y="${y+20}" fill="#F4EEE2" font-family="Geist" font-size="11">${it[0]}</text>
     <text x="${x+12}" y="${y+34}" fill="#E8542A" font-family="Geist Mono" font-size="10" font-weight="600">${it[1]}</text>
@@ -308,7 +301,7 @@ document.getElementById('mockup-3').innerHTML = svgWrap(`
   <text x="32" y="40" fill="#F4EEE2" font-family="Geist" font-size="14" font-weight="600">Mesa 14 · Pista B</text>
   <text x="32" y="58" fill="#8A8275" font-family="Geist Mono" font-size="10">8 PAX · ABIERTA · 23:18</text>
   <text x="448" y="58" fill="#4DB87A" font-family="Geist Mono" font-size="10" letter-spacing="1.2" text-anchor="end">● MÍNIMO OK</text>
-  ${[['23:42','Bot. Grey Goose',120],['23:46','4× Tonic Schweppes',24],['00:14','2× Estrella',10],['00:38','Bot. champagne',180],['01:12','6× Coca-Cola Zero',18],['01:55','2× Mojito',18]].map((r,i)=>`<g>
+  ${[['23:42','Bot. vodka premium',120],['23:46','4× Tónica',24],['00:14','2× Caña',10],['00:38','Bot. champagne',180],['01:12','6× Refresco',18],['01:55','2× Mojito',18]].map((r,i)=>`<g>
     <rect x="32" y="${78+i*30}" width="416" height="26" rx="6" fill="${i%2?'#0F0D0B':'#1A1612'}" stroke="#26211C"/>
     <text x="48" y="${96+i*30}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[0]}</text>
     <text x="100" y="${96+i*30}" fill="#F4EEE2" font-family="Geist" font-size="11">${r[1]}</text>
