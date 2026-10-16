@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Documentación API · Pasify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../soluciones/_shared.css" />
+</head>
+<body data-depth="sub" data-current="api-docs">
+<div class="grain"></div>
+
+<!-- HEADER (injected) -->
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#producto">Recursos</a>
+      <span class="sep">/</span>
+      <span class="here">Documentación API</span>
+    </nav>
+
+    <section class="page-hero">
+      <div class="inner">
+        <div>
+          <span class="label"><span class="pulse"></span>Recursos · Documentación API</span>
+          <h1>Documentación que tu equipo <em>técnico</em> agradece.</h1>
+          <p class="lede">Generada desde OpenAPI en cada despliegue, con ejemplos ejecutables, SDKs oficiales en cinco lenguajes y colecciones Postman e Insomnia mantenidas. Del primer <code>200 OK</code> a producción en una tarde, no en una semana.</p>
+          <div class="ctas">
+            <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+            <a href="#explorar" class="btn btn-outline">Explorar docs</a>
+          </div>
+        </div>
+        <div class="mockup reveal">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · docs.pasify.com</div>
+          <div class="body" id="hero-mockup-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-bar reveal">
+      <div class="stat"><div class="num">247 <em>endpoints</em></div><div class="lab">Documentados al detalle</div></div>
+      <div class="stat"><div class="num">5 <em>SDK</em></div><div class="lab">JavaScript · Python · PHP · Ruby · Go</div></div>
+      <div class="stat"><div class="num">&lt;30 <em>s</em></div><div class="lab">Hasta tu primer 200 OK</div></div>
+      <div class="stat"><div class="num">Auto</div><div class="lab">Actualizada en cada despliegue</div></div>
+    </section>
+
+    <section class="sec" id="explorar">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2 class="h2">Documentación <em>viva</em>, no PDF de 80 páginas.</h2>
+        </div>
+        <p class="lede-2">Cuatro piezas para que tu equipo técnico no pierda un sprint integrando: docs auto-generadas, ejemplos ejecutables en el navegador, SDKs oficiales y un changelog público con avisos antes de cada cambio.</p>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">01 · Auto-generada</div>
+          <h3>Siempre <em>al día</em>. Imposible que mienta.</h3>
+          <p>Cada despliegue de Pasify regenera la documentación a partir del esquema OpenAPI&nbsp;3.1. Si un campo cambia o aparece un endpoint nuevo, lo ves en docs antes de que tu integración se entere. Schema descargable para que tu equipo lo importe en su propio generador o servidor de mocks.</p>
+          <ul class="checks">
+            <li>Generación desde OpenAPI 3.1 en cada commit a producción</li>
+            <li>Schema completo descargable en YAML y JSON</li>
+            <li>Diff visible entre versiones, sin abrir releases notes</li>
+            <li>Mocks generables con un solo comando de tu CLI</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · openapi.yaml · 247 endpoints</div>
+          <div class="body" id="mockup-2"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">02 · Ejemplos ejecutables</div>
+          <h3>Prueba sin <em>salir</em> de la página.</h3>
+          <p>Cada endpoint trae cinco ejemplos — cURL, JavaScript, Python, PHP y Ruby — y un botón «Probar» que ejecuta la petición contra el sandbox con datos sintéticos en menos de un segundo. Tu equipo no sale de la documentación para validar que el endpoint hace lo que cree, y la respuesta queda guardada en su sesión para comparar.</p>
+          <ul class="checks">
+            <li>Ejemplos copy-paste en cinco lenguajes con tu API key</li>
+            <li>Botón «Probar» con respuesta real desde el sandbox</li>
+            <li>Histórico de tus últimas peticiones de la sesión</li>
+            <li>Variables de plantilla con tus IDs reales precargados</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · /v1/tickets · probar</div>
+          <div class="body" id="mockup-3"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">03 · SDK y colecciones</div>
+          <h3>Trabaja con la <em>herramienta</em> que ya usas.</h3>
+          <p>SDKs oficiales en JavaScript, Python, PHP, Ruby y Go publicados en npm, PyPI, Composer, RubyGems y Go modules. Colección Postman e Insomnia mantenidas por nosotros, no por la comunidad. Si tu equipo es de IDE plugins, tenemos extensiones para VS Code y JetBrains que autocompletan tipos del esquema actual.</p>
+          <ul class="checks">
+            <li>SDKs oficiales mantenidos en cinco lenguajes</li>
+            <li>Tipado completo en TypeScript y Python</li>
+            <li>Colección Postman e Insomnia con un toque desde docs</li>
+            <li>Plugins VS Code y JetBrains con autocompletado del esquema</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · sdks · 5 lenguajes</div>
+          <div class="body" id="mockup-4"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">04 · Changelog y avisos</div>
+          <h3>Sin <em>sorpresas</em> en mitad de tu integración.</h3>
+          <p>Changelog público con cada cambio, deprecación con seis meses de aviso y RSS para que tu equipo se entere antes que tu integración se rompa. Para los cambios grandes — nueva versión mayor, nuevos campos requeridos — mandamos correo a la persona técnica que firmó el contrato.</p>
+          <ul class="checks">
+            <li>Changelog público con commit hash y enlace al ticket</li>
+            <li>Deprecaciones con seis meses de aviso y guía de migración</li>
+            <li>RSS y webhook al canal Slack que tu equipo elija</li>
+            <li>Aviso por correo a la persona técnica de contrato</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · changelog · 14 cambios este mes</div>
+          <div class="body" id="mockup-5"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">El stack</div>
+          <h2 class="h2">Las herramientas que <em>ya</em> tienes abiertas.</h2>
+        </div>
+      </div>
+      <div class="cards-3 reveal">
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></div>
+          <h4>Postman e Insomnia</h4>
+          <p>Colección oficial mantenida por nosotros. Importa con un toque, prueba en 30 segundos, comparte con tu equipo. Versiones por entorno (sandbox y producción).</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+          <h4>SDKs oficiales</h4>
+          <p>npm install @pasify/sdk · pip install pasify · composer require pasify/sdk · gem install pasify · go get pasify-go. Tipos completos y autocompletado.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+          <h4>Página de estado</h4>
+          <p>status.pasify.com con uptime y latencia por endpoint en directo, mantenimientos programados con siete días de aviso y suscripción RSS o por correo.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Antes / Después</div>
+          <h2 class="h2">Documentación de <em>2014</em> vs Pasify.</h2>
+        </div>
+      </div>
+      <div class="compare reveal">
+        <div class="col bad">
+          <h5>Documentación cerrada</h5>
+          <ul>
+            <li>PDF de 80 páginas que el día del contrato ya está obsoleto</li>
+            <li>Ejemplos solo en cURL, sin tu lenguaje de servidor</li>
+            <li>Sandbox detrás de tres correos al equipo comercial</li>
+            <li>Cambios silenciosos que rompen tu integración los lunes</li>
+            <li>Sin changelog público, te enteras cuando explota</li>
+            <li>SDKs «de la comunidad» abandonados desde hace dos años</li>
+          </ul>
+        </div>
+        <div class="col good">
+          <h5>Pasify Docs</h5>
+          <ul>
+            <li>Generadas en cada despliegue desde OpenAPI 3.1</li>
+            <li>Ejemplos en cinco lenguajes con botón «Probar»</li>
+            <li>Sandbox público con un correo de alta y datos sintéticos</li>
+            <li>Deprecaciones con seis meses de aviso y guía de migración</li>
+            <li>Changelog público con RSS y webhook a tu Slack</li>
+            <li>SDKs oficiales mantenidos en cinco lenguajes</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="cta-banner reveal">
+    <div class="grain-overlay"></div>
+    <div class="inner">
+      <div>
+        <h2>De la firma del contrato a <em>producción</em> en una tarde.</h2>
+        <p>Te damos sandbox y claves de prueba antes incluso de la demo, para que tu equipo técnico se moje las manos y diga si encaja con vuestro stack.</p>
+      </div>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn">Solicita demo <span class="arrow">→</span></a>
+        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="related">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Sigue explorando</div>
+          <h2 class="h2">Más en <em>recursos</em>.</h2>
+        </div>
+      </div>
+      <div class="related-grid reveal">
+        <a href="../data/api.html" class="related-card">
+          <span class="lab">Producto</span>
+          <h5>API e integraciones</h5>
+          <p>Lo que la API hace por ti: 40+ conectores listos, webhooks granulares, sandbox real y SLA con créditos automáticos.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="ayuda.html" class="related-card">
+          <span class="lab">Ayuda</span>
+          <h5>Centro de ayuda</h5>
+          <p>Cuando la documentación no llega: soporte humano 24/7, estado del sistema y guía paso a paso para los casos comunes.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="academy.html" class="related-card">
+          <span class="lab">Academy</span>
+          <h5>Pasify Academy</h5>
+          <p>Cursos cortos por rol — incluido el de integraciones para tu equipo técnico — con certificación Pasify Pro al final.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="../soluciones/_header.js"></script>
+<script>
+const h=document.getElementById('header');
+window.addEventListener('scroll',()=>{h && h.classList.toggle('scrolled',window.scrollY>20)});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -60px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+function svgWrap(html){return `<svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;border-radius:10px">${html}</svg>`}
+
+// HERO: docs page with sidebar + endpoint detail
+document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <!-- sidebar -->
+  <rect x="32" y="24" width="124" height="276" rx="10" fill="#1A1612" stroke="#332C25"/>
+  <text x="44" y="46" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">v2026-05-01</text>
+  ${[
+    ['Authentication','#8A8275'],
+    ['Events','#E8542A'],
+    ['  · GET /events','#F4EEE2'],
+    ['  · POST /events','#F4EEE2'],
+    ['Tickets','#8A8275'],
+    ['  · GET /tickets','#C9BFA8'],
+    ['  · POST /tickets','#C9BFA8'],
+    ['  · POST /checkin','#C9BFA8'],
+    ['Customers','#8A8275'],
+    ['Webhooks','#8A8275'],
+    ['SDKs','#8A8275']
+  ].map((r,i)=>`<text x="44" y="${66+i*18}" fill="${r[1]}" font-family="Geist Mono" font-size="10" font-weight="${i===1?600:400}">${r[0]}</text>`).join('')}
+  <!-- main content -->
+  <rect x="172" y="24" width="276" height="276" rx="10" fill="#0F0D0B" stroke="#332C25"/>
+  <text x="186" y="46" fill="#9D8AE8" font-family="Geist Mono" font-size="9" letter-spacing="1.2">GET</text>
+  <text x="216" y="46" fill="#F4EEE2" font-family="Geist Mono" font-size="11">/v1/events/{id}</text>
+  <text x="186" y="68" fill="#8A8275" font-family="Geist" font-size="10">Recupera un evento por su ID, con tickets agregados.</text>
+  <!-- params -->
+  <text x="186" y="92" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">PATH PARAMETERS</text>
+  <rect x="186" y="100" width="248" height="22" rx="4" fill="#1A1612"/>
+  <text x="196" y="115" fill="#7DD17F" font-family="Geist Mono" font-size="9.5">id</text>
+  <text x="216" y="115" fill="#8A8275" font-family="Geist Mono" font-size="9">string · required</text>
+  <text x="424" y="115" fill="#E8B07A" font-family="Geist Mono" font-size="9" text-anchor="end">"evt_8K2"</text>
+  <!-- code example -->
+  <text x="186" y="142" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">EJEMPLO · CURL</text>
+  ${['curl  ','  -H "Authorization: Bearer sk_····"','  -H "Pasify-Version: 2026-05-01"','  https://api.pasify.com/v1/events/evt_8K2'].map((c,i)=>`<text x="186" y="${158+i*14}" fill="${i===0?'#7DD17F':'#F4EEE2'}" font-family="Geist Mono" font-size="9.5">${c}</text>`).join('')}
+  <!-- response -->
+  <rect x="186" y="220" width="248" height="64" rx="6" fill="#0A0907" stroke="#26211C"/>
+  <text x="196" y="236" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">RESPONSE 200</text>
+  <text x="424" y="236" fill="#4DB87A" font-family="Geist Mono" font-size="9" text-anchor="end">87 ms</text>
+  <text x="196" y="252" fill="#F4EEE2" font-family="Geist Mono" font-size="9.5">{ <tspan fill="#9D8AE8">"id"</tspan>: <tspan fill="#7DD17F">"evt_8K2"</tspan>,</text>
+  <text x="196" y="266" fill="#F4EEE2" font-family="Geist Mono" font-size="9.5">  <tspan fill="#9D8AE8">"sold"</tspan>: <tspan fill="#E8B07A">1842</tspan> }</text>
+  <text x="196" y="280" fill="#8A8275" font-family="Geist Mono" font-size="9">···</text>
+  <!-- run button -->
+  <rect x="370" y="290" width="64" height="14" rx="7" fill="#E8542A"/>
+  <text x="402" y="300" fill="#fff" font-family="Geist Mono" font-size="8" text-anchor="middle">PROBAR ▶</text>
+`);
+
+// 02: OpenAPI schema regeneración
+document.getElementById('mockup-2').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">openapi.yaml · auto-generado</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">v2026-05-01 · 247 ENDPOINTS · ÚLT. CAMBIO HACE 4 H</text>
+  <!-- code block -->
+  <rect x="32" y="74" width="416" height="180" rx="8" fill="#0F0D0B" stroke="#26211C"/>
+  ${[
+    ['openapi: <tspan fill="#7DD17F">"3.1.0"</tspan>','#F4EEE2'],
+    ['info:','#9D8AE8'],
+    ['  title: <tspan fill="#7DD17F">Pasify API</tspan>','#F4EEE2'],
+    ['  version: <tspan fill="#7DD17F">2026-05-01</tspan>','#F4EEE2'],
+    ['servers:','#9D8AE8'],
+    ['  - url: <tspan fill="#7DD17F">https://api.pasify.com/v1</tspan>','#F4EEE2'],
+    ['paths:','#9D8AE8'],
+    ['  /events/{id}:','#F4EEE2'],
+    ['    get:','#7AD0D8'],
+    ['      summary: <tspan fill="#7DD17F">Get an event by ID</tspan>','#F4EEE2'],
+    ['      parameters: ···','#F4EEE2']
+  ].map((c,i)=>`<text x="48" y="${94+i*15}" fill="${c[1]}" font-family="Geist Mono" font-size="10.5">${c[0]}</text>`).join('')}
+  <!-- diff sidebar -->
+  <rect x="32" y="270" width="416" height="40" rx="8" fill="#1A1612" stroke="#332C25"/>
+  <text x="44" y="288" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">DIFF DESDE TU ÚLT. SYNC · 14 H</text>
+  <text x="44" y="304" fill="#4DB87A" font-family="Geist Mono" font-size="9.5">+ 3 endpoints</text>
+  <text x="148" y="304" fill="#E8B07A" font-family="Geist Mono" font-size="9.5">~ 2 modificados</text>
+  <text x="280" y="304" fill="#E8542A" font-family="Geist Mono" font-size="9.5">− 0 eliminados</text>
+  <rect x="370" y="282" width="64" height="20" rx="10" fill="#E8542A"/>
+  <text x="402" y="296" fill="#fff" font-family="Geist Mono" font-size="9" text-anchor="middle">VER DIFF</text>
+`);
+
+// 03: Try-it-now with response
+document.getElementById('mockup-3').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">POST /v1/tickets · probar</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">SANDBOX · TUS DATOS DE PRUEBA · CAMBIA Y EJECUTA</text>
+  <!-- language tabs -->
+  ${['cURL','JS','Python','PHP','Ruby'].map((l,i)=>`<g>
+    <rect x="${32+i*52}" y="74" width="48" height="22" rx="4" fill="${i===0?'#E8542A':'#1A1612'}" stroke="${i===0?'transparent':'#332C25'}"/>
+    <text x="${56+i*52}" y="89" fill="${i===0?'#fff':'#C9BFA8'}" font-family="Geist Mono" font-size="9" text-anchor="middle">${l}</text>
+  </g>`).join('')}
+  <!-- request body -->
+  <rect x="32" y="104" width="416" height="92" rx="8" fill="#0F0D0B" stroke="#26211C"/>
+  <text x="44" y="124" fill="#7DD17F" font-family="Geist Mono" font-size="10.5">curl -X POST \\</text>
+  <text x="56" y="140" fill="#F4EEE2" font-family="Geist Mono" font-size="10.5">  https://api.pasify.com/v1/tickets \\</text>
+  <text x="56" y="156" fill="#F4EEE2" font-family="Geist Mono" font-size="10.5">  -H <tspan fill="#E8B07A">"Authorization: Bearer sk_test_····"</tspan> \\</text>
+  <text x="56" y="172" fill="#F4EEE2" font-family="Geist Mono" font-size="10.5">  -d <tspan fill="#E8B07A">'{"event_id":"evt_8K2","email":"sara@..."}'</tspan></text>
+  <!-- run + result -->
+  <rect x="32" y="206" width="200" height="88" rx="8" fill="#1A1612" stroke="#332C25"/>
+  <text x="44" y="222" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">VARIABLES</text>
+  <text x="44" y="240" fill="#9D8AE8" font-family="Geist Mono" font-size="10">event_id</text>
+  <text x="220" y="240" fill="#7DD17F" font-family="Geist Mono" font-size="10" text-anchor="end">evt_8K2</text>
+  <text x="44" y="258" fill="#9D8AE8" font-family="Geist Mono" font-size="10">email</text>
+  <text x="220" y="258" fill="#7DD17F" font-family="Geist Mono" font-size="10" text-anchor="end">sara@…</text>
+  <rect x="44" y="270" width="172" height="20" rx="10" fill="#E8542A"/>
+  <text x="130" y="284" fill="#fff" font-family="Geist Mono" font-size="9" text-anchor="middle" font-weight="600">EJECUTAR ▶</text>
+  <rect x="248" y="206" width="200" height="88" rx="8" fill="#0A0907" stroke="#26211C"/>
+  <text x="260" y="222" fill="#4DB87A" font-family="Geist Mono" font-size="9" letter-spacing="1.2">200 OK · 142 ms</text>
+  <text x="260" y="240" fill="#F4EEE2" font-family="Geist Mono" font-size="10">{ <tspan fill="#9D8AE8">"id"</tspan>: <tspan fill="#7DD17F">"t_9X3Y"</tspan>,</text>
+  <text x="260" y="256" fill="#F4EEE2" font-family="Geist Mono" font-size="10">  <tspan fill="#9D8AE8">"qr"</tspan>: <tspan fill="#7DD17F">"PSY-···-9341"</tspan>,</text>
+  <text x="260" y="272" fill="#F4EEE2" font-family="Geist Mono" font-size="10">  <tspan fill="#9D8AE8">"price"</tspan>: <tspan fill="#E8B07A">22.00</tspan> }</text>
+  <text x="260" y="288" fill="#8A8275" font-family="Geist Mono" font-size="9">···</text>
+`);
+
+// 04: SDK install commands
+document.getElementById('mockup-4').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">SDKs oficiales</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">5 LENGUAJES · MANTENIDOS POR PASIFY · TIPADO COMPLETO</text>
+  ${[
+    ['JavaScript / TypeScript','npm install @pasify/sdk','#F7DF1E','npm','3.4.2'],
+    ['Python','pip install pasify','#3776AB','pypi','3.4.2'],
+    ['PHP','composer require pasify/sdk','#777BB4','packagist','3.4.2'],
+    ['Ruby','gem install pasify','#CC342D','rubygems','3.4.2'],
+    ['Go','go get pasify-go','#00ADD8','go modules','3.4.2']
+  ].map((r,i)=>{const y=78+i*42;return `<g>
+    <rect x="32" y="${y}" width="416" height="34" rx="8" fill="#16130F" stroke="#26211C"/>
+    <rect x="44" y="${y+8}" width="18" height="18" rx="4" fill="${r[2]}"/>
+    <text x="53" y="${y+21}" fill="#0A0907" font-family="Geist" font-size="11" font-weight="700" text-anchor="middle">${r[0].charAt(0)}</text>
+    <text x="76" y="${y+15}" fill="#F4EEE2" font-family="Geist" font-size="11" font-weight="500">${r[0]}</text>
+    <text x="76" y="${y+27}" fill="#7DD17F" font-family="Geist Mono" font-size="9.5">${r[1]}</text>
+    <text x="436" y="${y+15}" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end">${r[3]}</text>
+    <text x="436" y="${y+27}" fill="#E8B07A" font-family="Geist Mono" font-size="9" text-anchor="end">v${r[4]}</text>
+  </g>`}).join('')}
+  <rect x="32" y="294" width="416" height="14" rx="7" fill="#0F0D0B" stroke="#26211C"/>
+  <text x="44" y="304" fill="#8A8275" font-family="Geist Mono" font-size="9">+ POSTMAN · INSOMNIA · VS CODE · JETBRAINS</text>
+`);
+
+// 05: Changelog timeline
+document.getElementById('mockup-5').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="36" fill="#F4EEE2" font-family="Geist" font-size="13" font-weight="600">Changelog · últimos cambios</text>
+  <text x="32" y="54" fill="#8A8275" font-family="Geist Mono" font-size="9">PÚBLICO · RSS · WEBHOOK A SLACK · 14 CAMBIOS ESTE MES</text>
+  ${[
+    ['v2026-05-01','HOY','+ POST /v1/tickets/transfer','feature','#4DB87A'],
+    ['v2026-05-01','HOY','~ POST /v1/events: nuevo campo capacity_warning','minor','#E8B07A'],
+    ['v2026-04-22','9 d','− DEPRECADO /v1/legacy/checkin → /v1/checkin','deprecation','#E8542A'],
+    ['v2026-04-15','16 d','+ Webhooks: ticket.transferred','feature','#4DB87A'],
+    ['v2026-04-08','23 d','✓ Subida límite rate a 1000 req/min en sandbox','perf','#9D8AE8']
+  ].map((r,i)=>{const y=78+i*40;return `<g>
+    <rect x="32" y="${y}" width="416" height="32" rx="6" fill="#16130F" stroke="#26211C"/>
+    <text x="48" y="${y+14}" fill="#8A8275" font-family="Geist Mono" font-size="9.5">${r[0]}</text>
+    <text x="48" y="${y+27}" fill="#${r[4].slice(1)}" font-family="Geist Mono" font-size="8.5" letter-spacing="1.2">${r[3].toUpperCase()}</text>
+    <text x="120" y="${y+14}" fill="#F4EEE2" font-family="Geist Mono" font-size="10">${r[2]}</text>
+    <text x="120" y="${y+27}" fill="#8A8275" font-family="Geist" font-size="9">${i===2?'aviso 6 meses · guía de migración disponible':'commit 8e2f4·· · ver detalles'}</text>
+    <text x="436" y="${y+18}" fill="${r[4]}" font-family="Geist Mono" font-size="9" text-anchor="end">hace ${r[1]}</text>
+  </g>`}).join('')}
+  <rect x="32" y="294" width="416" height="14" rx="7" fill="#0F0D0B" stroke="#26211C"/>
+  <text x="44" y="304" fill="#8A8275" font-family="Geist Mono" font-size="9">SUSCRÍBETE · RSS · CORREO · SLACK · WEBHOOK · DISCORD</text>
+`);
+</script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
+</body>
+</html>
