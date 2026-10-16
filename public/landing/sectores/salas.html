@@ -55,15 +55,6 @@
   .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
   .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
 
-  /* Stats strip */
-  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
-  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
-  .stats-strip > div:last-child{border-right:none}
-  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
-  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
-  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
-  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
-  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
 
   /* Pain section */
   .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -74,7 +65,6 @@
   .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
   .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
   .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
-  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
 
   /* Modules */
   .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -183,34 +173,8 @@
   .res-card .b.ok{background:rgba(77,184,122,.1);border-color:rgba(77,184,122,.3);color:#4DB87A}
 
   /* Comparison */
-  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
-  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
-  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
-  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
-  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
-  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
-  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
-  .cmp td{color:var(--ink-3);font-size:14px}
-  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
-  .cmp td.yes{color:#4DB87A}
-  .cmp td.no{color:var(--ink-4)}
-  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
-  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
 
   /* Quotes */
-  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
-  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
-  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
-  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
-  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
-  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
-  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
-  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
-  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
-  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
 
   /* Integrations */
   .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
@@ -295,32 +259,12 @@
       </div>
     </section>
 
-    <!-- ===== STATS STRIP ===== -->
-    <section class="stats-strip" aria-label="Métricas de plataforma">
-      <div>
-        <div class="num"><em>+</em>42<em>%</em></div>
-        <div class="lab">sell-through anticipado<br>vs taquilla en puerta</div>
-      </div>
-      <div>
-        <div class="num">18<em>s</em></div>
-        <div class="lab">tiempo medio<br>de checkout móvil</div>
-      </div>
-      <div>
-        <div class="num">0<em>%</em></div>
-        <div class="lab">comisión añadida<br>al fan que viene al show</div>
-      </div>
-      <div>
-        <div class="num">3<em>min</em></div>
-        <div class="lab">settlement medio<br>con artista al cierre</div>
-      </div>
-    </section>
-
     <!-- ===== PROBLEM ===== -->
     <section class="sec reveal">
       <div class="sec-head">
         <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
         <h2>Una sala buena no debería <em>liquidar</em> con calculadora del móvil a las 02:30.</h2>
-        <p class="sub">La operativa de una sala de conciertos en España sigue a medias entre Excel y la libreta. Programación por WhatsApp con managers, settlement con la calculadora del iPhone, reventa que se va de las manos a los 30 min de poner las entradas. Estos son los tres dolores con los que llegan los programadores que prueban Pasify.</p>
+        <p class="sub">La operativa de una sala de conciertos en España sigue a medias entre Excel y la libreta. Programación por WhatsApp con managers, settlement con la calculadora del iPhone, reventa que se va de las manos a los 30 min de poner las entradas. Estos son los tres dolores más habituales.</p>
       </div>
 
       <div class="pain-grid">
@@ -329,7 +273,6 @@
           <div class="lab">Dolor 01</div>
           <h3>Settlement post-show con la calculadora del móvil</h3>
           <p>El show acaba a la 01:00. El promotor y el artista quieren cobrar antes de irse. Tú abres Excel, sumas taquilla + presales, restas IVA, restas el guarantee, calculas el split. Si te equivocas, lo descubres el martes.</p>
-          <div class="quote">"Cada lunes pasaba 90 minutos cuadrando un settlement que debería ser automático."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -337,7 +280,6 @@
           <div class="lab">Dolor 02</div>
           <h3>Reventa a 3× del precio en 30 minutos</h3>
           <p>Pones entradas para una banda popular el martes. El miércoles ya están en una web de reventa al triple. Tu fan llega furioso a la puerta, paga 90€ por una entrada que costaba 22€, y odia tu sala — no a quien revendió.</p>
-          <div class="quote">"Perdimos relación con fans por entradas que nunca controlamos."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -345,7 +287,6 @@
           <div class="lab">Dolor 03</div>
           <h3>Cero memoria de quién vino a tu sala</h3>
           <p>Llenaste 800 personas con una banda indie en marzo. En septiembre programas algo similar y no tienes manera de avisar a esas mismas 800 personas. Compras anuncios en Instagram para hablarle a quien ya te conoce.</p>
-          <div class="quote">"Mi base de fans la tienen Ticketmaster e Instagram. Yo no la veo."</div>
         </article>
       </div>
     </section>
@@ -415,7 +356,7 @@
             <span class="num">04</span>
           </div>
           <h3>Control de acceso QR + pulseras</h3>
-          <p>App nativa para puerta, modo offline, lectura &lt;200ms. Aforo en vivo por zonas. Pulseras NFC para zona VIP o para combo concierto + after.</p>
+          <p>App nativa para puerta, modo offline, lectura al instante. Aforo en vivo por zonas. Pulseras NFC para zona VIP o para combo concierto + after.</p>
           <ul>
             <li>iOS / Android · sin cobertura</li>
             <li>Aforo por zona (pista, grada, VIP)</li>
@@ -544,7 +485,7 @@
             <div class="day">Settlement</div>
           </div>
           <div class="body">
-            <h4>Liquidación al artista en 3 minutos</h4>
+            <h4>Liquidación al artista al cierre</h4>
             <p>El show está cerrado. Pasify calcula: 1.180 entradas · 22€ medios · IVA 10% restado · garantía 8.000€ · 80/20 split sobre el excedente. Net al artista: 11.342€. Pre-firmado. Stripe Connect transfiere mañana.</p>
             <span class="tag">Auto-settlement</span>
           </div>
@@ -677,7 +618,7 @@
 
       <div class="res-split">
         <div class="text">
-          <h2>El cierre con el <em>artista</em>, en tres minutos. Sin Excel, sin discusiones.</h2>
+          <h2>El cierre con el <em>artista</em>, al momento. Sin Excel, sin discusiones.</h2>
           <p class="sub">El settlement es el momento de la verdad. Un error del 2% en una taquilla de 26.000€ son 520€ que pierdes — o que nunca cobra el artista. Pasify calcula, registra y firma el cierre delante del manager, antes de que el furgón arranque. La banda se va con un PDF y un pago programado en Stripe.</p>
 
           <ul class="checks">
@@ -732,135 +673,10 @@
       </div>
     </section>
 
-    <!-- ===== COMPARISON ===== -->
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
-        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
-        <p class="sub">Sin nombrar a nadie. Estos son los rangos típicos de las dos plataformas más usadas en salas de conciertos en España, según conversaciones con programadores que migraron a Pasify en 2024–25. Si la tuya cobra menos, escríbenos: ajustamos.</p>
-      </div>
-
-      <div class="cmp" role="region" aria-label="Comparativa de Pasify vs alternativas">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col"></th>
-              <th scope="col" class="hl">Pasify</th>
-              <th scope="col">Marketplace global</th>
-              <th scope="col">Plataforma vertical conciertos</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Comisión por entrada vendida</th>
-              <td class="hl"><span class="pct">0%</span> al fan · 4–6% a la sala</td>
-              <td>12–18% al fan <span style="color:var(--ink-4)">(repercutido)</span></td>
-              <td>8–12% al fan + service fee</td>
-            </tr>
-            <tr>
-              <th scope="row">Anti-reventa nominativa</th>
-              <td class="hl yes">Sí · DNI + cambio interno con tope</td>
-              <td>Sí · solo en algunos shows</td>
-              <td>Parcial</td>
-            </tr>
-            <tr>
-              <th scope="row">Settlement automático con artista</th>
-              <td class="hl yes">Sí · vía Stripe Connect en 48h</td>
-              <td class="no">No</td>
-              <td class="no">No</td>
-            </tr>
-            <tr>
-              <th scope="row">Tour mode (multi-fecha)</th>
-              <td class="hl yes">Sí · 30 fechas, 1 setup</td>
-              <td>Sí</td>
-              <td>Sí</td>
-            </tr>
-            <tr>
-              <th scope="row">Merch &amp; barra integradas</th>
-              <td class="hl yes">Sí · mismo TPV, mismo cierre Z</td>
-              <td class="no">No</td>
-              <td class="no">No</td>
-            </tr>
-            <tr>
-              <th scope="row">CRM por fan · export</th>
-              <td class="hl yes">Sí · CSV + API · tu data</td>
-              <td class="no">No · es la tuya pero la tienen ellos</td>
-              <td>Parcial</td>
-            </tr>
-            <tr>
-              <th scope="row">Soporte humano en show</th>
-              <td class="hl yes">Sí · WhatsApp directo · 4 min</td>
-              <td>Tickets · 24h</td>
-              <td>Email · 24–48h</td>
-            </tr>
-            <tr>
-              <th scope="row">Permanencia mínima</th>
-              <td class="hl"><span class="pct">0</span> meses</td>
-              <td>12 meses</td>
-              <td>6 meses</td>
-            </tr>
-            <tr>
-              <th scope="row">Migración asistida</th>
-              <td class="hl yes">Gratis · 15 min con humano</td>
-              <td class="no">No ofrecida</td>
-              <td>De pago</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ===== TESTIMONIALS ===== -->
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
-        <h2>Tres formas de medir si Pasify funciona.</h2>
-        <p class="sub">Tres salas reales de tres ciudades. Nombres anonimizados a petición — el sector live es pequeño y prefieren no aparecer. Las cifras son las que comparten en sus reuniones de equipo.</p>
-      </div>
-
-      <div class="quotes">
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>El settlement con artistas pasó de <em>90 minutos</em> en Excel a tres minutos. Y firmado, con hash, en el iPad. Los managers se van contentos antes del recogido del furgón.</blockquote>
-          <div class="who">
-            <div class="av" aria-hidden="true"></div>
-            <div>
-              <div class="nm">P.A. · Programador</div>
-              <div class="role">Sala indie · Madrid · 600 cap</div>
-            </div>
-          </div>
-        </article>
-
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>La reventa fuera <em>desapareció</em>. Cuando la entrada va con DNI y solo se transfiere dentro de Pasify, la web de reventa no tiene producto que vender. Mi fan llega contento.</blockquote>
-          <div class="who">
-            <div class="av b" aria-hidden="true"></div>
-            <div>
-              <div class="nm">L.M. · Mánager</div>
-              <div class="role">Sala mid-size · Barcelona · 1.500 cap</div>
-            </div>
-          </div>
-        </article>
-
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>Ahora la barra y el ticketing <em>hablan</em>. Antes eran dos islas. Conozco a quién vino a tres conciertos seguidos y le mando el cuarto antes que ningún algoritmo.</blockquote>
-          <div class="who">
-            <div class="av c" aria-hidden="true"></div>
-            <div>
-              <div class="nm">I.B. · Owner</div>
-              <div class="role">Sala club + concierto · Bilbao · 800 cap</div>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
     <!-- ===== INTEGRATIONS ===== -->
     <section class="sec compact reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Integraciones</span>
         <h2>Encaja con el stack del live music.</h2>
         <p class="sub">No te pedimos que cambies de TPV, contabilidad ni distribuidor. Pasify habla con los sistemas que ya usas en sala — y con las plataformas donde tus fans descubren tus shows.</p>
       </div>
@@ -887,16 +703,16 @@
     <!-- ===== FAQ ===== -->
     <section class="sec reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Preguntas</span>
         <h2>Lo que preguntan los programadores antes de firmar.</h2>
-        <p class="sub">Si la tuya no está, escríbenos. Pasify no tiene comerciales que te llamen tres veces — un humano del producto te contesta en menos de una hora.</p>
+        <p class="sub">Si la tuya no está, escríbenos. Pasify no tiene comerciales que te llamen tres veces — te contesta una persona del equipo.</p>
       </div>
 
       <div class="faq">
         <details>
           <summary>¿Soporta giras (multi-fecha) o solo eventos sueltos?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Soporta ambos. <b>Tour mode</b> permite configurar una gira con 30 fechas, deal idéntico en cada una, abonos cross-fechas y reportes consolidados — pero también puedes crear un evento suelto en 2 minutos sin tocar más.</p>
+            <p>Soporta ambos. <b>Tour mode</b> permite configurar una gira con 30 fechas, deal idéntico en cada una, abonos cross-fechas y reportes consolidados — pero también puedes crear un evento suelto sin tocar más.</p>
             <p>El abono de gira es nativo: el fan compra "ver a la banda en Madrid + Barcelona + Valencia" como un solo carrito, y recibe los tres tickets nominativos. Settlement se hace por sala al final de cada show.</p>
           </div>
         </details>
@@ -905,7 +721,7 @@
           <summary>¿Cómo funciona el settlement con artista o promotor externo?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
             <p>Configuras el deal una vez en la ficha del show: garantía, % sobre excedente, IVA, retenciones, comisión de promotora si la hay. Pasify calcula al cierre, genera el PDF, lo presenta al manager para firmar en el iPad y programa el pago vía <code>Stripe Connect</code>.</p>
-            <p>Tipos de deal soportados: <b>guarantee + door deal</b>, <b>flat fee</b>, <b>80/20 / 70/30 over guarantee</b>, <b>flat + bonus</b>. Si tu acuerdo es más raro, se modela con una fórmula custom — lo hemos hecho ya con sellos pequeños.</p>
+            <p>Tipos de deal soportados: <b>guarantee + door deal</b>, <b>flat fee</b>, <b>80/20 / 70/30 over guarantee</b>, <b>flat + bonus</b>. Si tu acuerdo es más raro, se modela con una fórmula custom.</p>
           </div>
         </details>
 
@@ -918,10 +734,9 @@
         </details>
 
         <details>
-          <summary>¿Mantiene mi acuerdo con Ticketmaster / Wegow / Entradas.com?<span class="plus" aria-hidden="true">+</span></summary>
+          <summary>¿Mantiene mi acuerdo con mi plataforma actual?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
             <p>Sí. Pasify puede correr en paralelo: pones el 60% del aforo en Pasify y el 40% en tu marketplace habitual durante una transición. <b>Sincronizamos stock</b> vía API para evitar overselling.</p>
-            <p>La mayoría de programadores cancelan el segundo canal a los 90 días por iniciativa propia, cuando ven que el sell-through anticipado de Pasify supera al del marketplace y la comisión es la mitad.</p>
           </div>
         </details>
 
@@ -936,7 +751,7 @@
         <details>
           <summary>¿Cumple con SGAE, Hacienda y los impuestos del espectáculo?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. Pasify genera <b>cierre Z certificado</b>, IVA del espectáculo (10%), retenciones IRPF de artistas, libro registro y export directo a Holded, Sage o Excel para tu gestoría. Cumplimos con la normativa <code>Veri*Factu</code> 2026.</p>
+            <p>Sí. Pasify genera <b>cierre Z certificado</b>, IVA del espectáculo (10%), retenciones IRPF de artistas, libro registro y export directo a Holded, Sage o Excel para tu gestoría.</p>
             <p>Para SGAE generamos el listado de aforo + recaudación con el formato estándar de declaración (CSV o XML). Si tu gestor prefiere otro formato, lo configuramos una vez y va solo cada lunes.</p>
           </div>
         </details>
@@ -944,16 +759,15 @@
         <details>
           <summary>¿Puedo probarlo con un solo show antes de comprometerme?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. <b>Primer show gratis, sin tarjeta.</b> Crea el evento, vende las entradas, opera la noche, ejecuta el settlement, y al lunes decides. Si no encaja, no nos debes nada — y tu data se exporta limpia.</p>
+            <p>Sí. <b>Sin cuota mensual ni permanencia.</b> Crea el evento, vende las entradas, opera la noche, ejecuta el settlement, y al lunes decides. Si no encaja, no nos debes nada — y tu data se exporta limpia.</p>
             <p>Si prefieres probar con dos o tres shows pequeños antes de un cabeza de cartel grande, también vale. Solo dilo en la demo y te ajustamos el plan.</p>
           </div>
         </details>
 
         <details>
-          <summary>¿Tienen soporte humano durante el show?<span class="plus" aria-hidden="true">+</span></summary>
+          <summary>¿Hay soporte con personas de verdad?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. Esto es live music — sabemos cuándo nos necesitas. <b>Soporte WhatsApp directo</b> con humanos del producto (no chatbots) jueves a domingo de 18:00 a 03:00. Tiempo medio de respuesta: 4 minutos.</p>
-            <p>Para shows grandes (capacidad &gt;800 o cabeza de cartel relevante) coordinamos guardia dedicada — un ingeniero de Pasify pendiente de tu instancia desde puertas hasta cierre. Sin coste extra.</p>
+            <p>Sí. Esto es live music — sabemos cuándo nos necesitas. <b>Soporte por chat</b> con personas del equipo de Pasify, no chatbots.</p>
           </div>
         </details>
       </div>
@@ -964,16 +778,16 @@
       <div class="left">
         <div class="lab">Empieza con tu próximo show</div>
         <h2>La operativa que cada <em>cartel</em> merece. Sin contrato, sin reventa fuera, sin Excel a las 02:00.</h2>
-        <p class="sub">Un show gratis para probarlo. Migración gratis desde tu plataforma actual. Un humano de Pasify te configura la primera fecha en 15 minutos por videollamada — y se queda contigo el viernes por si algo arde.</p>
+        <p class="sub">Migración gratis desde tu plataforma actual. Un humano de Pasify te configura la primera fecha por videollamada — y se queda contigo el viernes por si algo arde.</p>
         <div class="ctas">
           <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
           <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
         </div>
       </div>
       <ul class="bulls">
-        <li><span class="ck">✓</span><div><b>Onboarding humano · 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Por videollamada con alguien que ha programado salas. Sin formulario, sin chatbot.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Migración gratis desde Ticketmaster, Wegow o Entradas.com</b><br><span style="color:var(--ink-2);font-size:13px">Importamos histórico, fans recurrentes e integración de pago en 48h.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Soporte humano en show · jueves a domingo</b><br><span style="color:var(--ink-2);font-size:13px">Personas del producto, no tickets. Tiempo medio de respuesta: 4 min.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Onboarding humano</b><br><span style="color:var(--ink-2);font-size:13px">Por videollamada con alguien que ha programado salas. Sin formulario, sin chatbot.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Migración gratis desde tu plataforma actual</b><br><span style="color:var(--ink-2);font-size:13px">Importamos histórico, fans recurrentes e integración de pago.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Soporte con personas</b><br><span style="color:var(--ink-2);font-size:13px">Por chat, con personas del equipo, no tickets.</span></div></li>
         <li><span class="ck">✓</span><div><b>Sin permanencia, sin letra pequeña</b><br><span style="color:var(--ink-2);font-size:13px">Si no funciona el primer mes, cancelas y te llevas tu data.</span></div></li>
       </ul>
     </section>

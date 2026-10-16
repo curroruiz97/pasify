@@ -43,15 +43,6 @@
   .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
   .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
 
-  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
-  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
-  .stats-strip > div:last-child{border-right:none}
-  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
-  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
-  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
-  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
-  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
-
   .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
   .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
@@ -60,7 +51,6 @@
   .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
   .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
   .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
-  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
 
   .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
@@ -173,34 +163,6 @@
   .wband .balance{font-family:'Geist Mono',monospace;font-size:32px;font-weight:600;letter-spacing:-0.03em;line-height:1}
   .wband .pass{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;background:rgba(255,255,255,.18);padding:5px 9px;border-radius:6px}
 
-  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
-  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
-  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
-  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
-  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
-  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
-  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
-  .cmp td{color:var(--ink-3);font-size:14px}
-  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
-  .cmp td.yes{color:#4DB87A}
-  .cmp td.no{color:var(--ink-4)}
-  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
-  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
-
-  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
-  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
-  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
-  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
-  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
-  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
-  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
-  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
-  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
-  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
-
   .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
   @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
   @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
@@ -263,7 +225,7 @@
     <section class="page-hero">
       <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Festivales</span>
       <h1>El sistema operativo de tu <em>festival</em>, del primer pase abonado al último <span class="highlight">brazalete</span> escaneado.</h1>
-      <p class="lede">Producción, accesos, cashless, sponsors, talento y CRM. Pasify cubre los seis hilos críticos sin que el cashless se caiga a las 17:00 ni el reporte al sponsor llegue una semana tarde — para festivales de 5.000 a 200.000 asistentes, multi-día, multi-stage.</p>
+      <p class="lede">Producción, accesos, cashless, sponsors, talento y CRM. Pasify cubre los seis hilos críticos sin que el cashless se caiga a las 17:00 ni el reporte al sponsor llegue una semana tarde — para festivales multi-día y multi-stage.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
         <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
@@ -275,18 +237,11 @@
       </div>
     </section>
 
-    <section class="stats-strip" aria-label="Métricas de plataforma">
-      <div><div class="num">200<em>K</em></div><div class="lab">asistentes gestionados<br>en una edición</div></div>
-      <div><div class="num">24<em>s</em></div><div class="lab">tiempo medio<br>de checkout móvil</div></div>
-      <div><div class="num">99.97<em>%</em></div><div class="lab">uptime de gates<br>en tres días de pico</div></div>
-      <div><div class="num">0<em>%</em></div><div class="lab">comisión añadida<br>al fan al comprar abono</div></div>
-    </section>
-
     <section class="sec reveal">
       <div class="sec-head">
         <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
         <h2>Un festival se gana o se pierde en <em>tres</em> momentos invisibles para el público.</h2>
-        <p class="sub">El público recuerda el cabeza de cartel. La organización vive recordando otras tres cosas: el cashless que se cayó a las 17:00, el reporte al sponsor que no llega, y el accesso de prensa colapsado el día 1. Estos son los tres dolores con los que llegan los directores que prueban Pasify.</p>
+        <p class="sub">El público recuerda el cabeza de cartel. La organización vive recordando otras tres cosas: el cashless que se cayó a las 17:00, el reporte al sponsor que no llega, y el accesso de prensa colapsado el día 1. Estos son los tres dolores más habituales.</p>
       </div>
 
       <div class="pain-grid">
@@ -295,7 +250,6 @@
           <div class="lab">Dolor 01</div>
           <h3>El cashless se cae justo en la hora pico</h3>
           <p>17:00 del sábado. Cola de 800 personas para top-up. El sistema del provider falla 22 minutos. Los bares se quedan sin cobro, los asistentes furiosos, las redes en llamas. Recupera el sistema — pero la sensación de "festival mal montado" ya queda.</p>
-          <div class="quote">"Veintidós minutos de caída costaron 180.000€ en consumición no realizada."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -303,7 +257,6 @@
           <div class="lab">Dolor 02</div>
           <h3>El sponsor pide reportes una semana después</h3>
           <p>El brand pagó 80.000€ por activación en el escenario B. Quiere saber cuántos pasaron, cuánto duraron, qué consumieron, edad media, ciudades. Tu equipo dedica 5 días a hacer el PowerPoint. El sponsor lo recibe el viernes — cuando ya está hablando con el competidor.</p>
-          <div class="quote">"Perdimos un sponsor que repetía 3 años por entregar el reporte tarde."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -311,7 +264,6 @@
           <div class="lab">Dolor 03</div>
           <h3>Acreditaciones de prensa colapsadas el día 1</h3>
           <p>180 medios acreditados en Excel. Día 1, todos llegan entre 16:00 y 19:00. Cola de prensa, fotógrafos enfadados, alguien manda una credencial duplicada por error. Tu equipo de comunicación pasa 4 horas ahí en vez de en la rueda de prensa.</p>
-          <div class="quote">"La acreditación se gestionaba con WhatsApp y Excel. Insostenible."</div>
         </article>
       </div>
     </section>
@@ -362,7 +314,7 @@
         <article class="mod reveal">
           <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg></div><span class="num">06</span></div>
           <h3>CRM por fan + retargeting</h3>
-          <p>Los 80.000 fans del año quedan en tu CRM con su histórico: días que vinieron, escenarios, consumición, ciudad, edad. La próxima edición se vende a los mismos antes de salir al público.</p>
+          <p>Los fans de cada edición quedan en tu CRM con su histórico: días que vinieron, escenarios, consumición, ciudad, edad. La próxima edición se vende a los mismos antes de salir al público.</p>
           <ul><li>Pre-venta a fans recurrentes</li><li>Lookalike audiences</li><li>Export · API · RGPD-clean</li></ul>
         </article>
       </div>
@@ -378,7 +330,7 @@
       <div class="timeline-wrap">
         <div class="tl-row"><div><div class="time">D−7</div><div class="day">Lun · carga</div></div><div class="body"><h4>Producción entra al recinto</h4><p>El equipo de producción accede con sus credenciales digitales. Los proveedores reciben sus QR de entrada al loading bay. Pasify registra cada acceso con timestamp — útil para auditorías de seguro.</p><span class="tag">Acceso producción</span></div></div>
         <div class="tl-row"><div><div class="time">D−2</div><div class="day">Acreditaciones</div></div><div class="body"><h4>Prensa, sponsors y artistas reciben su credencial</h4><p>180 medios, 22 sponsors, 64 artistas. Cada uno con zona, validez y QR personalizado. Las pulseras de artista van pre-codificadas por banda — un técnico de Pasify supervisa la impresión.</p><span class="tag">Pre-event</span></div></div>
-        <div class="tl-row"><div><div class="time">D0 · 14:00</div><div class="day">Vie · puertas</div></div><div class="body"><h4>Apertura · cola gestionada</h4><p>Tres puertas, 12 escáneres por puerta. Validación QR offline, &lt;200ms por escaneo. Los abonos de 3 días reciben pulsera NFC pre-cargada con saldo opcional. Refresh de aforo cada 60s.</p><span class="tag">Modo offline</span></div></div>
+        <div class="tl-row"><div><div class="time">D0 · 14:00</div><div class="day">Vie · puertas</div></div><div class="body"><h4>Apertura · cola gestionada</h4><p>Tres puertas, 12 escáneres por puerta. Validación QR offline, al instante. Los abonos de 3 días reciben pulsera NFC pre-cargada con saldo opcional. Refresh de aforo cada 60s.</p><span class="tag">Modo offline</span></div></div>
         <div class="tl-row"><div><div class="time">D0 · 18:00</div><div class="day">Main stage</div></div><div class="body"><h4>Primer headliner, escenario A al 70%</h4><p>El productor ve en vivo: stage A 35K, stage B 8K, stage C 4K, food court 6K. La consumición media en pulsera lleva 12.50€/asistente. Los sponsors reciben primer ping de pisadas.</p><span class="tag">Heatmap activo</span></div></div>
         <div class="tl-row peak"><div><div class="time">D0 · 22:00</div><div class="day">Pico</div></div><div class="body"><h4>Stages al 92%, top-up de cashless al máximo</h4><p>50K en main + 32K en B + 18K en C. Los 4 puntos de top-up trabajan a tope. Pasify cambia a provider redundante por precaución. Cero caídas. La consumición media sube a 28€/persona/día.</p><span class="tag">Pico operativo</span></div></div>
         <div class="tl-row"><div><div class="time">D0 · 02:00</div><div class="day">Cierre stage</div></div><div class="body"><h4>Última actuación, flujo controlado de salida</h4><p>El cabeza de cartel termina. Pasify dispara mensajes al fan: "ride share disponible aquí", "hidrátate", "encuentro con tus amigos en zona X". Salida ordenada, sin colas en gates.</p><span class="tag">Egress flow</span></div></div>
@@ -440,14 +392,14 @@
       <div class="res-split">
         <div class="text">
           <h2>El cashless es donde se gana o se pierde un festival. <em>Que no se caiga</em> es una decisión de arquitectura.</h2>
-          <p class="sub">22 minutos de caída en hora pico de un festival de 50.000 personas son 180.000€ de consumición no realizada y un trending topic en redes que duele tres semanas. Pasify implementa cashless con dos providers redundantes en hot-standby — si uno falla, el otro toma el relevo en 8 segundos sin que el bartender se entere.</p>
+          <p class="sub">Una caída en hora pico es consumición que ya no se recupera y un trending topic en redes que duele semanas. Pasify implementa cashless con dos providers redundantes en hot-standby — si uno falla, el otro toma el relevo sin que el bartender se entere.</p>
 
           <ul class="checks">
             <li><span class="ck">✓</span><div><b>Pulsera NFC pre-cargada.</b> El fan compra abono + saldo. Llega ya con su pulsera codificada y con dinero. Cero cola en top-up el primer día.</div></li>
             <li><span class="ck">✓</span><div><b>Top-up redundante online + on-site.</b> Web, app, máquinas físicas, asistente humano. Si uno cae, los otros tres siguen.</div></li>
             <li><span class="ck">✓</span><div><b>Refund post-festival auto.</b> El saldo no consumido se devuelve a la tarjeta del fan en 5–7 días. Sin formularios, sin emails, sin reclamaciones.</div></li>
             <li><span class="ck">✓</span><div><b>Datos agregados al sponsor.</b> Quién consumió en su barra, demografía, productos top, comparativa con otras zonas. Sin datos personales — solo agregados.</div></li>
-            <li><span class="ck">✓</span><div><b>Failover provider en 8 segundos.</b> Dos providers de cashless en hot-standby. Si uno se cae, el otro entra sin intervención humana. Redundancia testada cada 30 días.</div></li>
+            <li><span class="ck">✓</span><div><b>Failover automático de provider.</b> Dos providers de cashless en hot-standby. Si uno se cae, el otro entra sin intervención humana.</div></li>
           </ul>
         </div>
 
@@ -488,48 +440,9 @@
       </div>
     </section>
 
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
-        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
-        <p class="sub">Sin nombrar a nadie. Estos son los rangos típicos de las dos plataformas más usadas para ticketing y cashless de festivales en España, según conversaciones con directores que migraron a Pasify en 2024–25.</p>
-      </div>
-
-      <div class="cmp" role="region" aria-label="Comparativa">
-        <table>
-          <thead><tr><th></th><th class="hl">Pasify</th><th>Marketplace global</th><th>Vertical festivales</th></tr></thead>
-          <tbody>
-            <tr><th>Comisión por entrada</th><td class="hl"><span class="pct">0%</span> al fan · 3,5–5% al festival</td><td>10–15% al fan</td><td>6–9% al fan</td></tr>
-            <tr><th>Cashless redundante (failover &lt;10s)</th><td class="hl yes">Sí · doble provider</td><td class="no">No · provider único</td><td>Parcial</td></tr>
-            <tr><th>Multi-stage con aforo en vivo</th><td class="hl yes">Sí · heatmap</td><td>Solo total</td><td>Sí</td></tr>
-            <tr><th>Sponsor dashboard en vivo</th><td class="hl yes">Sí · D+0 reportes</td><td class="no">No</td><td>Reportes D+7</td></tr>
-            <tr><th>Acreditación prensa/artista digital</th><td class="hl yes">Sí · pre-event</td><td class="no">No</td><td>Manual</td></tr>
-            <tr><th>Refund cashless automático</th><td class="hl yes">Sí · 5–7 días</td><td class="no">No</td><td>Manual + fee</td></tr>
-            <tr><th>CRM exportable post-edición</th><td class="hl yes">Sí · CSV + API</td><td class="no">No</td><td>Parcial</td></tr>
-            <tr><th>Soporte humano D-7 a D+1</th><td class="hl yes">Sí · ingeniero on-site</td><td>Tickets · 24h</td><td>On-site de pago</td></tr>
-            <tr><th>Permanencia mínima</th><td class="hl"><span class="pct">0</span> meses</td><td>Por edición</td><td>Por edición</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
-        <h2>Tres formas de medir si Pasify funciona en festivales.</h2>
-        <p class="sub">Tres festivales reales de tres tamaños distintos. Nombres anonimizados a petición — el sector festivalero es competitivo y prefieren no revelar stack.</p>
-      </div>
-
-      <div class="quotes">
-        <article class="q reveal"><div class="mark">"</div><blockquote>El cashless aguantó <em>tres días</em> a 50K asistentes sin una sola caída. Es la primera vez en seis años que no me han llamado a las 17:00 del sábado.</blockquote><div class="who"><div class="av"></div><div><div class="nm">D.A. · Director técnico</div><div class="role">Festival indie · Madrid · 35K asist</div></div></div></article>
-        <article class="q reveal"><div class="mark">"</div><blockquote>Los <em>sponsors</em> recibieron sus reportes el lunes a las 09:00. Antes tardábamos una semana. Tres marcas firmaron edición 2026 en el aeropuerto.</blockquote><div class="who"><div class="av b"></div><div><div class="nm">M.C. · Operations Lead</div><div class="role">Festival electrónico · Barcelona · 50K</div></div></div></article>
-        <article class="q reveal"><div class="mark">"</div><blockquote>Ahora hablamos a <em>80.000 fans</em> directamente con WhatsApp y email. Antes el ticketing se quedaba toda la data — y nuestro retargeting era un anuncio de Instagram.</blockquote><div class="who"><div class="av c"></div><div><div class="nm">P.L. · Producer</div><div class="role">Festival mainstream · 80K asist</div></div></div></article>
-      </div>
-    </section>
-
     <section class="sec compact reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Integraciones</span>
         <h2>Encaja con tu stack de festival.</h2>
         <p class="sub">Pasify habla con los providers de cashless, las plataformas de discovery y las herramientas de sponsor reporting que ya usas.</p>
       </div>
@@ -555,19 +468,19 @@
 
     <section class="sec reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Preguntas</span>
         <h2>Lo que preguntan los directores antes de firmar.</h2>
       </div>
 
       <div class="faq">
-        <details><summary>¿Soporta festivales de 200.000 asistentes?<span class="plus">+</span></summary><div class="answer"><p>Sí. La arquitectura de Pasify escala horizontalmente: gates, cashless, dashboards. <b>Hemos operado a 180K en una jornada</b> sin degradación. La base técnica está auditada por un partner de infraestructura externo cada 6 meses.</p><p>Para festivales de &gt;100K coordinamos un ingeniero de Pasify on-site durante D-2 a D+1, sin coste extra. Es donde la mayoría de plataformas fallan — la nuestra está pensada para esa escala desde el día uno.</p></div></details>
-        <details><summary>¿Qué pasa si el cashless se cae?<span class="plus">+</span></summary><div class="answer"><p>Tenemos <b>doble provider en hot-standby</b>. Si el primario detecta lag o errores, el secundario toma el relevo en menos de 10 segundos. El bartender no se entera, el fan tampoco. La conmutación se ejercita cada 30 días en producción real.</p><p>Si ambos cayeran (no ha pasado en 4 años), pasamos a <b>modo offline degradado</b>: las pulseras se siguen leyendo localmente, las transacciones se sincronizan al volver. Cero pérdida de venta.</p></div></details>
-        <details><summary>¿Cómo funciona el refund de saldo no consumido?<span class="plus">+</span></summary><div class="answer"><p>El saldo no consumido se devuelve <b>automáticamente</b> en 5–7 días a la tarjeta del fan. Cero formularios, cero emails, cero reclamaciones. La media histórica: 3,2% de saldo no consumido — refund completo, sin fees.</p><p>Algunos festivales prefieren ofrecer un "convertir saldo en early-access próxima edición" — Pasify lo soporta, el fan elige.</p></div></details>
-        <details><summary>¿Puedo dar un dashboard a cada sponsor?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada sponsor recibe su propio panel con login. Ve: pisadas en su activación, demografía agregada (RGPD-clean), consumición en su barra, comparativa con otras zonas, evolución hora a hora. <b>Reportes diarios D+0</b> y reporte final D+1.</p><p>Lo hemos usado para activaciones premium grandes — los sponsors firman edición siguiente más rápido cuando ven sus números antes de irse del recinto.</p></div></details>
+        <details><summary>¿Soporta festivales grandes?<span class="plus">+</span></summary><div class="answer"><p>Sí. La arquitectura de Pasify escala horizontalmente: gates, cashless, dashboards.</p><p>Para festivales grandes coordinamos un ingeniero de Pasify on-site durante D-2 a D+1, sin coste extra.</p></div></details>
+        <details><summary>¿Qué pasa si el cashless se cae?<span class="plus">+</span></summary><div class="answer"><p>Tenemos <b>doble provider en hot-standby</b>. Si el primario detecta lag o errores, el secundario toma el relevo. El bartender no se entera, el fan tampoco.</p><p>Si ambos cayeran, pasamos a <b>modo offline degradado</b>: las pulseras se siguen leyendo localmente, las transacciones se sincronizan al volver. Cero pérdida de venta.</p></div></details>
+        <details><summary>¿Cómo funciona el refund de saldo no consumido?<span class="plus">+</span></summary><div class="answer"><p>El saldo no consumido se devuelve <b>automáticamente</b> en 5–7 días a la tarjeta del fan. Cero formularios, cero emails, cero reclamaciones. Refund completo, sin fees.</p><p>Algunos festivales prefieren ofrecer un "convertir saldo en early-access próxima edición" — Pasify lo soporta, el fan elige.</p></div></details>
+        <details><summary>¿Puedo dar un dashboard a cada sponsor?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada sponsor recibe su propio panel con login. Ve: pisadas en su activación, demografía agregada (RGPD-clean), consumición en su barra, comparativa con otras zonas, evolución hora a hora. <b>Reportes diarios D+0</b> y reporte final D+1.</p></div></details>
         <details><summary>¿Soporta acreditación de prensa, artista, sponsor y producción?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada perfil tiene su categoría con zona, validez y tipo de credencial (digital, impresa, pulsera NFC). La prensa recibe su credencial digital pre-event y solo se acerca al stand a por la física si quiere. Las bandas reciben pulseras pre-codificadas por banda y rol (artist, manager, técnico).</p></div></details>
-        <details><summary>¿Cumple con SGAE, Hacienda y normativa de festivales?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cierre Z certificado, IVA del espectáculo (10%), libro registro, declaración SGAE en CSV/XML. Cumple <code>Veri*Factu</code> 2026. Y para festivales con tasas locales (turística, etc.) configuramos el modelo fiscal específico una vez.</p></div></details>
-        <details><summary>¿Y si solo quiero usar Pasify para el cashless, no para ticketing?<span class="plus">+</span></summary><div class="answer"><p>Vale. Los módulos son independientes. Puedes usar tu Ticketmaster/Wegow para ticketing y solo el cashless de Pasify. <b>Sincronizamos vía API</b> los códigos del marketplace para que la pulsera NFC se cargue al validar la entrada en gate.</p></div></details>
-        <details><summary>¿Tienen ingeniero on-site durante el festival?<span class="plus">+</span></summary><div class="answer"><p>Sí, para festivales de &gt;30K asistentes. Un ingeniero de Pasify se desplaza al recinto desde D-2 hasta D+1, sin coste. Para festivales menores se coordina soporte WhatsApp con respuesta media de 4 minutos durante el evento.</p></div></details>
+        <details><summary>¿Cumple con SGAE, Hacienda y normativa de festivales?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cierre Z certificado, IVA del espectáculo (10%), libro registro, declaración SGAE en CSV/XML. Y para festivales con tasas locales (turística, etc.) configuramos el modelo fiscal específico una vez.</p></div></details>
+        <details><summary>¿Y si solo quiero usar Pasify para el cashless, no para ticketing?<span class="plus">+</span></summary><div class="answer"><p>Vale. Los módulos son independientes. Puedes usar tu plataforma de ticketing actual y solo el cashless de Pasify. <b>Sincronizamos vía API</b> los códigos del marketplace para que la pulsera NFC se cargue al validar la entrada en gate.</p></div></details>
+        <details><summary>¿Tienen ingeniero on-site durante el festival?<span class="plus">+</span></summary><div class="answer"><p>Sí, para festivales grandes. Un ingeniero de Pasify se desplaza al recinto desde D-2 hasta D+1, sin coste. Para festivales menores, soporte por chat con personas del equipo durante el evento.</p></div></details>
       </div>
     </section>
 
@@ -575,16 +488,16 @@
       <div class="left">
         <div class="lab">Empieza con tu próxima edición</div>
         <h2>El sistema que tu <em>festival</em> merece. Sin caídas, sin reportes tardíos, sin Excel a las 03:00.</h2>
-        <p class="sub">Pre-venta gratuita para tu próxima edición. Migración asistida desde tu plataforma actual. Un equipo Pasify on-site desde D-2 a D+1 si tu festival es de &gt;30K.</p>
+        <p class="sub">Migración asistida desde tu plataforma actual. Un equipo Pasify on-site desde D-2 a D+1 en festivales grandes.</p>
         <div class="ctas">
           <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
           <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
         </div>
       </div>
       <ul class="bulls">
-        <li><span class="ck">✓</span><div><b>Cashless redundante · failover &lt;10s</b><br><span style="color:var(--ink-2);font-size:13px">Doble provider en hot-standby, testado cada 30 días.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Sponsor reports D+0 · final D+1</b><br><span style="color:var(--ink-2);font-size:13px">Tus marcas firman antes de irse del aeropuerto.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Ingeniero on-site sin coste · &gt;30K</b><br><span style="color:var(--ink-2);font-size:13px">Equipo Pasify pendiente de tu instancia D-2 a D+1.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Cashless redundante · failover automático</b><br><span style="color:var(--ink-2);font-size:13px">Doble provider en hot-standby.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Sponsor reports D+0 · final D+1</b><br><span style="color:var(--ink-2);font-size:13px">Tus marcas ven sus números antes de irse.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Ingeniero on-site sin coste</b><br><span style="color:var(--ink-2);font-size:13px">Equipo Pasify pendiente de tu instancia D-2 a D+1.</span></div></li>
         <li><span class="ck">✓</span><div><b>Tu CRM, tu propiedad · siempre</b><br><span style="color:var(--ink-2);font-size:13px">Export CSV+API. Lookalike audiences. Pre-venta directa.</span></div></li>
       </ul>
     </section>
