@@ -60,7 +60,7 @@
   .mod:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
   .mod:hover::before{opacity:.18}
   .mod .head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative}
-  .mod .ico{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mod .ico{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,rgba(232,84,42,.2),rgba(232,84,42,.06));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 20px -12px rgba(232,84,42,.6);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
   .mod .ico svg{width:22px;height:22px}
   .mod .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--ink-3)}
   .mod h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;position:relative}
@@ -227,7 +227,7 @@
       <h1>El sistema operativo de tu <em>festival</em>, del primer pase abonado al último <span class="highlight">brazalete</span> escaneado.</h1>
       <p class="lede">Producción, accesos, cashless, sponsors, talento y CRM. Pasify cubre los seis hilos críticos sin que el cashless se caiga a las 17:00 ni el reporte al sponsor llegue una semana tarde — para festivales multi-día y multi-stage.</p>
       <div class="ctas">
-        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
         <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
       </div>
       <div class="meta" aria-label="Datos de plataforma">
@@ -277,42 +277,42 @@
 
       <div class="mod-grid">
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M16 3v6M8 3v6"/></svg></div><span class="num">01</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3" /><path d="M16 2v3" /><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M8 13h.01" /><path d="M12 13h.01" /><path d="M16 13h.01" /><path d="M8 17h.01" /><path d="M12 17h.01" /><path d="M16 17h.01" /></svg></div><span class="num">01</span></div>
           <h3>Ticketing multi-día y abonos</h3>
           <p>Abono 3 días, día suelto, VIP, camping, glamping, parking. Saltos de precio por tiempo o stock. Apple Wallet de serie. URL única para la web del festival.</p>
           <ul><li>Abonos / packs / bundles</li><li>Saltos de precio automáticos</li><li>Anti-reventa nominativa</li></ul>
         </article>
 
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><span class="num">02</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></svg></div><span class="num">02</span></div>
           <h3>Cashless con top-up en vivo</h3>
           <p>Pulsera NFC pre-cargada. Top-up online antes del festival, en máquinas dentro o desde la app del fan. Provider redundante: si uno se cae, el otro entra automáticamente.</p>
           <ul><li>Pulsera NFC con saldo</li><li>Top-up online + on-site</li><li>Refund post-festival auto</li></ul>
         </article>
 
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="6" cy="6" r="2" fill="currentColor"/><circle cx="13" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="18" r="2" fill="currentColor"/></svg></div><span class="num">03</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></svg></div><span class="num">03</span></div>
           <h3>Multi-stage con aforo por escenario</h3>
           <p>3, 5, 10 escenarios. Cada uno con su aforo, su programación y su data. El productor ve en vivo qué stage está al 90% y reacciona — re-rutea seguridad o redirige asistentes a otro stage.</p>
           <ul><li>Aforo por zona en vivo</li><li>Programación dinámica</li><li>Heatmap de movimientos</li></ul>
         </article>
 
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><circle cx="17" cy="17" r="2.5" fill="currentColor" stroke="none"/></svg></div><span class="num">04</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 19a4 4 0 00-8 0" /><path d="M16 10h2" /><path d="M16 14h2" /><circle cx="9" cy="12" r="3" /><rect x="2" y="5" width="20" height="14" rx="2" /></svg></div><span class="num">04</span></div>
           <h3>Acreditaciones · prensa, artista, sponsor</h3>
           <p>Cada perfil con su zona, su validez, su impresión y su QR. Los medios reciben su credencial digital antes del día 1. Backstage y artista con accesos diferenciados por banda.</p>
           <ul><li>Credenciales por perfil y zona</li><li>Impresión on-site opcional</li><li>Histórico por edición</li></ul>
         </article>
 
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 6.5-7 11-7 11z"/></svg></div><span class="num">05</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z" /><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /></svg></div><span class="num">05</span></div>
           <h3>Sponsor analytics en vivo</h3>
           <p>El sponsor recibe un dashboard propio: pisadas en su activación, demografía agregada, consumición media, comparativa con otras zonas. Reporte final entregado en el día +1.</p>
           <ul><li>Dashboard sponsor en vivo</li><li>Reporte final D+1</li><li>Datos agregados RGPD-clean</li></ul>
         </article>
 
         <article class="mod reveal">
-          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg></div><span class="num">06</span></div>
+          <div class="head"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg></div><span class="num">06</span></div>
           <h3>CRM por fan + retargeting</h3>
           <p>Los fans de cada edición quedan en tu CRM con su histórico: días que vinieron, escenarios, consumición, ciudad, edad. La próxima edición se vende a los mismos antes de salir al público.</p>
           <ul><li>Pre-venta a fans recurrentes</li><li>Lookalike audiences</li><li>Export · API · RGPD-clean</li></ul>
@@ -490,7 +490,7 @@
         <h2>El sistema que tu <em>festival</em> merece. Sin caídas, sin reportes tardíos, sin Excel a las 03:00.</h2>
         <p class="sub">Migración asistida desde tu plataforma actual. Un equipo Pasify on-site desde D-2 a D+1 en festivales grandes.</p>
         <div class="ctas">
-          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
           <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
         </div>
       </div>

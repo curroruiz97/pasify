@@ -197,7 +197,7 @@ export const EventListCard = ({
               className="h-[18px] w-[18px]"
               color="#fff"
               fill={fav ? "#fff" : "transparent"}
-              strokeWidth={fav ? 2 : 2.2}
+              strokeWidth={2}
             />
           </span>
 

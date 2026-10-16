@@ -113,6 +113,11 @@
     padding: 0;
     border: 0;
   }
+  /* Iconos Lucide: trazo algo más fino que el 2px por defecto para un acabado
+     más limpio. Solo afecta a los que no fijan su propio strokeWidth. */
+  svg.lucide[stroke-width="2"] {
+    stroke-width: 1.75;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;

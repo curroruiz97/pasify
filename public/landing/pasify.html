@@ -73,8 +73,8 @@
   .mega-link{display:flex;align-items:center;gap:10px;padding:9px 10px;margin-left:-10px;border-radius:8px;font-size:14px;color:var(--ink);transition:background .2s ease, color .2s ease}
   .mega-link:hover{background:rgba(232,84,42,.08);color:var(--accent)}
   .mega-link .pill{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;background:var(--accent);color:#fff;padding:2px 6px;border-radius:999px;margin-left:auto}
-  .mega-link .ico{width:28px;height:28px;border-radius:7px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
-  .mega-link .ico svg{width:14px;height:14px}
+  .mega-link .ico{width:28px;height:28px;border-radius:7px;background:linear-gradient(180deg,rgba(232,84,42,.2),rgba(232,84,42,.06));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 20px -12px rgba(232,84,42,.6);border:1px solid rgba(232,84,42,.2);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mega-link .ico svg{width:16px;height:16px}
   .mega-link.has-sub{flex-direction:column;align-items:flex-start;gap:6px;line-height:1.2}
   .mega-link.has-sub .ttl{font-size:14px;font-weight:500;letter-spacing:-0.005em}
   .mega-link.has-sub .sublabel{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3);line-height:1.45;font-weight:400}
@@ -235,7 +235,7 @@
   .modules{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   .module{background:var(--bg-2);border:1px solid var(--line);border-radius:20px;padding:32px;position:relative;overflow:hidden;transition:transform .3s ease, border-color .3s ease}
   .module:hover{border-color:var(--line-2);transform:translateY(-4px)}
-  .module .ico{width:48px;height:48px;border-radius:12px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);margin-bottom:24px;border:1px solid rgba(232,84,42,.25)}
+  .module .ico{width:48px;height:48px;border-radius:12px;background:linear-gradient(180deg,rgba(232,84,42,.2),rgba(232,84,42,.06));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 20px -12px rgba(232,84,42,.6);display:grid;place-items:center;color:var(--accent);margin-bottom:24px;border:1px solid rgba(232,84,42,.25)}
   .module .ico svg{width:22px;height:22px}
   .module h3{font-size:22px;font-weight:600;letter-spacing:-0.02em;margin-bottom:12px}
   .module p{font-size:15px;line-height:1.55;color:var(--ink-2)}
@@ -541,19 +541,19 @@
     <span class="spacer"></span>
     <div class="search-dock" id="search-dock">
       <button type="button" class="search-trigger" id="search-trigger" aria-label="Abrir búsqueda">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
       </button>
       <form class="search-form" id="search-form" role="search" autocomplete="off">
-        <span class="search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <span class="search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg></span>
         <input type="search" id="search-input" placeholder="Busca soluciones, sectores, recursos…" />
         <button type="button" class="search-close" id="search-close" aria-label="Cerrar búsqueda">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
         </button>
       </form>
       <div class="search-results" id="search-results" role="listbox"></div>
     </div>
     <a href="/#/login" target="_top" class="login">Entrar</a>
-    <a href="/#/register-client" target="_top" class="cta">Crear cuenta →</a>
+    <a href="/#/register-client" target="_top" class="cta">Crear cuenta <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
     <button class="burger" id="burger" aria-label="Menú"><span></span></button>
   </div>
 
@@ -564,38 +564,38 @@
         <div class="mega-col">
           <h6>Gestión de venta</h6>
           <ul>
-            <li><a class="mega-link" href="soluciones/entradas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3z"/><path d="M2 12h20"/></svg></span>Venta de entradas</a></li>
-            <li><a class="mega-link" href="soluciones/taquilla.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span>Venta en taquilla</a></li>
-            <li><a class="mega-link" href="soluciones/vip.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.5 5 5.5.8-4 3.9.9 5.5L12 14.6 7.1 17.2 8 11.7 4 7.8l5.5-.8z"/></svg></span>Reservados VIP</a></li>
-            <li><a class="mega-link" href="soluciones/invitados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h4v16h-4M4 4h4v16H4M8 12h8"/></svg></span>Listas de invitados</a></li>
-            <li><a class="mega-link" href="soluciones/rrpp.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11l2 2 4-4"/></svg></span>Gestión de RRPP</a></li>
-            <li><a class="mega-link" href="soluciones/canales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>Canales de venta</a></li>
+            <li><a class="mega-link" href="soluciones/entradas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v2" /><path d="M13 17v2" /><path d="M13 11v2" /></svg></span>Venta de entradas</a></li>
+            <li><a class="mega-link" href="soluciones/taquilla.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" /><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244" /><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" /></svg></span>Venta en taquilla</a></li>
+            <li><a class="mega-link" href="soluciones/vip.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" /><path d="M5 21h14" /></svg></span>Reservados VIP</a></li>
+            <li><a class="mega-link" href="soluciones/invitados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" /></svg></span>Listas de invitados</a></li>
+            <li><a class="mega-link" href="soluciones/rrpp.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" /><path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14" /><path d="M8 6v8" /></svg></span>Gestión de RRPP</a></li>
+            <li><a class="mega-link" href="soluciones/canales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" x2="15.42" y1="13.51" y2="17.49" /><line x1="15.41" x2="8.59" y1="6.51" y2="10.49" /></svg></span>Canales de venta</a></li>
           </ul>
         </div>
         <div class="mega-col">
           <h6>Operación</h6>
           <ul>
-            <li><a class="mega-link" href="operacion/control-acceso.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M21 21v-7M17 17h4"/></svg></span>Control de acceso QR <span class="pill">Hot</span></a></li>
-            <li><a class="mega-link" href="operacion/tpv.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg></span>Software TPV</a></li>
-            <li><a class="mega-link" href="operacion/recepcion.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Recepción de eventos</a></li>
-            <li><a class="mega-link" href="operacion/soporte.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>Soporte personalizado</a></li>
-            <li><a class="mega-link" href="operacion/pases-temporada.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>Pases de temporada</a></li>
+            <li><a class="mega-link" href="operacion/control-acceso.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 12v4a1 1 0 0 1-1 1h-4" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M17 8V7" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M7 17h.01" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><rect x="7" y="7" width="5" height="5" rx="1" /></svg></span>Control de acceso QR <span class="pill">Hot</span></a></li>
+            <li><a class="mega-link" href="operacion/tpv.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /><path d="M6 14h2" /></svg></span>Software TPV</a></li>
+            <li><a class="mega-link" href="operacion/recepcion.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20a1 1 0 0 1-1-1v-1a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1Z" /><path d="M20 16a8 8 0 1 0-16 0" /><path d="M12 4v4" /><path d="M10 4h4" /></svg></span>Recepción de eventos</a></li>
+            <li><a class="mega-link" href="operacion/soporte.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z" /><path d="M21 16v2a4 4 0 0 1-4 4h-5" /></svg></span>Soporte personalizado</a></li>
+            <li><a class="mega-link" href="operacion/pases-temporada.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3" /><path d="M16 2v3" /><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="m9 15 2 2 4-4" /></svg></span>Pases de temporada</a></li>
           </ul>
         </div>
         <div class="mega-col">
           <h6>Data &amp; Marketing</h6>
           <ul>
-            <li><a class="mega-link" href="data/crm.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12a9 9 0 0 0 9 9V12z" fill="currentColor"/></svg></span>CRM &amp; Real time data</a></li>
-            <li><a class="mega-link" href="data/marketing.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-6"/></svg></span>Marketing digital</a></li>
-            <li><a class="mega-link" href="data/informes.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 18h4"/></svg></span>Informes de eventos</a></li>
-            <li><a class="mega-link" href="data/api.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2M9 12l2 2 4-4"/></svg></span>API &amp; Integraciones</a></li>
+            <li><a class="mega-link" href="data/crm.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 2v2" /><path d="M17.915 21a6 6 0 10-12 0" /><path d="M8 2v2" /><circle cx="12" cy="11" r="4" /><rect x="3" y="3" width="18" height="18" rx="2" /></svg></span>CRM &amp; Real time data</a></li>
+            <li><a class="mega-link" href="data/marketing.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 7h6v6" /><path d="m22 7-8.5 8.5-5-5L2 17" /></svg></span>Marketing digital</a></li>
+            <li><a class="mega-link" href="data/informes.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /><path d="M8 18v-1" /><path d="M12 18v-6" /><path d="M16 18v-3" /></svg></span>Informes de eventos</a></li>
+            <li><a class="mega-link" href="data/api.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2" /><rect x="14" y="2" width="8" height="8" rx="1" /></svg></span>API &amp; Integraciones</a></li>
           </ul>
         </div>
         <div class="mega-feature">
           <span class="lab">En la puerta</span>
           <h5>Entradas en directo</h5>
           <p>Escanea los QR con el móvil y sigue en tiempo real quién ha entrado. Con el modo puerta, el móvil se queda solo con el escáner.</p>
-          <a href="#producto">Ver producto →</a>
+          <a href="#producto">Ver producto <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>
@@ -604,12 +604,12 @@
         <div class="mega-col">
           <h6>Por tipo de negocio</h6>
           <ul>
-            <li><a class="mega-link" href="sectores/discotecas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>Discotecas</a></li>
-            <li><a class="mega-link" href="sectores/salas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 20V9l7-5 7 5v11M9 20v-6h6v6"/></svg></span>Salas de conciertos</a></li>
-            <li><a class="mega-link" href="sectores/beach-clubs.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4M2 18h20M8 14V6a4 4 0 0 1 8 0v8"/></svg></span>Beach Clubs</a></li>
-            <li><a class="mega-link" href="sectores/festivales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l9-18 9 18M3 21h18M9 14h6"/></svg></span>Festivales</a></li>
-            <li><a class="mega-link" href="sectores/promotoras.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Promotoras</a></li>
-            <li><a class="mega-link" href="sectores/eventos-privados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v12H3z"/><path d="M9 21v-7h6v7"/></svg></span>Eventos privados</a></li>
+            <li><a class="mega-link" href="sectores/discotecas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M6 12c0-1.7.7-3.2 1.8-4.2" /><circle cx="12" cy="12" r="2" /><path d="M18 12c0 1.7-.7 3.2-1.8 4.2" /></svg></span>Discotecas</a></li>
+            <li><a class="mega-link" href="sectores/salas.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12" /><path d="M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5" /><circle cx="16" cy="7" r="5" /></svg></span>Salas de conciertos</a></li>
+            <li><a class="mega-link" href="sectores/beach-clubs.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l1-1 1 1h4" /><path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-3l-1-1-1 1h-3" /><path d="M5.89 9.71c-2.15 2.15-2.3 5.47-.35 7.43l4.24-4.25.7-.7.71-.71 2.12-2.12c-1.95-1.96-5.27-1.8-7.42.35" /><path d="M11 15.5c.5 2.5-.17 4.5-1 6.5h4c2-5.5-.5-12-1-14" /></svg></span>Beach Clubs</a></li>
+            <li><a class="mega-link" href="sectores/festivales.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 21 14 3" /><path d="M20.5 21 10 3" /><path d="M15.5 21 12 15l-3.5 6" /><path d="M2 21h20" /></svg></span>Festivales</a></li>
+            <li><a class="mega-link" href="sectores/promotoras.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12h.01" /><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /><path d="M22 13a18.15 18.15 0 0 1-20 0" /><rect width="20" height="14" x="2" y="6" rx="2" /></svg></span>Promotoras</a></li>
+            <li><a class="mega-link" href="sectores/eventos-privados.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 11.3 2 22l10.7-3.79" /><path d="M4 3h.01" /><path d="M22 8h.01" /><path d="M15 2h.01" /><path d="M22 20h.01" /><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10" /><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17" /><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7" /><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z" /></svg></span>Eventos privados</a></li>
           </ul>
         </div>
         <div class="mega-col">
@@ -633,7 +633,7 @@
           <span class="lab">Sin cuota mensual</span>
           <h5>Empieza gratis con tu local</h5>
           <p>Alta gratuita y una comisión por cada entrada vendida. Las entradas gratis no pagan comisión.</p>
-          <a href="#precios">Ver precio →</a>
+          <a href="#precios">Ver precio <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>
@@ -672,7 +672,7 @@
           <span class="lab">Soporte</span>
           <h5>Te contesta una persona</h5>
           <p>Chat con el equipo de Pasify desde el panel y desde la app, también la noche del evento.</p>
-          <a href="#preguntas">Preguntas frecuentes →</a>
+          <a href="#preguntas">Preguntas frecuentes <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>
@@ -713,7 +713,7 @@
           <span class="lab">Contacto</span>
           <h5>¿Hablamos?</h5>
           <p>Escríbenos y te ayudamos a montar tu primer evento con Pasify.</p>
-          <a href="mailto:comunicacion@avenuemedia.io">Escribir →</a>
+          <a href="mailto:comunicacion@avenuemedia.io">Escribir <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>
@@ -763,7 +763,7 @@
     <a href="#precios" style="padding:18px 4px;font-size:18px;font-weight:500;border-bottom:1px solid var(--line);color:var(--ink)">Pricing</a>
     <div class="ctas">
       <a href="/#/login" target="_top" class="btn btn-ghost" style="justify-content:center">Entrar</a>
-      <a href="/#/register-client" target="_top" class="btn btn-primary" style="justify-content:center">Crear cuenta →</a>
+      <a href="/#/register-client" target="_top" class="btn btn-primary" style="justify-content:center">Crear cuenta <svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
     </div>
   </aside>
 </header>
@@ -787,7 +787,7 @@
       <h1 class="hero-title"><span class="w">Vende.</span> <span class="w">Gestiona.</span> <span class="w"><em>Vibra</em><span class="dot">.</span></span></h1>
       <p class="lede">Crea tu evento, vende las entradas online con pago con tarjeta y valida cada QR en la puerta con el móvil. Todo desde el mismo panel, sin cuota mensual.</p>
       <div class="ctas">
-        <a href="/#/register-partner" target="_top" class="btn btn-primary">Crear cuenta de local <span class="arrow">→</span></a>
+        <a href="/#/register-partner" target="_top" class="btn btn-primary">Crear cuenta de local <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
         <a href="#como-funciona" class="btn btn-outline">Cómo funciona</a>
       </div>
     </div>
@@ -982,63 +982,63 @@
     <div class="modules">
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 9.5V7a2 2 0 012-2h16a2 2 0 012 2v2.5a1.5 1.5 0 000 3V15a2 2 0 01-2 2H4a2 2 0 01-2-2v-2.5a1.5 1.5 0 000-3z"/><line x1="9" y1="5" x2="9" y2="17" stroke-dasharray="2 2"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v2" /><path d="M13 17v2" /><path d="M13 11v2" /></svg></div>
         <h3>Eventos y tipos de entrada</h3>
         <p>General, anticipada, VIP… cada tipo con su precio y su cupo. El aforo del evento es la suma de los cupos. Entradas gratis o desde 0,50 €.</p>
         <div class="feat">
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Página pública del evento para compartir</div>
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Página pública del local con sus eventos</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Página pública del evento para compartir</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Página pública del local con sus eventos</div>
         </div>
       </div>
 
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /><path d="M6 14h2" /></svg></div>
         <h3>Venta online</h3>
         <p>El comprador entra con su cuenta y paga con tarjeta en la pasarela de Stripe. Recibe la entrada por email con su QR y la tiene también en la app.</p>
         <div class="feat">
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>La plaza queda reservada mientras paga</div>
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Sin sobreventa: se para al llenar el cupo</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>La plaza queda reservada mientras paga</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Sin sobreventa: se para al llenar el cupo</div>
         </div>
       </div>
 
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M15 17v-1a3 3 0 013-3h1a3 3 0 013 3v1"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><path d="M16 3.128a4 4 0 0 1 0 7.744" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><circle cx="9" cy="7" r="4" /></svg></div>
         <h3>Asistentes</h3>
         <p>La lista de cada evento con quién ha comprado, qué tipo de entrada y si ya ha entrado. Búsqueda por nombre, email o teléfono y exportación a CSV.</p>
       </div>
 
       <div class="module wide reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><line x1="14" y1="14" x2="21" y2="14"/><line x1="14" y1="17" x2="17" y2="17"/><line x1="14" y1="20" x2="21" y2="20"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 12v4a1 1 0 0 1-1 1h-4" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M17 8V7" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M7 17h.01" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><rect x="7" y="7" width="5" height="5" rx="1" /></svg></div>
         <h3>Control de acceso con el móvil</h3>
         <p>El escáner de la app lee el QR de la entrada con la cámara del móvil. Avisa si ya se ha usado, si es de otro evento o si no está pagada; si el QR no se lee, se valida con su código corto. Con el modo puerta dejas el móvil en la entrada: solo se ve el escáner y para salir hace falta tu PIN.</p>
         <div class="feat" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px;padding-top:24px;border-top:1px solid var(--line)">
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Sin lectores ni hardware</div>
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Modo puerta con PIN</div>
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Entradas usadas, rechazadas</div>
-          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Entradas en directo durante el evento</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Sin lectores ni hardware</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Modo puerta con PIN</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Entradas usadas, rechazadas</div>
+          <div class="row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Entradas en directo durante el evento</div>
         </div>
       </div>
 
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l4-5 4 3 5-7"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></svg></div>
         <h3>Métricas y cobros</h3>
         <p>Ventas por evento y por tipo de entrada. En Cobros ves lo cobrado, lo reembolsado, la comisión de Pasify y el neto de tus ventas.</p>
       </div>
 
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg></div>
         <h3>Cancelaciones y reembolsos</h3>
         <p>Si cancelas un evento, Pasify devuelve el dinero a quien compró, sin que tengas que hacerlo entrada a entrada. Los compradores también pueden pedir un reembolso y tú lo decides.</p>
       </div>
 
       <div class="module reveal">
         <div class="glow"></div>
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" /></svg></div>
         <h3>Soporte</h3>
         <p>Chat con el equipo de Pasify desde el panel y desde la app. Te contesta una persona.</p>
       </div>
@@ -1173,12 +1173,12 @@
         </div>
         <p class="desc">Alta gratuita. La comisión de Pasify se descuenta de lo que cobras por cada entrada vendida; en Cobros la ves desglosada.</p>
         <ul>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Eventos y tipos de entrada sin límite</li>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Escáner y modo puerta</li>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Asistentes, métricas y cobros</li>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Las entradas gratis no pagan comisión</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Eventos y tipos de entrada sin límite</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Escáner y modo puerta</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Asistentes, métricas y cobros</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Las entradas gratis no pagan comisión</li>
         </ul>
-        <a href="/#/register-partner" target="_top" class="btn btn-primary">Crear cuenta de local <span class="arrow">→</span></a>
+        <a href="/#/register-partner" target="_top" class="btn btn-primary">Crear cuenta de local <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
       </div>
 
       <div class="plan reveal">
@@ -1189,9 +1189,9 @@
         </div>
         <p class="desc">Paga el precio que pone el local, sin gastos de gestión añadidos. Necesita una cuenta de Pasify para comprar.</p>
         <ul>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Pago con tarjeta</li>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Entrada con QR por email y en la app</li>
-          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Reembolso si se cancela el evento</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Pago con tarjeta</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Entrada con QR por email y en la app</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Reembolso si se cancela el evento</li>
         </ul>
         <a href="/#/calendar" target="_top" class="btn btn-outline">Ver eventos</a>
       </div>
@@ -1208,23 +1208,23 @@
     </div>
     <div class="faq reveal" id="faq">
       <div class="faq-item open">
-        <div class="faq-q"><h4>¿Cuánto cuesta?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-q"><h4>¿Cuánto cuesta?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div>
         <div class="faq-a">Darse de alta es gratis y no hay cuota mensual ni permanencia. Pasify cobra una comisión por cada entrada vendida, que se descuenta del importe que recibe el local. El comprador paga el precio que tú pones.</div>
       </div>
       <div class="faq-item">
-        <div class="faq-q"><h4>¿Cómo recibe el comprador su entrada?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-q"><h4>¿Cómo recibe el comprador su entrada?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div>
         <div class="faq-a">Por email, con su código QR y un enlace a la entrada, y en la app de Pasify con su cuenta. Para comprar hay que iniciar sesión o crear una cuenta.</div>
       </div>
       <div class="faq-item">
-        <div class="faq-q"><h4>¿Necesito un lector para la puerta?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-q"><h4>¿Necesito un lector para la puerta?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div>
         <div class="faq-a">No. Basta un móvil con la app de Pasify: el escáner usa la cámara. En modo puerta el móvil solo enseña el escáner y para salir hace falta tu PIN. Para validar cada entrada, el escáner necesita conexión a internet.</div>
       </div>
       <div class="faq-item">
-        <div class="faq-q"><h4>¿Qué pasa si cancelo un evento?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-q"><h4>¿Qué pasa si cancelo un evento?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div>
         <div class="faq-a">Lo cancelas desde el panel y Pasify devuelve el dinero de las entradas vendidas a quien las compró, a la misma tarjeta.</div>
       </div>
       <div class="faq-item">
-        <div class="faq-q"><h4>¿Quién ve los datos de mis compradores?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+        <div class="faq-q"><h4>¿Quién ve los datos de mis compradores?</h4><div class="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div>
         <div class="faq-a">Tú, como organizador: ves el nombre, el email y el teléfono de quien compra en tus eventos, y eres responsable de esos datos. Pasify los trata por encargo tuyo y no los vende ni los usa para anunciar nada. Lo tienes en la <a href="/privacidad.html" target="_top" style="color:var(--accent)">política de privacidad</a>.</div>
       </div>
     </div>
@@ -1242,7 +1242,7 @@
           <p>Crea la cuenta de tu local y publica tu primer evento. ¿Dudas antes de empezar? Escríbenos.</p>
         </div>
         <div class="ctas">
-          <a href="/#/register-partner" target="_top" class="btn btn-primary" style="font-size:16px;padding:16px 24px">Crear cuenta de local <span class="arrow">→</span></a>
+          <a href="/#/register-partner" target="_top" class="btn btn-primary" style="font-size:16px;padding:16px 24px">Crear cuenta de local <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
           <a href="mailto:comunicacion@avenuemedia.io?subject=Quiero%20usar%20Pasify" class="btn btn-outline" style="background:transparent;color:var(--ink);border-color:rgba(244,238,226,.3)">Escríbenos</a>
         </div>
       </div>

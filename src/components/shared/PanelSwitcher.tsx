@@ -124,7 +124,7 @@ export const PanelSwitcher = () => {
             boxShadow: "inset 0 1px 0 rgba(255,255,255,.45), 0 2px 6px -1px rgba(232,84,42,.5)",
           }}
         >
-          <active.Icon className="h-3 w-3" strokeWidth={2.5} />
+          <active.Icon className="h-3 w-3" strokeWidth={2.25} />
         </span>
         <span
           style={{
@@ -213,7 +213,7 @@ export const PanelSwitcher = () => {
                         : "none",
                     }}
                   >
-                    <meta.Icon className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    <meta.Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
                   </span>
                   <div className="flex flex-1 flex-col items-start">
                     <span
@@ -242,7 +242,7 @@ export const PanelSwitcher = () => {
                     <Check
                       className="h-4 w-4"
                       style={{ color: "#B8381A" }}
-                      strokeWidth={3}
+                      strokeWidth={2.5}
                     />
                   )}
                 </button>

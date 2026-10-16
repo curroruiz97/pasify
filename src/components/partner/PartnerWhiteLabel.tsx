@@ -668,7 +668,8 @@ const PreviewCard = ({ config, tab }: { config: WhiteLabelConfig; tab: string })
               color: "#C9BFA8",
             }}
           >
-            🔒 https://{config.customDomain || `${config.subdomain}.pasify.es`}
+            <Lock className="mr-1.5 inline h-3 w-3 align-[-2px]" aria-hidden="true" />
+            https://{config.customDomain || `${config.subdomain}.pasify.es`}
           </div>
         </div>
       </div>

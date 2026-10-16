@@ -1543,7 +1543,7 @@ const ResultOverlay = ({
       onClick={ok ? onDismiss : undefined}
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-        <Icon className="h-24 w-24 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+        <Icon className="h-24 w-24 shrink-0" strokeWidth={1.75} aria-hidden="true" />
         <h2 id="scan-result-title" className="text-balance text-4xl font-extrabold leading-tight tracking-tight">
           {view.title}
         </h2>

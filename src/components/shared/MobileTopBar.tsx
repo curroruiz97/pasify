@@ -122,7 +122,7 @@ export const MobileTopBar = ({
                 {meta.label}
                 <ChevronDown
                   className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180"
-                  strokeWidth={2.5}
+                  strokeWidth={2.25}
                 />
               </span>
             </button>
@@ -142,9 +142,9 @@ export const MobileTopBar = ({
                   onSelect={() => handleSelectRole(r)}
                   className={`min-h-[44px] gap-2 ${isActive ? "bg-primary/10 text-primary" : ""}`}
                 >
-                  <m.Icon className="h-4 w-4" strokeWidth={2.5} />
+                  <m.Icon className="h-4 w-4" strokeWidth={2.25} />
                   <span className="flex-1">{m.label}</span>
-                  {isActive && <Check className="h-4 w-4" strokeWidth={3} />}
+                  {isActive && <Check className="h-4 w-4" strokeWidth={2.5} />}
                 </DropdownMenuItem>
               );
             })}

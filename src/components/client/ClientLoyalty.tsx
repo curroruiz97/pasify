@@ -205,7 +205,8 @@ export const ClientLoyalty = () => {
               className="mt-2 text-[11px] uppercase"
               style={{ ...mono, letterSpacing: "0.2em", color: "rgba(255,255,255,0.7)" }}
             >
-              ★ Pasify Points · Reward Program
+              <Star className="mr-1.5 inline h-3 w-3 fill-current align-[-2px]" aria-hidden="true" />
+              Pasify Points · Reward Program
             </div>
           </div>
           <div className="text-right">
