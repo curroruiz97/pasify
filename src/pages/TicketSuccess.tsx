@@ -552,7 +552,7 @@ const TicketSuccess = () => {
                 animation: "pasify-pop 320ms cubic-bezier(.2,.9,.4,1.2) both",
               }}
             >
-              <Check className="h-12 w-12 text-white" strokeWidth={3} />
+              <Check className="h-12 w-12 text-white" strokeWidth={2.5} />
             </div>
           ) : tone === "wait" ? (
             <div
@@ -563,7 +563,7 @@ const TicketSuccess = () => {
                   "inset 0 1px 0 rgba(255,255,255,0.35), 0 18px 40px -10px rgba(232,84,42,0.55)",
               }}
             >
-              <Loader2 className="h-12 w-12 animate-spin text-white" strokeWidth={2.5} />
+              <Loader2 className="h-12 w-12 animate-spin text-white" strokeWidth={2} />
             </div>
           ) : (
             <div
@@ -576,11 +576,11 @@ const TicketSuccess = () => {
               }}
             >
               {state.phase === "expired" || state.phase === "test_payment" ? (
-                <XCircle className="h-12 w-12" strokeWidth={2.2} />
+                <XCircle className="h-12 w-12" strokeWidth={1.75} />
               ) : state.phase === "pending" ? (
-                <Clock className="h-12 w-12" strokeWidth={2.2} />
+                <Clock className="h-12 w-12" strokeWidth={1.75} />
               ) : (
-                <TicketIcon className="h-12 w-12" strokeWidth={2.2} />
+                <TicketIcon className="h-12 w-12" strokeWidth={1.75} />
               )}
             </div>
           )}

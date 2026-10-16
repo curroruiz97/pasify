@@ -241,7 +241,8 @@ export const AuditTrailViewer = () => {
                       <td className="px-3 py-2">
                         {escalation ? (
                           <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-700">
-                            ⚠ Escalada
+                            <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
+                            Escalada
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">

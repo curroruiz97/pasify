@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   Bot,
   Brain,
@@ -722,7 +723,13 @@ const Automations = () => (
                     letterSpacing: "0.12em",
                   }}
                 >
-                  {i === 0 ? "✉" : i === a.steps - 1 ? "🎯" : "→"}
+                  {i === 0 ? (
+                    <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : i === a.steps - 1 ? (
+                    <Target className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
                 </div>
                 {i < a.steps - 1 && <span className="mx-0.5 text-muted-foreground">·</span>}
               </div>
