@@ -1,0 +1,47 @@
+/* Pasify hero background: liquid-glass ribbons (WebGL) with a CSS fallback.
+   Markup: <div class="hero-webgl" data-hero-webgl aria-hidden="true"></div>
+   The canvas is injected by hero-bg.js and fades in once the first frame is drawn. */
+[data-hero-webgl]{
+  position:absolute;
+  inset:0;
+  overflow:hidden;
+  pointer-events:none;
+  z-index:-1;
+  background-color:#0B0908;
+  background-image:
+    /* seam-free bottom: fade to the page colour */
+    linear-gradient(to top, #0B0908 0%, rgba(11,9,8,0) 18%),
+    /* soft warm glow behind the top of the content */
+    radial-gradient(ellipse 46% 32% at 50% 8%, rgba(232,84,42,.10), rgba(232,84,42,0) 70%),
+    /* left fold: hot rim + oxblood body */
+    radial-gradient(ellipse 20% 46% at 3% 46%, rgba(255,122,77,.30), rgba(232,84,42,.10) 45%, rgba(232,84,42,0) 72%),
+    radial-gradient(ellipse 36% 78% at -4% 58%, rgba(122,42,15,.70), rgba(42,15,6,.55) 52%, rgba(42,15,6,0) 78%),
+    /* right fold */
+    radial-gradient(ellipse 18% 42% at 98% 40%, rgba(255,122,77,.26), rgba(232,84,42,.09) 45%, rgba(232,84,42,0) 72%),
+    radial-gradient(ellipse 34% 74% at 104% 46%, rgba(122,42,15,.66), rgba(42,15,6,.52) 52%, rgba(42,15,6,0) 78%);
+  background-repeat:no-repeat;
+}
+@media (max-aspect-ratio:4/5){
+  [data-hero-webgl]{
+    background-image:
+      linear-gradient(to top, #0B0908 0%, rgba(11,9,8,0) 14%),
+      radial-gradient(ellipse 60% 22% at 50% 30%, rgba(232,84,42,.08), rgba(232,84,42,0) 70%),
+      radial-gradient(ellipse 55% 16% at 8% 4%, rgba(255,122,77,.26), rgba(232,84,42,0) 72%),
+      radial-gradient(ellipse 90% 24% at 0% 0%, rgba(122,42,15,.70), rgba(42,15,6,0) 78%),
+      radial-gradient(ellipse 55% 16% at 94% 84%, rgba(255,122,77,.24), rgba(232,84,42,0) 72%),
+      radial-gradient(ellipse 90% 24% at 100% 88%, rgba(122,42,15,.66), rgba(42,15,6,0) 78%);
+  }
+}
+[data-hero-webgl] > canvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  display:block;
+  opacity:0;
+  transition:opacity 1.2s ease;
+}
+[data-hero-webgl][data-ready="true"] > canvas{opacity:1}
+@media (prefers-reduced-motion:reduce){
+  [data-hero-webgl] > canvas{transition:none}
+}
