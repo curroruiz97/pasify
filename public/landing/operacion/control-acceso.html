@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Control de acceso QR ultra-rápido · Pasify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../soluciones/_shared.css" />
+</head>
+<body data-depth="sub" data-current="control-acceso">
+<div class="grain"></div>
+
+<!-- HEADER (injected) -->
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#producto">Operación</a>
+      <span class="sep">/</span>
+      <span class="here">Control de acceso QR ultra-rápido</span>
+    </nav>
+
+    <section class="page-hero">
+      <div class="inner">
+        <div>
+          <span class="label"><span class="pulse"></span>Operación · Control de acceso</span>
+          <h1>Una entrada validada en <em>200&nbsp;ms</em>. Sin colas, sin papel, sin reventas.</h1>
+          <p class="lede">Cualquier móvil del staff convertido en lector. Funciona offline en sótanos sin cobertura, balancea el aforo entre puertas y bloquea duplicados antes de que cuesten dinero.</p>
+          <div class="ctas">
+            <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+            <a href="#stack" class="btn btn-outline">Ver hardware</a>
+          </div>
+        </div>
+        <div class="mockup reveal">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · pasify · puerta norte</div>
+          <div class="body" id="hero-mockup-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-bar reveal">
+      <div class="stat"><div class="num">&lt;200&nbsp;<em>ms</em></div><div class="lab">Validación promedio</div></div>
+      <div class="stat"><div class="num">100&nbsp;%</div><div class="lab">Funciona offline</div></div>
+      <div class="stat"><div class="num">0 <em>reventas</em></div><div class="lab">Detectadas en escena</div></div>
+      <div class="stat"><div class="num">5.000&nbsp;<em>pax/h</em></div><div class="lab">Por puerta</div></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2 class="h2">Tu portero <em>no mira</em> la pantalla. Vibra y deja pasar.</h2>
+        </div>
+        <p class="lede-2">Cuatro piezas para que la entrada deje de ser un cuello de botella: validación instantánea, balanceo entre puertas, anti-fraude server-side y aforo neto en directo.</p>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">01 · Validación</div>
+          <h3>Tres décimas y dentro. <em>Vibra</em> verde, deja pasar.</h3>
+          <p>El móvil enfoca solo, valida en local y devuelve respuesta antes de que el QR salga del encuadre. Tu portero no necesita mirar la pantalla — siente la vibración corta + flash verde y la persona pasa. Si algo falla, vibración larga + flash rojo y el motivo aparece en pantalla en una palabra.</p>
+          <ul class="checks">
+            <li>Validación local en el dispositivo, sin round-trip al servidor</li>
+            <li>Vibración + flash de color como única señal necesaria</li>
+            <li>Modo nocturno con linterna para entradas mal iluminadas</li>
+            <li>Audio TTS opcional: lee zona y categoría para pulseras</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · scanner · 22:47</div>
+          <div class="body" id="mockup-2"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">02 · Multi-puerta</div>
+          <h3><em>Reparte</em> el aforo entre puertas, sin que se note.</h3>
+          <p>El manager ve el mapa entero: cuántas personas pasan por cada acceso, en qué puerta se está formando cola y cuánto se tarda de media. Si Puerta Norte se satura, redirige el flujo a Sur en dos toques — el portero de Norte ve un aviso y el de Sur recibe a las personas redirigidas con su zona ya marcada.</p>
+          <ul class="checks">
+            <li>Mapa de puertas en directo con tiempo medio de paso</li>
+            <li>Redirección de cola en dos toques desde el panel</li>
+            <li>Roles separados: portero ve su flujo, manager el global</li>
+            <li>Conteo neto por puerta exportable a informe post-evento</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · mapa · 4 puertas activas</div>
+          <div class="body" id="mockup-3"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reveal">
+        <div class="copy">
+          <div class="num">03 · Anti-fraude</div>
+          <h3><em>Cero reventas</em>. Y cero discusiones en puerta.</h3>
+          <p>Cada QR está firmado server-side y caduca al primer escaneo válido. Si alguien intenta entrar con la captura del WhatsApp del amigo, Pasify detecta que esa entrada ya pasó hace 15 minutos por otra puerta y muestra al portero <em>quién</em> validó la original. Para VIP, prensa y cortesías, el ticket queda vinculado a una foto que el portero ve al escanear.</p>
+          <ul class="checks">
+            <li>QR firmado y rotativo, imposible de duplicar</li>
+            <li>Bloqueo de duplicados en menos de un segundo</li>
+            <li>Detección de capturas de pantalla y entradas reembolsadas</li>
+            <li>Foto del titular en pantalla para VIP, prensa y artistas</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · validación · 4 escaneos</div>
+          <div class="body" id="mockup-4"></div>
+        </div>
+      </div>
+
+      <div class="feature-row reverse reveal">
+        <div class="copy">
+          <div class="num">04 · Aforo en directo</div>
+          <h3>Aforo <em>neto</em>, alertas antes de saturar.</h3>
+          <p>Pasify cuenta entradas y salidas: lo que importa es la gente que está dentro, no la que pasó. Predice el pico a quince minutos vista y, si te acercas al 90&nbsp;% del aforo legal, pausa la venta online sin que tengas que llamar a nadie. Tu plan de evacuación, los bomberos y Cruz Roja ven el mismo número que tú.</p>
+          <ul class="checks">
+            <li>Conteo neto: entradas menos salidas, en directo</li>
+            <li>Predicción de pico a 15 minutos por flujo histórico</li>
+            <li>Auto-pausa de venta online al 90&nbsp;% del aforo</li>
+            <li>Vista compartible con bomberos, seguridad y Cruz Roja</li>
+          </ul>
+        </div>
+        <div class="mockup">
+          <div class="glow"></div>
+          <div class="head"><span class="dot active"></span><span class="dot"></span><span class="dot"></span> · aforo · sala principal</div>
+          <div class="body" id="mockup-5"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="stack">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">El stack</div>
+          <h2 class="h2">Tu <em>móvil</em> ya vale. Si quieres más, lo tenemos.</h2>
+        </div>
+      </div>
+      <div class="cards-3 reveal">
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="3"/><circle cx="12" cy="18" r="1.2"/><path d="M9 5h6"/></svg></div>
+          <h4>Móvil del staff</h4>
+          <p>iOS y Android. App nativa, gratis, sin licencia por terminal. La cámara estándar es suficiente — incluso un iPhone SE de 2020 valida en 180&nbsp;ms.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h14l-1 12H6z"/><path d="M9 6V4h6v2"/><path d="M9 11h6M9 14h6"/></svg></div>
+          <h4>Lectores Bluetooth</h4>
+          <p>Honeywell Voyager, Datalogic Memor, Zebra TC22. Para festivales y volúmenes de 10.000+ personas en una hora. Se conectan al móvil sin instalar nada.</p>
+        </div>
+        <div class="card-3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="15" y="4" width="6" height="16" rx="1"/><path d="M9 12h6"/></svg></div>
+          <h4>Tornos y barreras</h4>
+          <p>Integración con Gantner, IDeal y Boon Edam por API. Apertura solo con QR válido, log auditable de cada paso, modo libre por incidente con un toque.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Antes / Después</div>
+          <h2 class="h2">Acceso de <em>2014</em> vs Pasify.</h2>
+        </div>
+      </div>
+      <div class="compare reveal">
+        <div class="col bad">
+          <h5>Acceso tradicional</h5>
+          <ul>
+            <li>Pulsera con sello, fácil de copiar a media noche</li>
+            <li>Cola única que embotella la entrada y desincentiva</li>
+            <li>Reventas en redes sin manera de comprobar el ticket</li>
+            <li>Aforo medido a ojo y a sensación de portero</li>
+            <li>Sin trazabilidad: nadie sabe quién entró cuándo</li>
+            <li>Coordinación por radio o por gritos en la puerta</li>
+          </ul>
+        </div>
+        <div class="col good">
+          <h5>Pasify Acceso</h5>
+          <ul>
+            <li>QR firmado y rotativo, técnicamente no duplicable</li>
+            <li>Multi-puerta con balanceo automático del aforo</li>
+            <li>Detección server-side de capturas y reembolsos</li>
+            <li>Aforo neto en directo con predicción de pico</li>
+            <li>Log auditable por persona, puerta y momento</li>
+            <li>Soporte 24/7 desde la misma app, sin walkie</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="cta-banner reveal">
+    <div class="grain-overlay"></div>
+    <div class="inner">
+      <div>
+        <h2>Pasa <em>5.000 personas</em> en 40 minutos sin colas.</h2>
+        <p>Demuéstratelo en tu próximo evento. Te dejamos un kit de prueba y un técnico de Pasify en puerta esa noche.</p>
+      </div>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn">Solicita demo <span class="arrow">→</span></a>
+        <a href="../pasify.html#precios" class="btn btn-outline">Ver precios</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="related">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="left">
+          <div class="eyebrow">Sigue explorando</div>
+          <h2 class="h2">Más en <em>operación</em>.</h2>
+        </div>
+      </div>
+      <div class="related-grid reveal">
+        <a href="tpv.html" class="related-card">
+          <span class="lab">01 · Caja</span>
+          <h5>Software TPV</h5>
+          <p>Carta visual, cuentas abiertas por mesa y cierre Z firmado. La caja conectada con tu venta online y con acceso.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="recepcion.html" class="related-card">
+          <span class="lab">03 · Recepción</span>
+          <h5>Recepción de eventos</h5>
+          <p>Una sola pantalla en puerta para entradas, lista de invitados, RRPP, VIP y prensa. El paso lógico antes del scanner.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+        <a href="pases-temporada.html" class="related-card">
+          <span class="lab">05 · Pases</span>
+          <h5>Pases de temporada</h5>
+          <p>Abonos y pases anuales con escalado de precio, recordatorios y reactivación automatizada — vinculados al mismo control de acceso.</p>
+          <span class="arr">Ver más <span class="arrow">→</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="../soluciones/_header.js"></script>
+<script>
+const h=document.getElementById('header');
+window.addEventListener('scroll',()=>{h && h.classList.toggle('scrolled',window.scrollY>20)});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -60px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+function svgWrap(html){return `<svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;border-radius:10px">${html}</svg>`}
+
+// Helper: dense visual QR (decorative — not a real readable QR)
+function qr(x, y, size, fg, bg){
+  const cell = size/21;
+  const seed = (i,j)=>((i*7+j*13+i*j*3)%5)<2;
+  let cells = '';
+  for(let i=0;i<21;i++) for(let j=0;j<21;j++){
+    const isFinder = (i<7 && j<7) || (i<7 && j>=14) || (i>=14 && j<7);
+    if(isFinder) continue;
+    if(seed(i,j)) cells += `<rect x="${x+j*cell}" y="${y+i*cell}" width="${cell}" height="${cell}" fill="${fg}"/>`;
+  }
+  const finder = (fx,fy)=>`
+    <rect x="${fx}" y="${fy}" width="${cell*7}" height="${cell*7}" fill="${fg}"/>
+    <rect x="${fx+cell}" y="${fy+cell}" width="${cell*5}" height="${cell*5}" fill="${bg}"/>
+    <rect x="${fx+cell*2}" y="${fy+cell*2}" width="${cell*3}" height="${cell*3}" fill="${fg}"/>`;
+  return `<rect x="${x-4}" y="${y-4}" width="${size+8}" height="${size+8}" fill="${bg}" rx="4"/>` + cells +
+    finder(x, y) + finder(x+cell*14, y) + finder(x, y+cell*14);
+}
+
+// HERO: phone scanner (left) + live aforo (right)
+document.getElementById('hero-mockup-1').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <!-- left: phone scanner -->
+  <rect x="32" y="24" width="180" height="276" rx="22" fill="#0A0907" stroke="#332C25" stroke-width="1.5"/>
+  <rect x="42" y="40" width="160" height="244" rx="14" fill="#0F0D0B"/>
+  <text x="56" y="62" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">PUERTA NORTE</text>
+  <text x="56" y="82" fill="#F4EEE2" font-family="Geist" font-size="11" font-weight="600">SARA · portero</text>
+  ${qr(72, 100, 100, '#F4EEE2', '#0F0D0B')}
+  <circle cx="184" cy="216" r="22" fill="#4DB87A"/>
+  <path d="M174 216 l8 8 l14 -16" stroke="#0A0907" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="56" y="252" fill="#4DB87A" font-family="Geist Mono" font-size="10" letter-spacing="1.2">VALIDADA · 187 ms</text>
+  <text x="56" y="270" fill="#C9BFA8" font-family="Geist" font-size="11">PISTA B · 1 pax</text>
+  <!-- right: live aforo card -->
+  <rect x="232" y="24" width="216" height="132" rx="14" fill="#1A1612" stroke="#332C25"/>
+  <text x="248" y="48" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">AFORO EN DIRECTO</text>
+  <text x="248" y="92" fill="#F4EEE2" font-family="Geist" font-size="32" font-weight="600">1.687</text>
+  <text x="346" y="92" fill="#8A8275" font-family="Geist Mono" font-size="14">/ 2.000</text>
+  <rect x="248" y="106" width="184" height="6" rx="3" fill="#26211C"/>
+  <rect x="248" y="106" width="155" height="6" rx="3" fill="#E8542A"/>
+  <text x="248" y="132" fill="#C9BFA8" font-family="Geist" font-size="10">+312 entradas · -8 salidas (h)</text>
+  <text x="248" y="148" fill="#4DB87A" font-family="Geist Mono" font-size="9" letter-spacing="1">● 84% · MARGEN OK</text>
+  <!-- right: latest scans -->
+  <rect x="232" y="172" width="216" height="128" rx="14" fill="#1A1612" stroke="#332C25"/>
+  <text x="248" y="196" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">ÚLTIMOS ESCANEOS</text>
+  ${[['22:47:12','✓','Sara · Norte','#4DB87A'],['22:47:08','✓','Iván · Sur','#4DB87A'],['22:46:57','✗','Duplicado','#E8542A'],['22:46:42','✓','Mar · Norte','#4DB87A']].map((r,i)=>`<g>
+    <text x="248" y="${218+i*20}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[0]}</text>
+    <text x="304" y="${218+i*20}" fill="${r[3]}" font-family="Geist" font-size="11" font-weight="600">${r[1]}</text>
+    <text x="318" y="${218+i*20}" fill="#C9BFA8" font-family="Geist" font-size="10">${r[2]}</text>
+  </g>`).join('')}
+`);
+
+// 02: Validación — phone with QR scan + side stats
+document.getElementById('mockup-2').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="40" fill="#F4EEE2" font-family="Geist" font-size="14" font-weight="600">Scanner · Puerta Norte</text>
+  <text x="32" y="58" fill="#8A8275" font-family="Geist Mono" font-size="10">SARA · iPhone 13 · MODO NOCTURNO</text>
+  <rect x="120" y="78" width="240" height="220" rx="18" fill="#0A0907" stroke="#332C25" stroke-width="1.5"/>
+  <rect x="130" y="92" width="220" height="192" rx="12" fill="#0F0D0B"/>
+  ${[[140,102,'tl'],[330,102,'tr'],[140,260,'bl'],[330,260,'br']].map(c=>{
+    const x=c[0], y=c[1], pos=c[2];
+    const horiz = pos.includes('r') ? `M${x} ${y} h-14` : `M${x} ${y} h14`;
+    const vert  = pos.includes('b') ? `M${x} ${y} v-14` : `M${x} ${y} v14`;
+    return `<path d="${horiz}" stroke="#E8542A" stroke-width="2.5" stroke-linecap="round"/><path d="${vert}" stroke="#E8542A" stroke-width="2.5" stroke-linecap="round"/>`;
+  }).join('')}
+  ${qr(170, 132, 140, '#F4EEE2', '#0F0D0B')}
+  <circle cx="240" cy="270" r="14" fill="#4DB87A"/>
+  <path d="M232 270 l6 6 l10 -12" stroke="#0A0907" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="32" y="78" width="72" height="220" rx="10" fill="#1A1612" stroke="#26211C"/>
+  <text x="44" y="100" fill="#8A8275" font-family="Geist Mono" font-size="9">FLASH</text>
+  <circle cx="68" cy="124" r="14" fill="#4DB87A"/>
+  <text x="44" y="156" fill="#8A8275" font-family="Geist Mono" font-size="9">VIBRA</text>
+  <rect x="44" y="170" width="48" height="6" rx="3" fill="#E8542A"/>
+  <text x="44" y="200" fill="#8A8275" font-family="Geist Mono" font-size="9">TIEMPO</text>
+  <text x="44" y="222" fill="#F4EEE2" font-family="Geist Mono" font-size="14" font-weight="600">187</text>
+  <text x="44" y="236" fill="#8A8275" font-family="Geist Mono" font-size="9">MS</text>
+  <text x="44" y="266" fill="#8A8275" font-family="Geist Mono" font-size="9">HOY</text>
+  <text x="44" y="286" fill="#F4EEE2" font-family="Geist Mono" font-size="13" font-weight="600">412</text>
+  <rect x="376" y="78" width="72" height="220" rx="10" fill="#1A1612" stroke="#26211C"/>
+  <text x="388" y="100" fill="#8A8275" font-family="Geist Mono" font-size="9">ZONA</text>
+  <text x="388" y="120" fill="#E8542A" font-family="Geist" font-size="14" font-weight="600">PISTA B</text>
+  <text x="388" y="148" fill="#8A8275" font-family="Geist Mono" font-size="9">CAT.</text>
+  <text x="388" y="168" fill="#F4EEE2" font-family="Geist" font-size="11">General</text>
+  <text x="388" y="196" fill="#8A8275" font-family="Geist Mono" font-size="9">PAGO</text>
+  <text x="388" y="216" fill="#F4EEE2" font-family="Geist" font-size="11">Online</text>
+  <text x="388" y="244" fill="#8A8275" font-family="Geist Mono" font-size="9">VIP</text>
+  <text x="388" y="264" fill="#C9BFA8" font-family="Geist" font-size="11">No</text>
+`);
+
+// 03: Multi-puerta — venue map with 4 doors
+document.getElementById('mockup-3').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="40" fill="#F4EEE2" font-family="Geist" font-size="14" font-weight="600">Mapa de puertas · Sala Eclipse</text>
+  <text x="32" y="58" fill="#8A8275" font-family="Geist Mono" font-size="10">22:47 · 1.687 / 2.000</text>
+  <rect x="64" y="84" width="352" height="200" rx="8" fill="#0F0D0B" stroke="#332C25" stroke-dasharray="4 3"/>
+  <text x="240" y="200" fill="#26211C" font-family="Instrument Serif" font-style="italic" font-size="48" text-anchor="middle">sala</text>
+  ${[
+    [40,140,'NORTE','847','142/h','#E8542A','94%','SATURADA'],
+    [380,140,'SUR','412','78/h','#4DB87A','58%','OK'],
+    [40,234,'ESTE','268','45/h','#4DB87A','42%','OK'],
+    [380,234,'OESTE','160','22/h','#4DB87A','24%','LIBRE'],
+  ].map(d=>{
+    const [x,y,name,count,rate,color,pct,status] = d;
+    return `<g>
+      <rect x="${x}" y="${y}" width="120" height="76" rx="8" fill="#1A1612" stroke="${color}" stroke-width="${color==='#E8542A'?'1.5':'1'}"/>
+      <text x="${x+12}" y="${y+22}" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">${name}</text>
+      <text x="${x+12}" y="${y+44}" fill="#F4EEE2" font-family="Geist" font-size="18" font-weight="600">${count}</text>
+      <text x="${x+108}" y="${y+22}" fill="${color}" font-family="Geist Mono" font-size="9" text-anchor="end">● ${status}</text>
+      <text x="${x+108}" y="${y+44}" fill="#C9BFA8" font-family="Geist Mono" font-size="9" text-anchor="end">${rate}</text>
+      <rect x="${x+12}" y="${y+58}" width="96" height="4" rx="2" fill="#26211C"/>
+      <rect x="${x+12}" y="${y+58}" width="${96*parseInt(pct)/100}" height="4" rx="2" fill="${color}"/>
+    </g>`;
+  }).join('')}
+  <path d="M158 178 Q 240 210 380 178" stroke="#E8542A" stroke-width="1.5" stroke-dasharray="3 4" fill="none"/>
+  <text x="240" y="218" fill="#E8542A" font-family="Geist Mono" font-size="9" text-anchor="middle" letter-spacing="1.2">REDIRIGE FLUJO →</text>
+`);
+
+// 04: Anti-fraude — 4 ticket events
+document.getElementById('mockup-4').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="40" fill="#F4EEE2" font-family="Geist" font-size="14" font-weight="600">Anti-fraude · log último minuto</text>
+  <text x="32" y="58" fill="#8A8275" font-family="Geist Mono" font-size="10">3 INTENTOS BLOQUEADOS · 22:46–22:47</text>
+  ${[
+    ['22:47:08','✓','VALIDADA','#4DB87A','PSY-A8K2-9341 · Sara · Norte','Pago online · Pista B'],
+    ['22:46:57','✗','DUPLICADO','#E8542A','PSY-A8K2-1117 · Sur','Ya pasó por Norte hace 14 min'],
+    ['22:46:31','✗','CAPTURA','#E8542A','PSY-A8K2-7724 · Norte','QR sin firma actual · screenshot'],
+    ['22:46:02','✗','REEMBOLSADA','#E8542A','PSY-A8K2-3308 · Este','Devolución 14/06 a las 18:22']
+  ].map((r,i)=>`<g>
+    <rect x="32" y="${78+i*52}" width="416" height="44" rx="8" fill="${i===0?'#1A1F18':'#1F1612'}" stroke="${r[3]}" stroke-width="${i===0?'1':'1.2'}"/>
+    <text x="48" y="${100+i*52}" fill="#8A8275" font-family="Geist Mono" font-size="9">${r[0]}</text>
+    <text x="116" y="${100+i*52}" fill="${r[3]}" font-family="Geist" font-size="14" font-weight="600">${r[1]}</text>
+    <text x="136" y="${100+i*52}" fill="${r[3]}" font-family="Geist Mono" font-size="10" letter-spacing="1.2">${r[2]}</text>
+    <text x="48" y="${116+i*52}" fill="#C9BFA8" font-family="Geist" font-size="10">${r[4]}</text>
+    <text x="436" y="${116+i*52}" fill="#8A8275" font-family="Geist Mono" font-size="9" text-anchor="end">${r[5]}</text>
+  </g>`).join('')}
+  <line x1="32" y1="298" x2="448" y2="298" stroke="#332C25"/>
+`);
+
+// 05: Aforo — counter + sparkline + alert
+document.getElementById('mockup-5').innerHTML = svgWrap(`
+  <rect width="480" height="320" fill="#13100E"/>
+  <text x="32" y="40" fill="#F4EEE2" font-family="Geist" font-size="14" font-weight="600">Aforo · Sala Eclipse</text>
+  <text x="32" y="58" fill="#8A8275" font-family="Geist Mono" font-size="10">22:47 · LIVE</text>
+  <text x="32" y="120" fill="#F4EEE2" font-family="Geist" font-size="56" font-weight="600">1.687</text>
+  <text x="226" y="120" fill="#8A8275" font-family="Geist Mono" font-size="18">/ 2.000</text>
+  <text x="32" y="142" fill="#4DB87A" font-family="Geist Mono" font-size="11" letter-spacing="1.2">● 84% · MARGEN OK · 313 PLAZAS</text>
+  <rect x="32" y="156" width="416" height="10" rx="5" fill="#26211C"/>
+  <rect x="32" y="156" width="351" height="10" rx="5" fill="#E8542A"/>
+  <line x1="383" y1="148" x2="383" y2="172" stroke="#E8542A" stroke-width="1" stroke-dasharray="2 2"/>
+  <text x="395" y="152" fill="#E8542A" font-family="Geist Mono" font-size="9">90%</text>
+  <text x="32" y="200" fill="#8A8275" font-family="Geist Mono" font-size="9" letter-spacing="1.2">FLUJO ÚLT. 60 MIN · ENTRADAS / SALIDAS</text>
+  <path d="M32 244 L70 240 L108 232 L146 220 L184 208 L222 198 L260 192 L298 186 L336 184 L374 188 L412 192 L448 196" stroke="#E8542A" stroke-width="2" fill="none"/>
+  <path d="M32 254 L70 256 L108 258 L146 256 L184 252 L222 248 L260 246 L298 244 L336 244 L374 246 L412 248 L448 250" stroke="#4DB87A" stroke-width="1.5" fill="none" stroke-dasharray="3 3"/>
+  <circle cx="448" cy="196" r="4" fill="#E8542A"/>
+  <text x="436" y="218" fill="#C9BFA8" font-family="Geist Mono" font-size="9" text-anchor="end">+15 min: 1.840</text>
+  <rect x="32" y="270" width="416" height="34" rx="8" fill="#1A0F08" stroke="rgba(232,84,42,0.35)"/>
+  <circle cx="50" cy="287" r="4" fill="#E8542A"/>
+  <text x="64" y="291" fill="#F4EEE2" font-family="Geist" font-size="11" font-weight="500">Auto-pausa de venta online activada al 90% · 23:02 estimado</text>
+`);
+</script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
+</body>
+</html>

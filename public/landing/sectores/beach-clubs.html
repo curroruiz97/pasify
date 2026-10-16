@@ -1,0 +1,620 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasify para beach clubs · Pasify</title>
+<meta name="description" content="El sistema operativo de tu beach club, de la primera cama balinesa al cierre del DJ. Reservas, F&B, sunset sessions, brand activations y CRM en una sola plataforma.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../soluciones/_shared.css">
+<style>
+  /* Page-local · sectores/beach-clubs · coherent with discotecas/salas */
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease, transform .8s ease}
+  .reveal.in{opacity:1;transform:none}
+  main{padding-top:0}
+  .sec{padding:96px 0;position:relative}
+  .sec.compact{padding:64px 0}
+  .sec-head{max-width:760px;margin-bottom:48px}
+  .sec-head .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .sec-head .eyebrow::before{content:"";width:18px;height:1px;background:var(--accent)}
+  .sec-head h2{font-size:clamp(32px,4vw,52px);font-weight:600;letter-spacing:-0.035em;line-height:1.04;color:var(--ink)}
+  .sec-head h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .sec-head p.sub{font-size:clamp(15px,1.2vw,17px);line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:62ch}
+  .crumbs{padding:120px 0 8px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .crumbs a{color:var(--ink-3);transition:color .2s ease}
+  .crumbs a:hover{color:var(--accent)}
+  .crumbs .sep{margin:0 10px;color:var(--line-2)}
+  .crumbs .here{color:var(--ink)}
+  .page-hero{padding:80px 0 60px;position:relative;overflow:hidden}
+  .page-hero::before{content:"";position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:.16;filter:blur(80px);top:-200px;left:-100px;pointer-events:none}
+  .page-hero::after{content:"";position:absolute;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,var(--warm) 0%,transparent 70%);opacity:.1;filter:blur(80px);top:60px;right:-60px;pointer-events:none}
+  .page-hero .label{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid var(--line-2);border-radius:999px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2);margin-bottom:24px;background:rgba(232,84,42,.06)}
+  .page-hero .label .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,84,42,.55)}70%{box-shadow:0 0 0 10px rgba(232,84,42,0)}100%{box-shadow:0 0 0 0 rgba(232,84,42,0)}}
+  .page-hero h1{font-size:clamp(44px,5.6vw,84px);font-weight:600;letter-spacing:-0.045em;line-height:.96;max-width:18ch;position:relative;z-index:2}
+  .page-hero h1 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .page-hero h1 .highlight{position:relative;display:inline-block}
+  .page-hero h1 .highlight::after{content:"";position:absolute;left:-2px;right:-2px;bottom:8px;height:14px;background:var(--accent);opacity:.45;z-index:-1;border-radius:2px;transform:skewY(-1deg)}
+  .page-hero p.lede{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:var(--ink-2);max-width:60ch;margin-top:24px;position:relative;z-index:2}
+  .page-hero .ctas{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;align-items:center;position:relative;z-index:2}
+  .page-hero .meta{margin-top:32px;display:flex;gap:24px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);position:relative;z-index:2}
+  .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
+  .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+
+  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
+  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
+  .stats-strip > div:last-child{border-right:none}
+  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
+  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
+  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
+  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
+  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
+
+  .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
+  .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
+  .pain-card:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .pain-card .x{position:absolute;top:24px;right:24px;width:30px;height:30px;border-radius:8px;border:1px solid rgba(232,84,42,.25);background:rgba(232,84,42,.08);display:grid;place-items:center;color:var(--accent);font-size:14px}
+  .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
+  .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
+  .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
+  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
+
+  .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.mod-grid{grid-template-columns:1fr}}
+  .mod{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:28px;transition:transform .3s ease, border-color .3s ease, background .3s ease;position:relative;overflow:hidden}
+  .mod::before{content:"";position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:0;filter:blur(50px);top:-40px;right:-40px;transition:opacity .3s ease;pointer-events:none}
+  .mod:hover{transform:translateY(-3px);border-color:var(--line-2);background:var(--bg-3)}
+  .mod:hover::before{opacity:.18}
+  .mod .head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative}
+  .mod .ico{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid rgba(232,84,42,.25);display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+  .mod .ico svg{width:22px;height:22px}
+  .mod .num{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--ink-3)}
+  .mod h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;position:relative}
+  .mod p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px;position:relative}
+  .mod ul{list-style:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+  .mod ul li{font-size:13px;color:var(--ink-2);display:flex;align-items:start;gap:10px;line-height:1.5}
+  .mod ul li::before{content:"";width:14px;height:1px;background:var(--accent);margin-top:9px;flex-shrink:0}
+
+  .timeline-wrap{position:relative;padding-left:48px;margin-top:32px}
+  .timeline-wrap::before{content:"";position:absolute;left:14px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,transparent,var(--line-2) 8%,var(--line-2) 92%,transparent)}
+  .tl-row{position:relative;padding:0 0 28px 0;display:grid;grid-template-columns:120px 1fr;gap:32px;align-items:start}
+  .tl-row::before{content:"";position:absolute;left:-40px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px rgba(232,84,42,.12)}
+  .tl-row.peak::before{background:var(--accent);box-shadow:0 0 0 6px rgba(232,84,42,.18),0 0 20px rgba(232,84,42,.5)}
+  .tl-row .time{font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-0.02em;line-height:1}
+  .tl-row .day{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+  .tl-row .body h4{font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-0.015em;margin-bottom:6px}
+  .tl-row .body p{font-size:14.5px;color:var(--ink-2);line-height:1.6;max-width:54ch}
+  .tl-row .body .tag{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:999px;background:rgba(232,84,42,.1);border:1px solid rgba(232,84,42,.2);font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  @media (max-width:720px){.tl-row{grid-template-columns:90px 1fr;gap:20px}.timeline-wrap{padding-left:36px}.tl-row::before{left:-32px;width:12px;height:12px}}
+
+  .mock{margin-top:48px;background:linear-gradient(160deg,#0F0C0A,#1A1411);border:1px solid var(--line-2);border-radius:20px;padding:6px;position:relative;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6),0 0 80px -20px rgba(232,84,42,.2)}
+  .mock-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .mock-bar .dot{width:11px;height:11px;border-radius:50%;background:var(--line-2)}
+  .mock-bar .dot.r{background:#E8542A}
+  .mock-bar .dot.y{background:#E8B04C}
+  .mock-bar .dot.g{background:#4DB87A}
+  .mock-bar .url{margin-left:14px;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 14px;display:flex;align-items:center;gap:8px}
+  .mock-bar .url::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.4s infinite}
+  .mock-body{padding:32px}
+  .mock-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;margin-bottom:28px}
+  .mock-head h4{font-size:22px;font-weight:600;letter-spacing:-0.02em;color:var(--ink)}
+  .mock-head .date{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  @media (max-width:720px){.mock-kpi{grid-template-columns:repeat(2,1fr)}}
+  .mock-kpi > div{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .mock-kpi .l{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .mock-kpi .v{font-family:'Geist Mono',monospace;font-size:24px;font-weight:600;color:var(--ink);margin-top:8px;letter-spacing:-0.02em;line-height:1}
+  .mock-kpi .v em{font-style:normal;color:var(--accent)}
+  .mock-kpi .d{font-family:'Geist Mono',monospace;font-size:11px;color:#4DB87A;margin-top:6px}
+  .mock-kpi .d.warn{color:var(--warm)}
+  .mock-split{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  @media (max-width:880px){.mock-split{grid-template-columns:1fr}}
+  .mock-tbl{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;overflow:hidden}
+  .mock-tbl .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;display:flex;justify-content:space-between}
+  .mock-tbl .ttl .live{color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+  .mock-tbl .ttl .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
+  .mock-tbl-row{display:grid;grid-template-columns:1.6fr .9fr .8fr 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--line);font-size:13px;align-items:center}
+  .mock-tbl-row.h{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);border-top:none;padding-top:0}
+  .mock-tbl-row .name{color:var(--ink);font-weight:500}
+  .mock-tbl-row .ppl{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .min{font-family:'Geist Mono',monospace;color:var(--ink-2)}
+  .mock-tbl-row .st{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  .mock-tbl-row .st.ok{color:#4DB87A}
+  .mock-tbl-row .st.wait{color:var(--warm)}
+  .mock-tbl-row .st.vip{color:var(--accent)}
+  .mock-tbl-row .st.gone{color:var(--ink-3);text-decoration:line-through}
+  @media (max-width:480px){.mock-tbl-row{grid-template-columns:1.6fr 1fr;gap:8px}.mock-tbl-row .min,.mock-tbl-row.h .min{display:none}}
+  .mock-feed{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:0}
+  .mock-feed .ttl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  .feed-row{padding:11px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+  .feed-row:first-of-type{border-top:none}
+  .feed-row .t{font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink-3);letter-spacing:.04em;line-height:1.5}
+  .feed-row .body{font-size:13px;color:var(--ink-2);line-height:1.5}
+  .feed-row .body b{color:var(--ink);font-weight:500}
+  .feed-row .body .acc{color:var(--accent);font-weight:500}
+
+  .res-split{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+  @media (max-width:980px){.res-split{grid-template-columns:1fr;gap:32px}}
+  .res-split .text h2{font-size:clamp(30px,3.6vw,46px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;color:var(--ink)}
+  .res-split .text h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .res-split .text p.sub{font-size:17px;line-height:1.6;color:var(--ink-2);margin-top:18px;max-width:54ch}
+  .res-split ul.checks{list-style:none;margin-top:28px;display:flex;flex-direction:column;gap:14px}
+  .res-split ul.checks li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:15px;color:var(--ink-2);line-height:1.55}
+  .res-split ul.checks li b{color:var(--ink);font-weight:600}
+  .res-split ul.checks .ck{width:24px;height:24px;border-radius:6px;background:rgba(232,84,42,.14);border:1px solid rgba(232,84,42,.3);color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;display:grid;place-items:center;flex-shrink:0;margin-top:1px}
+  .res-card{background:linear-gradient(160deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.25);border-radius:20px;padding:32px;position:relative;overflow:hidden}
+  .res-card::before{content:"";position:absolute;width:280px;height:280px;background:var(--accent);filter:blur(100px);opacity:.25;top:-80px;right:-80px;pointer-events:none}
+  .res-card .lab{position:relative;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .res-card .total{position:relative;display:flex;align-items:baseline;gap:6px;margin-top:14px}
+  .res-card .total .v{font-family:'Geist Mono',monospace;font-size:48px;font-weight:600;letter-spacing:-0.04em;color:var(--ink);line-height:1}
+  .res-card .total .c{font-family:'Geist Mono',monospace;font-size:18px;color:var(--ink-2)}
+  .res-card .small{position:relative;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px}
+  .res-card .badge-row{position:relative;margin-top:24px;display:flex;gap:8px;flex-wrap:wrap}
+  .res-card .b{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:rgba(244,238,226,.06);border:1px solid var(--line-2);color:var(--ink-2)}
+  .res-card .b.ok{background:rgba(77,184,122,.1);border-color:rgba(77,184,122,.3);color:#4DB87A}
+
+  /* Beach map (CSS-only sun-lounger plan inside res-card) */
+  .beach-map{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:18px}
+  .beach-map .lounger{aspect-ratio:1/1.2;border-radius:6px;border:1px solid var(--line-2);background:var(--bg);position:relative;font-family:'Geist Mono',monospace;font-size:9px;color:var(--ink-3);display:flex;align-items:end;justify-content:center;padding-bottom:3px}
+  .beach-map .lounger.taken{background:rgba(232,84,42,.18);border-color:rgba(232,84,42,.35);color:var(--ink)}
+  .beach-map .lounger.vip{background:linear-gradient(135deg,rgba(232,84,42,.5),rgba(184,56,26,.55));border-color:var(--accent);color:#fff}
+  .beach-map .lounger.held{background:rgba(232,176,76,.14);border-color:rgba(232,176,76,.4);color:var(--warm)}
+  .lab-key{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase}
+  .lab-key span{display:inline-flex;align-items:center;gap:6px}
+  .lab-key span::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--bg);border:1px solid var(--line-2)}
+  .lab-key span.t::before{background:rgba(232,84,42,.3);border-color:rgba(232,84,42,.5)}
+  .lab-key span.v::before{background:var(--accent);border-color:var(--accent)}
+  .lab-key span.h::before{background:rgba(232,176,76,.3);border-color:rgba(232,176,76,.5)}
+
+  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
+  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
+  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
+  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
+  .cmp td{color:var(--ink-3);font-size:14px}
+  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
+  .cmp td.yes{color:#4DB87A}
+  .cmp td.no{color:var(--ink-4)}
+  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
+  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
+
+  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
+  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
+  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
+  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
+  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
+  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
+  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
+  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
+  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+  .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
+  @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
+  .int{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center;transition:transform .25s ease, border-color .25s ease, background .25s ease}
+  .int:hover{transform:translateY(-2px);border-color:rgba(232,84,42,.3);background:var(--bg-3)}
+  .int .nm{font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;letter-spacing:-0.005em;color:var(--ink)}
+  .int .cat{font-family:'Geist Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+  .faq{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line);padding:24px 0;transition:background .25s ease}
+  .faq details[open]{background:linear-gradient(180deg,rgba(232,84,42,.03),transparent)}
+  .faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:24px;font-size:18px;font-weight:500;letter-spacing:-0.015em;color:var(--ink);outline:none}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+  .faq summary .plus{flex-shrink:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s ease, color .3s ease, border-color .3s ease;font-family:'Geist Mono',monospace;font-size:18px;line-height:1}
+  .faq details[open] summary .plus{transform:rotate(45deg);color:var(--accent);border-color:var(--accent)}
+  .faq .answer{padding:18px 56px 4px 0;font-size:15.5px;line-height:1.65;color:var(--ink-2);max-width:75ch}
+  .faq .answer p + p{margin-top:12px}
+  .faq .answer code{font-family:'Geist Mono',monospace;font-size:13px;color:var(--accent);background:rgba(232,84,42,.08);padding:2px 8px;border-radius:6px;border:1px solid rgba(232,84,42,.18)}
+
+  .cta-banner{margin:48px 0 0;background:linear-gradient(150deg,#1A0F08 0%,#3D1F12 100%);border:1px solid rgba(232,84,42,.3);border-radius:24px;padding:56px;display:grid;grid-template-columns:1.4fr 1fr;gap:48px;align-items:center;position:relative;overflow:hidden}
+  @media (max-width:880px){.cta-banner{grid-template-columns:1fr;padding:40px 28px;gap:32px}}
+  .cta-banner::before{content:"";position:absolute;width:400px;height:400px;background:var(--accent);filter:blur(120px);opacity:.28;top:-120px;right:-100px;pointer-events:none}
+  .cta-banner::after{content:"";position:absolute;width:300px;height:300px;background:var(--warm);filter:blur(100px);opacity:.12;bottom:-100px;left:-80px;pointer-events:none}
+  .cta-banner .left{position:relative}
+  .cta-banner .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .cta-banner h2{font-size:clamp(30px,3.4vw,48px);font-weight:600;letter-spacing:-0.035em;line-height:1.05;max-width:18ch;color:var(--ink)}
+  .cta-banner h2 em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .cta-banner p.sub{font-size:16px;line-height:1.55;color:var(--ink-2);margin-top:18px;max-width:48ch}
+  .cta-banner .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .cta-banner ul.bulls{position:relative;list-style:none;display:flex;flex-direction:column;gap:14px}
+  .cta-banner ul.bulls li{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;font-size:14.5px;color:var(--ink);line-height:1.5}
+  .cta-banner ul.bulls .ck{width:26px;height:26px;border-radius:7px;background:rgba(232,84,42,.18);border:1px solid rgba(232,84,42,.35);display:grid;place-items:center;color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;flex-shrink:0;margin-top:1px}
+
+  .footer{margin-top:96px;padding:40px 0 60px;border-top:1px solid var(--line);text-align:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body data-depth="sub" data-current="sec-beach-clubs">
+<a href="#main" class="skip-to-content" style="position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;z-index:9999;font-size:14px" onfocus="this.style.left='12px';this.style.top='12px'" onblur="this.style.left='-9999px'">Saltar al contenido</a>
+
+<div class="grain" aria-hidden="true"></div>
+<div id="site-header"></div>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="crumbs" aria-label="Migas de pan">
+      <a href="../pasify.html">Inicio</a>
+      <span class="sep">/</span>
+      <a href="../pasify.html#sectores">Sectores</a>
+      <span class="sep">/</span>
+      <span class="here">Beach clubs</span>
+    </nav>
+
+    <section class="page-hero">
+      <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Beach clubs</span>
+      <h1>El ritmo de tu beach club, de la primera <em>cama</em> a la última <span class="highlight">copa</span>.</h1>
+      <p class="lede">Día y noche en la misma plataforma. Reservas de hamacas y camas balinesas, brunch con DJ, sunset session, dinner y club mode — todo cobrado y trazado sin que tu maître pelee con cuatro pestañas un domingo a las 17:00 con la playa al 92%.</p>
+      <div class="ctas">
+        <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+        <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
+      </div>
+      <div class="meta" aria-label="Datos de plataforma">
+        <span>Marbella · Ibiza · Mallorca · Sitges</span>
+        <span>Plano de hamacas drag-and-drop</span>
+        <span>Weather refund opcional</span>
+      </div>
+    </section>
+
+    <section class="stats-strip" aria-label="Métricas de plataforma">
+      <div><div class="num"><em>+</em>52<em>%</em></div><div class="lab">reserva anticipada<br>de cama balinesa</div></div>
+      <div><div class="num">19<em>s</em></div><div class="lab">tiempo medio<br>de checkout móvil</div></div>
+      <div><div class="num">0<em>%</em></div><div class="lab">comisión añadida<br>al cliente final</div></div>
+      <div><div class="num">92<em>%</em></div><div class="lab">ocupación media<br>en hora pico de domingo</div></div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
+        <h2>Un beach club tiene <em>tres</em> negocios distintos. Y la mayoría los gestiona con la misma libreta.</h2>
+        <p class="sub">De día eres restaurante. A media tarde, lounge. De noche, club. Cada modo tiene su tipo de cliente, su ticket medio y su operativa — pero la plataforma de reservas, el TPV de barra y la lista VIP de la noche viven en archipiélagos separados.</p>
+      </div>
+
+      <div class="pain-grid">
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 01</div>
+          <h3>Walk-ins de domingo, hamacas reservadas vacías</h3>
+          <p>Llega una pareja sin reservar. La playa está al 60%, pero las 12 camas vacías son reservas no confirmadas. La maître decide a ojo. A las 16:00 quedan tres camas vacías que ya no se llenan — los walk-ins se fueron al beach club de al lado.</p>
+          <div class="quote">"Perdíamos dos camas balinesas todos los domingos. Cada una son 240€ mínimos."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 02</div>
+          <h3>F&B sin trazabilidad por cama o mesa</h3>
+          <p>El cliente pide una segunda botella desde la hamaca 14 por gestos. El camarero apunta en el móvil. Al llegar a la cuenta de las 18:00, nadie sabe qué pidió cada cama. Discusiones, ticket re-emitido, cliente molesto.</p>
+          <div class="quote">"El ticket promedio bajaba un 18% solo por errores de attribution."</div>
+        </article>
+
+        <article class="pain-card reveal">
+          <div class="x" aria-hidden="true">×</div>
+          <div class="lab">Dolor 03</div>
+          <h3>Mismo cliente, dos sistemas, cero CRM</h3>
+          <p>Vino al brunch en mayo, gastó 380€. Volvió a la sunset session en julio, gastó 520€. Volvió a la fiesta de IBZ en agosto, otros 650€. Para tu sistema de reservas son tres clientes anónimos. Para tu tarjeta fidelidad, cero.</p>
+          <div class="quote">"Un VIP que valía 4.000€/año aparecía como tres reservas independientes."</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="operativa" class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">02 /</span> Producto</span>
+        <h2>Tres modos del día, una plataforma. Sin saltar de TPV a Excel a WhatsApp.</h2>
+        <p class="sub">Pasify trata tu beach club como tres negocios bajo un mismo techo: restaurante con plano, lounge con DJ y club con pulseras. Los tres comparten cliente, ticket y caja. Cero islas.</p>
+      </div>
+
+      <div class="mod-grid">
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.5 5.5l1.5 1.5M17 17l1.5 1.5M5.5 18.5l1.5-1.5M17 7l1.5-1.5"/></svg></div>
+            <span class="num">01</span>
+          </div>
+          <h3>Day pass + reserva de hamaca</h3>
+          <p>El cliente entra a tu web, elige fecha, ve el plano de la playa con disponibilidad en vivo, y reserva su hamaca o cama balinesa con consumición mínima pre-pagada.</p>
+          <ul><li>Plano drag-and-drop · 200+ posiciones</li><li>Pre-pago mínimo · 0% comisión al cliente</li><li>Apple Wallet con código de cama</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12c2-3 5-3 7-3s5 0 7 3c2 3 4 6 4 6H1s2-3 4-6z"/><path d="M9 9V5a3 3 0 0 1 6 0v4"/></svg></div>
+            <span class="num">02</span>
+          </div>
+          <h3>F&B atado a la cama, no a la mesa</h3>
+          <p>El cliente pide bebida desde un QR que cuelga de la cama balinesa. El camarero ve la cuenta vinculada, sirve, cobra al instante o suma al pre-pago. Ticket único al final.</p>
+          <ul><li>QR por cama / hamaca / mesa</li><li>Asignación automática a camarero</li><li>Comanda directa a barra y cocina</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="14" r="3"/><circle cx="18" cy="14" r="3"/><path d="M9 14V5l9-2v9"/></svg></div>
+            <span class="num">03</span>
+          </div>
+          <h3>Sunset sessions con ticketing nativo</h3>
+          <p>De 18:00 a 22:00 cambia el modelo: cover charge, lista de invitados, RRPP con comisión. Sin re-imprimir nada, sin segundo TPV, sin segunda lista.</p>
+          <ul><li>Cover charge configurable</li><li>Lista invitados + RRPP nativos</li><li>Pulseras NFC para acceso a zona DJ</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><circle cx="17" cy="17" r="2.5" fill="currentColor" stroke="none"/></svg></div>
+            <span class="num">04</span>
+          </div>
+          <h3>Club mode · pulseras y aforo</h3>
+          <p>A partir de medianoche, el cover se sustituye por aforo en vivo. Las pulseras NFC hacen reentry, abren zona VIP y cobran en barra sin tarjeta.</p>
+          <ul><li>App offline · sin cobertura</li><li>Aforo por zona (pista · DJ · VIP)</li><li>NFC top-up barra opcional</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/><path d="M12 12l9-4.5M12 12v9M12 12L3 7.5"/></svg></div>
+            <span class="num">05</span>
+          </div>
+          <h3>CRM por cliente, no por momento</h3>
+          <p>Mismo cliente, mismo histórico — vino tres veces este verano, gastó 1.800€, le gusta el rosé y siempre pide la cama 14. Manda WhatsApp con la oferta del próximo finde.</p>
+          <ul><li>Score VIP automático</li><li>Brand activations · datos al sponsor</li><li>RGPD-clean · export libre</li></ul>
+        </article>
+
+        <article class="mod reveal">
+          <div class="head">
+            <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20v-13"/><path d="M2 20h20"/></svg></div>
+            <span class="num">06</span>
+          </div>
+          <h3>Analytics de las tres jornadas</h3>
+          <p>El lunes ves los tres negocios por separado: brunch, sunset, club. Por ticket medio, por hora, por canal de venta. Y agrupado, para ver al cliente real.</p>
+          <ul><li>Cuadre Z multi-modo</li><li>Weather adjusted · refund auto</li><li>Looker Studio export</li></ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">03 /</span> Operativa real</span>
+        <h2>Un domingo en tu beach club, hora a hora.</h2>
+        <p class="sub">No es una demo: es lo que ve el equipo de un beach club de 800 plazas un domingo de agosto. Desde la primera reserva confirmada hasta el cierre del DJ a las 03:00.</p>
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="tl-row"><div><div class="time">11:00</div><div class="day">Dom · apertura</div></div><div class="body"><h4>Apertura · primeras reservas confirmadas</h4><p>El maître abre la app y ve el plano: 78 reservas confirmadas, 12 walk-ins esperados según patrón histórico. Cocina recibe el resumen automático: 142 cubiertos esperados al brunch.</p><span class="tag">Forecast operativo</span></div></div>
+        <div class="tl-row"><div><div class="time">12:30</div><div class="day">Brunch DJ</div></div><div class="body"><h4>Llegan los reservados, asignación instantánea</h4><p>Los clientes muestran el QR. La maître arrastra a la cama 14, marca como llegado, dispara comanda welcome a barra. La consumición mínima de 240€ ya está cobrada — el camarero lo ve antes de servir el primer rosé.</p><span class="tag">Pre-pago aplicado</span></div></div>
+        <div class="tl-row peak"><div><div class="time">14:00</div><div class="day">Pico mediodía</div></div><div class="body"><h4>Playa al 92%, alerta a manager</h4><p>Pasify alerta: 736 / 800. Las dos últimas camas balinesas se ofrecen como "last chance" con surcharge en la web. Los walk-ins se redirigen a hamaca compartida o lista de espera. Sin caos en la entrada.</p><span class="tag">Alerta capacidad</span></div></div>
+        <div class="tl-row"><div><div class="time">16:00</div><div class="day">Bebida en cama</div></div><div class="body"><h4>Cama 14 pide segunda botella desde el QR</h4><p>Sin levantarse, sin gestos. El QR de la cama abre menú, el cliente pide una botella de Whispering Angel (180€). El camarero asignado recibe la comanda en su iPad, sirve, suma al ticket. Cero error de attribution.</p><span class="tag">QR ordering</span></div></div>
+        <div class="tl-row"><div><div class="time">18:00</div><div class="day">Sunset session</div></div><div class="body"><h4>Cambio de modo · DJ arranca, cover activo</h4><p>Los hamacas se aclaran, llegan los del sunset. Los reservados de cama mantienen su mesa con consumición. Los nuevos pagan 25€ cover en la web. Pulseras NFC opcionales para acceder a la zona DJ.</p><span class="tag">Mode switch</span></div></div>
+        <div class="tl-row"><div><div class="time">21:00</div><div class="day">Dinner</div></div><div class="body"><h4>Restaurante a la carta · cocktail bar</h4><p>30 mesas se pasan a dinner mode. La cama balinesa se transforma en mesa de cena con minimum 90€/pax. La carta cambia automáticamente en los QR. La música baja, el lighting cambia.</p><span class="tag">Carta dinámica</span></div></div>
+        <div class="tl-row"><div><div class="time">00:00</div><div class="day">Club mode</div></div><div class="body"><h4>Pulseras NFC, aforo nuevo, RRPP activos</h4><p>El recinto se transforma. Los del dinner que se quedan reciben pulsera NFC con saldo del top-up de cama. Los nuevos pagan 30€ cover. Aforo nocturno máximo: 600. RRPP con sus links activos hasta las 02:30.</p><span class="tag">Modo nocturno</span></div></div>
+        <div class="tl-row"><div><div class="time">03:00</div><div class="day">Cierre</div></div><div class="body"><h4>Cuadre triple · brunch + sunset + club</h4><p>El cierre Z desglosa los tres modos: 14.2K€ brunch · 9.8K€ sunset · 21.4K€ club. IVA por tipo, comisión a RRPP, cuadre con TPV de barra. Hacienda-ready. El manager firma y se va.</p><span class="tag">Triple cierre</span></div></div>
+        <div class="tl-row"><div><div class="time">09:00</div><div class="day">Lun · informe</div></div><div class="body"><h4>Email con los tres negocios desglosados</h4><p>Brunch ticket medio 78€ · sunset 42€ · club 36€. Top cama: la 22 con 720€. Top cliente: M.V. con 1.140€. 124 fans nuevos en CRM. Sugerencia: "estos 38 vinieron las 3 sesiones — invítales al cierre de temporada".</p><span class="tag">Auto-segmentación</span></div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">04 /</span> Lo que ves desde el office</span>
+        <h2>Un dashboard que cabe en el iPad del maître.</h2>
+        <p class="sub">Una pantalla. Datos vivos. Decisiones rápidas. Esto es lo que vería tu equipo ahora mismo si estuvieses operando un domingo con la playa al 92%.</p>
+      </div>
+
+      <div class="mock" aria-label="Demostración visual del dashboard">
+        <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">app.pasify.com/beach/cala-azul/live · dom 14 ago · 14:18</span></div>
+        <div class="mock-body">
+          <div class="mock-head"><h4>Cala Azul Beach Club · Marbella · Live</h4><span class="date">Dom 14 ago · 14:18 · brunch DJ</span></div>
+
+          <div class="mock-kpi">
+            <div><div class="l">Ocupación</div><div class="v">736 <em>/ 800</em></div><div class="d warn">92% · last calls</div></div>
+            <div><div class="l">F&B en vivo</div><div class="v">14<em>.</em>248<em>€</em></div><div class="d">+22% vs dom anterior</div></div>
+            <div><div class="l">Camas balinesas</div><div class="v">26 <em>/ 28</em></div><div class="d">2 last chance · surcharge</div></div>
+            <div><div class="l">Próximo modo</div><div class="v" style="font-size:18px">Sunset</div><div class="d">en 03:42 · DJ confirmado</div></div>
+          </div>
+
+          <div class="mock-split">
+            <div class="mock-tbl">
+              <div class="ttl"><span>Plano de camas · zona pool</span><span class="live">live</span></div>
+              <div class="mock-tbl-row h"><span>Cama</span><span>Pax</span><span>Mín</span><span>Estado</span></div>
+              <div class="mock-tbl-row"><span class="name">14 · Pool front</span><span class="ppl">2 pax</span><span class="min">240€</span><span class="st vip">VIP · DENTRO</span></div>
+              <div class="mock-tbl-row"><span class="name">22 · Pool side</span><span class="ppl">4 pax</span><span class="min">480€</span><span class="st vip">VIP · DENTRO</span></div>
+              <div class="mock-tbl-row"><span class="name">07 · Garden</span><span class="ppl">2 pax</span><span class="min">180€</span><span class="st ok">DENTRO</span></div>
+              <div class="mock-tbl-row"><span class="name">11 · Sea view</span><span class="ppl">6 pax</span><span class="min">540€</span><span class="st ok">DENTRO</span></div>
+              <div class="mock-tbl-row"><span class="name">03 · Pool front</span><span class="ppl">2 pax</span><span class="min">240€</span><span class="st wait">PEND · 14:30</span></div>
+              <div class="mock-tbl-row"><span class="name">19 · Sea view</span><span class="ppl">2 pax</span><span class="min">240€</span><span class="st gone">NO-SHOW</span></div>
+            </div>
+
+            <div class="mock-feed">
+              <div class="ttl">Últimos eventos</div>
+              <div class="feed-row"><span class="t">14:18</span><span class="body"><b>Cama 14</b> añade botella · <span class="acc">+180€</span></span></div>
+              <div class="feed-row"><span class="t">14:17</span><span class="body"><b>Walk-in 4 pax</b> · hamacas 18-21</span></div>
+              <div class="feed-row"><span class="t">14:15</span><span class="body"><b>Aforo 92%</b> · alerta a maître</span></div>
+              <div class="feed-row"><span class="t">14:13</span><span class="body"><b>Cama 19 no-show</b> · liberada · cobrado 50%</span></div>
+              <div class="feed-row"><span class="t">14:10</span><span class="body"><b>M.V.</b> reserva sunset · <span class="acc">VIP 5x</span></span></div>
+              <div class="feed-row"><span class="t">14:06</span><span class="body"><b>Cocina</b> · 86 menús servidos</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">05 /</span> Plano de hamacas y camas</span>
+      </div>
+
+      <div class="res-split">
+        <div class="text">
+          <h2>El <em>70%</em> de tu facturación viene de las camas premium. Trátalas como en un Michelin.</h2>
+          <p class="sub">Una cama balinesa en Marbella en agosto factura entre 600 y 1.500€ en consumición real. Un no-show ahí no es una mesa vacía: es una franja del día perdida, porque a las 16:00 ya no se vende. Pasify trata cada cama como un producto con precio, pre-pago, asignación y reasignación.</p>
+
+          <ul class="checks">
+            <li><span class="ck">✓</span><div><b>Plano drag-and-drop fiel a tu beach.</b> Pool front, sea view, garden, beach line. Cada cama con su precio, capacidad y descripción real.</div></li>
+            <li><span class="ck">✓</span><div><b>Pre-pago de consumición mínima.</b> El cliente paga el suelo al reservar. Si no aparece a la 1h del horario, se cobra el 50% como no-show fee. Configurable.</div></li>
+            <li><span class="ck">✓</span><div><b>Weather refund opcional.</b> Si la web meteo certifica lluvia &gt;2mm, el cobro se anula automáticamente. Cero llamadas, cero discusión.</div></li>
+            <li><span class="ck">✓</span><div><b>Cliente VIP detectado en check-in.</b> Si vino 3+ veces este verano, el maître recibe el flag al escanear su QR. Trata distinto a quien gasta 4.000€/temporada.</div></li>
+            <li><span class="ck">✓</span><div><b>Reasignación en vivo.</b> Si una cama no aparece, libérala. Si llega un walk-in con perfil alto, asígnala. Sin re-imprimir, sin re-cobrar.</div></li>
+          </ul>
+        </div>
+
+        <aside class="res-card" aria-label="Plano visual de camas">
+          <div class="lab">Plano · pool front · dom 14 ago 14:18</div>
+          <div class="total"><span class="v">26</span><span class="c">/ 28 camas · 92%</span></div>
+          <div class="small">14.248 € en vivo · top cama #14 · 720€</div>
+
+          <div class="beach-map" aria-hidden="true">
+            <div class="lounger taken">14</div><div class="lounger taken">02</div><div class="lounger vip">22</div><div class="lounger taken">04</div><div class="lounger taken">05</div><div class="lounger held">06</div><div class="lounger taken">07</div>
+            <div class="lounger taken">08</div><div class="lounger taken">09</div><div class="lounger taken">10</div><div class="lounger taken">11</div><div class="lounger taken">12</div><div class="lounger taken">13</div><div class="lounger taken">15</div>
+            <div class="lounger taken">16</div><div class="lounger taken">17</div><div class="lounger taken">18</div><div class="lounger vip">19</div><div class="lounger taken">20</div><div class="lounger taken">21</div><div class="lounger taken">23</div>
+            <div class="lounger taken">24</div><div class="lounger taken">25</div><div class="lounger taken">26</div><div class="lounger held">27</div><div class="lounger taken">28</div><div class="lounger">01</div><div class="lounger">03</div>
+          </div>
+
+          <div class="lab-key">
+            <span class="t">Ocupada</span>
+            <span class="v">VIP</span>
+            <span class="h">Pendiente</span>
+            <span>Libre</span>
+          </div>
+
+          <div class="badge-row" style="margin-top:18px">
+            <span class="b ok">PRE-PAGO 100%</span>
+            <span class="b">Last chance · 2</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
+        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
+        <p class="sub">La mayoría de beach clubs en España usan dos plataformas: una global de reservas hostelería y un TPV vertical noche. Pasify hace ambas cosas en una sola.</p>
+      </div>
+
+      <div class="cmp" role="region" aria-label="Comparativa">
+        <table>
+          <thead><tr><th></th><th class="hl">Pasify</th><th>Plataforma reservas hostelería</th><th>TPV vertical eventos</th></tr></thead>
+          <tbody>
+            <tr><th>Comisión por reserva con pre-pago</th><td class="hl"><span class="pct">0%</span> al cliente · 4–6% al club</td><td>2,5–4€ por cubierto</td><td>5–7% al cliente</td></tr>
+            <tr><th>Plano drag-and-drop hamacas</th><td class="hl yes">Sí · nativo</td><td class="no">No · solo mesas</td><td>Limitado</td></tr>
+            <tr><th>F&B atado a cama via QR</th><td class="hl yes">Sí</td><td class="no">No</td><td>Parcial</td></tr>
+            <tr><th>Modo día + sunset + club</th><td class="hl yes">Sí · un solo TPV</td><td class="no">No · solo día</td><td class="no">No · solo noche</td></tr>
+            <tr><th>Weather refund automático</th><td class="hl yes">Sí · API meteo</td><td class="no">No</td><td class="no">No</td></tr>
+            <tr><th>CRM unificado día/noche</th><td class="hl yes">Sí</td><td>Solo reserva mesa</td><td>Solo entrada noche</td></tr>
+            <tr><th>Soporte humano fin de semana</th><td class="hl yes">Sí · WhatsApp · 4 min</td><td>Email · 24h</td><td>Tickets · 4h</td></tr>
+            <tr><th>Permanencia mínima</th><td class="hl"><span class="pct">0</span> meses</td><td>12 meses</td><td>12 meses</td></tr>
+            <tr><th>Migración asistida</th><td class="hl yes">Gratis · 15 min</td><td>De pago</td><td>De pago</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
+        <h2>Tres formas de medir si Pasify funciona.</h2>
+        <p class="sub">Tres beach clubs reales de tres puntos de la costa. Nombres anonimizados a petición — el sector es pequeño y prefieren no aparecer públicamente.</p>
+      </div>
+
+      <div class="quotes">
+        <article class="q reveal"><div class="mark">"</div><blockquote>El no-show de cama balinesa pasó del <em>18%</em> al 3% el primer mes. Pre-autorizamos al reservar y la gente, simplemente, viene. O paga la mitad si no.</blockquote><div class="who"><div class="av"></div><div><div class="nm">M.G. · Manager</div><div class="role">Beach club · Marbella · 800 cap</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>Antes el día y la noche eran dos negocios separados. Hoy <em>el mismo</em> cliente que vino al brunch tiene su pulsera VIP por la noche, sin volver a pagar entrada.</blockquote><div class="who"><div class="av b"></div><div><div class="nm">P.S. · Owner</div><div class="role">Chiringuito premium · Ibiza</div></div></div></article>
+        <article class="q reveal"><div class="mark">"</div><blockquote>El cuadre de tres modos en un solo Z me ha devuelto <em>tres horas</em> cada lunes. Y mi gestor me lo agradece más que yo.</blockquote><div class="who"><div class="av c"></div><div><div class="nm">L.T. · F&B Director</div><div class="role">Cala premium · Mallorca</div></div></div></article>
+      </div>
+    </section>
+
+    <section class="sec compact reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <h2>Encaja con tu cocina, tu TPV y tu meteo.</h2>
+        <p class="sub">Pasify habla con los sistemas de hostelería que ya usas y, además, con la API meteo que decide tus reembolsos.</p>
+      </div>
+
+      <div class="ints">
+        <div class="int"><div class="nm">Stripe</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Bizum</div><div class="cat">Pagos</div></div>
+        <div class="int"><div class="nm">Apple Wallet</div><div class="cat">Reservas</div></div>
+        <div class="int"><div class="nm">OpenTable</div><div class="cat">Sync reserva</div></div>
+        <div class="int"><div class="nm">TheFork</div><div class="cat">Sync reserva</div></div>
+        <div class="int"><div class="nm">Holded</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Sage 50</div><div class="cat">Contabilidad</div></div>
+        <div class="int"><div class="nm">Revel TPV</div><div class="cat">Barra · cocina</div></div>
+        <div class="int"><div class="nm">Sumup</div><div class="cat">TPV</div></div>
+        <div class="int"><div class="nm">AEMET API</div><div class="cat">Meteo refund</div></div>
+        <div class="int"><div class="nm">OpenWeather</div><div class="cat">Meteo refund</div></div>
+        <div class="int"><div class="nm">Instagram</div><div class="cat">Marketing</div></div>
+        <div class="int"><div class="nm">WhatsApp Biz</div><div class="cat">CRM</div></div>
+        <div class="int"><div class="nm">Mailchimp</div><div class="cat">Email</div></div>
+        <div class="int"><div class="nm">Looker Studio</div><div class="cat">Analytics</div></div>
+      </div>
+    </section>
+
+    <section class="sec reveal">
+      <div class="sec-head">
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <h2>Lo que preguntan los managers antes de firmar.</h2>
+      </div>
+
+      <div class="faq">
+        <details><summary>¿Funciona la reserva de cama si solo abro de mayo a octubre?<span class="plus">+</span></summary><div class="answer"><p>Sí. La tarifa de Pasify es <b>flexible por temporada</b>: pagas solo los meses que operas. Cerramos tu instancia en noviembre y la abrimos en abril con tu calendario y CRM intactos.</p><p>Tenemos beach clubs en Costa del Sol que solo operan 6 meses al año — para ellos hicimos el modelo seasonal. Cuesta lo mismo prorrateado que la tarifa anual completa.</p></div></details>
+        <details><summary>¿Qué pasa si llueve y mis reservas se quedan sin venir?<span class="plus">+</span></summary><div class="answer"><p>Conectamos con <code>AEMET</code> y <code>OpenWeather</code>. Si la previsión a 4 horas vista certifica lluvia &gt;2mm, lanzamos un email a tus reservas ofreciendo: (1) reagendar gratis, (2) refund completo, (3) mantener.</p><p>Si la lluvia se confirma el mismo día y configuras "weather refund", el reembolso es automático. Cero llamadas a las 09:00 de un domingo.</p></div></details>
+        <details><summary>¿Soporta brand activations con Estrella, Veuve, etc.?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cada brand activation tiene su propio "espacio" en Pasify: cama VIP brandeada, cover charge brandeado, lista de invitados del sponsor. Reportes consolidados al sponsor con números agregados — sin compartir datos personales (RGPD).</p><p>Hemos hecho activaciones con marcas premium grandes en Ibiza y Marbella. Caso típico: 10 camas pintadas, sponsor recibe lista RGPD-clean al final, paga upfront.</p></div></details>
+        <details><summary>¿Puedo gestionar los walk-ins desde la misma app?<span class="plus">+</span></summary><div class="answer"><p>Sí. La app de maître tiene "modo walk-in": abre, asigna cama o hamaca disponible, cobra al instante con tarjeta o Bizum, imprime ticket o manda QR por SMS. Stock unificado con las reservas online.</p></div></details>
+        <details><summary>¿Cumple con Hacienda y la facturación TPV en España?<span class="plus">+</span></summary><div class="answer"><p>Sí. Cierre Z certificado, IVA por tipo (4% / 10% / 21%), libro registro, export a Holded/Sage. Cumple <code>Veri*Factu</code> 2026.</p><p>Para beach clubs que operan en zonas con régimen especial (ZEC en Canarias, etc.), configuramos el modelo fiscal específico una vez y va solo.</p></div></details>
+        <details><summary>¿Y los meses de invierno cuando solo hago eventos privados?<span class="plus">+</span></summary><div class="answer"><p>Pasify se transforma en modo "eventos privados": bodas, corporativos, fiestas de fin de año. Misma plataforma, distinta configuración. Y los datos del verano siguen ahí — pueden segmentarse para invitar a clientes del verano a la nochevieja.</p></div></details>
+        <details><summary>¿Puedo probarlo con un solo finde antes de firmar nada?<span class="plus">+</span></summary><div class="answer"><p>Sí. Primer fin de semana gratis. Crea las reservas, opera el día, cuadra al cierre. Lunes decides. Si no encaja, te llevas tu data limpia sin pagar nada.</p></div></details>
+      </div>
+    </section>
+
+    <section class="cta-banner reveal">
+      <div class="left">
+        <div class="lab">Empieza este verano</div>
+        <h2>El sistema que tu <em>cala</em> merece. Sin contrato, sin sorpresas, sin Excel los lunes.</h2>
+        <p class="sub">Un fin de semana gratis para probarlo. Migración gratis desde tu plataforma actual. Un humano de Pasify te configura el plano de hamacas y la primera carta en 15 minutos por videollamada.</p>
+        <div class="ctas">
+          <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
+          <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
+        </div>
+      </div>
+      <ul class="bulls">
+        <li><span class="ck">✓</span><div><b>Plano de hamacas en 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Subes una foto aérea, te lo digitalizamos en directo.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Migración gratis · OpenTable, TheFork u otra</b><br><span style="color:var(--ink-2);font-size:13px">Reservas pasadas y CRM importados en 48h.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Soporte humano fin de semana</b><br><span style="color:var(--ink-2);font-size:13px">WhatsApp directo · 4 min de respuesta media.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Tarifa por temporada · sin permanencia</b><br><span style="color:var(--ink-2);font-size:13px">Pagas los meses que operas. Si no funciona, cancelas.</span></div></li>
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="footer">© 2026 Pasify · El pase a tu mejor noche.</div>
+</main>
+
+<script src="../soluciones/_header.js"></script>
+<script>
+  (function(){
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+      return;
+    }
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }});
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  })();
+</script>
+
+<!-- FOOTER (injected) -->
+<div id="site-footer"></div>
+<script src="../soluciones/_footer.js"></script>
+</body>
+</html>
