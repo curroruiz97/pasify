@@ -339,19 +339,24 @@
     k = k * k * (3 - 2 * k);
     var mix = function (a, b) { return a + (b - a) * k; };
     var half = aspect * 0.5;
+    // the hero content is ~1120px wide: the share of the width it covers drives
+    // how far out the ribbons sit and how wide the calm zone is
+    var contentFrac = Math.max(0.30, Math.min(0.46, 560 / cw));
+    var squeeze = Math.max(0, contentFrac - 0.39);
 
     gl.uniform2f(this.loc.uRes, w, h);
     gl.uniform1f(this.loc.uHalf, half);
-    gl.uniform1f(this.loc.uW, mix(aspect * 0.205, aspect * 0.15));
+    gl.uniform1f(this.loc.uW, mix(aspect * (0.205 - squeeze * 0.9), aspect * 0.15));
     gl.uniform1f(this.loc.uSeed, this.seed);
     gl.uniform1f(this.loc.uAmp, mix(0.8, 0.45));
-    // right ribbon sits a bit further out than the left one on desktop
-    gl.uniform2f(this.loc.uOff, mix(0.0, 0.0), mix(-0.05, 0.0));
-    gl.uniform2f(this.loc.uTilt, mix(0.30, 0.42), mix(0.0, 0.42));
-    gl.uniform2f(this.loc.uBulge, mix(0.03, 0.0), mix(0.05, 0.0));
+    // desktop: the right ribbon is narrow at the top (behind the big word) and
+    // widens towards the bottom; the left one does the mirror sweep
+    gl.uniform2f(this.loc.uOff, mix(0.0, 0.0), mix(-0.24, 0.0));
+    gl.uniform2f(this.loc.uTilt, mix(0.30, 0.42), mix(-0.30, 0.42));
+    gl.uniform2f(this.loc.uBulge, mix(0.03, 0.0), mix(0.03, 0.0));
     // calm zone: desktop = content column (14%..86%) around the headline band,
     // portrait = the whole content column
-    gl.uniform4f(this.loc.uCalm, mix(half * 0.72, half * 0.84), mix(-0.12, -0.6), mix(0.34, 0.6), mix(0.55, 0.8));
+    gl.uniform4f(this.loc.uCalm, mix(aspect * contentFrac, half * 0.84), mix(-0.12, -0.6), mix(0.34, 0.6), mix(0.6, 0.8));
     gl.uniform1f(this.loc.uFade, mix(0.15, 0.07));
   };
 

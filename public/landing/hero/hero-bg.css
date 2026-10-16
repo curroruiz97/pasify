@@ -22,14 +22,15 @@
   background-repeat:no-repeat;
 }
 @media (max-aspect-ratio:4/5){
+  /* portrait: glow only in the top-right / bottom-left corners, away from the text */
   [data-hero-webgl]{
     background-image:
-      linear-gradient(to top, #0B0908 0%, rgba(11,9,8,0) 14%),
-      radial-gradient(ellipse 60% 22% at 50% 30%, rgba(232,84,42,.08), rgba(232,84,42,0) 70%),
-      radial-gradient(ellipse 55% 16% at 8% 4%, rgba(255,122,77,.26), rgba(232,84,42,0) 72%),
-      radial-gradient(ellipse 90% 24% at 0% 0%, rgba(122,42,15,.70), rgba(42,15,6,0) 78%),
-      radial-gradient(ellipse 55% 16% at 94% 84%, rgba(255,122,77,.24), rgba(232,84,42,0) 72%),
-      radial-gradient(ellipse 90% 24% at 100% 88%, rgba(122,42,15,.66), rgba(42,15,6,0) 78%);
+      linear-gradient(to top, #0B0908 0%, rgba(11,9,8,0) 8%),
+      radial-gradient(ellipse 60% 22% at 50% 30%, rgba(232,84,42,.06), rgba(232,84,42,0) 70%),
+      radial-gradient(ellipse 22% 14% at 100% 4%, rgba(255,122,77,.22), rgba(232,84,42,0) 72%),
+      radial-gradient(ellipse 34% 22% at 104% 0%, rgba(122,42,15,.60), rgba(42,15,6,0) 78%),
+      radial-gradient(ellipse 22% 14% at 0% 90%, rgba(255,122,77,.20), rgba(232,84,42,0) 72%),
+      radial-gradient(ellipse 34% 22% at -4% 94%, rgba(122,42,15,.56), rgba(42,15,6,0) 78%);
   }
 }
 [data-hero-webgl] > canvas{
