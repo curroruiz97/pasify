@@ -54,15 +54,6 @@
   .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
   .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
 
-  /* Stats strip */
-  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
-  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
-  .stats-strip > div:last-child{border-right:none}
-  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
-  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
-  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
-  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
-  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
 
   /* Pain section (3 cards "the problem") */
   .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -73,7 +64,6 @@
   .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
   .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
   .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
-  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
 
   /* Modules — 6 cards with unique icons */
   .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -180,35 +170,7 @@
   .res-card .b{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:rgba(244,238,226,.06);border:1px solid var(--line-2);color:var(--ink-2)}
   .res-card .b.ok{background:rgba(77,184,122,.1);border-color:rgba(77,184,122,.3);color:#4DB87A}
 
-  /* Comparison table */
-  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
-  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
-  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
-  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
-  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
-  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
-  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
-  .cmp td{color:var(--ink-3);font-size:14px}
-  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
-  .cmp td.yes{color:#4DB87A}
-  .cmp td.no{color:var(--ink-4)}
-  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
-  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
 
-  /* Testimonials */
-  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
-  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
-  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
-  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
-  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
-  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
-  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
-  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
-  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
-  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
 
   /* Integrations strip */
   .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
@@ -281,35 +243,14 @@
     <section class="page-hero">
       <span class="label"><span class="pulse" aria-hidden="true"></span>Sectores · Discotecas</span>
       <h1>El sistema operativo de tu <span class="highlight">noche</span>, no un <em>plugin</em> más.</h1>
-      <p class="lede">Diseñado con clubs reales, no con un slide de pitch. Si tu noche son 100 personas o 2.000, si abres un día o siete, Pasify cubre la venta, el reservado, la puerta y el lunes — sin contrato, sin comisión a tu cliente, sin pelearte con cuatro pestañas a las 4 AM.</p>
+      <p class="lede">Diseñado para la noche real, no para un slide de pitch. Si tu noche son 100 personas o 2.000, si abres un día o siete, Pasify cubre la venta, el reservado, la puerta y el lunes — sin contrato, sin comisión a tu cliente, sin pelearte con cuatro pestañas a las 4 AM.</p>
       <div class="ctas">
         <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
         <a href="#operativa" class="btn btn-outline">Ver cómo funciona</a>
       </div>
       <div class="meta" aria-label="Datos de plataforma">
-        <span>Activo en 6 ciudades</span>
         <span>Stripe · Bizum · Apple Wallet</span>
-        <span>Soporte WhatsApp · viernes 03:00</span>
-      </div>
-    </section>
-
-    <!-- ===== STATS STRIP ===== -->
-    <section class="stats-strip" aria-label="Métricas de plataforma">
-      <div>
-        <div class="num"><em>+</em>38<em>%</em></div>
-        <div class="lab">venta anticipada<br>vs taquilla en puerta</div>
-      </div>
-      <div>
-        <div class="num">23<em>s</em></div>
-        <div class="lab">tiempo medio<br>de checkout móvil</div>
-      </div>
-      <div>
-        <div class="num">0<em>%</em></div>
-        <div class="lab">comisión añadida<br>al cliente final</div>
-      </div>
-      <div>
-        <div class="num">99.9<em>%</em></div>
-        <div class="lab">uptime escáner<br>en puerta de entrada</div>
+        <span>Soporte por chat con personas</span>
       </div>
     </section>
 
@@ -318,7 +259,7 @@
       <div class="sec-head">
         <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
         <h2>Una buena discoteca no debería operarse con <em>WhatsApp</em>, Excel y un cuaderno.</h2>
-        <p class="sub">Y sin embargo, el 70% de los clubs en España siguen así. Listas en grupos, reservados apuntados a boli, RRPP cuestionando comisiones a las 5 AM. Estos son los tres dolores con los que llegan los managers que prueban Pasify.</p>
+        <p class="sub">Y sin embargo, muchos clubs siguen así. Listas en grupos, reservados apuntados a boli, RRPP cuestionando comisiones a las 5 AM. Estos son los tres dolores más habituales.</p>
       </div>
 
       <div class="pain-grid">
@@ -327,7 +268,6 @@
           <div class="lab">Dolor 01</div>
           <h3>Caos de RRPP los domingos por la mañana</h3>
           <p>Cinco listas en cinco grupos. Un Excel exportado a las 6 AM. Tres promotores discutiendo a quién pertenece el cliente que entró por la puerta sin código. Y una comisión que se paga "a ojo".</p>
-          <div class="quote">"Pagaba comisiones que no podía justificar. Y a veces la pagaba dos veces."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -335,7 +275,6 @@
           <div class="lab">Dolor 02</div>
           <h3>Reservados sin trazabilidad ni pre-pago</h3>
           <p>El cliente reserva por DM, no aparece, y la mesa queda vacía sábado a las 02:30. Si aparece, paga al final, discute la cuenta, y tu maître pasa media hora en el TPV en vez de en la sala.</p>
-          <div class="quote">"De cada 10 reservados, 2 no venían. Y nadie pagaba un duro de penalización."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -343,7 +282,6 @@
           <div class="lab">Dolor 03</div>
           <h3>Cero data útil después del evento</h3>
           <p>El lunes el dueño quiere saber cuánta gente vino, qué bebieron, de qué ciudad eran y cuántos vuelven. La respuesta es un número total y dos screenshots del TPV. No hay manera de fidelizar a quien ya pagó.</p>
-          <div class="quote">"Tenía 14.000 clientes acumulados. Sabía sus nombres y nada más."</div>
         </article>
       </div>
     </section>
@@ -413,7 +351,7 @@
             <span class="num">04</span>
           </div>
           <h3>Control de acceso QR + pulseras NFC</h3>
-          <p>App nativa para puerta, modo offline, lectura en menos de 200ms. Aforo en vivo, alertas de capacidad y reentry con un toque.</p>
+          <p>App nativa para puerta, modo offline, lectura al instante. Aforo en vivo, alertas de capacidad y reentry con un toque.</p>
           <ul>
             <li>iOS / Android — funciona sin cobertura</li>
             <li>Pulseras NFC pre-codificadas opcionales</li>
@@ -472,7 +410,7 @@
           <div class="body">
             <h4>Apertura controlada</h4>
             <p>El taquillero abre la app de puerta. La lista de invitados está sincronizada, los QR ya validados, las pulseras NFC pre-codificadas para los reservados VIP. Aforo objetivo configurado. Cero papel.</p>
-            <span class="tag">Setup en 90s</span>
+            <span class="tag">Setup previo</span>
           </div>
         </div>
 
@@ -482,7 +420,7 @@
             <div class="day">Primeras entradas</div>
           </div>
           <div class="body">
-            <h4>Cola fluida, validación &lt;200ms</h4>
+            <h4>Cola fluida, validación al instante</h4>
             <p>Los primeros clientes con entrada anticipada llegan. Validación QR offline (incluso si se cae la fibra). Cada lectura suma al contador en vivo. El RRPP responsable de esa lista ve sus entradas confirmadas en su móvil.</p>
             <span class="tag">Modo offline activo</span>
           </div>
@@ -663,8 +601,8 @@
 
       <div class="res-split">
         <div class="text">
-          <h2>El <em>60%</em> de tu facturación, gestionado como en un restaurante de Michelin.</h2>
-          <p class="sub">Los reservados son donde se gana o se pierde la noche. Un no-show del 22% — la media del sector — equivale a perder un fin de semana al mes. Pasify trata cada mesa como un producto, con su precio, su pre-autorización, su consumición, su trazabilidad y su penalización si hace falta.</p>
+          <h2>Tus <em>reservados</em>, gestionados como en un restaurante de Michelin.</h2>
+          <p class="sub">Los reservados son donde se gana o se pierde la noche. Pasify trata cada mesa como un producto, con su precio, su pre-autorización, su consumición, su trazabilidad y su penalización si hace falta.</p>
 
           <ul class="checks">
             <li>
@@ -714,137 +652,12 @@
       </div>
     </section>
 
-    <!-- ===== COMPARISON TABLE ===== -->
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
-        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
-        <p class="sub">Sin nombrar a nadie. Estos son los rangos típicos de las dos plataformas más usadas en discotecas en España, según conversaciones con managers que migraron a Pasify en 2024–25. Si crees que la tuya cobra menos, escríbenos: ajustamos.</p>
-      </div>
-
-      <div class="cmp" role="region" aria-label="Comparativa de Pasify vs alternativas">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col"></th>
-              <th scope="col" class="hl">Pasify</th>
-              <th scope="col">Plataforma vertical A</th>
-              <th scope="col">Plataforma marketplace B</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Comisión por entrada vendida</th>
-              <td class="hl"><span class="pct">0%</span> al cliente · 4–6% al club</td>
-              <td>5–7% al cliente <span style="color:var(--ink-4)">(repercutido)</span></td>
-              <td>3,5% + 0,99 €/entrada al cliente</td>
-            </tr>
-            <tr>
-              <th scope="row">Reservados con pre-pago</th>
-              <td class="hl yes">Sí · nativo</td>
-              <td>Sí · módulo extra</td>
-              <td class="no">No</td>
-            </tr>
-            <tr>
-              <th scope="row">RRPP con liquidación automática</th>
-              <td class="hl yes">Sí · semanal vía Stripe</td>
-              <td>Sí · manual o quincenal</td>
-              <td class="no">No</td>
-            </tr>
-            <tr>
-              <th scope="row">Aforo en vivo + alertas</th>
-              <td class="hl yes">Sí</td>
-              <td>Sí</td>
-              <td>Solo total</td>
-            </tr>
-            <tr>
-              <th scope="row">App de puerta offline</th>
-              <td class="hl yes">Sí · sin cobertura</td>
-              <td>Limitada</td>
-              <td>Requiere conexión</td>
-            </tr>
-            <tr>
-              <th scope="row">CRM por cliente · export</th>
-              <td class="hl yes">Sí · CSV + API</td>
-              <td>Sí · CSV</td>
-              <td class="no">Solo dentro de la plataforma</td>
-            </tr>
-            <tr>
-              <th scope="row">Soporte humano viernes 03:00</th>
-              <td class="hl yes">Sí · WhatsApp directo</td>
-              <td>Tickets · 1–4h</td>
-              <td>Email · 24–48h</td>
-            </tr>
-            <tr>
-              <th scope="row">Permanencia mínima</th>
-              <td class="hl"><span class="pct">0</span> meses</td>
-              <td>12 meses</td>
-              <td>0 meses</td>
-            </tr>
-            <tr>
-              <th scope="row">Migración asistida</th>
-              <td class="hl yes">Gratis · 15 min con humano</td>
-              <td>Coste a medida</td>
-              <td class="no">No ofrecida</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ===== TESTIMONIALS ===== -->
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
-        <h2>Tres formas de medir si Pasify funciona.</h2>
-        <p class="sub">Tres clubs reales de tres ciudades distintas. Nombres anonimizados a petición — el sector es pequeño y prefieren no aparecer. Las cifras son las que comparten en sus reuniones de equipo.</p>
-      </div>
-
-      <div class="quotes">
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>Pasamos de <em>cuatro</em> personas en taquilla los sábados a una sola escaneando QR. La cola desapareció en dos noches. Y el cliente no paga ni un céntimo extra.</blockquote>
-          <div class="who">
-            <div class="av" aria-hidden="true"></div>
-            <div>
-              <div class="nm">M.G. · Manager</div>
-              <div class="role">Club techno · Madrid · 1.200 cap</div>
-            </div>
-          </div>
-        </article>
-
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>El no-show de reservados pasó del <em>22%</em> al 4% el primer mes. Pre-autorizamos al reservar y la gente, simplemente, viene. Ya recuperé el coste de Pasify en un sábado.</blockquote>
-          <div class="who">
-            <div class="av b" aria-hidden="true"></div>
-            <div>
-              <div class="nm">J.R. · Owner</div>
-              <div class="role">Sala indie · Barcelona · 600 cap</div>
-            </div>
-          </div>
-        </article>
-
-        <article class="q reveal">
-          <div class="mark" aria-hidden="true">"</div>
-          <blockquote>Mi <em>link</em>, mi lista, mi comisión. Nunca más una discusión a las 5 AM con el dueño sobre si tres entradas eran mías o no. La transparencia me hace dormir mejor.</blockquote>
-          <div class="who">
-            <div class="av c" aria-hidden="true"></div>
-            <div>
-              <div class="nm">A.L. · Promotora</div>
-              <div class="role">Colectivo RRPP · Valencia</div>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
     <!-- ===== INTEGRATIONS ===== -->
     <section class="sec compact reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Integraciones</span>
         <h2>Encaja con el stack que ya usas.</h2>
-        <p class="sub">No te pedimos que cambies de TPV, contabilidad, CRM ni redes. Pasify habla con todos. Y si lo tuyo no está, lo conectamos vía API en 24h.</p>
+        <p class="sub">No te pedimos que cambies de TPV, contabilidad, CRM ni redes. Pasify habla con todos. Y si lo tuyo no está, lo conectamos vía API.</p>
       </div>
 
       <div class="ints">
@@ -869,25 +682,25 @@
     <!-- ===== FAQ ===== -->
     <section class="sec reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Preguntas</span>
         <h2>Lo que preguntan los managers antes de firmar.</h2>
-        <p class="sub">Si la tuya no está, escríbenos. Pasify no tiene comerciales que te llamen tres veces — un humano del producto te contesta en menos de una hora.</p>
+        <p class="sub">Si la tuya no está, escríbenos. Pasify no tiene comerciales que te llamen tres veces — te contesta una persona del equipo.</p>
       </div>
 
       <div class="faq">
         <details>
           <summary>¿Cuánto tarda el alta y la migración desde mi plataforma actual?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>El alta operativa son <b>15 minutos</b> con un humano nuestro por videollamada. Configuramos tu sala, tus horarios, tus mesas y tu primer evento en directo, contigo.</p>
-            <p>Si vienes de Fourvenues, Eventbrite o cualquier otra plataforma, migramos tu base de clientes (CRM), tu histórico de eventos y tus integraciones de pago <b>gratis</b>, en menos de 48h. Tu próximo viernes ya operas con Pasify.</p>
+            <p>El alta operativa la hacemos <b>contigo</b>, con una persona nuestra por videollamada. Configuramos tu sala, tus horarios, tus mesas y tu primer evento en directo, contigo.</p>
+            <p>Si vienes de otra plataforma, migramos tu base de clientes (CRM), tu histórico de eventos y tus integraciones de pago <b>gratis</b>. Tu próximo viernes ya operas con Pasify.</p>
           </div>
         </details>
 
         <details>
-          <summary>¿Funciona si ya tengo contrato con Fourvenues u otra plataforma?<span class="plus" aria-hidden="true">+</span></summary>
+          <summary>¿Funciona si ya tengo contrato con otra plataforma?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
             <p>Sí. Pasify puede correr en paralelo durante tu permanencia. Empieza por un módulo (típicamente reservados o RRPP) y, cuando venza tu contrato actual, migras el resto.</p>
-            <p>De hecho recomendamos esa transición — verifica el ROI antes de comprometerte. La mayoría de managers cancelan la otra plataforma a los 60 días por iniciativa propia.</p>
+            <p>De hecho recomendamos esa transición — verifica el ROI antes de comprometerte.</p>
           </div>
         </details>
 
@@ -895,23 +708,22 @@
           <summary>¿Quién tiene la propiedad de la data de mis clientes?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
             <p><b>Tú. Sin condiciones.</b> Pasify es un encargado de tratamiento (RGPD art. 28), no responsable. Tu base de clientes es exportable en cualquier momento por CSV o API, en el formato que pidas, sin coste.</p>
-            <p>Si decides irte mañana, te llevas <b>el 100%</b> de tu data. No usamos tu CRM para venderte cosas a tus clientes ni para cruzar datos con otros locales.</p>
+            <p>Si decides irte mañana, te llevas <b>toda</b> tu data. No usamos tu CRM para venderte cosas a tus clientes ni para cruzar datos con otros locales.</p>
           </div>
         </details>
 
         <details>
           <summary>¿Cuál es la comisión exacta? ¿Hay letra pequeña?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Para discotecas: una <b>tarifa fija mensual</b> según tu aforo (desde 149€/mes para clubs de hasta 500 cap.) más una <b>comisión del 4–6%</b> sobre la venta online — la cobramos al club, no al cliente. Tu asistente paga lo que diga el ticket, ni un céntimo más.</p>
+            <p><b>0 € de cuota mensual</b> y una <b>comisión por cada entrada vendida</b> — la cobramos al club, no al cliente. Las entradas gratuitas no pagan comisión. Tu asistente no paga gastos de gestión: paga lo que diga el ticket, ni un céntimo más.</p>
             <p>Lo que NO hay: setup fee, coste por evento creado, coste por usuario, coste por mesa, coste por SMS, coste por integración, coste por exportar, coste por cancelar. Sin permanencia.</p>
           </div>
         </details>
 
         <details>
-          <summary>¿Tienen soporte humano un viernes a las 03:00 AM?<span class="plus" aria-hidden="true">+</span></summary>
+          <summary>¿Hay soporte con personas de verdad?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. Esto son eventos — sabemos cuándo nos necesitas. <b>Soporte WhatsApp directo</b> con humanos del producto (no chatbots) viernes y sábados de 22:00 a 06:00. Tiempo medio de respuesta: 4 minutos.</p>
-            <p>El resto de la semana, lunes a jueves 09:00–20:00 con respuesta en menos de 30 minutos. Y sí, tenemos guardia de operaciones para festivales y noches especiales — coordinamos antes.</p>
+            <p>Sí. Esto son eventos — sabemos cuándo nos necesitas. <b>Soporte por chat</b> con personas del equipo de Pasify, no chatbots.</p>
           </div>
         </details>
 
@@ -919,14 +731,14 @@
           <summary>¿Y si mi club no se dedica solo a eventos? Ej: cocktail bar con DJ los jueves<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
             <p>También. Pasify se adapta al perfil del local: si solo necesitas reservados con pre-pago para los DJ nights, contratas solo ese módulo. Si quieres ticketing para una sesión especial al mes, igual.</p>
-            <p>Tenemos clientes que solo usan Pasify <b>para cuatro noches al mes</b> y están encantados. La tarifa fija escala hacia abajo si tu volumen es bajo — escríbenos y ajustamos.</p>
+            <p>Sin cuota mensual: si un mes no vendes entradas, no pagas nada.</p>
           </div>
         </details>
 
         <details>
           <summary>¿Cumple con Hacienda y la facturación TPV en España?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. Pasify genera <b>cierre Z certificado</b>, IVA por tipo (4% / 10% / 21%), libro registro de facturas y export directo a Holded, Sage o Excel para tu gestoría. Cumplimos con la normativa <code>Veri*Factu</code> 2026.</p>
+            <p>Sí. Pasify genera <b>cierre Z certificado</b>, IVA por tipo (4% / 10% / 21%), libro registro de facturas y export directo a Holded, Sage o Excel para tu gestoría.</p>
             <p>Y si tu gestor prefiere que le mandemos los datos cada lunes en un formato concreto, lo configuramos una vez y va solo.</p>
           </div>
         </details>
@@ -934,7 +746,7 @@
         <details>
           <summary>¿Puedo probarlo antes de firmar?<span class="plus" aria-hidden="true">+</span></summary>
           <div class="answer">
-            <p>Sí. <b>Primer evento gratis, sin tarjeta.</b> Crea el evento, vende entradas, opera la noche, y al lunes decides. Si no encaja, no nos debes nada — y tu data se exporta limpia.</p>
+            <p>Sí. <b>Sin cuota mensual ni permanencia.</b> Crea el evento, vende entradas, opera la noche, y al lunes decides. Si no encaja, no nos debes nada — y tu data se exporta limpia.</p>
             <p>Si quieres probar dos o tres noches antes de comprometerte, también vale. Solo dilo en la demo.</p>
           </div>
         </details>
@@ -946,16 +758,16 @@
       <div class="left">
         <div class="lab">Empieza esta semana</div>
         <h2>La operativa que tu <em>noche</em> merece. Sin contrato, sin sorpresas.</h2>
-        <p class="sub">30 días para probarlo en serio. Migración gratis desde tu plataforma actual. Un humano de Pasify te configura el primer evento en 15 minutos por videollamada — y se queda contigo el viernes por si algo arde.</p>
+        <p class="sub">Migración gratis desde tu plataforma actual. Un humano de Pasify te configura el primer evento por videollamada — y se queda contigo el viernes por si algo arde.</p>
         <div class="ctas">
           <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow"><svg class="arr-ico" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></a>
           <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
         </div>
       </div>
       <ul class="bulls">
-        <li><span class="ck">✓</span><div><b>Onboarding humano · 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Por videollamada con alguien que ha trabajado en sala. Sin formulario, sin chatbot.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Migración gratis desde Eventbrite o Fourvenues</b><br><span style="color:var(--ink-2);font-size:13px">Importamos clientes, eventos pasados y tu integración de pago en 48h.</span></div></li>
-        <li><span class="ck">✓</span><div><b>Soporte WhatsApp · viernes 03:00</b><br><span style="color:var(--ink-2);font-size:13px">Personas del producto, no tickets. Tiempo medio de respuesta: 4 min.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Onboarding humano</b><br><span style="color:var(--ink-2);font-size:13px">Por videollamada con alguien que ha trabajado en sala. Sin formulario, sin chatbot.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Migración gratis desde tu plataforma actual</b><br><span style="color:var(--ink-2);font-size:13px">Importamos clientes, eventos pasados y tu integración de pago.</span></div></li>
+        <li><span class="ck">✓</span><div><b>Soporte con personas</b><br><span style="color:var(--ink-2);font-size:13px">Por chat, con personas del equipo, no tickets.</span></div></li>
         <li><span class="ck">✓</span><div><b>Sin permanencia, sin letra pequeña</b><br><span style="color:var(--ink-2);font-size:13px">Si no funciona el primer mes, cancelas y te llevas tu data.</span></div></li>
       </ul>
     </section>

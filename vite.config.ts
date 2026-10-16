@@ -143,6 +143,10 @@ export default defineConfig(({ mode, command }) => ({
         cleanupOutdatedCaches: true,
         // Precache shell HTML, CSS, JS chunks, logo, manifest
         globPatterns: ["**/*.{js,css,html,ico,svg,webp,woff2}"],
+        // La landing estática (public/landing/, en el iframe de Index) va
+        // siempre a la red: precacheada, cada cambio publicado se seguía viendo
+        // viejo hasta que el navegador estrenaba el service worker nuevo.
+        globIgnores: ["landing/**"],
         // Exclude large images from precache (will be runtime-cached instead)
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         // Navigazione SPA
@@ -150,8 +154,9 @@ export default defineConfig(({ mode, command }) => ({
         // Rutas que resuelve el servidor, no la SPA (HashRouter): sin esto el
         // service worker contesta con index.html a /e/<id> y /p/<id> y se pierde
         // el redirect de api/e|p a /#/e/<id>. /.well-known/ queda reservado para
-        // los universal links.
-        navigateFallbackDenylist: [/^\/api\//, /^\/e\//, /^\/p\//, /^\/\.well-known\//],
+        // los universal links. /landing/ tampoco: su iframe es una navegación y,
+        // sin precache, el fallback le serviría index.html.
+        navigateFallbackDenylist: [/^\/api\//, /^\/e\//, /^\/p\//, /^\/\.well-known\//, /^\/landing\//],
         // Runtime caching strategies
         runtimeCaching: [
           {
