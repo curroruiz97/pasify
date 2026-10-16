@@ -34,6 +34,7 @@
     'uniform vec2  uTilt;',
     'uniform vec2  uBulge;',
     'uniform vec2  uOff;',    // per-side inward offset of the edge
+    'uniform float uScroll;', // 0..1 progress of the hero scroll-out (hero.js)
 
     'const vec3 BG    = vec3(0.04314, 0.03529, 0.03137);', // #0B0908
     'const vec3 DEEP  = vec3(0.16471, 0.05882, 0.02353);', // #2A0F06
@@ -55,7 +56,7 @@
     '  float ph = s * 1.7 + uSeed;',
     // domain warp so the edge curves organically
     '  float wy = y + 0.06*sin(x*3.1 + t + ph);',
-    '  float e = uHalf - uW - off',
+    '  float e = uHalf - uW - off + uScroll * 0.16',
     '      + tilt * (y + 0.5)',
     '      - bulge * exp(-pow((wy - 0.08*s + 0.12*sin(t + ph)) * 2.2, 2.0))',
     '      + uAmp * (0.062*sin(wy*2.3 + t + ph)',
@@ -92,6 +93,7 @@
     '  vec2 uv = frag / uRes;',
     '  vec2 p = (frag - 0.5*uRes) / uRes.y;',
     '  p += uMouse * vec2(-0.012, -0.008);',
+    '  p.y -= uScroll * 0.42;',
     '  float t = uT;',
 
     '  float eps = 1.0 / uRes.y;',
@@ -200,6 +202,9 @@
     this.h = 0;
     this.seed = Math.random() * 6.0;
     this.resizeTimer = 0;
+    this.scroll = 0;          // set by hero.js while the hero scrolls out
+    this.suspended = false;   // hero fully gone: stop drawing
+    this.phase = 0.9;
     this.frame = this.frame.bind(this);
   }
 
@@ -247,7 +252,7 @@
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    var names = ['uRes', 'uT', 'uMouse', 'uHalf', 'uAmp', 'uCalm', 'uFade', 'uW', 'uSeed', 'uTilt', 'uBulge', 'uOff'];
+    var names = ['uRes', 'uT', 'uMouse', 'uHalf', 'uAmp', 'uCalm', 'uFade', 'uW', 'uSeed', 'uTilt', 'uBulge', 'uOff', 'uScroll'];
     for (var i = 0; i < names.length; i++) this.loc[names[i]] = gl.getUniformLocation(prog, names[i]);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -346,24 +351,26 @@
 
     gl.uniform2f(this.loc.uRes, w, h);
     gl.uniform1f(this.loc.uHalf, half);
-    gl.uniform1f(this.loc.uW, mix(aspect * (0.205 - squeeze * 0.9), aspect * 0.15));
+    gl.uniform1f(this.loc.uW, mix(aspect * (0.205 - squeeze * 0.9), aspect * 0.34));
     gl.uniform1f(this.loc.uSeed, this.seed);
     gl.uniform1f(this.loc.uAmp, mix(0.8, 0.45));
     // desktop: the right ribbon is narrow at the top (behind the big word) and
     // widens towards the bottom; the left one does the mirror sweep
     gl.uniform2f(this.loc.uOff, mix(0.0, 0.0), mix(-0.24, 0.0));
-    gl.uniform2f(this.loc.uTilt, mix(0.30, 0.42), mix(-0.30, 0.42));
+    gl.uniform2f(this.loc.uTilt, mix(0.30, 0.55), mix(-0.30, 0.55));
     gl.uniform2f(this.loc.uBulge, mix(0.03, 0.0), mix(0.03, 0.0));
     // calm zone: desktop = content column (14%..86%) around the headline band,
     // portrait = the whole content column
-    gl.uniform4f(this.loc.uCalm, mix(aspect * contentFrac, half * 0.84), mix(-0.12, -0.6), mix(0.34, 0.6), mix(0.6, 0.8));
+    gl.uniform4f(this.loc.uCalm, mix(aspect * contentFrac, half * 0.84), mix(-0.12, -0.36), mix(0.34, 0.27), mix(0.6, 0.9));
     gl.uniform1f(this.loc.uFade, mix(0.15, 0.07));
   };
 
   HeroBG.prototype.draw = function (phase) {
     var gl = this.gl;
     if (!gl || this.lost) return;
+    this.phase = phase;
     gl.uniform1f(this.loc.uT, phase);
+    gl.uniform1f(this.loc.uScroll, this.scroll);
     gl.uniform2f(this.loc.uMouse, this.mouse[0], this.mouse[1]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (!this.ready) {
@@ -380,7 +387,7 @@
   };
 
   HeroBG.prototype.shouldRun = function () {
-    return !this.reduced && !this.lost && this.visible && !document.hidden;
+    return !this.reduced && !this.lost && !this.suspended && this.visible && !document.hidden;
   };
 
   HeroBG.prototype.updateRunning = function () {
@@ -409,6 +416,19 @@
     this.mouse[1] += (this.mouseTarget[1] - this.mouse[1]) * ease;
     this.draw((this.elapsed / LOOP_SECONDS) * TAU + 0.9);
     this.raf = requestAnimationFrame(this.frame);
+  };
+
+  // hero.js drives these while the hero scrolls out
+  HeroBG.prototype.setScroll = function (v) {
+    this.scroll = v;
+    // the loop picks it up on its next frame; when idle (reduced motion) redraw now
+    if (!this.raf && !this.suspended && this.ready) this.draw(this.phase);
+  };
+
+  HeroBG.prototype.setSuspended = function (on) {
+    if (this.suspended === on) return;
+    this.suspended = on;
+    this.updateRunning();
   };
 
   var instances = [];
