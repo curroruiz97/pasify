@@ -1,0 +1,178 @@
+/* ============ PILLS — banda de cápsulas animadas (sustituye al ticker) ============
+   Todo bajo .pills. Solo anima transform. Sin JS. */
+
+.pills{
+  --pill-h:64px;
+  --pill-fs:20px;
+  --pill-px:30px;
+  --pill-gap:16px;
+  --row-gap:16px;
+  --pad-y:88px;
+  position:relative;
+  z-index:2;
+  padding:var(--pad-y) 0 calc(var(--pad-y) * .5);
+  background:var(--bg,#0B0908);
+  overflow:hidden;
+  overflow:clip;
+  contain:paint;
+}
+
+/* Lista accesible (visualmente oculta) */
+.pills .pills__sr{
+  position:absolute;
+  width:1px;height:1px;
+  margin:-1px;padding:0;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+  clip-path:inset(50%);
+  white-space:nowrap;
+  border:0;
+  list-style:none;
+}
+
+.pills .pills__band{
+  display:flex;
+  flex-direction:column;
+  gap:var(--row-gap);
+  /* aire vertical para que el glow y el hover no se recorten */
+  padding:14px 0;
+  margin:-14px 0;
+  overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 8%,#000 92%,transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 0,#000 8%,#000 92%,transparent 100%);
+}
+
+.pills .pills__row{
+  display:flex;
+  width:100%;
+}
+
+.pills .pills__track{
+  display:flex;
+  flex:none;
+  width:max-content;
+  will-change:transform;
+  animation:pills-left var(--dur,60s) linear infinite;
+  animation-delay:var(--delay,0s);
+  backface-visibility:hidden;
+}
+
+.pills .pills__seq{
+  display:flex;
+  flex:none;
+  align-items:center;
+  gap:var(--pill-gap);
+  /* el hueco final = gap, así -50% encaja exacto */
+  padding-right:var(--pill-gap);
+}
+
+/* Direcciones, velocidades y desfases (no arrancan alineadas) */
+.pills .pills__row--1 .pills__track{--dur:62s;--delay:-14s}
+.pills .pills__row--2 .pills__track{--dur:74s;--delay:-40s;animation-name:pills-right}
+.pills .pills__row--3 .pills__track{--dur:54s;--delay:-27s}
+.pills .pills__row--4 .pills__track{--dur:68s;--delay:-9s;animation-name:pills-right}
+.pills .pills__row--5 .pills__track{--dur:80s;--delay:-52s}
+
+@keyframes pills-left{
+  from{transform:translate3d(0,0,0)}
+  to{transform:translate3d(-50%,0,0)}
+}
+@keyframes pills-right{
+  from{transform:translate3d(-50%,0,0)}
+  to{transform:translate3d(0,0,0)}
+}
+
+/* ---- Cápsula base (apagada) ---- */
+.pills .pills__pill{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:var(--pill-h);
+  width:calc(var(--w,2) * var(--pill-h));
+  border-radius:999px;
+  background:linear-gradient(180deg,rgba(232,84,42,.135) 0%,rgba(232,84,42,.1) 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,122,77,.055),inset 0 1px 0 rgba(255,122,77,.05);
+}
+
+/* ---- Cápsula encendida ---- */
+.pills .pills__pill--lit{
+  width:auto;
+  gap:calc(var(--pill-fs) * .55);
+  padding:0 calc(var(--pill-px) + 2px) 0 var(--pill-px);
+  font-family:'Geist',ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--pill-fs);
+  font-weight:600;
+  line-height:1;
+  letter-spacing:-0.012em;
+  color:#1A0A04;
+  white-space:nowrap;
+  background:linear-gradient(180deg,#FF7A4D 0%,#F2602F 38%,#E8542A 70%,#D2461F 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.42),
+    inset 0 -1px 0 rgba(80,20,5,.22),
+    inset 0 -10px 18px -12px rgba(120,30,8,.35),
+    0 6px 16px -6px rgba(232,84,42,.42),
+    0 14px 30px -14px rgba(184,56,26,.5);
+  transition:transform .35s cubic-bezier(.2,.7,.2,1),filter .35s cubic-bezier(.2,.7,.2,1);
+}
+
+.pills .pills__plus{
+  flex:none;
+  width:calc(var(--pill-fs) * .78);
+  height:calc(var(--pill-fs) * .78);
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.9;
+  stroke-linecap:round;
+}
+
+@media (hover:hover) and (pointer:fine){
+  .pills .pills__pill--lit:hover{
+    transform:translateY(-3px);
+    filter:brightness(1.07) saturate(1.04);
+  }
+}
+
+/* ---- Tablet: 4 filas ---- */
+@media (max-width:1023.98px){
+  .pills{
+    --pill-h:48px;
+    --pill-fs:16px;
+    --pill-px:22px;
+    --pill-gap:14px;
+    --row-gap:14px;
+    --pad-y:64px;
+  }
+  .pills .pills__row--5{display:none}
+}
+
+/* ---- Móvil: 3 filas ---- */
+@media (max-width:639.98px){
+  .pills{
+    --pill-h:42px;
+    --pill-fs:14px;
+    --pill-px:18px;
+    --pill-gap:12px;
+    --row-gap:12px;
+    --pad-y:48px;
+  }
+  .pills .pills__row--4{display:none}
+  .pills .pills__band{
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%);
+            mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%);
+  }
+  .pills .pills__plus{stroke-width:2.1}
+}
+
+/* ---- Movimiento reducido: estático y centrado ---- */
+@media (prefers-reduced-motion:reduce){
+  .pills .pills__track{
+    animation:none;
+    will-change:auto;
+    transform:none;
+  }
+  .pills .pills__row{justify-content:center}
+  .pills .pills__pill--lit{transition:none}
+  .pills .pills__pill--lit:hover{transform:none}
+}
