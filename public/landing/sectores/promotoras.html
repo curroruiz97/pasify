@@ -43,15 +43,6 @@
   .page-hero .meta span{display:inline-flex;align-items:center;gap:8px}
   .page-hero .meta span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
 
-  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:36px 0;margin-top:48px}
-  .stats-strip > div{padding:0 24px;border-right:1px solid var(--line)}
-  .stats-strip > div:last-child{border-right:none}
-  .stats-strip .num{font-family:'Geist Mono',monospace;font-size:clamp(32px,3.4vw,44px);font-weight:600;letter-spacing:-0.035em;color:var(--ink);line-height:1}
-  .stats-strip .num em{font-family:'Geist Mono',monospace;font-style:normal;color:var(--accent)}
-  .stats-strip .lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:8px;line-height:1.4}
-  @media (max-width:920px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:0}.stats-strip > div{padding:24px;border-right:none;border-top:1px solid var(--line)}.stats-strip > div:nth-child(-n+2){border-top:none}.stats-strip > div:nth-child(odd){border-right:1px solid var(--line)}}
-  @media (max-width:480px){.stats-strip{grid-template-columns:1fr}.stats-strip > div{border-right:none !important;border-top:1px solid var(--line) !important;padding:24px 0}.stats-strip > div:first-child{border-top:none !important}}
-
   .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   @media (max-width:920px){.pain-grid{grid-template-columns:1fr}}
   .pain-card{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;position:relative;transition:transform .3s ease, border-color .3s ease, background .3s ease}
@@ -60,7 +51,6 @@
   .pain-card .lab{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-bottom:16px}
   .pain-card h3{font-size:21px;font-weight:600;letter-spacing:-0.02em;color:var(--ink);line-height:1.25;max-width:20ch}
   .pain-card p{font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:10px}
-  .pain-card .quote{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;color:var(--ink-3);line-height:1.5}
 
   .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   @media (max-width:1024px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
@@ -175,34 +165,6 @@
   .wl-foot{margin-top:14px;font-family:'Geist Mono',monospace;font-size:9.5px;color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase;text-align:center}
   .wl-foot em{font-style:normal;color:var(--ink-2)}
 
-  .cmp{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:32px}
-  .cmp table{width:100%;border-collapse:collapse;font-size:14.5px}
-  .cmp th,.cmp td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
-  .cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
-  .cmp thead th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--bg-3)}
-  .cmp thead th.hl{color:var(--accent);background:rgba(232,84,42,.06)}
-  .cmp tbody th{font-weight:500;color:var(--ink-2);font-size:14.5px;width:38%;letter-spacing:-0.005em}
-  .cmp td{color:var(--ink-3);font-size:14px}
-  .cmp td.hl{color:var(--ink);font-weight:500;background:rgba(232,84,42,.04)}
-  .cmp td.yes{color:#4DB87A}
-  .cmp td.no{color:var(--ink-4)}
-  .cmp td .pct{font-family:'Geist Mono',monospace;font-weight:600;color:var(--ink)}
-  @media (max-width:720px){.cmp th,.cmp td{padding:14px 16px;font-size:13px}.cmp thead th{font-size:10px}}
-
-  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media (max-width:1024px){.quotes{grid-template-columns:1fr;gap:16px}}
-  .q{background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:0;transition:transform .3s ease, border-color .3s ease}
-  .q:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .q .mark{font-family:'Instrument Serif',serif;font-style:italic;font-size:48px;color:var(--accent);line-height:.6;margin-bottom:12px}
-  .q blockquote{font-size:17px;line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-0.005em}
-  .q blockquote em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
-  .q .who{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px}
-  .q .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3D1F12,#E8542A)}
-  .q .av.b{background:linear-gradient(135deg,#16183C,#9B5BC9)}
-  .q .av.c{background:linear-gradient(135deg,#0B2618,#56B36C)}
-  .q .who .nm{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-0.005em}
-  .q .who .role{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
-
   .ints{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:28px}
   @media (max-width:880px){.ints{grid-template-columns:repeat(3,1fr)}}
   @media (max-width:480px){.ints{grid-template-columns:repeat(2,1fr)}}
@@ -277,18 +239,11 @@
       </div>
     </section>
 
-    <section class="stats-strip" aria-label="Métricas de plataforma">
-      <div><div class="num"><em>+</em>56<em>%</em></div><div class="lab">conversión<br>desde Instagram</div></div>
-      <div><div class="num">20<em>s</em></div><div class="lab">tiempo medio<br>de checkout móvil</div></div>
-      <div><div class="num">0<em>%</em></div><div class="lab">comisión añadida<br>al asistente</div></div>
-      <div><div class="num">24<em>h</em></div><div class="lab">liquidación<br>con la sala</div></div>
-    </section>
-
     <section class="sec reveal">
       <div class="sec-head">
         <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">01 /</span> La realidad</span>
         <h2>Una promotora seria no debería operar como un grupo de WhatsApp con <em>ambición</em>.</h2>
-        <p class="sub">Tu fan compra una entrada y ve la marca de Eventbrite o Fourvenues. Tu liquidación con la sala se hace por captura de pantalla. Tu RRPP se paga por mensaje. Llega un punto en que tu marca crece — y la operativa no ha cambiado desde 2018. Estos son los tres dolores con los que llegan las promotoras que prueban Pasify.</p>
+        <p class="sub">Tu fan compra una entrada y ve la marca de la plataforma. Tu liquidación con la sala se hace por captura de pantalla. Tu RRPP se paga por mensaje. Llega un punto en que tu marca crece — y la operativa no ha cambiado desde 2018. Estos son los tres dolores más habituales.</p>
       </div>
 
       <div class="pain-grid">
@@ -297,7 +252,6 @@
           <div class="lab">Dolor 01</div>
           <h3>Tu fan compra una entrada y ve <em>otra</em> marca</h3>
           <p>Inviertes 4 meses construyendo tu identidad en Instagram. El día que el fan paga, ve la URL del marketplace, su logo en el email, su look en el ticket. Cero memoria de tu marca. La próxima fiesta tendrás que volver a explicar quién eres.</p>
-          <div class="quote">"Construyo una marca y la plataforma se queda con la última pantalla."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -305,7 +259,6 @@
           <div class="lab">Dolor 02</div>
           <h3>Liquidar con la sala es más arte que ciencia</h3>
           <p>El lunes vas a la sala con tu portátil. El dueño abre su Excel, tú abres el tuyo. Discutís 40 minutos sobre 14 entradas que pagaron en taquilla pero "no aparecen en el sistema". Te vas con un acuerdo aproximado y un pago a 7 días.</p>
-          <div class="quote">"Cada lunes era un mini-juicio. Y siempre perdía algo."</div>
         </article>
 
         <article class="pain-card reveal">
@@ -313,7 +266,6 @@
           <div class="lab">Dolor 03</div>
           <h3>RRPP por WhatsApp y Excel del 2018</h3>
           <p>15 promotores. Cada uno con su lista en su grupo de WhatsApp. Comisiones calculadas a ojo el martes. Discusiones a las 5 AM sobre si "ese cliente" entró por una lista u otra. El promotor pierde la fe, se va a otra promotora.</p>
-          <div class="quote">"Perdí a mis tres mejores RRPP por no poderles pagar bien."</div>
         </article>
       </div>
     </section>
@@ -379,11 +331,11 @@
 
       <div class="timeline-wrap">
         <div class="tl-row"><div><div class="time">M−1</div><div class="day">Mes anterior</div></div><div class="body"><h4>Cierre de deal con la sala</h4><p>Hablas con el manager. Cierras: alquiler 1.500€ + 70/30 sobre taquilla excedente. Pasify importa el deal, lo vincula al evento, configura el reparto automáticamente. La sala firma desde su iPad.</p><span class="tag">Deal firmado</span></div></div>
-        <div class="tl-row"><div><div class="time">D−21</div><div class="day">Anuncio</div></div><div class="body"><h4>Lanzamiento en IG · creatividades brandeadas</h4><p>Subes el evento. Pasify genera tu landing en <code>tickets.tumarca.com/sabotaje-mad-jul</code> con tu look. Compartes el link en historia, post, Linktree. Cero "powered by Pasify" visible al fan.</p><span class="tag">Brand-first</span></div></div>
-        <div class="tl-row"><div><div class="time">D−14</div><div class="day">Early bird</div></div><div class="body"><h4>Apertura early bird · 200 entradas a 12€</h4><p>El precio está configurado para subir automáticamente al agotarse el stock. La conversión Instagram → checkout es 56% — porque tu landing carga en tu dominio, con tu marca, en 1.4s.</p><span class="tag">Saltos auto</span></div></div>
-        <div class="tl-row"><div><div class="time">D−7</div><div class="day">Push fans</div></div><div class="body"><h4>Email a 4.200 fans recurrentes</h4><p>Pasify segmenta tu CRM: 4.200 fans que vinieron a alguna pop-up tuya en los últimos 12 meses. Email con descuento exclusivo. Conversión: 38%. La fiesta se vende sola sin gastar en ads.</p><span class="tag">Retargeting</span></div></div>
+        <div class="tl-row"><div><div class="time">D−21</div><div class="day">Anuncio</div></div><div class="body"><h4>Lanzamiento en IG · creatividades brandeadas</h4><p>Subes el evento. Pasify genera tu landing en <code>tickets.tumarca.com/fiesta-mad-jul</code> con tu look. Compartes el link en historia, post, Linktree. Cero "powered by Pasify" visible al fan.</p><span class="tag">Brand-first</span></div></div>
+        <div class="tl-row"><div><div class="time">D−14</div><div class="day">Early bird</div></div><div class="body"><h4>Apertura early bird · 200 entradas a 12€</h4><p>El precio está configurado para subir automáticamente al agotarse el stock. Tu landing carga en tu dominio, con tu marca: el fan no salta a otra web.</p><span class="tag">Saltos auto</span></div></div>
+        <div class="tl-row"><div><div class="time">D−7</div><div class="day">Push fans</div></div><div class="body"><h4>Email a 4.200 fans recurrentes</h4><p>Pasify segmenta tu CRM: 4.200 fans que vinieron a alguna pop-up tuya en los últimos 12 meses. Email con descuento exclusivo. La fiesta se vende sola sin gastar en ads.</p><span class="tag">Retargeting</span></div></div>
         <div class="tl-row"><div><div class="time">D−2</div><div class="day">RRPP & lista</div></div><div class="body"><h4>Activación de RRPP · sold-out</h4><p>15 RRPP activos con su URL. Comisión 2€ por entrada vendida. Pasify alerta: "evento sold-out a las 22:14". Cierras venta general, dejas activo solo "lista RRPP" por si quieres meter última gente.</p><span class="tag">Sold-out</span></div></div>
-        <div class="tl-row peak"><div><div class="time">D0</div><div class="day">Vie · pop-up</div></div><div class="body"><h4>Puertas, escáner offline, aforo 100%</h4><p>Tres taquilleros con tu logo en el iPad. 1.180 personas escaneadas en 90 minutos sin caída. La sala ve sus números en su instancia, tú ves los tuyos. Cero confusión sobre quién entró cuándo.</p><span class="tag">Modo offline</span></div></div>
+        <div class="tl-row peak"><div><div class="time">D0</div><div class="day">Vie · pop-up</div></div><div class="body"><h4>Puertas, escáner offline, aforo 100%</h4><p>Tres taquilleros con tu logo en el iPad. 1.180 personas escaneadas sin caída. La sala ve sus números en su instancia, tú ves los tuyos. Cero confusión sobre quién entró cuándo.</p><span class="tag">Modo offline</span></div></div>
         <div class="tl-row"><div><div class="time">D0 · 03:00</div><div class="day">Cierre</div></div><div class="body"><h4>Cierre Z firmado en iPad por sala y promotora</h4><p>Taquilla 14.4K€ · 30% IVA + comisión sala restada · 70% para ti = 10.080€. RRPP devengado: 1.640€. Sala recibe su parte en 24h vía Stripe Connect. Tú firmas, sala firma, hash auditable. Fin.</p><span class="tag">Settlement</span></div></div>
         <div class="tl-row"><div><div class="time">D+1</div><div class="day">Sáb · liquidación</div></div><div class="body"><h4>Stripe Connect dispara los pagos</h4><p>10.080€ a tu cuenta · 1.640€ repartidos entre 15 RRPP automáticamente · 4.320€ a la sala. Cero transferencias manuales, cero "te lo paso el lunes". Cero llamadas el domingo por la mañana.</p><span class="tag">Pagos auto</span></div></div>
         <div class="tl-row"><div><div class="time">D+3</div><div class="day">Lun · próxima ciudad</div></div><div class="body"><h4>Replicación a Barcelona en 1 click</h4><p>Pasify duplica el evento para la siguiente ciudad: misma marca, misma estructura de tickets, RRPP locales activados. Importas 1.840 fans recurrentes de tu CRM en BCN. Empezamos otra vez — pero ya con datos.</p><span class="tag">Multi-ciudad</span></div></div>
@@ -398,9 +350,9 @@
       </div>
 
       <div class="mock" aria-label="Demostración visual del dashboard">
-        <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">app.pasify.com/promo/sabotaje/tour-jul · vie 26 jul · 21:14</span></div>
+        <div class="mock-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">app.pasify.com/promo/tu-marca/tour-jul · vie 26 jul · 21:14</span></div>
         <div class="mock-body">
-          <div class="mock-head"><h4>Sabotaje · Tour Jul · Multi-ciudad</h4><span class="date">Vie 26 jul · 21:14 · MAD live</span></div>
+          <div class="mock-head"><h4>Tu marca · Tour Jul · Multi-ciudad</h4><span class="date">Vie 26 jul · 21:14 · MAD live</span></div>
 
           <div class="mock-kpi">
             <div><div class="l">Entradas tour</div><div class="v">3<em>.</em>240 <em>/ 4K</em></div><div class="d">81% · 4 ciudades</div></div>
@@ -446,7 +398,7 @@
           <p class="sub">Una promotora que no controla la última pantalla del fan está alquilando su marca al marketplace. Pasify hace lo opuesto: tu landing en tu dominio, tu logo en el email, tu look en el ticket, tu brand en la app de puerta. Pasify desaparece. Tu fan recuerda tu fiesta — no a quién la procesó.</p>
 
           <ul class="checks">
-            <li><span class="ck">✓</span><div><b>Custom domain.</b> <code>tickets.tumarca.com</code> con DNS gestionado y certificado SSL automático. Setup en 15 min con un humano.</div></li>
+            <li><span class="ck">✓</span><div><b>Custom domain.</b> <code>tickets.tumarca.com</code> con DNS gestionado y certificado SSL automático. Setup con un humano.</div></li>
             <li><span class="ck">✓</span><div><b>Tema visual completo.</b> Logo, paleta, tipografía, fondo, tono de mensajes. El fan no sabe que existe Pasify.</div></li>
             <li><span class="ck">✓</span><div><b>Email transaccional con tu marca.</b> Confirmación, recordatorio, ticket — desde tu dominio (<code>tickets@tumarca.com</code>) con tu firma.</div></li>
             <li><span class="ck">✓</span><div><b>App de puerta brandeable.</b> Tus taquilleros usan tu app. El fan ve tu logo al escanear su QR. Cero "powered by".</div></li>
@@ -455,15 +407,15 @@
         </div>
 
         <aside class="wl-card" aria-label="Vista previa landing white-label">
-          <div class="wl-browser"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span class="url">tickets.sabotaje.es/madrid-jul-26</span></div>
+          <div class="wl-browser"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span class="url">tickets.tumarca.com/madrid-jul-26</span></div>
           <div class="wl-body">
             <div class="wl-brand">
               <span class="mark">SB</span>
-              <span class="nb">Sabotaje</span>
+              <span class="nb">Tu marca</span>
             </div>
             <div class="wl-event">
               <div class="lab">Madrid · 26 jul · 23:30</div>
-              <div class="ti">Sabotaje vol.&nbsp;14 — pop-up techno</div>
+              <div class="ti">Tu fiesta vol.&nbsp;14 — pop-up techno</div>
               <div class="meta">Sala Eclipse · 1.200 cap · 21+</div>
             </div>
             <div class="wl-tickets">
@@ -487,48 +439,9 @@
       </div>
     </section>
 
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Comparativa</span>
-        <h2>Lo que cobra el resto. Lo que cobramos <em>nosotros</em>.</h2>
-        <p class="sub">Comparamos las tres opciones típicas para una promotora: usar el sistema de la sala (forzado), un marketplace global, o construirte un Stripe + Linktree casero. Pasify combina lo mejor de cada uno.</p>
-      </div>
-
-      <div class="cmp" role="region" aria-label="Comparativa">
-        <table>
-          <thead><tr><th></th><th class="hl">Pasify</th><th>Sistema de la sala</th><th>Marketplace global</th></tr></thead>
-          <tbody>
-            <tr><th>Comisión por entrada</th><td class="hl"><span class="pct">0%</span> al fan · 4–6% a ti</td><td>5–8% al fan</td><td>10–15% al fan</td></tr>
-            <tr><th>White-label · tu marca, tu URL</th><td class="hl yes">Sí · custom domain</td><td class="no">No · marca de la sala</td><td class="no">No</td></tr>
-            <tr><th>Multi-ciudad bajo un dashboard</th><td class="hl yes">Sí · vista global tour</td><td class="no">No · solo esa sala</td><td>Sí · pero comisión alta</td></tr>
-            <tr><th>RRPP nativo + liquidación auto</th><td class="hl yes">Sí · semanal</td><td>Parcial</td><td class="no">No</td></tr>
-            <tr><th>Settlement con sala automático</th><td class="hl yes">Sí · 24h vía Stripe Connect</td><td>—</td><td class="no">No</td></tr>
-            <tr><th>CRM exportable propio</th><td class="hl yes">Sí · CSV + API</td><td class="no">Es de la sala</td><td class="no">Solo dentro</td></tr>
-            <tr><th>Atribución por canal de marketing</th><td class="hl yes">Sí · IG · TikTok · ads · orgánico</td><td class="no">No</td><td>Limitado</td></tr>
-            <tr><th>Soporte humano viernes 03:00</th><td class="hl yes">Sí · WhatsApp · 4 min</td><td>—</td><td>Email · 24h</td></tr>
-            <tr><th>Permanencia mínima</th><td class="hl"><span class="pct">0</span> meses</td><td>Acuerdo con sala</td><td>0–6 meses</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="sec reveal">
-      <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Lo que dicen</span>
-        <h2>Tres formas de medir si Pasify funciona en promotoras.</h2>
-        <p class="sub">Tres promotoras de tres escalas. Nombres anonimizados a petición — algunas trabajan con clubs específicos y prefieren no nombrarlos.</p>
-      </div>
-
-      <div class="quotes">
-        <article class="q reveal"><div class="mark">"</div><blockquote>El fan compra entradas en mi <em>dominio</em>, recibe email con mi logo, escanea mi QR. Por primera vez en seis años mi marca aparece al final del funnel, no la del marketplace.</blockquote><div class="who"><div class="av"></div><div><div class="nm">N.M. · Founder</div><div class="role">Colectivo techno · multi-ciudad</div></div></div></article>
-        <article class="q reveal"><div class="mark">"</div><blockquote>Pasamos de discutir liquidación con cada sala a recibir el pago en <em>24 horas</em> automáticamente. Mi gestor me llama menos. Mi cuenta está siempre cuadrada.</blockquote><div class="who"><div class="av b"></div><div><div class="nm">R.G. · Promoter</div><div class="role">Pop-up urban · BCN/MAD/VLC</div></div></div></article>
-        <article class="q reveal"><div class="mark">"</div><blockquote>Mis tres mejores RRPP <em>se quedaron</em>. La transparencia de comisiones les hace dormir mejor — y a mí también. Cero discusiones a las 5 AM.</blockquote><div class="who"><div class="av c"></div><div><div class="nm">A.V. · Marketing Lead</div><div class="role">Promotora corporativa · 12 ciudades</div></div></div></article>
-      </div>
-    </section>
-
     <section class="sec compact reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">08 /</span> Integraciones</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">06 /</span> Integraciones</span>
         <h2>Encaja con el stack de una promotora moderna.</h2>
         <p class="sub">Pasify habla con tu Linktree, tu Beatport, tu Mailchimp y tus pixels de tracking. Y te da la API si necesitas algo más.</p>
       </div>
@@ -554,19 +467,19 @@
 
     <section class="sec reveal">
       <div class="sec-head">
-        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">09 /</span> Preguntas</span>
+        <span class="eyebrow"><span style="font-family:'Geist Mono',monospace">07 /</span> Preguntas</span>
         <h2>Lo que preguntan las promotoras antes de firmar.</h2>
       </div>
 
       <div class="faq">
-        <details><summary>¿Cómo funciona el white-label exactamente?<span class="plus">+</span></summary><div class="answer"><p>Te damos un <code>subdominio</code> custom (ej. <code>tickets.tumarca.com</code>) con SSL automático. Subes tu logo, defines tu paleta, tipografía y tono de email. La landing, los emails, el ticket en Apple Wallet y la app de puerta heredan tu marca completa. Pasify solo aparece en una pequeña línea legal del footer (obligatoria por TOS), tipo "Procesado por Pasify".</p><p>Setup completo en <b>15 minutos</b> con un humano nuestro por videollamada. Si tienes un equipo de diseño y quieres iterar, te pasamos un Figma con los componentes editables.</p></div></details>
-        <details><summary>¿La sala se entera de que uso Pasify?<span class="plus">+</span></summary><div class="answer"><p>Sí — y es bueno que sea así. La sala recibe su parte vía <code>Stripe Connect</code> directamente y firma el cierre Z digital. Pasify es transparente con la sala: ven los números reales de taquilla, su corte, su comisión, su pago programado. Esto suele <b>fortalecer</b> tu relación con la sala, no debilitarla — porque ya no hay discusiones de liquidación.</p><p>Algunas salas, al ver el sistema, deciden adoptar Pasify para sus propios eventos. Si pasa, no cobramos comisión doble — eres tú quien negocia.</p></div></details>
+        <details><summary>¿Cómo funciona el white-label exactamente?<span class="plus">+</span></summary><div class="answer"><p>Te damos un <code>subdominio</code> custom (ej. <code>tickets.tumarca.com</code>) con SSL automático. Subes tu logo, defines tu paleta, tipografía y tono de email. La landing, los emails, el ticket en Apple Wallet y la app de puerta heredan tu marca completa. Pasify solo aparece en una pequeña línea legal del footer (obligatoria por TOS), tipo "Procesado por Pasify".</p><p>Setup completo <b>con un humano</b> nuestro por videollamada. Si tienes un equipo de diseño y quieres iterar, te pasamos un Figma con los componentes editables.</p></div></details>
+        <details><summary>¿La sala se entera de que uso Pasify?<span class="plus">+</span></summary><div class="answer"><p>Sí — y es bueno que sea así. La sala recibe su parte vía <code>Stripe Connect</code> directamente y firma el cierre Z digital. Pasify es transparente con la sala: ven los números reales de taquilla, su corte, su comisión, su pago programado. Esto suele <b>fortalecer</b> tu relación con la sala, no debilitarla — porque ya no hay discusiones de liquidación.</p></div></details>
         <details><summary>¿Soporta giras multi-ciudad reales?<span class="plus">+</span></summary><div class="answer"><p>Sí. Una "tour instance" agrupa N eventos (uno por ciudad/sala). Cada uno con su deal con su sala, su RRPP local, su precio. El dashboard te da vista global (% sold-through del tour, ingresos consolidados, ciudades en pico) y vista por evento. CRM cross-ciudad — el fan que vino a tu Madrid se segmenta cuando vuelves.</p></div></details>
         <details><summary>¿Cómo se calculan las comisiones de RRPP?<span class="plus">+</span></summary><div class="answer"><p>Configurable: importe fijo por entrada vendida (ej. 2€), porcentaje (ej. 10%) o tier (ej. 1€ las primeras 50, 2€ las siguientes). Cada RRPP tiene su URL única — la entrada vendida le queda atribuida sin ambigüedad.</p><p>Pago automático vía <b>Stripe Connect</b> semanalmente. El RRPP ve su panel con sus ventas, sus pagos pendientes y su histórico. Cero "te lo paso el lunes que viene".</p></div></details>
-        <details><summary>¿Y la fiscalidad? IRPF de RRPP, IVA, retenciones<span class="plus">+</span></summary><div class="answer"><p>Pasify retiene IRPF a RRPP que lo necesiten (15% o el que corresponda), genera el certificado anual, y exporta directamente a tu gestoría. Cumple <code>Veri*Factu</code> 2026.</p><p>El IVA del espectáculo (10%) se aplica automáticamente en la venta. Si tu evento tiene un IVA distinto (educativo, cultural exento, etc.) se configura una vez por evento.</p></div></details>
-        <details><summary>¿Puedo migrar mi base de fans desde Eventbrite o Fourvenues?<span class="plus">+</span></summary><div class="answer"><p>Sí, gratis. Importamos: contactos, histórico de eventos, segmentos guardados, tags, opt-ins. La migración tarda 24–72h y la lleva un humano nuestro. <b>El opt-in del fan se preserva</b> — no le mandamos nada hasta que tú lo decidas.</p></div></details>
-        <details><summary>¿Cuánto cobra Pasify exactamente?<span class="plus">+</span></summary><div class="answer"><p>Tarifa fija mensual (desde <code>89€/mes</code> para promotoras pequeñas) + comisión del 4–6% sobre la venta. <b>Cero comisión añadida al fan.</b> Si tu volumen es estacional (giras de verano, fin de año), tarifa por evento disponible.</p><p>Sin setup fee. Sin coste por evento. Sin coste por usuario. Sin permanencia.</p></div></details>
-        <details><summary>¿Puedo probarlo con un solo evento antes de comprometerme?<span class="plus">+</span></summary><div class="answer"><p>Sí. Primer evento <b>gratis</b>, sin tarjeta. Crea el evento, vende, opera la noche, cobra la liquidación. Si no encaja, te llevas tu data limpia sin pagar. La mayoría de promotoras que prueban siguen — pero la decisión es tuya.</p></div></details>
+        <details><summary>¿Y la fiscalidad? IRPF de RRPP, IVA, retenciones<span class="plus">+</span></summary><div class="answer"><p>Pasify retiene IRPF a RRPP que lo necesiten (15% o el que corresponda), genera el certificado anual, y exporta directamente a tu gestoría.</p><p>El IVA del espectáculo (10%) se aplica automáticamente en la venta. Si tu evento tiene un IVA distinto (educativo, cultural exento, etc.) se configura una vez por evento.</p></div></details>
+        <details><summary>¿Puedo migrar mi base de fans desde mi plataforma actual?<span class="plus">+</span></summary><div class="answer"><p>Sí, gratis. Importamos: contactos, histórico de eventos, segmentos guardados, tags, opt-ins. La migración la lleva un humano nuestro. <b>El opt-in del fan se preserva</b> — no le mandamos nada hasta que tú lo decidas.</p></div></details>
+        <details><summary>¿Cuánto cobra Pasify exactamente?<span class="plus">+</span></summary><div class="answer"><p><b>0 € de cuota mensual</b> y una <b>comisión por cada entrada vendida</b>. <b>Cero comisión añadida al fan:</b> el asistente no paga gastos de gestión. Las entradas gratuitas no pagan comisión.</p><p>Sin setup fee. Sin coste por evento. Sin coste por usuario. Sin permanencia.</p></div></details>
+        <details><summary>¿Puedo probarlo con un solo evento antes de comprometerme?<span class="plus">+</span></summary><div class="answer"><p>Sí. <b>Sin cuota mensual</b> ni permanencia. Crea el evento, vende, opera la noche, cobra la liquidación. Si no encaja, te llevas tu data limpia sin pagar. La decisión es tuya.</p></div></details>
       </div>
     </section>
 
@@ -574,14 +487,14 @@
       <div class="left">
         <div class="lab">Empieza con tu próxima fiesta</div>
         <h2>Tu marca, tu fan, tu <em>data</em>. Sin comisiones a tu cliente, sin Excel los lunes.</h2>
-        <p class="sub">Primer evento gratis para probarlo. Migración asistida desde Eventbrite o Fourvenues. White-label completo configurado en 15 minutos por videollamada.</p>
+        <p class="sub">Migración asistida desde tu plataforma actual. White-label completo configurado por videollamada.</p>
         <div class="ctas">
           <a href="../pasify.html#contacto" class="btn btn-primary">Solicita demo <span class="arrow">→</span></a>
           <a href="../pasify.html#pricing" class="btn btn-outline">Ver pricing</a>
         </div>
       </div>
       <ul class="bulls">
-        <li><span class="ck">✓</span><div><b>White-label en tu dominio · 15 min</b><br><span style="color:var(--ink-2);font-size:13px">Custom domain, SSL, branding completo, email transaccional con tu marca.</span></div></li>
+        <li><span class="ck">✓</span><div><b>White-label en tu dominio</b><br><span style="color:var(--ink-2);font-size:13px">Custom domain, SSL, branding completo, email transaccional con tu marca.</span></div></li>
         <li><span class="ck">✓</span><div><b>Multi-ciudad · vista global del tour</b><br><span style="color:var(--ink-2);font-size:13px">Mismo dashboard, distintas salas, distintos deals — un solo CRM.</span></div></li>
         <li><span class="ck">✓</span><div><b>Settlement con sala en 24h</b><br><span style="color:var(--ink-2);font-size:13px">Stripe Connect transfiere automático. Cero discusiones el lunes.</span></div></li>
         <li><span class="ck">✓</span><div><b>Tu CRM, tu propiedad · siempre</b><br><span style="color:var(--ink-2);font-size:13px">Export CSV+API. Lookalikes para próximas pop-ups. RGPD-clean.</span></div></li>

@@ -286,7 +286,7 @@
     +           '<ul>'
     +             '<li><a class="mega-link has-sub" data-slug="ayuda" href="' + L('recursos','ayuda.html') + '">'
     +               '<span class="ttl">Centro de ayuda</span>'
-    +               '<span class="sublabel">Changelog · Estado del sistema · Soporte 24/7</span>'
+    +               '<span class="sublabel">Preguntas frecuentes · Soporte por chat</span>'
     +             '</a></li>'
     +             '<li><a class="mega-link" data-slug="api-docs" href="' + L('recursos','api-docs.html') + '">API e integraciones</a></li>'
     +           '</ul>'
