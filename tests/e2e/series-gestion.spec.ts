@@ -598,7 +598,8 @@ test.describe("editar una fecha de una serie", () => {
     await editor.getByRole("button", { name: /Cuándo y dónde/ }).click();
     await editor.locator("#evt-start").click();
     const selector = page.locator("[data-radix-popper-content-wrapper]").last();
-    await selector.getByRole("button", { name: "22", exact: true }).first().click();
+    // Las 20:00: la serie empieza a las 21:00 UTC (23:00 en verano y 22:00 en invierno en Madrid); con las 22:00 en invierno no había cambio.
+    await selector.getByRole("button", { name: "20", exact: true }).first().click();
     await selector.getByRole("button", { name: "00", exact: true }).last().click();
     await editor.getByRole("button", { name: /Resumen/ }).click();
     await editor.getByRole("button", { name: "Guardar cambios" }).click();
@@ -607,7 +608,7 @@ test.describe("editar una fecha de una serie", () => {
     await alcance.getByTestId("alcance-datos-all").click();
     await alcance.getByTestId("alcance-guardar").click();
     await expect(page.getByText("Cambios guardados")).toBeVisible();
-    expect(plumbing.rpc.update_event_series[0]._patch).toEqual({ start_time: "22:00" });
+    expect(plumbing.rpc.update_event_series[0]._patch).toEqual({ start_time: "20:00" });
   });
 
   test("cambiar los tipos de entrada: se pregunta aparte y se copian donde no hay ventas", async ({ page }) => {
